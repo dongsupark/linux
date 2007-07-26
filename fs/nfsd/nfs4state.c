@@ -90,6 +90,7 @@ static void nfs4_set_recdir(char *recdir);
  * Layout state - NFSv4.1 pNFS
  */
 static struct kmem_cache *pnfs_layout_slab;
+static int expire_layout(struct nfs4_layout *lp);
 static void destroy_layout(struct nfs4_layout *lp);
 #endif /* CONFIG_PNFSD */
 
@@ -723,6 +724,7 @@ expire_client(struct nfs4_client *clp)
 		dprintk("NFSD: expire client. lp %p, fp %p\n", lp,
 				lp->lo_file);
 		BUG_ON(lp->lo_client != clp);
+		expire_layout(lp);
 		destroy_layout(lp);
 	}
 #endif /* CONFIG_PNFSD */
@@ -4448,6 +4450,34 @@ destroy_layout(struct nfs4_layout *lp)
 	/* release references taken by init_layout */
 	put_layout_state(ls);
 	put_nfs4_file(fp);
+}
+
+static int
+expire_layout(struct nfs4_layout *lp)
+{
+	struct nfs4_client *clp;
+	struct nfs4_file *fp;
+	struct nfsd4_pnfs_layoutreturn lr;
+
+	clp = lp->lo_client;
+	fp = lp->lo_file;
+	dprintk("pNFS %s: lp %p clp %p fp %p ino %p\n", __func__,
+		lp, clp, fp, fp->fi_inode);
+
+	/* call exported filesystem layout_return */
+	if (!fp->fi_inode->i_sb->s_pnfs_op->layout_return)
+		return 0;
+
+	lr.lr_return_type = RETURN_FILE;
+	lr.lr_reclaim = 0;
+	lr.lr_flags = LR_FLAG_EXPIRE;
+	lr.lr_seg.clientid = lp->lo_seg.clientid;
+	lr.lr_seg.layout_type = lp->lo_seg.layout_type;
+	lr.lr_seg.iomode = IOMODE_ANY;
+	lr.lr_seg.offset = 0;
+	lr.lr_seg.length = NFS4_MAX_UINT64;
+	return fp->fi_inode->i_sb->s_pnfs_op->layout_return(
+		fp->fi_inode, &lr);
 }
 
 /*
