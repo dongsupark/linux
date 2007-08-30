@@ -375,7 +375,9 @@ static void release_open_stateid(struct nfs4_stateid *stp)
 {
 	unhash_generic_stateid(stp);
 	release_stateid_lockowners(stp);
+	nfs4_unlock_state();	/* allow nested layout recall/return */
 	nfsd_close(stp->st_vfs_file);
+	nfs4_lock_state();
 	free_generic_stateid(stp);
 }
 
