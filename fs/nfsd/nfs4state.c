@@ -121,7 +121,8 @@ nfs4_lock_state(void)
 	client_mutex_owner = current_thread_info();
 }
 
-#define BUG_ON_UNLOCKED_STATE() BUG_ON(mutex_trylock(&client_mutex))
+#define BUG_ON_UNLOCKED_STATE() BUG_ON(mutex_trylock(&client_mutex) || \
+	client_mutex_owner != current_thread_info())
 
 void
 nfs4_unlock_state(void)
@@ -1994,7 +1995,10 @@ release_stateid(struct nfs4_stateid *stp, int flags)
 	if (flags & OPEN_STATE) {
 		release_stateid_lockowners(stp);
 		stp->st_vfs_file = NULL;
+		BUG_ON_UNLOCKED_STATE();
+		nfs4_unlock_state();	/* allow nested layout recall/return */
 		nfsd_close(filp);
+		nfs4_lock_state();
 	} else if (flags & LOCK_STATE)
 		locks_remove_posix(filp, (fl_owner_t) stp->st_stateowner);
 	put_nfs4_file(stp->st_file);
