@@ -41,7 +41,8 @@
 /* pNFS structs */
 
 struct pnfs_export_operations {
-	/* stub */
+	/* Returns the supported pnfs_layouttype4. */
+	int (*layout_type) (struct super_block *);
 };
 
 #endif /* CONFIG_PNFSD */

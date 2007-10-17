@@ -48,6 +48,10 @@
 #include <linux/nfsd/xdr4.h>
 #include <linux/nfs4_acl.h>
 #include <linux/sunrpc/gss_api.h>
+#if defined(CONFIG_PNFSD)
+#include <linux/nfsd/pnfsd.h>
+#include <linux/exportfs.h>
+#endif /* CONFIG_PNFSD */
 
 #define NFSDDBG_FACILITY		NFSDDBG_PROC
 
@@ -825,6 +829,37 @@ nfsd4_verify(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	status = _nfsd4_verify(rqstp, cstate, verify);
 	return status == nfserr_same ? nfs_ok : status;
 }
+
+#if defined(CONFIG_PNFSD)
+static __be32
+nfsd4_layout_verify(struct super_block *sb, unsigned int layout_type)
+{
+	int status, type;
+
+	/* check to see if pNFS  is supported. */
+	status = nfserr_layoutunavailable;
+	if (!sb->s_pnfs_op->layout_type) {
+		printk(KERN_INFO "pNFS %s: Underlying file system "
+		       "does not support pNFS\n", __func__);
+		goto out;
+	}
+
+	type = sb->s_pnfs_op->layout_type(sb);
+
+	/* check to see if requested layout type is supported. */
+	status = nfserr_unknown_layouttype;
+	if (type != layout_type) {
+		printk(KERN_INFO "pNFS %s: requested layout type %d "
+		       "does not match suppored type %d\n",
+			__func__, layout_type, type);
+		goto out;
+	}
+
+	status = nfs_ok;
+out:
+	return status;
+}
+#endif /* CONFIG_PNFSD */
 
 /*
  * NULL call.
