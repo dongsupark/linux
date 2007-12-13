@@ -1,7 +1,7 @@
 VERSION = 2
 PATCHLEVEL = 6
 SUBLEVEL = 30
-EXTRAVERSION =
+EXTRAVERSION = -pnfs
 NAME = Man-Eating Seals of Antiquity
 
 # *DOCUMENTATION*
