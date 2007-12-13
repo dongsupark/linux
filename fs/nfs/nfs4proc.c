@@ -66,7 +66,7 @@
 struct nfs4_opendata;
 static int _nfs4_proc_open(struct nfs4_opendata *data);
 static int nfs4_do_fsinfo(struct nfs_server *, struct nfs_fh *, struct nfs_fsinfo *);
-static int nfs4_async_handle_error(struct rpc_task *, const struct nfs_server *, struct nfs4_state *);
+static int nfs4_async_handle_error(struct rpc_task *, const struct nfs_server *, struct nfs4_state *, struct nfs_client *);
 static int _nfs4_proc_lookup(struct inode *dir, const struct qstr *name, struct nfs_fh *fhandle, struct nfs_fattr *fattr);
 static int _nfs4_proc_getattr(struct nfs_server *server, struct nfs_fh *fhandle, struct nfs_fattr *fattr);
 static int nfs4_call_sync_sequence(struct nfs_client *clp,
@@ -1765,7 +1765,8 @@ static void nfs4_close_done(struct rpc_task *task, void *data)
 			if (calldata->arg.fmode == 0)
 				break;
 		default:
-			if (nfs4_async_handle_error(task, server, state) == -EAGAIN) {
+			if (nfs4_async_handle_error(task, server, state,
+					server->nfs_client) == -EAGAIN) {
 				nfs4_restart_rpc(task, server->nfs_client);
 				return;
 			}
@@ -2531,7 +2532,8 @@ static int nfs4_proc_unlink_done(struct rpc_task *task, struct inode *dir)
 	struct nfs_removeres *res = task->tk_msg.rpc_resp;
 
 	nfs4_sequence_done(res->server, &res->seq_res, task->tk_status);
-	if (nfs4_async_handle_error(task, res->server, NULL) == -EAGAIN)
+	if (nfs4_async_handle_error(task, res->server, NULL,
+				    res->server->nfs_client) == -EAGAIN)
 		return 0;
 	nfs4_sequence_free_slot(res->server->nfs_client, &res->seq_res);
 	update_changeattr(dir, &res->cinfo);
@@ -2975,7 +2977,8 @@ static int nfs4_read_done(struct rpc_task *task, struct nfs_read_data *data)
 	/* nfs4_sequence_free_slot called in the read rpc_call_done */
 	nfs4_sequence_done(server, &data->res.seq_res, task->tk_status);
 
-	if (nfs4_async_handle_error(task, server, data->args.context->state) == -EAGAIN) {
+	if (nfs4_async_handle_error(task, server, data->args.context->state,
+				    server->nfs_client) == -EAGAIN) {
 		nfs4_restart_rpc(task, server->nfs_client);
 		return -EAGAIN;
 	}
@@ -2997,10 +3000,11 @@ static int nfs4_write_done(struct rpc_task *task, struct nfs_write_data *data)
 	struct inode *inode = data->inode;
 	
 	/* slot is freed in nfs_writeback_done */
-	nfs4_sequence_done(NFS_SERVER(inode), &data->res.seq_res,
-			   task->tk_status);
+	nfs4_sequence_done(NFS_SERVER(inode), &data->res.seq_res, task->tk_status);
 
-	if (nfs4_async_handle_error(task, NFS_SERVER(inode), data->args.context->state) == -EAGAIN) {
+	if (nfs4_async_handle_error(task, NFS_SERVER(inode),
+				    data->args.context->state,
+				    NFS_SERVER(inode)->nfs_client) == -EAGAIN) {
 		nfs4_restart_rpc(task, NFS_SERVER(inode)->nfs_client);
 		return -EAGAIN;
 	}
@@ -3026,9 +3030,9 @@ static int nfs4_commit_done(struct rpc_task *task, struct nfs_write_data *data)
 {
 	struct inode *inode = data->inode;
 	
-	nfs4_sequence_done(NFS_SERVER(inode), &data->res.seq_res,
-			   task->tk_status);
-	if (nfs4_async_handle_error(task, NFS_SERVER(inode), NULL) == -EAGAIN) {
+	nfs4_sequence_done(NFS_SERVER(inode), &data->res.seq_res, task->tk_status);
+	if (nfs4_async_handle_error(task, NFS_SERVER(inode), NULL,
+				    NFS_SERVER(inode)->nfs_client) == -EAGAIN) {
 		nfs4_restart_rpc(task, NFS_SERVER(inode)->nfs_client);
 		return -EAGAIN;
 	}
@@ -3330,10 +3334,9 @@ static int nfs4_proc_set_acl(struct inode *inode, const void *buf, size_t buflen
 }
 
 static int
-nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server, struct nfs4_state *state)
+nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server,
+			struct nfs4_state *state, struct nfs_client *clp)
 {
-	struct nfs_client *clp = server->nfs_client;
-
 	if (!clp || task->tk_status >= 0)
 		return 0;
 	switch(task->tk_status) {
@@ -3747,7 +3750,8 @@ static void nfs4_locku_done(struct rpc_task *task, void *data)
 		case -NFS4ERR_EXPIRED:
 			break;
 		default:
-			if (nfs4_async_handle_error(task, calldata->server, NULL) == -EAGAIN)
+			if (nfs4_async_handle_error(task, calldata->server,
+				NULL, calldata->server->nfs_client) == -EAGAIN)
 				nfs4_restart_rpc(task,
 						calldata->server->nfs_client);
 	}
@@ -4811,7 +4815,8 @@ void nfs41_sequence_call_done(struct rpc_task *task, void *data)
 			dprintk("%s ERROR %d Reset session\n", __func__,
 				task->tk_status);
 
-			if (nfs4_async_handle_error(task, server, NULL) == -EAGAIN) {
+			if (nfs4_async_handle_error(task, server, NULL,
+					server->nfs_client) == -EAGAIN) {
 				nfs4_restart_rpc(task, server->nfs_client);
 				return;
 			}
