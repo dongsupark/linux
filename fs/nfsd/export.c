@@ -18,6 +18,9 @@
 #include <linux/exportfs.h>
 
 #include <linux/nfsd/nfsd4_pnfs.h>
+#if defined(CONFIG_SPNFS)
+#include <linux/nfsd4_spnfs.h>
+#endif
 #include <linux/nfsd/syscall.h>
 #include <net/ipv6.h>
 
@@ -418,7 +421,22 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 #if defined(CONFIG_PNFSD_LOCAL_EXPORT)
 	if (!inode->i_sb->s_pnfs_op)
 		pnfsd_lexp_init(inode);
+	return 0;
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
+
+#if defined(CONFIG_SPNFS)
+	/*
+	 * spnfs_enabled() indicates we're an MDS.
+	 * XXX Better to check an export time option as well.
+	 */
+	if (spnfs_enabled()) {
+		dprintk("set spnfs export structure...\n");
+		if (!inode->i_sb->s_export_op->get_devicelist)
+			inode->i_sb->s_export_op->get_devicelist =
+				spnfs_getdevicelist;
+	} else
+		dprintk("%s spnfs not in use\n", __FUNCTION__);
+#endif /* CONFIG_SPNFS */
 
 	return 0;
 
