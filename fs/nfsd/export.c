@@ -34,6 +34,7 @@
 #if defined(CONFIG_PNFSD)
 #include <linux/nfsd/state.h>
 #include <linux/nfsd/pnfsd.h>
+#include <linux/nfsd4_spnfs.h>
 #endif
 #include <linux/nfsd/syscall.h>
 #include <linux/lockd/bind.h>
@@ -402,6 +403,20 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 		dprintk("exp_export: export of invalid fs type.\n");
 		return -EINVAL;
 	}
+
+#if defined(CONFIG_PNFSD)
+	/*
+	 * spnfs_enabled() indicates we're an MDS.
+	 * XXX Better to check an export time option as well.
+	 */
+	if (spnfs_enabled()) {
+		dprintk("set spnfs export structure...\n");
+		if (!inode->i_sb->s_export_op->get_devicelist)
+			inode->i_sb->s_export_op->get_devicelist =
+				spnfs_getdevicelist;
+	} else
+		dprintk("%s spnfs not in use\n", __FUNCTION__);
+#endif /* CONFIG_PNFSD */
 
 	return 0;
 
