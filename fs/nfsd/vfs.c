@@ -37,6 +37,7 @@
 #include "acl.h"
 #include "idmap.h"
 #include "pnfsd.h"
+#include <linux/nfsd4_spnfs.h>
 #endif /* CONFIG_NFSD_V4 */
 
 #include "nfsd.h"
@@ -1796,6 +1797,9 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 	struct inode	*dirp;
 	__be32		err;
 	int		host_err;
+#if defined(CONFIG_NFSD_V4)
+	unsigned long	ino;
+#endif /* defined(CONFIG_NFSD_V4) */
 
 	err = nfserr_acces;
 	if (!flen || isdotent(fname, flen))
@@ -1819,6 +1823,14 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 		goto out;
 	}
 
+#if defined(CONFIG_NFSD_V4)
+	/*
+	 * Remember the inode number to communicate to the spnfsd
+	 * for removal of stripes
+	 */
+	ino = rdentry->d_inode->i_ino;
+#endif /* defined(CONFIG_NFS_V4) */
+
 	if (!type)
 		type = rdentry->d_inode->i_mode & S_IFMT;
 
@@ -1835,6 +1847,26 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 		host_err = vfs_rmdir(dirp, rdentry);
 	if (!host_err)
 		host_err = commit_metadata(fhp);
+
+#if defined(CONFIG_SPNFS)
+	/*
+	 * spnfs: notify spnfsd of removal to destroy stripes
+	 */
+	dprintk("%s check if spnfs_enabled\n", __FUNCTION__);
+	if (spnfs_enabled()) {
+		BUG_ON(ino == 0);
+		dprintk("%s calling spnfs_remove inumber=%ld\n",
+			__FUNCTION__, ino);
+		if (spnfs_remove(ino) == 0) {
+			dprintk("%s spnfs_remove success\n", __FUNCTION__);
+		} else {
+			/* XXX How do we make this atomic? */
+			printk(KERN_WARNING "nfsd: pNFS could not "
+				"remove stripes for inode: %ld\n", ino);
+		}
+	}
+#endif /* defined(CONFIG_SPNFS) */
+
 out_drop_write:
 	mnt_drop_write(fhp->fh_export->ex_path.mnt);
 out_put:
