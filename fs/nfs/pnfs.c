@@ -1143,6 +1143,26 @@ pnfs_getiosize(struct nfs_server *server)
 	return ld->ld_policy_ops->get_blocksize(mounttype);
 }
 
+void
+pnfs_set_ds_iosize(struct nfs_server *server)
+{
+	unsigned dssize = pnfs_getiosize(server);
+
+	/* Set buffer size for data servers */
+	if (dssize > 0) {
+		server->ds_rsize = server->ds_wsize =
+			nfs_block_size(dssize, NULL);
+		server->ds_rpages = server->ds_wpages =
+			(server->ds_rsize + PAGE_CACHE_SIZE - 1) >>
+			PAGE_CACHE_SHIFT;
+	} else {
+		server->ds_wsize = server->wsize;
+		server->ds_rsize = server->rsize;
+		server->ds_rpages = server->rpages;
+		server->ds_wpages = server->wpages;
+	}
+}
+
 /* Called on completion of layoutcommit */
 void
 pnfs_layoutcommit_done(struct pnfs_layoutcommit_data *data)

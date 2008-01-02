@@ -2390,8 +2390,10 @@ static void nfs4_init_pnfs(struct super_block *sb, struct nfs_server *server,
 		   struct nfs_fh *fh)
 {
 #if defined(CONFIG_PNFS)
-	if (server->nfs_client->cl_minorversion)
+	if (server->nfs_client->cl_minorversion) {
 		set_pnfs_layoutdriver(sb, fh, server->pnfs_fs_ltype);
+		pnfs_set_ds_iosize(server);
+	}
 #endif /* CONFIG_PNFS */
 }
 
