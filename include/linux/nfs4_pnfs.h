@@ -142,10 +142,16 @@ struct layoutdriver_io_operations {
 enum layoutdriver_policy_flags {
 	/* Should the full nfs rpc cleanup code be used after io */
 	PNFS_USE_RPC_CODE		= 1 << 0,
+
+	/* Should the NFS req. gather algorithm cross stripe boundaries? */
+	PNFS_GATHER_ACROSS_STRIPES	= 1 << 1,
 };
 
 struct layoutdriver_policy_operations {
 	unsigned flags;
+
+	/* The stripe size of the file system */
+	ssize_t (*get_stripesize) (struct pnfs_layout_type *layoutid);
 
 	/* test for nfs page cache coalescing */
 	int (*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
@@ -168,6 +174,13 @@ static inline int
 pnfs_ld_use_rpc_code(struct pnfs_layoutdriver_type *ld)
 {
 	return ld->ld_policy_ops->flags & PNFS_USE_RPC_CODE;
+}
+
+/* Should the NFS req. gather algorithm cross stripe boundaries? */
+static inline int
+pnfs_ld_gather_across_stripes(struct pnfs_layoutdriver_type *ld)
+{
+	return ld->ld_policy_ops->flags & PNFS_GATHER_ACROSS_STRIPES;
 }
 
 struct pnfs_device {

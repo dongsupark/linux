@@ -61,6 +61,7 @@ struct nfs_pageio_descriptor {
 	int 			pg_ioflags;
 	int			pg_error;
 #ifdef CONFIG_PNFS
+	int			pg_boundary;
 	int			(*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
 #endif /* CONFIG_PNFS */
 };
