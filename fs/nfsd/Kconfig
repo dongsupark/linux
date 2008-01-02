@@ -113,3 +113,12 @@ config PNFSD_LOCAL_EXPORT
 	  useful for development and debugging purposes.
 
 	  If unsure, say N.
+
+config SPNFS
+	bool "Provide spNFS server support (EXPERIMENTAL)"
+	depends on PNFSD
+	select RPCSEC_GSS_KRB5
+	help
+	  Say Y here if you want spNFS server support.
+
+	  If unsure, say N.

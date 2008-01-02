@@ -1494,6 +1494,15 @@ static struct file_system_type nfsd_fs_type = {
 	.kill_sb	= kill_litter_super,
 };
 
+#if defined(CONFIG_SPNFS)
+extern int (*spnfs_init)(void);
+extern void (*spnfs_delete)(void);
+
+int nfsd_spnfs_new(void);
+int spnfs_close(void);
+void nfsd_spnfs_delete(void);
+#endif /* CONFIG_SPNFS */
+
 #ifdef CONFIG_PROC_FS
 static int create_proc_exports_entry(void)
 {
@@ -1536,6 +1545,11 @@ static int __init init_nfsd(void)
 	retval = create_proc_exports_entry();
 	if (retval)
 		goto out_free_idmap;
+#if defined(CONFIG_SPNFS)
+	spnfs_init = nfsd_spnfs_new;
+	spnfs_delete = nfsd_spnfs_delete;
+#endif /* CONFIG_SPNFS */
+
 	retval = register_filesystem(&nfsd_fs_type);
 	if (retval)
 		goto out_free_all;
@@ -1558,6 +1572,10 @@ out_free_stat:
 
 static void __exit exit_nfsd(void)
 {
+#if defined(CONFIG_SPNFS)
+	spnfs_init = NULL;
+#endif /* CONFIG_SPNFS */
+
 	nfsd_export_shutdown();
 	nfsd4_pnfs_dlm_shutdown();
 	nfsd_reply_cache_shutdown();
