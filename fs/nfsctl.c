@@ -102,6 +102,9 @@ SYSCALL_DEFINE3(nfsservctl, int, cmd, struct nfsctl_arg __user *, arg,
 	int err;
 
 #if defined(CONFIG_SPNFS)
+	int fd;
+	struct nfs_fh *fh;
+	extern struct nfs_fh *spnfs_getfh(int);
 
 	if (cmd == 222) {
 		if (spnfs_init) {
@@ -131,6 +134,23 @@ SYSCALL_DEFINE3(nfsservctl, int, cmd, struct nfsctl_arg __user *, arg,
 			return -EOPNOTSUPP;
 	}
 
+	if (cmd == NFSCTL_FD2FH) {
+		/*
+		 * Shortcut here.  If this cmd lives on, it should probably
+		 * be processed like the others below.
+		 */
+		if (copy_from_user(&fd, &arg->ca_fd2fh.fd, sizeof(int)))
+			return -EFAULT;
+		fh = spnfs_getfh(fd);
+		if (fh == NULL)
+			return -EINVAL;
+
+		/* XXX fix this with the proper struct */
+		if (copy_to_user(res, (char *)fh, 130))
+			return -EFAULT;
+
+		return 0;
+	}
 #endif /* CONFIG_SPNFS */
 
 	if (copy_from_user(&version, &arg->ca_version, sizeof(int)))
