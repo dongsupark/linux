@@ -397,6 +397,9 @@ static int pnfsd_check_export(struct inode *inode, int *flags)
 		if (!inode->i_sb->s_export_op->layout_get)
 			inode->i_sb->s_export_op->layout_get =
 				spnfs_layoutget;
+		if (!inode->i_sb->s_export_op->layout_return)
+			inode->i_sb->s_export_op->layout_return =
+				spnfs_layoutreturn;
 	} else
 		dprintk("%s spnfs not in use\n", __FUNCTION__);
 
