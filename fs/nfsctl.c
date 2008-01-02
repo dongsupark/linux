@@ -15,6 +15,7 @@
 #include <linux/mount.h>
 #include <linux/syscalls.h>
 #include <asm/uaccess.h>
+#include <linux/module.h>
 
 /*
  * open a file on nfsd fs
@@ -83,6 +84,15 @@ static struct {
 	},
 };
 
+#if defined(CONFIG_SPNFS)
+int (*spnfs_init)(void);
+int (*spnfs_test)(void);
+void (*spnfs_delete)(void);
+EXPORT_SYMBOL(spnfs_init);
+EXPORT_SYMBOL(spnfs_test);
+EXPORT_SYMBOL(spnfs_delete);
+#endif /* CONFIG_SPNFS */
+
 SYSCALL_DEFINE3(nfsservctl, int, cmd, struct nfsctl_arg __user *, arg,
 		void __user *, res)
 {
@@ -90,6 +100,38 @@ SYSCALL_DEFINE3(nfsservctl, int, cmd, struct nfsctl_arg __user *, arg,
 	void __user *p = &arg->u;
 	int version;
 	int err;
+
+#if defined(CONFIG_SPNFS)
+
+	if (cmd == 222) {
+		if (spnfs_init) {
+			err = spnfs_init();
+			return err;
+		} else
+			return -EOPNOTSUPP;
+	}
+
+	if (cmd == 223) {
+		if (spnfs_test) {
+			printk(KERN_INFO "nfsctl: spnfs_test\n");
+			err = spnfs_test();
+			return err;
+		} else {
+			printk(
+			     KERN_INFO "nfsctl: spnfs_test not initialized\n");
+			return -EOPNOTSUPP;
+		}
+	}
+
+	if (cmd == 224) {
+		if (spnfs_delete) {
+			spnfs_delete();
+			return 0;
+		} else
+			return -EOPNOTSUPP;
+	}
+
+#endif /* CONFIG_SPNFS */
 
 	if (copy_from_user(&version, &arg->ca_version, sizeof(int)))
 		return -EFAULT;
