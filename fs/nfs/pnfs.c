@@ -1066,6 +1066,36 @@ pnfs_set_pg_test(struct inode *inode, struct nfs_pageio_descriptor *pgio)
 		pgio->pg_test = ld->ld_policy_ops->pg_test;
 }
 
+static u32
+pnfs_getboundary(struct inode *inode)
+{
+	u32 stripe_size = 0;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	struct layoutdriver_policy_operations *policy_ops;
+	struct nfs_inode *nfsi;
+	struct pnfs_layout_type *lo;
+
+	if (!nfss->pnfs_curr_ld)
+		goto out;
+
+	policy_ops = nfss->pnfs_curr_ld->ld_policy_ops;
+	if (!policy_ops || !policy_ops->get_stripesize)
+		goto out;
+
+	/* The default is to not gather across stripes */
+	if (pnfs_ld_gather_across_stripes(nfss->pnfs_curr_ld))
+		goto out;
+
+	nfsi = NFS_I(inode);
+	lo = get_lock_current_layout(nfsi);;
+	if (lo) {
+		stripe_size = policy_ops->get_stripesize(lo);
+		put_unlock_current_layout(nfsi, lo);
+	}
+out:
+	return stripe_size;
+}
+
 /* This is utilized in the paging system to determine if
  * it should use the NFSv4 or pNFS read path.
  * If count < 0, we do not check the I/O size.
