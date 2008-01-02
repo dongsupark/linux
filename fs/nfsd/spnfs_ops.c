@@ -263,6 +263,12 @@ open_out:
 	return status;
 }
 
+int
+spnfs_create(void)
+{
+	return 0;
+}
+
 /*
  * Return the state for this object.
  * At this time simply return 0 to indicate success and use the existing state
