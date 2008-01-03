@@ -222,6 +222,12 @@ pnfs_register_layoutdriver(struct pnfs_layoutdriver_type *ld_type)
 		return NULL;
 	}
 
+	if (!io_ops || !io_ops->alloc_layout || !io_ops->free_layout) {
+		printk(KERN_ERR "%s Layout driver must provide "
+		       "alloc_layout and free_layout.\n", __func__);
+		return NULL;
+	}
+
 	if (!io_ops->alloc_lseg || !io_ops->free_lseg) {
 		printk(KERN_ERR "%s Layout driver must provide "
 		       "alloc_lseg and free_lseg.\n", __func__);
