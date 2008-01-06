@@ -339,6 +339,61 @@ panfs_shim_free_io_state(struct panlayout_io_state *pl_state)
 	kfree(pl_state);
 }
 
+static int
+panfs_shim_pages_to_sg(
+	struct panfs_shim_io_state *state,
+	struct page **pages,
+	unsigned int pgbase,
+	unsigned nr_pages,
+	size_t count)
+{
+	int i, n;
+	pan_sg_entry_t *sg;
+
+	dprintk("%s pgbase %u nr_pages %u count %d "
+		"pg0 %p flags 0x%x index %Lu\n",
+		__func__, pgbase, nr_pages, (int)count, pages[0],
+		(unsigned)pages[0]->flags, (__u64)pages[0]->index);
+
+	if (pgbase > PAGE_SIZE) {
+		n = pgbase >> PAGE_SHIFT;
+		pgbase &= ~PAGE_MASK;
+		pages += n;
+		nr_pages -= n;
+	}
+	if (nr_pages > ((pgbase + count + PAGE_SIZE - 1) >> PAGE_SHIFT))
+		nr_pages = (pgbase + count + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	sg = kmalloc(nr_pages * sizeof(*sg), GFP_KERNEL);
+	if (sg == NULL)
+		return -ENOMEM;
+
+	dprintk("%s sg_list %p pages %p pgbase %u nr_pages %u\n",
+		__func__, sg, pages, pgbase, nr_pages);
+
+	for (i = 0; i < nr_pages; i++) {
+		sg[i].buffer = (char *)kmap(pages[i]) + pgbase;
+		n = PAGE_SIZE - pgbase;
+		pgbase = 0;
+		if (n > count)
+			n = count;
+		sg[i].chunk_size = n;
+		count -= n;
+		if (likely(count)) {
+			sg[i].next = &sg[i+1];
+		} else {
+			/* we're done */
+			sg[i].next = NULL;
+			break;
+		}
+	}
+	BUG_ON(count);
+
+	state->sg_list = sg;
+	state->pages = pages;
+	state->nr_pages = nr_pages;
+	return 0;
+}
+
 int
 panfs_shim_register(struct panfs_export_operations *ops)
 {
