@@ -360,18 +360,54 @@ panlayout_write_pagelist(struct pnfs_layout_type *pnfs_layout_type,
 
 int
 panlayout_setup_layoutcommit(struct pnfs_layout_type *pnfslay,
-			     struct pnfs_layoutcommit_arg *arg)
+			     struct pnfs_layoutcommit_data *data)
 {
-	int status = -EIO;
+	struct pnfs_layoutcommit_arg *arg = &data->args;
+	struct panlayout *panlay;
+	int status = 0;
+	s64 delta;
+	s64 *buf;
+
+	dprintk("%s: Begin\n", __func__);
+
+	panlay = PNFS_LD_DATA(pnfslay);
+
+	delta = panlayout_atomic64_xchg(&panlay->delta_space_used, 0);
+
+	if (!delta)
+		goto out;
+
+	buf = kmalloc(sizeof(delta), GFP_KERNEL);
+	if (!buf) {
+		status = -ENOMEM;
+		goto out;
+	}
+
+	*buf = cpu_to_be64(delta);
+	arg->new_layout_size = sizeof(delta);
+	arg->new_layout = buf;
+	dprintk("%s: delta_space_used %lld\n", __func__, delta);
+
+out:
 	dprintk("%s: Return %d\n", __func__, status);
 	return status;
 }
 
 void
 panlayout_cleanup_layoutcommit(struct pnfs_layout_type *pnfslay,
-			       struct pnfs_layoutcommit_arg *arg,
-			       struct pnfs_layoutcommit_res *res)
+			       struct pnfs_layoutcommit_data *data)
 {
+	struct pnfs_layoutcommit_arg *arg = &data->args;
+
+	dprintk("%s: Begin new_layout %p new_layout_size %u\n", __func__,
+		arg->new_layout, arg->new_layout_size);
+	BUG_ON((arg->new_layout != NULL) != (arg->new_layout_size != 0));
+	if (!arg->new_layout)
+		goto out;
+	kfree(arg->new_layout);
+	arg->new_layout = NULL;
+	arg->new_layout_size = 0;
+out:
 	dprintk("%s: Return\n", __func__);
 }
 
