@@ -20,3 +20,5 @@ nfs-$(CONFIG_NFS_FSCACHE) += fscache.o fscache-index.o
 
 obj-m += nfslayoutdriver.o
 nfslayoutdriver-objs := nfs4filelayout.o nfs4filelayoutdev.o
+
+obj-$(CONFIG_PNFS_PANLAYOUT) += panlayout/
