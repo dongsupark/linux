@@ -93,6 +93,14 @@ config PNFS
 
 	  Unless you're an NFS developer, say N.
 
+config PNFS_PANLAYOUT
+	tristate "Provide support for the Panasas OSD Layout Driver for NFSv4.1 pNFS (EXPERIMENTAL)"
+	depends on PNFS
+	help
+	  Say M here if you want your pNFS client to support the Panasas OSD Layout Driver
+
+	  If unsure, say N.
+
 config ROOT_NFS
 	bool "Root file system on NFS"
 	depends on NFS_FS=y && IP_PNP
