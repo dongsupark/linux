@@ -1427,6 +1427,45 @@ pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
 	pnfs_set_pg_test(inode, pgio);
 }
 
+/*
+ * Get a layoutout for COMMIT
+ */
+void
+pnfs_update_layout_commit(struct inode *inode,
+			struct list_head *head,
+			pgoff_t idx_start,
+			unsigned int npages)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	struct nfs_page *nfs_page = nfs_list_entry(head->next);
+	u64 count;
+	loff_t start;
+	int status;
+
+	dprintk("--> %s inode %p layout range: %Zd@%llu\n", __func__, inode,
+		(size_t)(npages * PAGE_CACHE_SIZE),
+		(u64)((u64)idx_start << PAGE_CACHE_SHIFT));
+
+	if (!pnfs_enabled_sb(nfss))
+		return;
+
+	/* COMMIT indicates the whole file with offset = count = 0
+	 * whereas layout segments indicate whole file with offset = 0,
+	 * count = NFS4_MAX_UINT64.
+	 */
+	count = (size_t)npages * PAGE_CACHE_SIZE;
+	start = (loff_t)idx_start <<  PAGE_CACHE_SHIFT;
+	if (start == 0 && count == 0)
+		count = NFS4_MAX_UINT64;
+
+	status = pnfs_update_layout(inode, nfs_page->wb_context,
+				count,
+				start,
+				IOMODE_RW,
+				NULL);
+	dprintk("%s  virt update status %d\n", __func__, status);
+}
+
 /* This is utilized in the paging system to determine if
  * it should use the NFSv4 or pNFS read path.
  * If count < 0, we do not check the I/O size.

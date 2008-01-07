@@ -538,8 +538,14 @@ nfs_scan_commit(struct inode *inode, struct list_head *dst, pgoff_t idx_start, u
 	ret = nfs_scan_list(nfsi, dst, idx_start, npages, NFS_PAGE_TAG_COMMIT);
 	if (ret > 0)
 		nfsi->ncommit -= ret;
-	if (nfs_need_commit(NFS_I(inode)))
+	if (nfs_need_commit(NFS_I(inode))) {
 		__mark_inode_dirty(inode, I_DIRTY_DATASYNC);
+#ifdef CONFIG_NFS_V4_1
+		/* FIXME: change pnfs_update_layout_commit to derive
+		   idx_start from head of list and pass ret rather than npages */
+		pnfs_update_layout_commit(inode, dst, idx_start, npages);
+#endif /* CONFIG_NFS_V4_1 */
+	}
 	return ret;
 }
 #else
