@@ -752,6 +752,14 @@ static int nfs4_stat_to_errno(int);
 				decode_sequence_maxsz + \
 				decode_putfh_maxsz + \
 				decode_layoutreturn_maxsz)
+#define NFS4_enc_dswrite_sz	(compound_encode_hdr_maxsz + \
+				encode_sequence_maxsz +\
+				encode_putfh_maxsz + \
+				encode_write_maxsz)
+#define NFS4_dec_dswrite_sz	(compound_decode_hdr_maxsz + \
+				decode_sequence_maxsz + \
+				decode_putfh_maxsz + \
+				decode_write_maxsz)
 #endif /* CONFIG_PNFS */
 
 static const umode_t nfs_type2fmt[] = {
@@ -2785,6 +2793,26 @@ static int nfs4_xdr_enc_layoutreturn(struct rpc_rqst *req, uint32_t *p,
 	encode_sequence(&xdr, &args->seq_args, &hdr);
 	encode_putfh(&xdr, NFS_FH(args->inode), &hdr);
 	encode_layoutreturn(&xdr, args, &hdr);
+	encode_nops(&hdr);
+	return 0;
+}
+
+/*
+ * Encode a pNFS File Layout Data Server WRITE request
+ */
+static int nfs4_xdr_enc_dswrite(struct rpc_rqst *req, uint32_t *p,
+				struct nfs_writeargs *args)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr = {
+		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
+	};
+
+	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
+	encode_compound_hdr(&xdr, req, &hdr);
+	encode_sequence(&xdr, &args->seq_args, &hdr);
+	encode_putfh(&xdr, args->fh, &hdr);
+	encode_write(&xdr, args, &hdr);
 	encode_nops(&hdr);
 	return 0;
 }
@@ -5990,6 +6018,33 @@ static int nfs4_xdr_dec_layoutcommit(struct rpc_rqst *rqstp, uint32_t *p,
 out:
 	return status;
 }
+
+/*
+ * Decode pNFS File Layout Data Server WRITE response
+ */
+static int nfs4_xdr_dec_dswrite(struct rpc_rqst *rqstp, uint32_t *p,
+				struct nfs_writeres *res)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr;
+	int status;
+
+	xdr_init_decode(&xdr, &rqstp->rq_rcv_buf, p);
+	status = decode_compound_hdr(&xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(&xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_putfh(&xdr);
+	if (status)
+		goto out;
+	status = decode_write(&xdr, res);
+	if (!status)
+		return res->count;
+out:
+	return status;
+}
 #endif /* CONFIG_PNFS */
 
 __be32 *nfs4_decode_dirent(__be32 *p, struct nfs_entry *entry, int plus)
@@ -6174,6 +6229,7 @@ struct rpc_procinfo	nfs4_procedures[] = {
   PROC(PNFS_LAYOUTGET,  enc_layoutget,     dec_layoutget),
   PROC(PNFS_LAYOUTCOMMIT, enc_layoutcommit,  dec_layoutcommit),
   PROC(PNFS_LAYOUTRETURN, enc_layoutreturn,  dec_layoutreturn),
+  PROC(PNFS_WRITE, enc_dswrite,  dec_dswrite),
 #endif /* CONFIG_PNFS */
 };
 
