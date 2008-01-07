@@ -3315,6 +3315,30 @@ static void nfs4_proc_commit_setup(struct nfs_write_data *data, struct rpc_messa
 	msg->rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_COMMIT];
 }
 
+#if defined(CONFIG_NFS_V4_1)
+/*
+ * pNFS does not send a getattr on write.
+ */
+static void pnfs4_proc_write_setup(struct nfs_write_data *data,
+				   struct rpc_message *msg)
+{
+	struct nfs_server *server = NFS_SERVER(data->inode);
+
+	dprintk("--> %s ds_nfs_client %p\n", __func__,
+		data->fldata.ds_nfs_client);
+
+	/* writes to MDS use non-pnfs vector */
+	if (!data->fldata.ds_nfs_client)
+		return nfs4_proc_write_setup(data, msg);
+
+	data->args.bitmask = server->attr_bitmask;
+	data->res.server = server;
+	data->timestamp   = jiffies;
+
+	msg->rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_PNFS_WRITE];
+}
+#endif /* CONFIG_NFS_V4_1 */
+
 /*
  * nfs4_proc_async_renew(): This is not one of the nfs_rpc_ops; it is a special
  * standalone procedure for queueing an asynchronous RENEW.
@@ -5918,6 +5942,7 @@ pnfs_v4_clientops_init(void)
 	p->file_ops		= &pnfs_file_operations;
 	p->setattr		= pnfs4_proc_setattr;
 	p->read_done		= pnfs4_read_done;
+	p->write_setup		= pnfs4_proc_write_setup;
 	p->write_done		= pnfs4_write_done;
 	p->commit_done		= pnfs4_commit_done;
 }
