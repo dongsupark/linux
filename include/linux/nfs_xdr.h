@@ -985,6 +985,7 @@ struct nfs_read_data {
 #endif
 #if defined(CONFIG_PNFS)
 	struct pnfs_call_data	pdata;
+	struct pnfs_fl_call_data fldata;
 #endif /* CONFIG_PNFS */
 	struct page		*page_array[NFS_PAGEVEC_SIZE];
 };
@@ -1007,6 +1008,7 @@ struct nfs_write_data {
 #endif
 #if defined(CONFIG_PNFS)
 	struct pnfs_call_data	pdata;
+	struct pnfs_fl_call_data fldata;
 #endif /* CONFIG_PNFS */
 	struct page		*page_array[NFS_PAGEVEC_SIZE];
 };
