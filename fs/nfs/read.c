@@ -431,9 +431,14 @@ static void nfs_readpage_release_partial(void *calldata)
 void nfs_read_prepare(struct rpc_task *task, void *calldata)
 {
 	struct nfs_read_data *data = calldata;
+	struct nfs_client *clp = NFS_SERVER(data->inode)->nfs_client;
 
-	if (nfs4_setup_sequence(NFS_SERVER(data->inode)->nfs_client,
-				&data->args.seq_args, &data->res.seq_res,
+#ifdef CONFIG_NFS_V4_1
+	if (data->fldata.ds_nfs_client)
+		clp = data->fldata.ds_nfs_client;
+#endif /* CONFIG_NFS_V4_1 */
+
+	if (nfs4_setup_sequence(clp, &data->args.seq_args, &data->res.seq_res,
 				0, task))
 		return;
 	rpc_call_start(task);
