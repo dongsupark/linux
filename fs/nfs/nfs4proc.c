@@ -3061,6 +3061,12 @@ static int pnfs4_commit_done(struct rpc_task *task, struct nfs_write_data *data)
 	if (data->pdata.pnfsflags & PNFS_NO_RPC)
 		return 0;
 
+	/* Is this a DS session */
+	if (data->fldata.ds_nfs_client) {
+		dprintk("%s DS commit\n", __func__);
+		client = data->fldata.ds_nfs_client;
+	}
+
 	nfs41_sequence_done(client, &data->res.seq_res, task->tk_status);
 
 	if (nfs4_async_handle_error(task, mds_svr, NULL) == -EAGAIN) {
@@ -3069,7 +3075,8 @@ static int pnfs4_commit_done(struct rpc_task *task, struct nfs_write_data *data)
 	}
 	nfs4_sequence_free_slot(client, &data->res.seq_res);
 
-	if (task->tk_status >= 0)
+	/* Update inode if commit to MDS */
+	if (task->tk_status >= 0 && !data->fldata.ds_nfs_client)
 		nfs_refresh_inode(data->inode, data->res.fattr);
 	dprintk("<-- %s\n", __func__);
 	return 0;
