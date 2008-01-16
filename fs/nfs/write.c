@@ -1064,11 +1064,17 @@ void nfs_write_prepare(struct rpc_task *task, void *calldata)
 	struct nfs_write_data *data = calldata;
 	struct nfs_client *clp = (NFS_SERVER(data->inode))->nfs_client;
 
+#ifdef CONFIG_PNFS
+	if (data->fldata.ds_nfs_client)
+		clp = data->fldata.ds_nfs_client;
+#endif /* CONFIG_PNFS */
+
 	if (nfs4_setup_sequence(clp, &data->args.seq_args,
 				&data->res.seq_res, 1, task))
 		return;
 	rpc_call_start(task);
 }
+EXPORT_SYMBOL(nfs_write_prepare);
 #endif /* CONFIG_NFS_V4_1 */
 
 static const struct rpc_call_ops nfs_write_partial_ops = {
