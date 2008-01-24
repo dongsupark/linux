@@ -3064,10 +3064,31 @@ static int pnfs4_write_done(struct rpc_task *task, struct nfs_write_data *data)
 	return 0;
 }
 
+/*
+ * rpc_call_done callback for a commit to the MDS or to a filelayout Data Server
+ */
 static int pnfs4_commit_done(struct rpc_task *task, struct nfs_write_data *data)
 {
-	/* XXX Need to implement */
-	return -1;
+	struct nfs_server *mds_svr = NFS_SERVER(data->inode);
+	struct nfs_client *client = mds_svr->nfs_client;
+
+	dprintk("--> %s task->tk_status %d\n", __func__, task->tk_status);
+
+	if (data->pdata.pnfsflags & PNFS_NO_RPC)
+		return 0;
+
+	nfs41_sequence_done(client, &data->res.seq_res, task->tk_status);
+
+	if (nfs4_async_handle_error(task, mds_svr, NULL, client) == -EAGAIN) {
+		nfs4_restart_rpc(task, client);
+		return -EAGAIN;
+	}
+	nfs4_sequence_free_slot(client, &data->res.seq_res);
+
+	if (task->tk_status >= 0)
+		nfs_refresh_inode(data->inode, data->res.fattr);
+	dprintk("<-- %s\n", __func__);
+	return 0;
 }
 #endif /* CONFIG_PNFS */
 
@@ -5523,7 +5544,7 @@ const struct nfs_rpc_ops pnfs_v4_clientops = {
 	.write_setup	= nfs4_proc_write_setup,
 	.write_done	= pnfs4_write_done,
 	.commit_setup	= nfs4_proc_commit_setup,
-	.commit_done	= nfs4_commit_done,
+	.commit_done	= pnfs4_commit_done,
 	.lock		= nfs4_proc_lock,
 	.clear_acl_cache = nfs4_zap_acl_attr,
 	.pnfs_layoutget		= pnfs4_proc_layoutget,
