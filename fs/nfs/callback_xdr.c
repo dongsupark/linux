@@ -20,6 +20,10 @@
 				2 + 2 + 3 + 3)
 #define CB_OP_RECALL_RES_MAXSZ	(CB_OP_HDR_RES_MAXSZ)
 
+#if defined(CONFIG_PNFS)
+#define CB_OP_LAYOUTRECALL_RES_MAXSZ	(CB_OP_HDR_RES_MAXSZ)
+#endif /* CONFIG_PNFS */
+
 #if defined(CONFIG_NFS_V4_1)
 #define CB_OP_SEQUENCE_RES_MAXSZ	(CB_OP_HDR_RES_MAXSZ + \
 					4 + 1 + 3)
@@ -221,6 +225,56 @@ out:
 	dprintk("%s: exit with status = %d\n", __func__, ntohl(status));
 	return status;
 }
+
+#if defined(CONFIG_PNFS)
+
+static unsigned decode_pnfs_layoutrecall_args(struct svc_rqst *rqstp,
+					struct xdr_stream *xdr,
+					struct cb_pnfs_layoutrecallargs *args)
+{
+	uint32_t *p;
+	unsigned status = 0;
+
+	args->cbl_addr = svc_addr(rqstp);
+	p = read_buf(xdr, 4 * sizeof(uint32_t));
+	if (unlikely(p == NULL)) {
+		status = htonl(NFS4ERR_RESOURCE);
+		goto out;
+	}
+
+	args->cbl_layout_type = ntohl(*p++);
+	args->cbl_seg.iomode = ntohl(*p++);
+	args->cbl_layoutchanged = ntohl(*p++);
+	args->cbl_recall_type = ntohl(*p++);
+
+	if (likely(args->cbl_recall_type == RECALL_FILE)) {
+		status = decode_fh(xdr, &args->cbl_fh);
+		if (unlikely(status != 0))
+			goto out;
+
+		p = read_buf(xdr, 2 * sizeof(uint64_t));
+		p = xdr_decode_hyper(p, &args->cbl_seg.offset);
+		p = xdr_decode_hyper(p, &args->cbl_seg.length);
+		status = decode_stateid(xdr, &args->cbl_stateid);
+		if (unlikely(status != 0))
+			goto out;
+	} else if (args->cbl_recall_type == RECALL_FSID) {
+		p = read_buf(xdr, 2 * sizeof(uint64_t));
+		p = xdr_decode_hyper(p, &args->cbl_fsid.major);
+		p = xdr_decode_hyper(p, &args->cbl_fsid.minor);
+	}
+	dprintk("%s: ltype 0x%x iomode %d changed %d recall_type %d "
+		"fsid %llx-%llx fhsize %d\n", __func__,
+		args->cbl_layout_type, args->cbl_seg.iomode,
+		args->cbl_layoutchanged, args->cbl_recall_type,
+		args->cbl_fsid.major, args->cbl_fsid.minor,
+		args->cbl_fh.size);
+out:
+	dprintk("%s: exit with status = %d\n", __func__, ntohl(status));
+	return status;
+}
+
+#endif /* CONFIG_PNFS */
 
 #if defined(CONFIG_NFS_V4_1)
 
@@ -543,10 +597,15 @@ preprocess_nfs41_op(int nop, unsigned int op_nr, struct callback_op **op)
 	case OP_CB_GETATTR:
 	case OP_CB_RECALL:
 	case OP_CB_SEQUENCE:
+#if defined(CONFIG_PNFS)
+	case OP_CB_LAYOUTRECALL:
+#endif
 		*op = &callback_ops[op_nr];
 		break;
 
+#if !defined(CONFIG_PNFS)
 	case OP_CB_LAYOUTRECALL:
+#endif
 	case OP_CB_NOTIFY_DEVICEID:
 	case OP_CB_NOTIFY:
 	case OP_CB_PUSH_DELEG:
@@ -691,6 +750,14 @@ static struct callback_op callback_ops[] = {
 		.decode_args = (callback_decode_arg_t)decode_recall_args,
 		.res_maxsize = CB_OP_RECALL_RES_MAXSZ,
 	},
+#if defined(CONFIG_PNFS)
+	[OP_CB_LAYOUTRECALL] = {
+		.process_op = (callback_process_op_t)pnfs_cb_layoutrecall,
+		.decode_args =
+			(callback_decode_arg_t)decode_pnfs_layoutrecall_args,
+		.res_maxsize = CB_OP_LAYOUTRECALL_RES_MAXSZ,
+	},
+#endif /* CONFIG_PNFS */
 #if defined(CONFIG_NFS_V4_1)
 	[OP_CB_SEQUENCE] = {
 		.process_op = (callback_process_op_t)nfs4_callback_sequence,
