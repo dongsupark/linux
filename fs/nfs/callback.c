@@ -133,7 +133,7 @@ nfs4_callback_up(struct svc_serv *serv)
 int nfs_callback_up(u32 minorversion, void *args)
 {
 	struct svc_serv *serv = NULL;
-	struct svc_rqst *rqstp;
+	struct svc_rqst *rqst;
 	int (* callback_svc)(void *vrqstp);
 	char svc_name[12];
 	int ret = 0;
@@ -151,20 +151,20 @@ int nfs_callback_up(u32 minorversion, void *args)
 	/* FIXME: either 4.0 or 4.1 callback service can be up at a time
 	 * need to monitor and control them both */
 	if (!minorversion) {
-		rqstp = nfs4_callback_up(serv);
+		rqst = nfs4_callback_up(serv);
 		callback_svc = nfs4_callback_svc;
 	} else {
 		BUG();	/* for now */
 	}
-	if (IS_ERR(rqstp)) {
-		ret = PTR_ERR(rqstp);
+	if (IS_ERR(rqst)) {
+		ret = PTR_ERR(rqst);
 		goto out_err;
 	}
 
 	svc_sock_update_bufs(serv);
 
 	sprintf(svc_name, "nfsv4.%u-svc", minorversion);
-	nfs_callback_info.rqst = rqstp;
+	nfs_callback_info.rqst = rqst;
 	nfs_callback_info.task = kthread_run(callback_svc,
 					     nfs_callback_info.rqst,
 					     svc_name);
