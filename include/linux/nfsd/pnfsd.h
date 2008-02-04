@@ -104,6 +104,8 @@ extern size_t pnfs_lexp_addr_len;
 void pnfsd_lexp_init(struct inode *inode);
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
 
+int nfs4_pnfs_propagate_open(struct super_block *, struct svc_fh *, void *);
+
 #endif /* CONFIG_PNFSD */
 
 #endif /* LINUX_NFSD_PNFSD_H */
