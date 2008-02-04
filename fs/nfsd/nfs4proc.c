@@ -374,6 +374,24 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	 * set, (2) sets open->op_stateid, (3) sets open->op_delegation.
 	 */
 	status = nfsd4_process_open2(rqstp, &cstate->current_fh, open);
+#if defined(CONFIG_SPNFS)
+	if (!status && spnfs_enabled()) {
+		struct inode *inode = cstate->current_fh.fh_dentry->d_inode;
+
+		status = spnfs_open(inode, open);
+		if (status) {
+			dprintk(
+			     "nfsd: pNFS could not be enabled for inode: %lu\n",
+			     inode->i_ino);
+			/*
+			 * XXX When there's a failure then need to indicate to
+			 * future ops that no pNFS is available.  Should I save
+			 * the status in the inode?  It's kind of a big hammer.
+			 * But there may be no stripes available?
+			 */
+		}
+	}
+#endif /* CONFIG_SPNFS */
 out:
 	if (open->op_stateowner) {
 		nfs4_get_stateowner(open->op_stateowner);

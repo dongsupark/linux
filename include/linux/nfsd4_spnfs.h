@@ -45,6 +45,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define SPNFS_TYPE_GETDEVICELIST	0x04
 #define SPNFS_TYPE_GETDEVICEINFO	0x05
+#define SPNFS_TYPE_OPEN			0x07
 #define	SPNFS_TYPE_CLOSE		0x08
 
 /* getdevicelist */
@@ -74,6 +75,18 @@ struct spnfs_msg_getdeviceinfo_res {
 	struct spnfs_getdevicelist_dev dinfo;
 };
 
+/* open */
+struct spnfs_msg_open_args {
+	unsigned long inode;
+	int create;
+	int createmode;
+	int truncate;
+};
+
+struct spnfs_msg_open_res {
+	int status;
+};
+
 /* close */
 /* No op for daemon */
 struct spnfs_msg_close_args {
@@ -88,12 +101,14 @@ struct spnfs_msg_close_res {
 union spnfs_msg_args {
 	struct spnfs_msg_getdevicelist_args     getdevicelist_args;
 	struct spnfs_msg_getdeviceinfo_args     getdeviceinfo_args;
+	struct spnfs_msg_open_args		open_args;
 	struct spnfs_msg_close_args		close_args;
 };
 
 union spnfs_msg_res {
 	struct spnfs_msg_getdevicelist_res      getdevicelist_res;
 	struct spnfs_msg_getdeviceinfo_res      getdeviceinfo_res;
+	struct spnfs_msg_open_res		open_res;
 	struct spnfs_msg_close_res		close_res;
 };
 
@@ -116,8 +131,11 @@ struct spnfs {
 	struct mutex		spnfs_plock;
 };
 
+struct nfsd4_open;
+
 int spnfs_getdevicelist(struct super_block *, void *);
 int spnfs_getdeviceinfo(struct super_block *, void *);
+int spnfs_open(struct inode *, struct nfsd4_open *);
 
 int nfsd_spnfs_new(void);
 void nfsd_spnfs_delete(void);
