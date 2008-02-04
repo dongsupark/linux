@@ -152,6 +152,10 @@ struct export_operations {
 	int (*get_name)(struct dentry *parent, char *name,
 			struct dentry *child);
 	struct dentry * (*get_parent)(struct dentry *child);
+#if defined(CONFIG_PNFSD)
+		/* pNFS: spnfs calls */
+	int (*propagate_open) (struct inode *inode, void *p);
+#endif /* CONFIG_PNFSD */
 };
 
 extern int exportfs_encode_fh(struct dentry *dentry, struct fid *fid,
