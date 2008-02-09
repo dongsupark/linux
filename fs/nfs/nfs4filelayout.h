@@ -18,4 +18,6 @@ struct filelayout_mount_type {
 
 extern struct pnfs_client_operations *pnfs_callback_ops;
 
+char *deviceid_fmt(const struct pnfs_deviceid *dev_id);
+
 #endif /* FS_NFS_NFS4FILELAYOUT_H */

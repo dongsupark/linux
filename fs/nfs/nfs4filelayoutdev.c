@@ -35,3 +35,24 @@
  *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/nfs4.h>
+#include <linux/nfs_fs.h>
+#include <linux/nfs_xdr.h>
+
+#include <linux/pnfs_xdr.h>
+#include "nfs4filelayout.h"
+
+/* Debugging function assuming a 64bit major/minor split of the deviceid */
+char *
+deviceid_fmt(const struct pnfs_deviceid *dev_id)
+{
+	static char buf[17];
+	uint32_t *p = (uint32_t *)dev_id->data;
+	uint64_t major, minor;
+
+	p = xdr_decode_hyper(p, &major);
+	p = xdr_decode_hyper(p, &minor);
+
+	sprintf(buf, "%08llu %08llu", major, minor);
+	return buf;
+}
