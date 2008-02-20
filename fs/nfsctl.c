@@ -88,9 +88,11 @@ static struct {
 int (*spnfs_init)(void);
 int (*spnfs_test)(void);
 void (*spnfs_delete)(void);
+struct nfs_fh * (*spnfs_getfh_vec)(int);
 EXPORT_SYMBOL(spnfs_init);
 EXPORT_SYMBOL(spnfs_test);
 EXPORT_SYMBOL(spnfs_delete);
+EXPORT_SYMBOL(spnfs_getfh_vec);
 #endif /* CONFIG_SPNFS */
 
 SYSCALL_DEFINE3(nfsservctl, int, cmd, struct nfsctl_arg __user *, arg,
@@ -141,7 +143,10 @@ SYSCALL_DEFINE3(nfsservctl, int, cmd, struct nfsctl_arg __user *, arg,
 		 */
 		if (copy_from_user(&fd, &arg->ca_fd2fh.fd, sizeof(int)))
 			return -EFAULT;
-		fh = spnfs_getfh(fd);
+		if (spnfs_getfh_vec)
+			fh = spnfs_getfh_vec(fd);
+		else
+			return -EINVAL;
 		if (fh == NULL)
 			return -EINVAL;
 
