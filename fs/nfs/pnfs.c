@@ -1137,6 +1137,8 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 	loff_t loff;
 	int status = 0;
 
+	pgio->pg_threshold = 0;
+	pgio->pg_iswrite = 0;
 	pgio->pg_boundary = 0;
 	pgio->pg_test = NULL;
 
@@ -1159,6 +1161,21 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 		if (pgio->pg_boundary)
 			pnfs_set_pg_test(inode, pgio);
 	}
+}
+
+void
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
+{
+	pgio->pg_iswrite = 1;
+	if (!pnfs_enabled_sb(NFS_SERVER(inode))) {
+		pgio->pg_threshold = 0;
+		pgio->pg_boundary = 0;
+		pgio->pg_test = NULL;
+		return;
+	}
+	pgio->pg_threshold = pnfs_getthreshold(inode, 1);
+	pgio->pg_boundary = pnfs_getboundary(inode);
+	pnfs_set_pg_test(inode, pgio);
 }
 
 /* This is utilized in the paging system to determine if
