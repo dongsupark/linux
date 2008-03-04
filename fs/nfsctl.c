@@ -87,6 +87,7 @@ static struct {
 	},
 };
 
+#if defined(CONFIG_PNFSD)
 int (*spnfs_init)(void);
 int (*spnfs_test)(void);
 void (*spnfs_delete)(void);
@@ -95,6 +96,7 @@ EXPORT_SYMBOL(spnfs_init);
 EXPORT_SYMBOL(spnfs_test);
 EXPORT_SYMBOL(spnfs_delete);
 EXPORT_SYMBOL(spnfs_getfh_vec);
+#endif /* CONFIG_PNFSD */
 
 SYSCALL_DEFINE3(nfsservctl, int, cmd, struct nfsctl_arg __user *, arg,
 		void __user *, res)
@@ -104,6 +106,8 @@ SYSCALL_DEFINE3(nfsservctl, int, cmd, struct nfsctl_arg __user *, arg,
 	int version;
 	int err;
 	int fd;
+
+#if defined(CONFIG_PNFSD)
 	struct nfs_fh *fh;
 	extern struct nfs_fh *spnfs_getfh(int);
 
@@ -155,6 +159,7 @@ SYSCALL_DEFINE3(nfsservctl, int, cmd, struct nfsctl_arg __user *, arg,
 
 		return 0;
 	}
+#endif /* CONFIG_PNFSD */
 
 	if (copy_from_user(&version, &arg->ca_version, sizeof(int)))
 		return -EFAULT;
