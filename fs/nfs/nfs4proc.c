@@ -52,6 +52,7 @@
 #include <linux/nfs41_session_recovery.h>
 #include <linux/sunrpc/bc_xprt.h>
 #include <linux/pnfs_xdr.h>
+#include <linux/nfs4_pnfs.h>
 
 #include "nfs4_fs.h"
 #include "delegation.h"
@@ -4943,8 +4944,13 @@ static void nfs4_pnfs_layoutget_done(struct rpc_task *task, void *calldata)
 
 static void nfs4_pnfs_layoutget_release(void *calldata)
 {
+	struct nfs4_pnfs_layoutget *lgp = calldata;
+
 	dprintk("--> %s\n", __func__);
-	/* pnfs_layout_release here */
+	pnfs_layout_release(lgp->lo);
+	if (lgp->res.layout.buf != NULL)
+		free_page((unsigned long) lgp->res.layout.buf);
+	kfree(calldata);
 	dprintk("<-- %s\n", __func__);
 }
 
@@ -4974,6 +4980,13 @@ static int pnfs4_proc_layoutget(struct nfs4_pnfs_layoutget *lgp)
 	int status;
 
 	dprintk("--> %s\n", __func__);
+
+	lgp->res.layout.buf = (void *)__get_free_page(GFP_NOFS);
+	if (lgp->res.layout.buf == NULL) {
+		nfs4_pnfs_layoutget_release(lgp);
+		status = -ENOMEM;
+		goto out;
+	}
 
 	lgp->res.seq_res.sr_slotid = NFS4_MAX_SLOT_TABLE;
 	task = rpc_run_task(&task_setup_data);

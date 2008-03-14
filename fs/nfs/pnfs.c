@@ -41,6 +41,8 @@
 #include <linux/smp_lock.h>
 #include <linux/nfs_fs.h>
 #include <linux/nfs_mount.h>
+#include <linux/nfs_page.h>
+#include <linux/nfs4.h>
 #include <linux/pnfs_xdr.h>
 #include <linux/nfs4_pnfs.h>
 
@@ -252,6 +254,15 @@ put_unlock_current_layout(struct nfs_inode *nfsi,
 		spin_unlock(&clp->cl_lock);
 	}
 	spin_unlock(&nfsi->lo_lock);
+}
+
+void
+pnfs_layout_release(struct pnfs_layout_type *lo)
+{
+	struct nfs_inode *nfsi = NFS_I(lo->inode);
+
+	spin_lock(&nfsi->lo_lock);
+	put_unlock_current_layout(nfsi, lo);
 }
 
 static inline void
