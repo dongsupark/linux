@@ -279,6 +279,43 @@ static void renew_lease(const struct nfs_server *server, unsigned long timestamp
 	spin_unlock(&clp->cl_lock);
 }
 
+#if defined(CONFIG_NFS_V4_1)
+
+/*
+ * nfs4_find_slot - efficiently look for a free slot
+ *
+ * nfs4_find_slot looks for an unset bit in the used_slots bitmap.
+ * If found, we mark the slot as used, update the highest_used_slotid,
+ * and respectively set up the sequence operation args.
+ * The slot number is returned if found, or NFS4_MAX_SLOT_TABLE otherwise.
+ */
+static u8
+nfs4_find_slot(struct nfs4_slot_table *tbl, struct rpc_task *task)
+{
+	int slotid;
+	u8 ret_id = NFS4_MAX_SLOT_TABLE;
+	BUILD_BUG_ON((u8)NFS4_MAX_SLOT_TABLE != (int)NFS4_MAX_SLOT_TABLE);
+
+	spin_lock(&tbl->slot_tbl_lock);
+	dprintk("--> %s used_slots=%04lx highest_used=%d max_slots=%d\n",
+		__func__, tbl->used_slots[0], tbl->highest_used_slotid,
+		tbl->max_slots);
+	slotid = find_first_zero_bit(tbl->used_slots, tbl->max_slots);
+	if (slotid >= tbl->max_slots)
+		goto out;
+	__set_bit(slotid, tbl->used_slots);
+	if (slotid > tbl->highest_used_slotid)
+		tbl->highest_used_slotid = slotid;
+	ret_id = slotid;
+out:
+	dprintk("<-- %s used_slots=%04lx highest_used=%d slotid=%d \n",
+		__func__, tbl->used_slots[0], tbl->highest_used_slotid, ret_id);
+	spin_unlock(&tbl->slot_tbl_lock);
+	return ret_id;
+}
+
+#endif /* CONFIG_NFS_V4_1 */
+
 static void update_changeattr(struct inode *dir, struct nfs4_change_info *cinfo)
 {
 	struct nfs_inode *nfsi = NFS_I(dir);
