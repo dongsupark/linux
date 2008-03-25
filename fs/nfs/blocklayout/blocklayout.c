@@ -807,6 +807,23 @@ bl_write_begin(struct pnfs_layout_segment *lseg, struct page *page, loff_t pos,
 	return ret;
 }
 
+/* CAREFUL - what happens if copied < count??? */
+static int
+bl_write_end(struct inode *inode, struct page *page, loff_t pos,
+	     unsigned count, unsigned copied, struct pnfs_fsdata *fsdata)
+{
+	dprintk("%s enter, %u@%lld, %i\n", __func__, count, pos,
+		fsdata ? fsdata->ok_to_use_pnfs : -1);
+	print_page(page);
+	if (fsdata) {
+		if (fsdata->ok_to_use_pnfs) {
+			dprintk("%s using pnfs\n", __func__);
+			SetPageUptodate(page);
+		}
+	}
+	return 0;
+}
+
 static ssize_t
 bl_get_stripesize(struct pnfs_layout_type *lo)
 {
@@ -851,6 +868,7 @@ static struct layoutdriver_io_operations blocklayout_io_operations = {
 	.read_pagelist			= bl_read_pagelist,
 	.write_pagelist			= bl_write_pagelist,
 	.write_begin			= bl_write_begin,
+	.write_end			= bl_write_end,
 	.alloc_layout			= bl_alloc_layout,
 	.free_layout			= bl_free_layout,
 	.alloc_lseg			= bl_alloc_lseg,
