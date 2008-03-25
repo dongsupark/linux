@@ -1040,6 +1040,32 @@ below_threshold(struct inode *inode, size_t req_size, int iswrite)
 }
 
 void
+readahead_range(struct inode *inode, struct list_head *pages, loff_t *offset,
+		size_t *count)
+{
+	struct page *first, *last;
+	loff_t foff, i_size = i_size_read(inode);
+	pgoff_t end_index = (i_size - 1) >> PAGE_CACHE_SHIFT;
+	size_t range;
+
+
+	first = list_entry((pages)->prev, struct page, lru);
+	last = list_entry((pages)->next, struct page, lru);
+
+	foff = (loff_t)first->index << PAGE_CACHE_SHIFT;
+
+	range = (last->index - first->index) * PAGE_CACHE_SIZE;
+	if (last->index == end_index)
+		range += ((i_size - 1) & ~PAGE_CACHE_MASK) + 1;
+	else
+		range += PAGE_CACHE_SIZE;
+	dprintk("%s foff %lu, range %Zu\n", __func__, (unsigned long)foff,
+		range);
+	*offset = foff;
+	*count = range;
+}
+
+void
 pnfs_set_pg_test(struct inode *inode, struct nfs_pageio_descriptor *pgio)
 {
 	struct pnfs_layout_type *laytype;
@@ -1084,6 +1110,45 @@ pnfs_getboundary(struct inode *inode)
 	}
 out:
 	return stripe_size;
+}
+
+/*
+ * rsize is already set by caller to MDS rsize.
+ */
+void
+pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
+		  struct inode *inode,
+		  struct nfs_open_context *ctx,
+		  struct list_head *pages,
+		  size_t *rsize)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	size_t count = 0;
+	loff_t loff;
+	int status = 0;
+
+	pgio->pg_boundary = 0;
+	pgio->pg_test = NULL;
+
+	if (!pnfs_enabled_sb(nfss))
+		return;
+
+	/* Calculate the total read-ahead count */
+	readahead_range(inode, pages, &loff, &count);
+
+	if (count > 0 && !below_threshold(inode, count, 0)) {
+		status = pnfs_update_layout(inode, ctx, count,
+						loff, IOMODE_READ, NULL);
+		dprintk("%s *rsize %Zd virt update returned %d\n",
+					__func__, *rsize, status);
+		if (status != 0)
+			return;
+
+		*rsize = NFS_SERVER(inode)->ds_rsize;
+		pgio->pg_boundary = pnfs_getboundary(inode);
+		if (pgio->pg_boundary)
+			pnfs_set_pg_test(inode, pgio);
+	}
 }
 
 /* This is utilized in the paging system to determine if
