@@ -150,10 +150,12 @@ static inline void
 bl_done_with_rpage(struct page *page, const int ok)
 {
 	if (ok) {
+		ClearPagePnfsErr(page);
 		SetPageUptodate(page);
 	} else {
 		ClearPageUptodate(page);
 		SetPageError(page);
+		SetPagePnfsErr(page);
 	}
 	/* Page is unlocked via rpc_release.  Should really be done here. */
 }
@@ -223,6 +225,13 @@ bl_read_pagelist(struct pnfs_layout_type *lo,
 
 	if (dont_like_caller(rdata->req)) {
 		dprintk("%s dont_like_caller failed\n", __func__);
+		goto use_mds;
+	}
+	if ((nr_pages == 1) && PagePnfsErr(rdata->req->wb_page)) {
+		/* We want to fall back to mds in case of read_page
+		 * after error on read_pages.
+		 */
+		dprintk("%s PG_pnfserr set\n", __func__);
 		goto use_mds;
 	}
 	par = alloc_parallel(rdata);
