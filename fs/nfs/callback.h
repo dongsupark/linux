@@ -83,6 +83,7 @@ struct cb_pnfs_layoutrecallargs {
 	uint32_t		cbl_recall_type;
 	uint32_t		cbl_layout_type;
 	uint32_t		cbl_layoutchanged;
+	nfs4_stateid		cbl_stateid;
 };
 #endif /* CONFIG_PNFS */
 
@@ -120,6 +121,10 @@ struct cb_sequenceres {
 extern unsigned nfs4_callback_sequence(struct cb_sequenceargs *args,
 				       struct cb_sequenceres *res);
 
+#if defined(CONFIG_PNFS)
+extern unsigned pnfs_cb_layoutrecall(struct cb_pnfs_layoutrecallargs *args,
+				     void *dummy);
+#endif /* CONFIG_PNFS */
 #endif /* CONFIG_NFS_V4_1 */
 
 extern __be32 nfs4_callback_getattr(struct cb_getattrargs *args, struct cb_getattrres *res);
