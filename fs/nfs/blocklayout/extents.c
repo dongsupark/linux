@@ -191,3 +191,50 @@ add_and_merge_extent(struct pnfs_block_layout *bl,
 	put_extent(new);
 	return -EIO;
 }
+
+/* Returns extent, or NULL.  If a second READ extent exists, it is returned
+ * in cow_read, if given.
+ *
+ * The extents are kept in two seperate ordered lists, one for READ and NONE,
+ * one for READWRITE and INVALID.  Within each list, we assume:
+ * 1. Extents are ordered by file offset.
+ * 2. For any given isect, there is at most one extents that matches.
+ */
+struct pnfs_block_extent *
+find_get_extent(struct pnfs_block_layout *bl, sector_t isect,
+	    struct pnfs_block_extent **cow_read)
+{
+	struct pnfs_block_extent *be, *cow, *ret;
+	int i;
+
+	dprintk("%s enter with isect %llu\n", __func__, (u64)isect);
+	cow = ret = NULL;
+	spin_lock(&bl->bl_ext_lock);
+	for (i = 0; i < EXTENT_LISTS; i++) {
+		if (ret &&
+		    (!cow_read || ret->be_state != PNFS_BLOCK_INVALID_DATA))
+			break;
+		list_for_each_entry(be, &bl->bl_extents[i], be_node) {
+			if (isect < be->be_f_offset)
+				break;
+			if (isect < be->be_f_offset + be->be_length) {
+				/* We have found an extent */
+				dprintk("%s Get %p (%i)\n", __func__, be,
+					atomic_read(&be->be_refcnt.refcount));
+				kref_get(&be->be_refcnt);
+				if (!ret)
+					ret = be;
+				else if (be->be_state != PNFS_BLOCK_READ_DATA)
+					put_extent(be);
+				else
+					cow = be;
+				break;
+			}
+		}
+	}
+	spin_unlock(&bl->bl_ext_lock);
+	if (cow_read)
+		*cow_read = cow;
+	print_bl_extent(ret);
+	return ret;
+}
