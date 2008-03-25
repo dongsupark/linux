@@ -23,3 +23,4 @@ obj-m += nfslayoutdriver.o
 nfslayoutdriver-objs := nfs4filelayout.o nfs4filelayoutdev.o
 
 obj-$(CONFIG_PNFS_OBJLAYOUT) += objlayout/
+obj-$(CONFIG_PNFS_BLOCK) += blocklayout/
