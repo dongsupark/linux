@@ -663,6 +663,12 @@ static int dev_create(struct dm_ioctl *param, size_t param_size)
 	return 0;
 }
 
+int dm_dev_create(struct dm_ioctl *param)
+{
+	return dev_create(param, sizeof(*param));
+}
+EXPORT_SYMBOL(dm_dev_create);
+
 /*
  * Always use UUID for lookups if it's present, otherwise use name or dev.
  */
@@ -757,6 +763,12 @@ static int dev_remove(struct dm_ioctl *param, size_t param_size)
 	dm_destroy(md);
 	return 0;
 }
+
+int dm_dev_remove(struct dm_ioctl *param)
+{
+	return dev_remove(param, sizeof(*param));
+}
+EXPORT_SYMBOL(dm_dev_remove);
 
 /*
  * Check a string doesn't overrun the chunk of
@@ -936,6 +948,12 @@ static int do_resume(struct dm_ioctl *param)
 	dm_put(md);
 	return r;
 }
+
+int dm_do_resume(struct dm_ioctl *param)
+{
+	return do_resume(param);
+}
+EXPORT_SYMBOL(dm_do_resume);
 
 /*
  * Set or unset the suspension state of a device.
@@ -1202,6 +1220,12 @@ out:
 
 	return r;
 }
+
+int dm_table_load(struct dm_ioctl *param, size_t param_size)
+{
+	return table_load(param, param_size);
+}
+EXPORT_SYMBOL(dm_table_load);
 
 static int table_clear(struct dm_ioctl *param, size_t param_size)
 {
