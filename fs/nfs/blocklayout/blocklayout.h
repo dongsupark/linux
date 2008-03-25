@@ -202,6 +202,9 @@ struct pnfs_block_dev *nfs4_blk_init_metadev(struct super_block *sb,
 int nfs4_blk_flatten(struct pnfs_blk_volume *, int, struct pnfs_block_dev *);
 void free_block_dev(struct pnfs_block_dev *bdev);
 /* extents.c */
+struct pnfs_block_extent *
+find_get_extent(struct pnfs_block_layout *bl, sector_t isect,
+		struct pnfs_block_extent **cow_read);
 void put_extent(struct pnfs_block_extent *be);
 struct pnfs_block_extent *alloc_extent(void);
 int add_and_merge_extent(struct pnfs_block_layout *bl,
