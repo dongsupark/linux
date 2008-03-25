@@ -28,6 +28,7 @@
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
 #include <linux/aio.h>
+#include <linux/pnfs_xdr.h>
 
 #include <asm/uaccess.h>
 #include <asm/system.h>
