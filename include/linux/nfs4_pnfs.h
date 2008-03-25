@@ -139,6 +139,11 @@ struct layoutdriver_io_operations {
 	int (*uninitialize_mountpoint) (struct pnfs_mount_type *mountid);
 };
 
+enum layoutdriver_policy_flags {
+	/* Should the full nfs rpc cleanup code be used after io */
+	PNFS_USE_RPC_CODE		= 1 << 0,
+};
+
 struct layoutdriver_policy_operations {
 	unsigned flags;
 
@@ -157,6 +162,13 @@ struct layoutdriver_policy_operations {
 	/* Write requests under this value are sent to the NFSv4 server */
 	ssize_t (*get_write_threshold) (struct pnfs_layout_type *, struct inode *);
 };
+
+/* Should the full nfs rpc cleanup code be used after io */
+static inline int
+pnfs_ld_use_rpc_code(struct pnfs_layoutdriver_type *ld)
+{
+	return ld->ld_policy_ops->flags & PNFS_USE_RPC_CODE;
+}
 
 struct pnfs_device {
 	struct pnfs_deviceid dev_id;
