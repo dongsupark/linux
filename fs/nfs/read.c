@@ -22,6 +22,7 @@
 #include <linux/module.h>
 
 #include <asm/system.h>
+#include "pnfs.h"
 
 #include "nfs4_fs.h"
 #include "internal.h"
@@ -643,6 +644,9 @@ int nfs_readpages(struct file *filp, struct address_space *mapping,
 	if (ret == 0)
 		goto read_complete; /* all pages were read */
 
+#ifdef CONFIG_PNFS
+	pnfs_pageio_init_read(&pgio, inode, desc.ctx, pages, &rsize);
+#endif /* CONFIG_PNFS */
 	if (rsize < PAGE_CACHE_SIZE)
 		nfs_pageio_init(&pgio, inode, nfs_pagein_multi, rsize, 0);
 	else

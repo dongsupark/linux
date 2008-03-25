@@ -14,6 +14,7 @@
 
 #ifdef CONFIG_PNFS
 
+#include <linux/nfs_page.h>
 #include <linux/nfs4_pnfs.h>
 #include <linux/pnfs_xdr.h>
 
@@ -47,6 +48,7 @@ int pnfs_layoutcommit_inode(struct inode *inode, int sync);
 void pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx);
 unsigned int pnfs_getiosize(struct nfs_server *server);
 void pnfs_set_ds_iosize(struct nfs_server *server);
+void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *, struct nfs_open_context *, struct list_head *, size_t *);
 void pnfs_get_layout_done(struct nfs4_pnfs_layoutget *, int rpc_status);
 int pnfs_layout_process(struct nfs4_pnfs_layoutget *lgp);
 void pnfs_layout_release(struct pnfs_layout_type *);
