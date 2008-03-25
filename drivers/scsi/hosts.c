@@ -48,10 +48,11 @@ static void scsi_host_cls_release(struct device *dev)
 	put_device(&class_to_shost(dev)->shost_gendev);
 }
 
-static struct class shost_class = {
+struct class shost_class = {
 	.name		= "scsi_host",
 	.dev_release	= scsi_host_cls_release,
 };
+EXPORT_SYMBOL(shost_class);
 
 /**
  *	scsi_host_set_state - Take the given host through the host state model.
