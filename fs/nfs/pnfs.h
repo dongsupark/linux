@@ -78,6 +78,21 @@ static inline int pnfs_return_layout(struct inode *ino,
 	return 0;
 }
 
+static inline int pnfs_use_rpc(struct nfs_server *nfss)
+{
+	if (pnfs_enabled_sb(nfss))
+		return pnfs_ld_use_rpc_code(nfss->pnfs_curr_ld);
+
+	return 1;
+}
+
+#else  /* CONFIG_PNFS */
+
+static inline int pnfs_use_rpc(struct nfs_server *nfss)
+{
+	return 1;
+}
+
 #endif /* CONFIG_PNFS */
 
 #endif /* FS_NFS_PNFS_H */
