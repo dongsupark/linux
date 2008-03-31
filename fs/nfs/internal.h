@@ -245,6 +245,10 @@ extern int nfs_initiate_write(struct nfs_write_data *data,
 			      struct rpc_clnt *clnt,
 			      const struct rpc_call_ops *call_ops,
 			      int how);
+extern int nfs_initiate_commit(struct nfs_write_data *data,
+			       struct rpc_clnt *clnt,
+			       const struct rpc_call_ops *call_ops,
+			       int how);
 extern void nfs_write_prepare(struct rpc_task *task, void *calldata);
 
 /* nfs4proc.c */
