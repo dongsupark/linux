@@ -16,6 +16,9 @@
 #include <linux/module.h>
 #include <linux/exportfs.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
+#if defined(CONFIG_SPNFS)
+#include <linux/nfsd4_spnfs.h>
+#endif
 #include <net/ipv6.h>
 
 #include "nfsd.h"
@@ -354,6 +357,20 @@ static struct pnfsd_cb_operations pnfsd_cb_op = {
 	.cb_get_state = nfs4_pnfs_cb_get_state,
 	.cb_change_state = nfs4_pnfs_cb_change_state,
 };
+
+#if defined(CONFIG_SPNFS)
+static struct pnfs_export_operations spnfs_export_ops = {
+	.layout_type = spnfs_layout_type,
+	.get_device_info = spnfs_getdeviceinfo,
+	.get_device_iter = spnfs_getdeviceiter,
+	.layout_get = spnfs_layoutget,
+	.layout_return = spnfs_layoutreturn,
+};
+
+static struct pnfs_export_operations spnfs_ds_export_ops = {
+	.get_state = spnfs_get_state,
+};
+#endif /* CONFIG_SPNFS */
 #endif /* CONFIG_PNFSD */
 
 static struct svc_export *svc_export_update(struct svc_export *new,
@@ -367,7 +384,27 @@ static int pnfsd_check_export(struct inode *inode, int *flags)
 #if defined(CONFIG_PNFSD_LOCAL_EXPORT)
 	if (!inode->i_sb->s_pnfs_op)
 		pnfsd_lexp_init(inode);
+	return 0;
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
+
+#if defined(CONFIG_SPNFS)
+	/*
+	 * spnfs_enabled() indicates we're an MDS.
+	 * XXX Better to check an export time option as well.
+	 */
+	if (spnfs_enabled()) {
+		dprintk("set spnfs export structure...\n");
+		inode->i_sb->s_pnfs_op = &spnfs_export_ops;
+	} else {
+		dprintk("%s spnfs not in use\n", __func__);
+
+		/*
+		 * get_state is needed if we're a DS using spnfs.
+		 * XXX Better to check an export time option instead.
+		 */
+		inode->i_sb->s_pnfs_op = &spnfs_ds_export_ops;
+	}
+#endif /* CONFIG_SPNFS */
 
 #endif /* CONFIG_PNFSD */
 
@@ -413,6 +450,7 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 		return -EINVAL;
 	}
 
+#if !defined(CONFIG_SPNFS)
 	if (inode->i_sb->s_pnfs_op &&
 	    (!inode->i_sb->s_pnfs_op->layout_type ||
 	     !inode->i_sb->s_pnfs_op->get_device_info ||
@@ -420,6 +458,7 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 		dprintk("exp_export: export of invalid fs pnfs export ops.\n");
 		return -EINVAL;
 	}
+#endif /* !CONFIG_SPNFS */
 
 	return pnfsd_check_export(inode, flags);
 }
