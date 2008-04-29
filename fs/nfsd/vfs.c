@@ -37,6 +37,7 @@
 #include "acl.h"
 #include "idmap.h"
 #include "pnfsd.h"
+#include <linux/nfsd4_spnfs.h>
 #endif /* CONFIG_NFSD_V4 */
 
 #include "nfsd.h"
@@ -1729,6 +1730,11 @@ nfsd_rename(struct svc_rqst *rqstp, struct svc_fh *ffhp, char *fname, int flen,
 	struct inode	*fdir, *tdir;
 	__be32		err;
 	int		host_err;
+#ifdef CONFIG_SPNFS
+	unsigned long	ino = 0;
+	unsigned long	generation = 0;
+	unsigned int	nlink = 0;
+#endif /* CONFIG_SPNFS */
 
 	err = fh_verify(rqstp, ffhp, S_IFDIR, NFSD_MAY_REMOVE);
 	if (err)
@@ -1793,7 +1799,27 @@ nfsd_rename(struct svc_rqst *rqstp, struct svc_fh *ffhp, char *fname, int flen,
 		if (host_err)
 			goto out_drop_write;
 	}
+
+#ifdef CONFIG_SPNFS
+	/*
+	 * if the target is a preexisting regular file, remember the
+	 * inode number and generation so we can delete the stripes;
+	 * save the link count as well so that the stripes only get
+	 * get deleted when the last link is deleted
+	 */
+	if (ndentry && ndentry->d_inode && S_ISREG(ndentry->d_inode->i_mode)) {
+		ino = ndentry->d_inode->i_ino;
+		generation = ndentry->d_inode->i_generation;
+		nlink = ndentry->d_inode->i_nlink;
+	}
+#endif /* CONFIG_SPNFS */
+
 	host_err = vfs_rename(fdir, odentry, tdir, ndentry);
+#ifdef CONFIG_SPNFS
+	if (spnfs_enabled() && (!host_err && ino && nlink == 1))
+		spnfs_remove(ino, generation);
+#endif /* CONFIG_SPNFS */
+
 	if (!host_err) {
 		host_err = commit_metadata(tfhp);
 		if (!host_err)
@@ -1833,6 +1859,11 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 	struct inode	*dirp;
 	__be32		err;
 	int		host_err;
+#if defined(CONFIG_SPNFS)
+	unsigned long	ino;
+	unsigned long	generation;
+	unsigned int	nlink;
+#endif /* defined(CONFIG_SPNFS) */
 
 	err = nfserr_acces;
 	if (!flen || isdotent(fname, flen))
@@ -1856,6 +1887,17 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 		goto out;
 	}
 
+#if defined(CONFIG_SPNFS)
+	/*
+	 * Remember the inode number to communicate to the spnfsd
+	 * for removal of stripes; save the link count as well so that
+	 * the stripes only get get deleted when the last link is deleted
+	 */
+	ino = rdentry->d_inode->i_ino;
+	generation = rdentry->d_inode->i_generation;
+	nlink = rdentry->d_inode->i_nlink;
+#endif /* defined(CONFIG_SPNFS) */
+
 	if (!type)
 		type = rdentry->d_inode->i_mode & S_IFMT;
 
@@ -1872,6 +1914,26 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 		host_err = vfs_rmdir(dirp, rdentry);
 	if (!host_err)
 		host_err = commit_metadata(fhp);
+
+#if defined(CONFIG_SPNFS)
+	/*
+	 * spnfs: notify spnfsd of removal to destroy stripes
+	 */
+	dprintk("%s check if spnfs_enabled\n", __FUNCTION__);
+	if (spnfs_enabled() && nlink == 1) {
+		BUG_ON(ino == 0);
+		dprintk("%s calling spnfs_remove inumber=%ld\n",
+			__FUNCTION__, ino);
+		if (spnfs_remove(ino, generation) == 0) {
+			dprintk("%s spnfs_remove success\n", __FUNCTION__);
+		} else {
+			/* XXX How do we make this atomic? */
+			printk(KERN_WARNING "nfsd: pNFS could not "
+				"remove stripes for inode: %ld\n", ino);
+		}
+	}
+#endif /* defined(CONFIG_SPNFS) */
+
 out_drop_write:
 	mnt_drop_write(fhp->fh_export->ex_path.mnt);
 out_put:

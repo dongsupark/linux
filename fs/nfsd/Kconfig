@@ -122,3 +122,21 @@ config PNFSD_LEXP_LAYOUT_SEGMENT_SIZE
 	  Set simulated layout segment size.
 
 	  If unsure, say N.
+
+config SPNFS
+	bool "Provide spNFS server support (EXPERIMENTAL)"
+	depends on PNFSD
+	select RPCSEC_GSS_KRB5
+	help
+	  Say Y here if you want spNFS server support.
+
+	  If unsure, say N.
+
+config SPNFS_LAYOUTSEGMENTS
+	bool "Allow spNFS to return partial file layouts (EXPERIMENTAL)"
+	depends on SPNFS
+	select RPCSEC_GSS_KRB5
+	help
+	  Say Y here if you want spNFS to be able to return layout segments.
+
+	  If unsure, say N.

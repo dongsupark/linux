@@ -35,6 +35,7 @@
 #include <linux/file.h>
 #include <linux/slab.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
+#include <linux/nfsd4_spnfs.h>
 
 #include "idmap.h"
 #include "cache.h"
@@ -398,6 +399,24 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	 * set, (2) sets open->op_stateid, (3) sets open->op_delegation.
 	 */
 	status = nfsd4_process_open2(rqstp, &cstate->current_fh, open);
+#if defined(CONFIG_SPNFS)
+	if (!status && spnfs_enabled()) {
+		struct inode *inode = cstate->current_fh.fh_dentry->d_inode;
+
+		status = spnfs_open(inode, open);
+		if (status) {
+			dprintk(
+			     "nfsd: pNFS could not be enabled for inode: %lu\n",
+			     inode->i_ino);
+			/*
+			 * XXX When there's a failure then need to indicate to
+			 * future ops that no pNFS is available.  Should I save
+			 * the status in the inode?  It's kind of a big hammer.
+			 * But there may be no stripes available?
+			 */
+		}
+	}
+#endif /* CONFIG_SPNFS */
 out:
 	if (open->op_openowner)
 		cstate->replay_owner = &open->op_openowner->oo_owner;
@@ -901,9 +920,34 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	nfsd4_get_verifier(cstate->current_fh.fh_dentry->d_inode->i_sb,
 			   &write->wr_verifier);
+#if defined(CONFIG_SPNFS)
+	if (spnfs_enabled()) {
+		status = spnfs_write(cstate->current_fh.fh_dentry->d_inode,
+			write->wr_offset, write->wr_buflen, write->wr_vlen,
+			rqstp);
+		if (status == nfs_ok) {
+			/* DMXXX: HACK to get filesize set */
+			/* write one byte at offset+length-1 */
+			struct kvec k[1];
+			char zero = 0;
+			unsigned long cnt = 1;
+
+			k[0].iov_base = (void *)&zero;
+			k[0].iov_len = 1;
+			nfsd_write(rqstp, &cstate->current_fh, filp,
+				   write->wr_offset+write->wr_buflen-1, k, 1,
+				   &cnt, &write->wr_how_written);
+		}
+	} else /* we're not an MDS */
+		status =  nfsd_write(rqstp, &cstate->current_fh, filp,
+			     write->wr_offset, rqstp->rq_vec, write->wr_vlen,
+			     &cnt, &write->wr_how_written);
+#else
 	status =  nfsd_write(rqstp, &cstate->current_fh, filp,
 			     write->wr_offset, rqstp->rq_vec, write->wr_vlen,
 			     &cnt, &write->wr_how_written);
+#endif /* CONFIG_SPNFS */
+
 	if (filp)
 		fput(filp);
 
