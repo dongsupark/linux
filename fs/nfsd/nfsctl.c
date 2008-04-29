@@ -19,6 +19,10 @@
 #include "nfsd.h"
 #include "cache.h"
 
+#if defined(CONFIG_PROC_FS) && defined(CONFIG_SPNFS)
+#include <linux/nfsd4_spnfs.h>
+#endif /* CONFIG_PROC_FS && CONFIG_SPNFS */
+
 /*
  *	We have a single directory with several nodes in it.
  */
@@ -1220,6 +1224,12 @@ static int __init init_nfsd(void)
 	retval = create_proc_exports_entry();
 	if (retval)
 		goto out_free_idmap;
+#if defined(CONFIG_PROC_FS) && defined(CONFIG_SPNFS)
+	retval = spnfs_init_proc();
+	if (retval != 0)
+		goto out_free_idmap;
+#endif /* CONFIG_PROC_FS && CONFIG_SPNFS */
+
 	retval = register_filesystem(&nfsd_fs_type);
 	if (retval)
 		goto out_free_all;
@@ -1242,6 +1252,20 @@ out_free_stat:
 
 static void __exit exit_nfsd(void)
 {
+#if defined(CONFIG_PROC_FS) && defined(CONFIG_SPNFS)
+	remove_proc_entry("fs/nfs/spnfs/recall", NULL);
+	remove_proc_entry("fs/nfs/spnfs/layoutseg", NULL);
+	remove_proc_entry("fs/nfs/spnfs/getfh", NULL);
+	remove_proc_entry("fs/nfs/spnfs/config", NULL);
+	remove_proc_entry("fs/nfs/spnfs/ctl", NULL);
+	remove_proc_entry("fs/nfs/spnfs", NULL);
+#endif /* CONFIG_PROC_FS && CONFIG_SPNFS */
+
+#if defined(CONFIG_PROC_FS) && defined(CONFIG_SPNFS_LAYOUTSEGMENTS)
+	remove_proc_entry("fs/nfs/spnfs/layoutseg", NULL);
+	remove_proc_entry("fs/nfs/spnfs/layoutsegsize", NULL);
+#endif /* CONFIG_PROC_FS && CONFIG_SPNFS_LAYOUTSEGMENTS */
+
 	nfsd_export_shutdown();
 	nfsd4_pnfs_dlm_shutdown();
 	nfsd_reply_cache_shutdown();
