@@ -41,6 +41,7 @@ struct nfs_parsed_mount_data {
 	unsigned int		auth_flavor_len;
 	rpc_authflavor_t	auth_flavors[1];
 	char			*client_address;
+	unsigned int		minorversion;
 
 	struct {
 		struct sockaddr_storage	address;

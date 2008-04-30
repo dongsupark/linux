@@ -88,6 +88,7 @@ enum {
 	Opt_mountport,
 	Opt_mountvers,
 	Opt_nfsvers,
+	Opt_minorversion,
 
 	/* Mount options that take string arguments */
 	Opt_sec, Opt_proto, Opt_mountproto, Opt_mounthost,
@@ -149,6 +150,7 @@ static const match_table_t nfs_mount_option_tokens = {
 	{ Opt_mountvers, "mountvers=%u" },
 	{ Opt_nfsvers, "nfsvers=%u" },
 	{ Opt_nfsvers, "vers=%u" },
+	{ Opt_minorversion, "minorversion=%u" },
 
 	{ Opt_sec, "sec=%s" },
 	{ Opt_proto, "proto=%s" },
@@ -1167,6 +1169,13 @@ static int nfs_parse_mount_options(char *raw,
 				errors++;
 				nfs_parse_invalid_value("nfsvers");
 			}
+			break;
+		case Opt_minorversion:
+			if (match_int(args, &option))
+				return 0;
+			if (option < 0 || option > NFS4_MAX_MINOR_VERSION)
+				return 0;
+			mnt->minorversion = option;
 			break;
 
 		/*
@@ -2218,6 +2227,7 @@ static int nfs4_validate_mount_data(void *options,
 	args->nfs_server.port	= NFS_PORT; /* 2049 unless user set port= */
 	args->auth_flavors[0]	= RPC_AUTH_UNIX;
 	args->auth_flavor_len	= 0;
+	args->minorversion	= 0;
 
 	switch (data->version) {
 	case 1:
