@@ -154,6 +154,9 @@ struct layoutdriver_io_operations {
 	int (*write_begin) (struct pnfs_layout_segment *lseg, struct page *page,
 			    loff_t pos, unsigned count,
 			    struct pnfs_fsdata *fsdata);
+	void (*new_request)(struct pnfs_layout_segment *lseg,
+			    struct nfs_page *req, loff_t pos, unsigned count,
+			    struct pnfs_fsdata *fsdata);
 
 	/* Layout information. For each inode, alloc_layout is executed once to retrieve an
 	 * inode specific layout structure.  Each subsequent layoutget operation results in
