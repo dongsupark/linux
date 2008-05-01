@@ -3168,6 +3168,12 @@ static int pnfs4_write_done(struct rpc_task *task, struct nfs_write_data *data)
 	}
 	return 0;
 }
+
+static int pnfs4_commit_done(struct rpc_task *task, struct nfs_write_data *data)
+{
+	/* XXX Need to implement */
+	return -1;
+}
 #endif /* CONFIG_PNFS */
 
 static void nfs4_proc_read_setup(struct nfs_read_data *data, struct rpc_message *msg)
@@ -5824,6 +5830,7 @@ pnfs_v4_clientops_init(void)
 	p->file_ops		= &pnfs_file_operations;
 	p->read_done		= pnfs4_read_done;
 	p->write_done		= pnfs4_write_done;
+	p->commit_done		= pnfs4_commit_done;
 }
 #endif /* CONFIG_PNFS */
 
