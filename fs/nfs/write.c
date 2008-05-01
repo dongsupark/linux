@@ -879,6 +879,7 @@ static void nfs_redirty_request(struct nfs_page *req)
 {
 	struct page *page = req->wb_page;
 
+	pnfs_redirty_request(req);
 	nfs_mark_request_dirty(req);
 	nfs_clear_page_tag_locked(req);
 	nfs_end_page_writeback(page);
