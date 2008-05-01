@@ -1564,6 +1564,38 @@ _pnfs_try_to_read_data(struct nfs_read_data *data,
 	}
 }
 
+/*
+ * This gives the layout driver an opportunity to read in page "around"
+ * the data to be written.  It returns 0 on success, otherwise an error code
+ * which will either be passed up to user, or ignored if
+ * some previous part of write succeeded.
+ * Note the range [pos, pos+len-1] is entirely within the page.
+ */
+int _pnfs_write_begin(struct inode *inode, struct page *page,
+		      loff_t pos, unsigned len, struct pnfs_fsdata **fsdata)
+{
+	struct pnfs_layout_segment *lseg;
+	int status = 0;
+
+	*fsdata = kzalloc(sizeof(struct pnfs_fsdata), GFP_KERNEL);
+	if (!*fsdata)
+		return -ENOMEM;
+	lseg = pnfs_find_get_lseg(inode, pos, len, IOMODE_RW);
+	if (lseg) {
+		struct layoutdriver_io_operations *io_ops =
+			NFS_SERVER(inode)->pnfs_curr_ld->ld_io_ops;
+		status = io_ops->write_begin(lseg, page, pos, len, *fsdata);
+		if (!status) {
+			(*fsdata)->lseg = lseg;
+			return 0;
+		}
+		put_lseg(lseg);
+	}
+	kfree(*fsdata);
+	*fsdata = NULL;
+	return status;
+}
+
 /* Given an nfs request, determine if it should be flushed before proceeding.
  * It should default to returning False, returning True only if there is a
  * specific reason to flush.
@@ -1743,6 +1775,14 @@ out:
 out_unlock:
 	spin_unlock(&nfsi->lo_lock);
 	goto out;
+}
+
+void pnfs_free_fsdata(struct pnfs_fsdata *fsdata)
+{
+	if (fsdata) {
+		put_lseg(fsdata->lseg);
+		kfree(fsdata);
+	}
 }
 
 /* Callback operations for layout drivers.
