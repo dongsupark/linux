@@ -57,6 +57,8 @@ void pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent
 void pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx);
 unsigned int pnfs_getiosize(struct nfs_server *server);
 void pnfs_set_ds_iosize(struct nfs_server *server);
+enum pnfs_try_status _pnfs_try_to_commit(struct nfs_write_data *,
+					 const struct rpc_call_ops *, int);
 void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *, struct nfs_open_context *, struct list_head *, size_t *);
 void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *);
 void pnfs_free_fsdata(struct pnfs_fsdata *fsdata);
@@ -70,6 +72,9 @@ void pnfs_set_layout_stateid(struct pnfs_layout_type *lo,
 int _pnfs_write_begin(struct inode *inode, struct page *page,
 		      loff_t pos, unsigned len,
 		      struct pnfs_fsdata **fsdata);
+int _pnfs_write_end(struct inode *inode, struct page *page,
+		    loff_t pos, unsigned len,
+		    unsigned copied, struct pnfs_fsdata *fsdata);
 int _pnfs_do_flush(struct inode *inode, struct nfs_page *req,
 		   struct pnfs_fsdata *fsdata);
 void _pnfs_modify_new_write_request(struct nfs_page *req,
@@ -117,6 +122,24 @@ pnfs_try_to_write_data(struct nfs_write_data *data,
 	return PNFS_NOT_ATTEMPTED;
 }
 
+static inline enum pnfs_try_status
+pnfs_try_to_commit(struct nfs_write_data *data,
+		   const struct rpc_call_ops *call_ops,
+		   int how)
+{
+	struct inode *inode = data->inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	/* Note that we check for "write_pagelist" and not for "commit"
+	   since if async writes were done and pages weren't marked as stable
+	   the commit method MUST be defined by the LD */
+	/* FIXME: write_pagelist should probably be mandated */
+	if (PNFS_EXISTS_LDIO_OP(nfss, write_pagelist))
+		return _pnfs_try_to_commit(data, call_ops, how);
+
+	return PNFS_NOT_ATTEMPTED;
+}
+
 static inline int pnfs_write_begin(struct file *filp, struct page *page,
 				   loff_t pos, unsigned len, void **fsdata)
 {
@@ -145,6 +168,19 @@ static inline int pnfs_do_flush(struct nfs_page *req, void *fsdata)
 
 	if (PNFS_EXISTS_LDPOLICY_OP(NFS_SERVER(inode), do_flush))
 		return _pnfs_do_flush(inode, req, fsdata);
+	else
+		return 0;
+}
+
+static inline int pnfs_write_end(struct file *filp, struct page *page,
+				 loff_t pos, unsigned len, unsigned copied,
+				 void *fsdata)
+{
+	struct inode *inode = filp->f_dentry->d_inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	if (PNFS_EXISTS_LDIO_OP(nfss, write_end))
+		return _pnfs_write_end(inode, page, pos, len, copied, fsdata);
 	else
 		return 0;
 }
@@ -216,6 +252,13 @@ pnfs_try_to_write_data(struct nfs_write_data *data,
 	return PNFS_NOT_ATTEMPTED;
 }
 
+static inline enum pnfs_try_status
+pnfs_try_to_commit(struct nfs_write_data *data,
+		   const struct rpc_call_ops *call_ops, int how)
+{
+	return PNFS_NOT_ATTEMPTED;
+}
+
 static inline int pnfs_do_flush(struct nfs_page *req, void *fsdata)
 {
 	return 0;
@@ -223,6 +266,13 @@ static inline int pnfs_do_flush(struct nfs_page *req, void *fsdata)
 
 static inline int pnfs_write_begin(struct file *filp, struct page *page,
 				   loff_t pos, unsigned len, void **fsdata)
+{
+	return 0;
+}
+
+static inline int pnfs_write_end(struct file *filp, struct page *page,
+				 loff_t pos, unsigned len, unsigned copied,
+				 void *fsdata)
 {
 	return 0;
 }

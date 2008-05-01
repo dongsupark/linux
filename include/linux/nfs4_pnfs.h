@@ -142,9 +142,21 @@ struct layoutdriver_io_operations {
 	int (*write_begin) (struct pnfs_layout_segment *lseg, struct page *page,
 			    loff_t pos, unsigned count,
 			    struct pnfs_fsdata *fsdata);
+	int (*write_end)(struct inode *inode, struct page *page, loff_t pos,
+			 unsigned count, unsigned copied,
+			 struct pnfs_fsdata *fsdata);
 	void (*new_request)(struct pnfs_layout_segment *lseg,
 			    struct nfs_page *req, loff_t pos, unsigned count,
 			    struct pnfs_fsdata *fsdata);
+
+	/* Consistency ops */
+	/* 2 problems:
+	 * 1) the page list contains nfs_pages, NOT pages
+	 * 2) currently the NFS code doesn't create a page array (as it does with read/write)
+	 */
+	enum pnfs_try_status
+	(*commit) (struct pnfs_layout_type *layoutid,
+		   int sync, struct nfs_write_data *nfs_data);
 
 	/* Layout information. For each inode, alloc_layout is executed once to retrieve an
 	 * inode specific layout structure.  Each subsequent layoutget operation results in
@@ -253,6 +265,9 @@ struct pnfs_client_operations {
 
 	/* Post write callback. */
 	void (*nfs_writelist_complete) (struct nfs_write_data *nfs_data);
+
+	/* Post commit callback. */
+	void (*nfs_commit_complete) (struct nfs_write_data *nfs_data);
 	void (*nfs_return_layout) (struct inode *);
 };
 
