@@ -63,6 +63,9 @@ void pnfs_layout_release(struct pnfs_layout_type *);
 int _pnfs_write_begin(struct inode *inode, struct page *page,
 		      loff_t pos, unsigned len,
 		      struct pnfs_fsdata **fsdata);
+int _pnfs_write_end(struct inode *inode, struct page *page,
+		    loff_t pos, unsigned len,
+		    unsigned copied, struct pnfs_fsdata *fsdata);
 int _pnfs_do_flush(struct inode *inode, struct nfs_page *req,
 		   struct pnfs_fsdata *fsdata);
 void _pnfs_modify_new_write_request(struct nfs_page *req,
@@ -142,6 +145,19 @@ static inline int pnfs_do_flush(struct nfs_page *req, void *fsdata)
 		return 0;
 }
 
+static inline int pnfs_write_end(struct file *filp, struct page *page,
+				 loff_t pos, unsigned len, unsigned copied,
+				 void *fsdata)
+{
+	struct inode *inode = filp->f_dentry->d_inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	if (PNFS_EXISTS_LDIO_OP(nfss, write_end))
+		return _pnfs_write_end(inode, page, pos, len, copied, fsdata);
+	else
+		return 0;
+}
+
 static inline void pnfs_write_end_cleanup(void *fsdata)
 {
 	pnfs_free_fsdata(fsdata);
@@ -216,6 +232,13 @@ static inline int pnfs_do_flush(struct nfs_page *req, void *fsdata)
 
 static inline int pnfs_write_begin(struct file *filp, struct page *page,
 				   loff_t pos, unsigned len, void **fsdata)
+{
+	return 0;
+}
+
+static inline int pnfs_write_end(struct file *filp, struct page *page,
+				 loff_t pos, unsigned len, unsigned copied,
+				 void *fsdata)
 {
 	return 0;
 }

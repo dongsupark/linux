@@ -432,8 +432,12 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 			zero_user_segment(page, pglen, PAGE_CACHE_SIZE);
 	}
 
+	status = pnfs_write_end(file, page, pos, len, copied, fsdata);
+	if (status)
+		goto out;
 	status = nfs_updatepage(file, page, offset, copied, fsdata);
 
+ out:
 	unlock_page(page);
 	page_cache_release(page);
 	pnfs_write_end_cleanup(fsdata);
