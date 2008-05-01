@@ -59,6 +59,8 @@ ssize_t pnfs_file_write(struct file *, const char __user *, size_t, loff_t *);
 void pnfs_get_layout_done(struct nfs4_pnfs_layoutget *, int rpc_status);
 int pnfs_layout_process(struct nfs4_pnfs_layoutget *lgp);
 void pnfs_layout_release(struct pnfs_layout_type *);
+int _pnfs_do_flush(struct inode *inode, struct nfs_page *req,
+		   struct pnfs_fsdata *fsdata);
 
 #define PNFS_EXISTS_LDIO_OP(srv, opname) ((srv)->pnfs_curr_ld &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops &&	\
@@ -100,6 +102,24 @@ pnfs_try_to_write_data(struct nfs_write_data *data,
 		return _pnfs_try_to_write_data(data, call_ops, how);
 
 	return PNFS_NOT_ATTEMPTED;
+}
+
+/* req may not be locked, so we have to be prepared for req->wb_page being
+ * set to NULL at any time.
+ */
+static inline int pnfs_do_flush(struct nfs_page *req, void *fsdata)
+{
+	struct page *page = req->wb_page;
+	struct inode *inode;
+
+	if (!page)
+		return 1;
+	inode = page->mapping->host;
+
+	if (PNFS_EXISTS_LDPOLICY_OP(NFS_SERVER(inode), do_flush))
+		return _pnfs_do_flush(inode, req, fsdata);
+	else
+		return 0;
 }
 
 static inline int pnfs_return_layout(struct inode *ino,
@@ -149,6 +169,11 @@ pnfs_try_to_write_data(struct nfs_write_data *data,
 		       const struct rpc_call_ops *call_ops, int how)
 {
 	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline int pnfs_do_flush(struct nfs_page *req, void *fsdata)
+{
+	return 0;
 }
 
 static inline int pnfs_get_write_status(struct nfs_write_data *data)
