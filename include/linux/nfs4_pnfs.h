@@ -45,6 +45,11 @@ struct pnfs_mount_type {
 	void *mountid;
 };
 
+struct pnfs_fsdata {
+	int ok_to_use_pnfs;
+	struct pnfs_layout_segment *lseg;
+};
+
 static inline struct nfs_inode *
 PNFS_NFS_INODE(struct pnfs_layout_type *lo)
 {
@@ -138,6 +143,9 @@ struct layoutdriver_io_operations {
 			   struct page **pages, unsigned int pgbase,
 			   unsigned nr_pages, loff_t offset, size_t count,
 			   int sync, struct nfs_write_data *nfs_data);
+	int (*write_begin) (struct pnfs_layout_segment *lseg, struct page *page,
+			    loff_t pos, unsigned count,
+			    struct pnfs_fsdata *fsdata);
 
 	/* Layout information. For each inode, alloc_layout is executed once to retrieve an
 	 * inode specific layout structure.  Each subsequent layoutget operation results in
@@ -181,6 +189,10 @@ struct layoutdriver_policy_operations {
 
 	/* test for nfs page cache coalescing */
 	int (*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
+
+	/* Test for pre-write request flushing */
+	int (*do_flush)(struct pnfs_layout_segment *lseg, struct nfs_page *req,
+			struct pnfs_fsdata *fsdata);
 
 	/* Retreive the block size of the file system.  If gather_across_stripes == 1,
 	 * then the file system will gather requests into the block size.
