@@ -145,6 +145,11 @@ static inline void pnfs_write_end_cleanup(void *fsdata)
 	pnfs_free_fsdata(fsdata);
 }
 
+static inline void pnfs_redirty_request(struct nfs_page *req)
+{
+	clear_bit(PG_USE_PNFS, &req->wb_flags);
+}
+
 static inline int pnfs_return_layout(struct inode *ino,
 				     struct nfs4_pnfs_layout_segment *lseg,
 				     const nfs4_stateid *stateid, /* optional */
@@ -206,6 +211,10 @@ static inline int pnfs_write_begin(struct file *filp, struct page *page,
 }
 
 static inline void pnfs_write_end_cleanup(void *fsdata)
+{
+}
+
+static inline void pnfs_redirty_request(struct nfs_page *req)
 {
 }
 
