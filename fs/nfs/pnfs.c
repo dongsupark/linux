@@ -1606,6 +1606,20 @@ int _pnfs_write_begin(struct inode *inode, struct page *page,
 	return status;
 }
 
+/* Return 0 on succes, negative on failure */
+/* CAREFUL - what happens if copied < len??? */
+int _pnfs_write_end(struct inode *inode, struct page *page,
+		    loff_t pos, unsigned len,
+		    unsigned copied, struct pnfs_fsdata *fsdata)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	int status;
+
+	status = nfss->pnfs_curr_ld->ld_io_ops->write_end(inode, page,
+						pos, len, copied, fsdata);
+	return status;
+}
+
 /* Given an nfs request, determine if it should be flushed before proceeding.
  * It should default to returning False, returning True only if there is a
  * specific reason to flush.
