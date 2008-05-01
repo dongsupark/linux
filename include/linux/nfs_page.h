@@ -32,6 +32,7 @@ enum {
 	PG_CLEAN,
 	PG_NEED_COMMIT,
 	PG_NEED_RESCHED,
+	PG_USE_PNFS,
 };
 
 struct nfs_inode;
