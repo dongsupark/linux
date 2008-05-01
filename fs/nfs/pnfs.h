@@ -59,6 +59,7 @@ unsigned int pnfs_getiosize(struct nfs_server *server);
 void pnfs_set_ds_iosize(struct nfs_server *server);
 void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *, struct nfs_open_context *, struct list_head *, size_t *);
 void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *);
+void pnfs_free_fsdata(struct pnfs_fsdata *fsdata);
 ssize_t pnfs_file_write(struct file *, const char __user *, size_t, loff_t *);
 void pnfs_get_layout_done(struct nfs4_pnfs_layoutget *, int rpc_status);
 int pnfs_layout_process(struct nfs4_pnfs_layoutget *lgp);
@@ -66,6 +67,11 @@ void pnfs_layout_release(struct pnfs_layout_type *,
 			 struct nfs4_pnfs_layout_segment *range);
 void pnfs_set_layout_stateid(struct pnfs_layout_type *lo,
 			     const nfs4_stateid *stateid);
+int _pnfs_write_begin(struct inode *inode, struct page *page,
+		      loff_t pos, unsigned len,
+		      struct pnfs_fsdata **fsdata);
+int _pnfs_do_flush(struct inode *inode, struct nfs_page *req,
+		   struct pnfs_fsdata *fsdata);
 
 #define PNFS_EXISTS_LDIO_OP(srv, opname) ((srv)->pnfs_curr_ld &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops &&	\
@@ -107,6 +113,43 @@ pnfs_try_to_write_data(struct nfs_write_data *data,
 		return _pnfs_try_to_write_data(data, call_ops, how);
 
 	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline int pnfs_write_begin(struct file *filp, struct page *page,
+				   loff_t pos, unsigned len, void **fsdata)
+{
+	struct inode *inode = filp->f_dentry->d_inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	int status = 0;
+
+	*fsdata = NULL;
+	if (PNFS_EXISTS_LDIO_OP(nfss, write_begin))
+		status = _pnfs_write_begin(inode, page, pos, len,
+					   (struct pnfs_fsdata **) fsdata);
+	return status;
+}
+
+/* req may not be locked, so we have to be prepared for req->wb_page being
+ * set to NULL at any time.
+ */
+static inline int pnfs_do_flush(struct nfs_page *req, void *fsdata)
+{
+	struct page *page = req->wb_page;
+	struct inode *inode;
+
+	if (!page)
+		return 1;
+	inode = page->mapping->host;
+
+	if (PNFS_EXISTS_LDPOLICY_OP(NFS_SERVER(inode), do_flush))
+		return _pnfs_do_flush(inode, req, fsdata);
+	else
+		return 0;
+}
+
+static inline void pnfs_write_end_cleanup(void *fsdata)
+{
+	pnfs_free_fsdata(fsdata);
 }
 
 static inline int pnfs_return_layout(struct inode *ino,
@@ -156,6 +199,21 @@ pnfs_try_to_write_data(struct nfs_write_data *data,
 		       const struct rpc_call_ops *call_ops, int how)
 {
 	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline int pnfs_do_flush(struct nfs_page *req, void *fsdata)
+{
+	return 0;
+}
+
+static inline int pnfs_write_begin(struct file *filp, struct page *page,
+				   loff_t pos, unsigned len, void **fsdata)
+{
+	return 0;
+}
+
+static inline void pnfs_write_end_cleanup(void *fsdata)
+{
 }
 
 static inline int pnfs_get_write_status(struct nfs_write_data *data)
