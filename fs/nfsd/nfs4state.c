@@ -3325,6 +3325,7 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	__be32 status;
 	struct nfs4_stateid *stp;
 	int flags = OPEN_STATE | CLOSE_STATE;
+	struct super_block *sb;
 
 	dprintk("NFSD: nfsd4_close on file %.*s\n", 
 			(int)cstate->current_fh.fh_dentry->d_name.len,
@@ -3332,6 +3333,13 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	if (nfsd4_has_session(cstate))
 		flags |= HAS_SESSION;
+#if defined(CONFIG_PNFSD)
+	/* temportary hook for spnfs testing purposes */
+	sb = cstate->current_fh.fh_dentry->d_inode->i_sb;
+	if (sb->s_export_op->close)
+		sb->s_export_op->close(cstate->current_fh.fh_dentry->d_inode);
+#endif /* CONFIG_PNFSD */
+
 	nfs4_lock_state();
 	/* check close_lru for replay */
 	if ((status = nfs4_preprocess_seqid_op(&cstate->current_fh,
@@ -5644,6 +5652,9 @@ int nfs4_pnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
 		poa.op_create = openp->op_create;
 		poa.op_createmode = openp->op_createmode;
 		poa.op_truncate = openp->op_truncate;
+		strncpy(poa.op_fn, openp->op_fname.data, openp->op_fname.len);
+		poa.op_fn[openp->op_fname.len] = '\0';
+
 		status = sb->s_export_op->propagate_open(
 			current_fh->fh_dentry->d_inode, &poa);
 		if (status) {

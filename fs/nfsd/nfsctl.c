@@ -1273,12 +1273,10 @@ static struct file_system_type nfsd_fs_type = {
 
 #if defined(CONFIG_PNFSD)
 extern int (*spnfs_init)(void);
-extern int (*spnfs_test)(void);
 extern void (*spnfs_delete)(void);
 extern struct nfs_fh * (*spnfs_getfh_vec)(int), *spnfs_getfh(int);
 
 int nfsd_spnfs_new(void);
-int spnfs_close(void);
 void nfsd_spnfs_delete(void);
 #endif /* CONFIG_PNFSD */
 
@@ -1326,7 +1324,6 @@ static int __init init_nfsd(void)
 		goto out_free_idmap;
 #if defined(CONFIG_PNFSD)
 	spnfs_init = nfsd_spnfs_new;
-	spnfs_test = spnfs_close;
 	spnfs_delete = nfsd_spnfs_delete;
 	spnfs_getfh_vec = spnfs_getfh;
 #endif /* CONFIG_PNFSD */
@@ -1355,7 +1352,6 @@ static void __exit exit_nfsd(void)
 {
 #if defined(CONFIG_PNFSD)
 	spnfs_init = NULL;
-	spnfs_test = NULL;
 #endif /* CONFIG_PNFSD */
 
 	nfsd_export_shutdown();
