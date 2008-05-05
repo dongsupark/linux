@@ -1444,6 +1444,9 @@ int nfs4_pnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
 		poa.op_create = openp->op_create;
 		poa.op_createmode = openp->op_createmode;
 		poa.op_truncate = openp->op_truncate;
+		strncpy(poa.op_fn, openp->op_fname.data, openp->op_fname.len);
+		poa.op_fn[openp->op_fname.len] = '\0';
+
 		status = sb->s_export_op->propagate_open(
 			current_fh->fh_dentry->d_inode, &poa);
 		if (status) {

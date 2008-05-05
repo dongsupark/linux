@@ -155,6 +155,7 @@ struct export_operations {
 #if defined(CONFIG_PNFSD)
 		/* pNFS: spnfs calls */
 	int (*propagate_open) (struct inode *inode, void *p);
+	int (*close) (struct inode *inode);
 #endif /* CONFIG_PNFSD */
 };
 
