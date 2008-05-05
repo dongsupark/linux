@@ -1500,7 +1500,6 @@ extern void (*spnfs_delete)(void);
 extern struct nfs_fh * (*spnfs_getfh_vec)(int), *spnfs_getfh(int);
 
 int nfsd_spnfs_new(void);
-int spnfs_close(void);
 void nfsd_spnfs_delete(void);
 #endif /* CONFIG_SPNFS */
 
