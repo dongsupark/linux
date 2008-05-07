@@ -22,6 +22,8 @@
 extern int pnfs4_proc_layoutget(struct nfs4_pnfs_layoutget *lgp);
 
 /* pnfs.c */
+extern const nfs4_stateid zero_stateid;
+
 void set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id);
 void unmount_pnfs_layoutdriver(struct super_block *sb);
 int pnfs_initialize(void);

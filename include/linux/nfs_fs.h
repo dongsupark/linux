@@ -98,6 +98,8 @@ struct nfs_delegation;
 struct posix_acl;
 
 struct pnfs_layout_type {
+	seqlock_t seqlock;		/* Protects the stateid */
+	nfs4_stateid stateid;
 };
 
 /*
