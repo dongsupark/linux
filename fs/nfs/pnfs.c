@@ -197,6 +197,37 @@ pnfs_unregister_layoutdriver(struct pnfs_layoutdriver_type *ld_type)
 	}
 }
 
+static void
+pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_type *lo)
+{
+	int seq;
+
+	dprintk("--> %s\n", __func__);
+
+	do {
+		seq = read_seqbegin(&lo->seqlock);
+		memcpy(dst->data, lo->stateid.data, sizeof(lo->stateid.data));
+	} while (read_seqretry(&lo->seqlock, seq));
+
+	dprintk("<-- %s\n", __func__);
+}
+
+static void
+pnfs_layout_from_open_stateid(nfs4_stateid *dst, struct nfs4_state *state)
+{
+	int seq;
+
+	dprintk("--> %s\n", __func__);
+
+	do {
+		seq = read_seqbegin(&state->seqlock);
+		memcpy(dst->data, state->stateid.data,
+				sizeof(state->stateid.data));
+	} while (read_seqretry(&state->seqlock, seq));
+
+	dprintk("<-- %s\n", __func__);
+}
+
 /*
 * Get layout from server.
 *    for now, assume that whole file layouts are requested.
@@ -235,6 +266,11 @@ get_layout(struct inode *ino,
 	lgp->args.inode = ino;
 	lgp->args.ctx = ctx;
 	lgp->lsegpp = lsegpp;
+
+	if (!memcmp(lo->stateid.data, &zero_stateid, NFS4_STATEID_SIZE))
+		pnfs_layout_from_open_stateid(&lgp->args.stateid, ctx->state);
+	else
+		pnfs_get_layout_stateid(&lgp->args.stateid, lo);
 
 	/* Retrieve layout information from server */
 	status = NFS_PROTO(ino)->pnfs_layoutget(lgp);
