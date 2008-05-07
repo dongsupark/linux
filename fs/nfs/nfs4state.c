@@ -597,7 +597,8 @@ static void __nfs4_close(struct path *path, struct nfs4_state *state, fmode_t fm
 			range.iomode = nfsi->layout.roc_iomode;
 			range.offset = 0;
 			range.length = NFS4_MAX_UINT64;
-			pnfs_return_layout(state->inode, &range, RETURN_FILE);
+			pnfs_return_layout(state->inode, &range, NULL,
+					   RETURN_FILE);
 		}
 #endif /* CONFIG_NFS_V4_1 */
 		nfs4_do_close(path, state, wait);

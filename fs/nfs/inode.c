@@ -1318,7 +1318,7 @@ void nfs4_clear_inode(struct inode *inode)
 	/* First call standard NFS clear_inode() code */
 	nfs_clear_inode(inode);
 #ifdef CONFIG_NFS_V4_1
-	pnfs_return_layout(inode, NULL, RETURN_FILE);
+	pnfs_return_layout(inode, NULL, NULL, RETURN_FILE);
 #endif /* CONFIG_NFS_V4_1 */
 }
 #endif
