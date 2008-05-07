@@ -30,6 +30,7 @@ int pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 	struct pnfs_layout_segment **lsegpp);
 
 int _pnfs_return_layout(struct inode *, struct nfs4_pnfs_layout_segment *,
+			const nfs4_stateid *stateid, /* optional */
 			enum pnfs_layoutrecall_type);
 void set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id);
 void unmount_pnfs_layoutdriver(struct super_block *sb);
@@ -58,6 +59,7 @@ static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 
 static inline int pnfs_return_layout(struct inode *ino,
 				     struct nfs4_pnfs_layout_segment *lseg,
+				     const nfs4_stateid *stateid, /* optional */
 				     enum pnfs_layoutrecall_type type)
 {
 	struct nfs_inode *nfsi = NFS_I(ino);
@@ -65,7 +67,7 @@ static inline int pnfs_return_layout(struct inode *ino,
 
 	if (pnfs_enabled_sb(nfss) &&
 	    (type != RECALL_FILE || has_layout(nfsi)))
-		return _pnfs_return_layout(ino, lseg, type);
+		return _pnfs_return_layout(ino, lseg, stateid, type);
 
 	return 0;
 }
