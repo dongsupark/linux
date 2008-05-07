@@ -49,6 +49,7 @@
 #include <linux/sunrpc/svcauth_gss.h>
 #include <linux/exportfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
+#include <linux/nfsd4_spnfs.h>
 
 #include "xdr4.h"
 #include "vfs.h"
@@ -2817,9 +2818,17 @@ nfsd4_encode_read(struct nfsd4_compoundres *resp, __be32 nfserr,
 	}
 	read->rd_vlen = v;
 
+#if defined(CONFIG_SPNFS)
+	nfserr = spnfs_read(read->rd_fhp->fh_dentry->d_inode->i_ino,
+			    read->rd_offset, &maxcount, read->rd_vlen,
+			    resp->rqstp);
+	if (nfserr < 0)
+		nfserr = nfserr_io;
+#else
 	nfserr = nfsd_read_file(read->rd_rqstp, read->rd_fhp, read->rd_filp,
 			read->rd_offset, resp->rqstp->rq_vec, read->rd_vlen,
 			&maxcount);
+#endif /* CONFIG_SPNFS */
 
 	if (nfserr == nfserr_symlink)
 		nfserr = nfserr_inval;
