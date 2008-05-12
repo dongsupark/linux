@@ -5836,6 +5836,7 @@ pnfs_v4_clientops_init(void)
 	struct nfs_rpc_ops *p = (struct nfs_rpc_ops *)&pnfs_v4_clientops;
 
 	memcpy(p, &nfs_v4_clientops, sizeof(*p));
+	p->file_ops		= &pnfs_file_operations;
 	p->read_done		= pnfs4_read_done;
 	p->write_done		= pnfs4_write_done;
 }
