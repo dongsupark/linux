@@ -36,6 +36,7 @@
 #include "delegation.h"
 #include "internal.h"
 #include "iostat.h"
+#include "pnfs.h"
 
 #define NFSDBG_FACILITY		NFSDBG_FILE
 
@@ -80,6 +81,30 @@ const struct file_operations nfs_file_operations = {
 	.check_flags	= nfs_check_flags,
 	.setlease	= nfs_setlease,
 };
+
+#ifdef CONFIG_PNFS
+const struct file_operations pnfs_file_operations = {
+	.llseek		= nfs_file_llseek,
+	.read		= do_sync_read,
+	.write		= pnfs_file_write,
+	.aio_read	= nfs_file_read,
+	.aio_write	= nfs_file_write,
+#ifdef CONFIG_MMU
+	.mmap		= nfs_file_mmap,
+#else
+	.mmap		= generic_file_mmap,
+#endif
+	.open		= nfs_file_open,
+	.flush		= nfs_file_flush,
+	.release	= nfs_file_release,
+	.fsync		= nfs_file_fsync,
+	.lock		= nfs_lock,
+	.flock		= nfs_flock,
+	.splice_read	= nfs_file_splice_read,
+	.check_flags	= nfs_check_flags,
+	.setlease	= nfs_setlease,
+};
+#endif /* CONFIG_PNFS */
 
 const struct inode_operations nfs_file_inode_operations = {
 	.permission	= nfs_permission,
