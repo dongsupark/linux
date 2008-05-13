@@ -363,6 +363,40 @@ alloc_init_ds_stateid(struct svc_fh *cfh, stateid_t *stidp)
 	return dsp;
 }
 
+static int
+update_ds_stateid(struct pnfs_ds_stateid *dsp, struct svc_fh *cfh,
+		  struct pnfs_get_state *gsp)
+{
+	struct pnfs_ds_clientid *dcp;
+	int new = 0;
+
+	dprintk("pNFSD: %s dsp %p\n", __func__, dsp);
+
+	dcp = find_pnfs_ds_clientid(&gsp->clid);
+	if (!dcp) {
+		dcp = alloc_init_ds_clientid(gsp);
+		if (!dcp)
+			return 1;
+		new = 1;
+	}
+	if (test_bit(DS_STATEID_NEW, &dsp->ds_flags)) {
+		list_add(&dsp->ds_perclid, &dcp->dc_stateid);
+		if (!new)
+			get_ds_clientid(dcp);
+	}
+
+	memcpy(&dsp->ds_stid, &gsp->stid, sizeof(stateid_t));
+	dsp->ds_access = gsp->access;
+	dsp->ds_status = 0;
+	dsp->ds_verifier[0] = gsp->verifier[0];
+	dsp->ds_verifier[1] = gsp->verifier[1];
+	memcpy(&dsp->ds_mdsclid, &gsp->clid, sizeof(clientid_t));
+	set_bit(DS_STATEID_VALID, &dsp->ds_flags);
+	clear_bit(DS_STATEID_ERROR, &dsp->ds_flags);
+	clear_bit(DS_STATEID_NEW, &dsp->ds_flags);
+	return 0;
+}
+
 int
 nfs4_pnfs_cb_change_state(struct pnfs_get_state *gs)
 {
@@ -455,7 +489,8 @@ nfsv4_ds_get_state(struct svc_fh *cfh, stateid_t *stidp)
 		status = sb->s_pnfs_op->get_state(ino, &cfh->fh_handle, &gs);
 		dprintk("pNFSD: %s from MDS status %d\n", __func__, status);
 		ds_lock_state();
-		if (status) {
+		/* if !status and stateid is valid, update id and mark valid */
+		if (status || update_ds_stateid(dsp, cfh, &gs)) {
 			set_bit(DS_STATEID_ERROR, &dsp->ds_flags);
 			/* remove invalid stateid from list */
 			put_ds_stateid(dsp);
