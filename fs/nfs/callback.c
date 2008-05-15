@@ -224,8 +224,13 @@ int nfs_callback_up(u32 minorversion, void *args)
 #endif /* CONFIG_NFS_V4_1 */
 
 	mutex_lock(&nfs_callback_mutex);
-	if (nfs_callback_info.users++ || nfs_callback_info.task != NULL)
+	if (nfs_callback_info.users++ || nfs_callback_info.task != NULL) {
+#if defined(CONFIG_NFS_V4_1)
+		if (minorversion)
+			xprt->bc_serv = nfs_callback_info.serv;
+#endif /* CONFIG_NFS_V4_1 */
 		goto out;
+	}
 	serv = svc_create(&nfs4_callback_program, NFS4_CALLBACK_BUFSIZE,
 				nfs_callback_family, NULL);
 	if (!serv) {
