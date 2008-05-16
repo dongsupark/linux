@@ -169,6 +169,73 @@ filelayout_free_layout(struct pnfs_layout_type *layoutid)
 	kfree(layoutid);
 }
 
+/*
+ * filelayout_check_layout()
+ *
+ * Make sure layout segment parameters are sane WRT the device.
+ *
+ * Notes:
+ * 1) current code insists that # stripe index = # multipath devices which
+ *    is wrong.
+ * 2) pattern_offset is ignored and must == 0 which is wrong;
+ * 3) the pattern_offset needs to be a mutliple of the stripe unit.
+ * 4) stripe unit is multiple of page size
+*/
+
+static int
+filelayout_check_layout(struct pnfs_layout_type *lo,
+			struct pnfs_layout_segment *lseg)
+{
+	struct nfs4_filelayout_segment *fl = LSEG_LD_DATA(lseg);
+	struct nfs4_file_layout_dsaddr *dsaddr;
+	int status = -EINVAL;
+	struct nfs_server *nfss = NFS_SERVER(PNFS_INODE(lo));
+
+	dprintk("--> %s\n", __func__);
+	dsaddr = nfs4_file_layout_dsaddr_get(FILE_MT(lo->inode), &fl->dev_id);
+	if (dsaddr == NULL) {
+		dprintk("%s NO device for dev_id %s\n",
+				__func__, deviceid_fmt(&fl->dev_id));
+		goto out;
+	}
+	if (fl->first_stripe_index < 0 ||
+	    fl->first_stripe_index > dsaddr->stripe_count) {
+		dprintk("%s Bad first_stripe_index %d\n",
+				__func__, fl->first_stripe_index);
+		goto out;
+	}
+
+	if (fl->pattern_offset != 0) {
+		dprintk("%s Unsupported no-zero pattern_offset %Ld\n",
+				__func__, fl->pattern_offset);
+		goto out;
+	}
+
+	if (fl->stripe_unit % PAGE_SIZE) {
+		dprintk("%s Stripe unit (%u) not page aligned\n",
+			__func__, fl->stripe_unit);
+		goto out;
+	}
+
+	/* XXX only support SPARSE packing. Don't support use MDS open fh */
+	if (!(fl->num_fh == 1 || fl->num_fh == dsaddr->multipath_count)) {
+		dprintk("%s num_fh %u not equal to 1 or multipath_count %u\n",
+			__func__, fl->num_fh, dsaddr->multipath_count);
+		goto out;
+	}
+
+	if (fl->stripe_unit % nfss->ds_rsize || fl->stripe_unit % nfss->ds_wsize) {
+		dprintk("%s Stripe unit (%u) not aligned with rsize %u wsize %u\n",
+			__func__, fl->stripe_unit, nfss->ds_rsize, nfss->ds_wsize);
+	}
+	status = 0;
+out:
+	dprintk("--> %s returns %d\n", __func__, status);
+	return status;
+}
+
+static void filelayout_free_lseg(struct pnfs_layout_segment *lseg);
+
 /* Decode layout and store in layoutid.  Overwrite any existing layout
  * information for this file.
  */
@@ -232,6 +299,10 @@ filelayout_alloc_lseg(struct pnfs_layout_type *layoutid,
 		return NULL;
 
 	filelayout_set_layout(flo, LSEG_LD_DATA(lseg), lgr);
+	if (filelayout_check_layout(layoutid, lseg)) {
+		filelayout_free_lseg(lseg);
+		lseg = NULL;
+	}
 	return lseg;
 }
 
