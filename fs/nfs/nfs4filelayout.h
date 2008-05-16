@@ -16,10 +16,38 @@
 #include <linux/pnfs_xdr.h>
 
 #define NFS4_PNFS_MAX_STRIPE_CNT 4096
+#define NFS4_PNFS_MAX_MULTI_CNT  64 /* 256 fit into a u8 stripe_index */
+#define NFS4_PNFS_MAX_MULTI_DS   2
+
+#define FILE_MT(inode) ((struct filelayout_mount_type *) \
+			(NFS_SERVER(inode)->pnfs_mountid->mountid))
 
 enum stripetype4 {
 	STRIPE_SPARSE = 1,
 	STRIPE_DENSE = 2
+};
+
+/* Individual ip address */
+struct nfs4_pnfs_ds {
+	struct hlist_node 	ds_node;  /* nfs4_pnfs_dev_hlist dev_dslist */
+	u32 			ds_ip_addr;
+	u32 			ds_port;
+	struct nfs_client	*ds_clp;
+	atomic_t		ds_count;
+	char r_addr[29];
+};
+
+struct nfs4_multipath {
+	int 			num_ds;
+	struct nfs4_pnfs_ds	*ds_list[NFS4_PNFS_MAX_MULTI_DS];
+};
+
+struct nfs4_file_layout_dsaddr {
+	struct pnfs_deviceid	dev_id;
+	u32 			stripe_count;
+	u8			*stripe_indices;
+	u32			multipath_count;
+	struct nfs4_multipath	*multipath_list;
 };
 
 struct nfs4_filelayout_segment {
@@ -57,5 +85,9 @@ char *deviceid_fmt(const struct pnfs_deviceid *dev_id);
 	memcpy((x), p, nbytes);			\
 	p += XDR_QUADLEN(nbytes);		\
 } while (0)
+
+struct nfs4_file_layout_dsaddr *
+nfs4_file_layout_dsaddr_get(struct filelayout_mount_type *,
+			  struct pnfs_deviceid *);
 
 #endif /* FS_NFS_NFS4FILELAYOUT_H */
