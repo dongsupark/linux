@@ -101,5 +101,10 @@ int nfs4_pnfs_dserver_get(struct pnfs_layout_segment *lseg,
 u32 filelayout_dserver_get_index(loff_t offset,
 				 struct nfs4_file_layout_dsaddr *di,
 				 struct nfs4_filelayout_segment *layout);
+struct nfs4_file_layout_dsaddr *
+nfs4_pnfs_device_item_find(struct nfs4_pnfs_dev_hlist *hlist,
+			   struct pnfs_deviceid *dev_id);
+struct nfs4_file_layout_dsaddr *
+get_device_info(struct inode *inode, struct pnfs_deviceid *dev_id);
 
 #endif /* FS_NFS_NFS4FILELAYOUT_H */

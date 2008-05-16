@@ -193,6 +193,75 @@ filelayout_free_layout(void *layoutid)
 	kfree(layoutid);
 }
 
+/*
+ * filelayout_check_layout()
+ *
+ * Make sure layout segment parameters are sane WRT the device.
+ *
+ * Notes:
+ * 1) current code insists that # stripe index = # data servers in ds_list
+ *    which is wrong.
+ * 2) pattern_offset is ignored and must == 0 which is wrong;
+ * 3) the pattern_offset needs to be a mutliple of the stripe unit.
+ * 4) stripe unit is multiple of page size
+*/
+
+static int
+filelayout_check_layout(struct pnfs_layout_type *lo,
+			struct pnfs_layout_segment *lseg)
+{
+	struct nfs4_filelayout_segment *fl = LSEG_LD_DATA(lseg);
+	struct nfs4_file_layout_dsaddr *dsaddr;
+	int status = -EINVAL;
+	struct nfs_server *nfss = NFS_SERVER(PNFS_INODE(lo));
+
+	dprintk("--> %s\n", __func__);
+	dsaddr = nfs4_pnfs_device_item_find(FILE_MT(PNFS_INODE(lo))->hlist,
+					     &fl->dev_id);
+	if (dsaddr == NULL) {
+		dsaddr = get_device_info(PNFS_INODE(lo), &fl->dev_id);
+		if (dsaddr == NULL) {
+			dprintk("%s NO device for dev_id %s\n",
+				__func__, deviceid_fmt(&fl->dev_id));
+			goto out;
+		}
+	}
+	if (fl->first_stripe_index < 0 ||
+	    fl->first_stripe_index > dsaddr->stripe_count) {
+		dprintk("%s Bad first_stripe_index %d\n",
+				__func__, fl->first_stripe_index);
+		goto out;
+	}
+
+	if (fl->pattern_offset != 0) {
+		dprintk("%s Unsupported no-zero pattern_offset %Ld\n",
+				__func__, fl->pattern_offset);
+		goto out;
+	}
+
+	if (fl->stripe_unit % PAGE_SIZE) {
+		dprintk("%s Stripe unit (%u) not page aligned\n",
+			__func__, fl->stripe_unit);
+		goto out;
+	}
+
+	/* XXX only support SPARSE packing. Don't support use MDS open fh */
+	if (!(fl->num_fh == 1 || fl->num_fh == dsaddr->ds_num)) {
+		dprintk("%s num_fh %u not equal to 1 or ds_num %u\n",
+			__func__, fl->num_fh, dsaddr->ds_num);
+		goto out;
+	}
+
+	if (fl->stripe_unit % nfss->ds_rsize || fl->stripe_unit % nfss->ds_wsize) {
+		dprintk("%s Stripe unit (%u) not aligned with rsize %u wsize %u\n",
+			__func__, fl->stripe_unit, nfss->ds_rsize, nfss->ds_wsize);
+	}
+	status = 0;
+out:
+	dprintk("--> %s returns %d\n", __func__, status);
+	return status;
+}
+
 static void filelayout_free_lseg(struct pnfs_layout_segment *lseg);
 static void filelayout_free_fh_array(struct nfs4_filelayout_segment *fl);
 
@@ -285,7 +354,7 @@ filelayout_alloc_lseg(struct pnfs_layout_type *layoutid,
 
 	rc = filelayout_set_layout(flo, LSEG_LD_DATA(lseg), lgr);
 
-	if (rc != 0) {
+	if (rc != 0 || filelayout_check_layout(layoutid, lseg)) {
 		filelayout_free_lseg(lseg);
 		lseg = NULL;
 	}

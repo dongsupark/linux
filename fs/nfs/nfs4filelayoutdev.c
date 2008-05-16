@@ -52,10 +52,6 @@
 
 #define NFSDBG_FACILITY		NFSDBG_PNFS_LD
 
-struct nfs4_file_layout_dsaddr *nfs4_pnfs_device_item_find(
-					struct nfs4_pnfs_dev_hlist *hlist,
-					struct pnfs_deviceid *dev_id);
-
 DEFINE_SPINLOCK(nfs4_ds_cache_lock);
 static LIST_HEAD(nfs4_data_server_cache);
 
