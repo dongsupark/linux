@@ -312,6 +312,74 @@ out:
 	return res;
 }
 
+/* Remove all devices for each superblock for nfs_client.  This may try
+ * to remove the same device multple times if they are
+ * shared across superblocks in the layout driver, but the
+ * layout drive should be able to handle this */
+static __be32 pnfs_devicenotify_client(struct nfs_client *clp,
+				       struct cb_pnfs_devicenotifyargs *args)
+{
+	struct nfs_server *server;
+	__be32 res = 0, res2 = 0;
+	int i, num_sb = 0;
+	struct layoutdriver_io_operations *ops;
+	uint32_t type;
+
+	dprintk("%s: --> clp %p\n", __func__, clp);
+
+	list_for_each_entry(server, &clp->cl_superblocks, client_link) {
+		ops = server->pnfs_curr_ld->ld_io_ops;
+		num_sb++;
+		for (i = 0; i < args->ndevs; i++) {
+			struct cb_pnfs_devicenotifyitem *dev = &args->devs[i];
+			type = dev->cbd_notify_type;
+			if (type == NOTIFY_DEVICEID4_DELETE &&
+			    PNFS_EXISTS_LDIO_OP(server, device_delete))
+				res = ops->device_delete(server->pnfs_mountid,
+							 &dev->cbd_dev_id);
+			else if (type == NOTIFY_DEVICEID4_CHANGE)
+				printk(KERN_ERR "%s: NOTIFY_DEVICEID4_CHANGE "
+					"not supported\n", __func__);
+			if (res)
+				res2 = res;
+		}
+	}
+	dprintk("%s: exit with status = %d numsb %u\n",
+		__func__, ntohl(res2), num_sb);
+	return res2;
+}
+
+__be32 pnfs_cb_devicenotify(struct cb_pnfs_devicenotifyargs *args,
+			    void *dummy)
+{
+	struct nfs_client *clp;
+	__be32 res = 0;
+	unsigned int num_client = 0;
+
+	dprintk("%s: -->\n", __func__);
+
+	res = __constant_htonl(NFS4ERR_INVAL);
+	clp = nfs_find_client(args->addr, 4);
+	if (clp == NULL) {
+		dprintk("%s: no client for addr %u.%u.%u.%u\n",
+			__func__, NIPQUAD(args->addr));
+		goto out;
+	}
+
+	do {
+		struct nfs_client *prev = clp;
+		num_client++;
+		res = pnfs_devicenotify_client(clp, args);
+		clp = nfs_find_client_next(prev);
+		nfs_put_client(prev);
+	} while (clp != NULL);
+
+out:
+	dprintk("%s: exit with status = %d numclient %u\n",
+		__func__, ntohl(res), num_client);
+	return res;
+}
+
 #endif /* defined(CONFIG_PNFS) */
 
 #if defined(CONFIG_NFS_V4_1)

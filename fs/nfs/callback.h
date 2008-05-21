@@ -85,6 +85,21 @@ struct cb_pnfs_layoutrecallargs {
 	uint32_t		cbl_layoutchanged;
 	nfs4_stateid		cbl_stateid;
 };
+
+struct cb_pnfs_devicenotifyitem {
+	uint32_t		cbd_notify_type;
+	uint32_t		cbd_layout_type;
+	struct pnfs_deviceid	cbd_dev_id;
+	uint32_t		cbd_immediate;
+};
+
+/* XXX: Should be dynamic up to max compound size */
+#define NFS4_DEV_NOTIFY_MAXENTRIES 10
+struct cb_pnfs_devicenotifyargs {
+	struct sockaddr			*addr;
+	int				 ndevs;
+	struct cb_pnfs_devicenotifyitem	 devs[NFS4_DEV_NOTIFY_MAXENTRIES];
+};
 #endif /* CONFIG_PNFS */
 
 struct referring_call {
@@ -123,6 +138,8 @@ extern unsigned nfs4_callback_sequence(struct cb_sequenceargs *args,
 
 #if defined(CONFIG_PNFS)
 extern unsigned pnfs_cb_layoutrecall(struct cb_pnfs_layoutrecallargs *args,
+				     void *dummy);
+extern unsigned pnfs_cb_devicenotify(struct cb_pnfs_devicenotifyargs *args,
 				     void *dummy);
 #endif /* CONFIG_PNFS */
 #endif /* CONFIG_NFS_V4_1 */

@@ -22,6 +22,7 @@
 
 #if defined(CONFIG_PNFS)
 #define CB_OP_LAYOUTRECALL_RES_MAXSZ	(CB_OP_HDR_RES_MAXSZ)
+#define CB_OP_DEVICENOTIFY_RES_MAXSZ	(CB_OP_HDR_RES_MAXSZ)
 #endif /* CONFIG_PNFS */
 
 #if defined(CONFIG_NFS_V4_1)
@@ -271,6 +272,76 @@ static unsigned decode_pnfs_layoutrecall_args(struct svc_rqst *rqstp,
 		args->cbl_fh.size);
 out:
 	dprintk("%s: exit with status = %d\n", __func__, ntohl(status));
+	return status;
+}
+
+static unsigned decode_pnfs_devicenotify_args(struct svc_rqst *rqstp,
+					struct xdr_stream *xdr,
+					struct cb_pnfs_devicenotifyargs *args)
+{
+	uint32_t *p;
+	unsigned status = 0;
+	int n, i;
+	args->ndevs = 0;
+
+	args->addr = svc_addr(rqstp);
+
+	/* Num of device notifications */
+	p = read_buf(xdr, sizeof(uint32_t));
+	if (unlikely(p == NULL)) {
+		status = htonl(NFS4ERR_RESOURCE);
+		goto out;
+	}
+	n = ntohl(*p++);
+	if (n <= 0)
+		goto out;
+
+	/* XXX: need to possibly return error in this case */
+	if (n > NFS4_DEV_NOTIFY_MAXENTRIES) {
+		dprintk("%s: Processing (%d) notifications out of (%d)\n",
+			__func__, NFS4_DEV_NOTIFY_MAXENTRIES, n);
+		n = NFS4_DEV_NOTIFY_MAXENTRIES;
+	}
+
+	/* Decode each dev notification */
+	for (i = 0; i < n; i++) {
+		struct cb_pnfs_devicenotifyitem *dev = &args->devs[i];
+
+		p = read_buf(xdr, (3 * sizeof(uint32_t))
+			     + NFS4_PNFS_DEVICEID4_SIZE);
+		if (unlikely(p == NULL)) {
+			status = htonl(NFS4ERR_RESOURCE);
+			goto out;
+		}
+
+		dev->cbd_notify_type = ntohl(*p++);
+		BUG_ON(dev->cbd_notify_type != NOTIFY_DEVICEID4_CHANGE &&
+		       dev->cbd_notify_type != NOTIFY_DEVICEID4_DELETE);
+
+		p++; /* opaque size */
+		dev->cbd_layout_type = ntohl(*p++);
+		COPYMEM(dev->cbd_dev_id.data, NFS4_PNFS_DEVICEID4_SIZE);
+
+		if (dev->cbd_layout_type == NOTIFY_DEVICEID4_CHANGE) {
+			p = read_buf(xdr, sizeof(uint32_t));
+			if (unlikely(p == NULL)) {
+				status = htonl(NFS4ERR_RESOURCE);
+				goto out;
+			}
+			dev->cbd_immediate = ntohl(*p++);
+		} else {
+			dev->cbd_immediate = 0;
+		}
+
+		args->ndevs++;
+
+		dprintk("%s: type %d layout 0x%x immediate %d\n",
+			__func__, dev->cbd_notify_type, dev->cbd_layout_type,
+			dev->cbd_immediate);
+	}
+out:
+	dprintk("%s: status %d ndevs %d\n",
+		__func__, ntohl(status), args->ndevs);
 	return status;
 }
 
@@ -599,14 +670,15 @@ preprocess_nfs41_op(int nop, unsigned int op_nr, struct callback_op **op)
 	case OP_CB_SEQUENCE:
 #if defined(CONFIG_PNFS)
 	case OP_CB_LAYOUTRECALL:
+	case OP_CB_NOTIFY_DEVICEID:
 #endif
 		*op = &callback_ops[op_nr];
 		break;
 
 #if !defined(CONFIG_PNFS)
 	case OP_CB_LAYOUTRECALL:
-#endif
 	case OP_CB_NOTIFY_DEVICEID:
+#endif
 	case OP_CB_NOTIFY:
 	case OP_CB_PUSH_DELEG:
 	case OP_CB_RECALL_ANY:
@@ -756,6 +828,12 @@ static struct callback_op callback_ops[] = {
 		.decode_args =
 			(callback_decode_arg_t)decode_pnfs_layoutrecall_args,
 		.res_maxsize = CB_OP_LAYOUTRECALL_RES_MAXSZ,
+	},
+	[OP_CB_NOTIFY_DEVICEID] = {
+		.process_op = (callback_process_op_t)pnfs_cb_devicenotify,
+		.decode_args =
+			(callback_decode_arg_t)decode_pnfs_devicenotify_args,
+		.res_maxsize = CB_OP_DEVICENOTIFY_RES_MAXSZ,
 	},
 #endif /* CONFIG_PNFS */
 #if defined(CONFIG_NFS_V4_1)
