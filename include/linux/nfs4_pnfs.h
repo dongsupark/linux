@@ -187,6 +187,7 @@ struct layoutdriver_io_operations {
 	 */
 	struct pnfs_mount_type * (*initialize_mountpoint) (struct super_block *, struct nfs_fh *fh);
 	int (*uninitialize_mountpoint) (struct pnfs_mount_type *mountid);
+	int (*device_delete) (struct pnfs_mount_type *mountid, struct pnfs_deviceid *dev_id);
 };
 
 enum layoutdriver_policy_flags {
