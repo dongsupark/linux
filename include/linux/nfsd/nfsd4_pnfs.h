@@ -107,6 +107,18 @@ struct nfsd4_pnfs_cb_layout {
 	struct nfs4_fsid	cbl_fsid;
 };
 
+struct nfsd4_pnfs_cb_dev_item {
+	u32			cbd_notify_type;	/* request */
+	u32			cbd_layout_type;	/* request */
+	deviceid_t		cbd_devid;		/* request */
+	u32			cbd_immediate;		/* request */
+};
+
+struct nfsd4_pnfs_cb_dev_list {
+	u32				cbd_len;  /* request */
+	struct nfsd4_pnfs_cb_dev_item  *cbd_list; /* request */
+};
+
 /*
  * fh_fsid_type is overloaded to indicate whether a filehandle was one supplied
  * to a DS by LAYOUTGET.  nfs4_preprocess_stateid_op() uses this to decide how
