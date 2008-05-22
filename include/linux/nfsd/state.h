@@ -279,6 +279,12 @@ struct nfs4_layoutrecall {
 	struct timespec			clr_time;	/* last activity */
 };
 
+/* notify device request (from exported filesystem) */
+struct nfs4_notify_device {
+	struct nfsd4_pnfs_cb_dev_list  *nd_list;
+	struct nfs4_client	       *nd_client;
+};
+
 #endif /* CONFIG_PNFSD */
 
 /* struct nfs4_client_reset
@@ -466,6 +472,7 @@ extern void nfsd4_remove_clid_dir(struct nfs4_client *clp);
 #if defined(CONFIG_PNFSD)
 extern int nfs4_preprocess_pnfs_ds_stateid(struct svc_fh *, stateid_t *);
 extern int nfsd4_cb_layout(struct nfs4_layoutrecall *lp);
+extern int nfsd4_cb_notify_device(struct nfs4_notify_device *cbnd);
 extern void nfs4_ds_get_verifier(stateid_t *stateid,
 				 struct super_block *sb, u32 *p);
 #endif /* CONFIG_PNFSD */

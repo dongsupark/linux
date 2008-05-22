@@ -5067,7 +5067,7 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 		dprintk("%s PROCESS LO_STATEID inode %p\n", __func__, ino);
 		status = nfs4_process_layout_stateid(clp, fp, &lrp->lr_sid, NULL);
 		if (status)
-			goto out;
+			goto out_put_file;
 
 		/* update layouts */
 		layouts_found = pnfs_return_file_layouts(clp, fp, lrp);
@@ -5098,9 +5098,10 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 			clr->clr_time = CURRENT_TIME;
 	}
 
-out:
+out_put_file:
 	if (fp)
 		put_nfs4_file(fp);
+out:
 	nfs4_unlock_state();
 
 	dprintk("pNFS %s: exit status %d \n", __func__, status);
@@ -5426,6 +5427,44 @@ int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 	sync_layout_recall(sb, &todolist);
 err:
 	nfs4_unlock_state();
+	return status;
+}
+
+/*
+ * Spawn a thread to perform a device notify
+ *
+ */
+int nfsd_device_notify_cb(struct super_block *sb,
+			  struct nfsd4_pnfs_cb_dev_list *ndl)
+{
+	struct nfs4_notify_device cbnd;
+	struct nfs4_client *clp = NULL;
+	unsigned int i, notify_num = 0;
+	int did_lock, status2, status = 0;
+
+	BUG_ON(!ndl || ndl->cbd_len == 0 || !ndl->cbd_list);
+
+	dprintk("NFSD %s: cbl %p len %u\n", __func__, ndl, ndl->cbd_len);
+
+	if (nfsd_serv == NULL)
+		return -ENOENT;
+
+	did_lock = nfs4_lock_state_nested();
+
+	cbnd.nd_list = ndl;
+	for (i = 0; i < CLIENT_HASH_SIZE; i++)
+		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
+			cbnd.nd_client = clp;
+			status2 = nfsd4_cb_notify_device(&cbnd);
+			if (status2)
+				status = status2;
+			notify_num++;
+		}
+
+	dprintk("NFSD %s: i %d status %d clients %u\n",
+		__func__, i , status, notify_num);
+	if (did_lock)
+		nfs4_unlock_state();
 	return status;
 }
 
