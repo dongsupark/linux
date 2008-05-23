@@ -1432,7 +1432,8 @@ int nfsd_device_notify_cb(struct super_block *sb,
 	return status;
 }
 
-int nfs4_pnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
+#if defined(CONFIG_SPNFS)
+int nfs4_spnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
 				void *p)
 {
 	int status = 0;
@@ -1463,5 +1464,6 @@ int nfs4_pnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
 	}
 	return status;
 }
+#endif /* CONFIG_SPNFS */
 
 #endif /* CONFIG_PNFSD */
