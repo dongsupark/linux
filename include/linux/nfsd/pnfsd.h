@@ -95,7 +95,6 @@ int nfs4_pnfs_return_layout(struct super_block *, struct svc_fh *,
 					struct nfsd4_pnfs_layoutreturn *);
 void pnfs_set_device_notify(clientid_t *clid, unsigned int types);
 void nfs4_pnfs_state_shutdown(void);
-int nfs4_pnfs_propagate_open(struct super_block *, struct svc_fh *, void *);
 
 #endif /* CONFIG_PNFSD */
 

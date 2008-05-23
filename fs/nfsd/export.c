@@ -34,7 +34,9 @@
 #if defined(CONFIG_PNFSD)
 #include <linux/nfsd/state.h>
 #include <linux/nfsd/pnfsd.h>
+#if defined(CONFIG_SPNFS)
 #include <linux/nfsd4_spnfs.h>
+#endif
 #endif
 #include <linux/nfsd/syscall.h>
 #include <linux/lockd/bind.h>
@@ -404,7 +406,7 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 		return -EINVAL;
 	}
 
-#if defined(CONFIG_PNFSD)
+#if defined(CONFIG_SPNFS)
 	/*
 	 * spnfs_enabled() indicates we're an MDS.
 	 * XXX Better to check an export time option as well.
@@ -444,7 +446,7 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 	 */
 	if (!inode->i_sb->s_export_op->get_state)
 		inode->i_sb->s_export_op->get_state = spnfs_get_state;
-#endif /* CONFIG_PNFSD */
+#endif /* CONFIG_SPNFS */
 
 	return 0;
 
