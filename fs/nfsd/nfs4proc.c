@@ -51,7 +51,9 @@
 #if defined(CONFIG_PNFSD)
 #include <linux/nfsd/pnfsd.h>
 #include <linux/exportfs.h>
+#if defined(CONFIG_SPNFS)
 #include <linux/nfsd4_spnfs.h>
+#endif /* CONFIG_SPNFS */
 #endif /* CONFIG_PNFSD */
 
 #define NFSDDBG_FACILITY		NFSDDBG_PROC
@@ -197,8 +199,12 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	   struct nfsd4_open *open)
 {
 	__be32 status;
+<<<<<<< pnfs:fs/nfsd/nfs4proc.c
 	struct nfsd4_compoundres *resp;
 #if defined(CONFIG_PNFSD)
+=======
+#if defined(CONFIG_SPNFS)
+>>>>>>> HEAD~20:fs/nfsd/nfs4proc.c
 	__be32 pstatus;
 	struct super_block *sb;
 #endif
@@ -288,11 +294,11 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	 * set, (2) sets open->op_stateid, (3) sets open->op_delegation.
 	 */
 	status = nfsd4_process_open2(rqstp, &cstate->current_fh, open);
-#if defined(CONFIG_PNFSD)
+#if defined(CONFIG_SPNFS)
 	if (!status) {
 		sb = cstate->current_fh.fh_dentry->d_inode->i_sb;
 		if (sb->s_export_op->propagate_open) {
-			pstatus = nfs4_pnfs_propagate_open(sb,
+			pstatus = nfs4_spnfs_propagate_open(sb,
 				&cstate->current_fh, open);
 			if (pstatus) {
 				dprintk(
@@ -308,7 +314,7 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 			}
 		}
 	}
-#endif /* CONFIG_PNFSD */
+#endif /* CONFIG_SPNFS */
 out:
 	if (open->op_stateowner) {
 		nfs4_get_stateowner(open->op_stateowner);
@@ -775,7 +781,7 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	nfsd4_get_verifier(cstate->current_fh.fh_dentry->d_inode->i_sb,
 			   &write->wr_verifier);
-#if defined(CONFIG_PNFSD)
+#if defined(CONFIG_SPNFS)
 	status = spnfs_write(cstate->current_fh.fh_dentry->d_inode->i_ino,
 		write->wr_offset, write->wr_buflen, write->wr_vlen, rqstp);
 	if (status < 0)
@@ -797,7 +803,7 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	status =  nfsd_write(rqstp, &cstate->current_fh, filp,
 			     write->wr_offset, rqstp->rq_vec, write->wr_vlen,
 			     &cnt, &write->wr_how_written);
-#endif /* CONFIG_PNFSD */
+#endif /* CONFIG_SPNFS */
 
 	if (filp)
 		fput(filp);

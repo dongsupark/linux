@@ -3243,12 +3243,12 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 			(int)cstate->current_fh.fh_dentry->d_name.len,
 			cstate->current_fh.fh_dentry->d_name.name);
 
-#if defined(CONFIG_PNFSD)
+#if defined(CONFIG_SPNFS)
 	/* temportary hook for spnfs testing purposes */
 	sb = cstate->current_fh.fh_dentry->d_inode->i_sb;
 	if (sb->s_export_op->close)
 		sb->s_export_op->close(cstate->current_fh.fh_dentry->d_inode);
-#endif /* CONFIG_PNFSD */
+#endif /* CONFIG_SPNFS */
 
 	nfs4_lock_state();
 	/* check close_lru for replay */
@@ -5557,7 +5557,8 @@ int nfsd_device_notify_cb(struct super_block *sb,
 	return status;
 }
 
-int nfs4_pnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
+#if defined(CONFIG_SPNFS)
+int nfs4_spnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
 				void *p)
 {
 	int status = 0;
@@ -5588,5 +5589,6 @@ int nfs4_pnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
 	}
 	return status;
 }
+#endif /* CONFIG_SPNFS */
 
 #endif /* CONFIG_PNFSD */
