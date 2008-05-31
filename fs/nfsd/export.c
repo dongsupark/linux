@@ -393,6 +393,17 @@ static int pnfsd_check_export(struct inode *inode, int *flags)
 				spnfs_getdeviceinfo;
 	} else
 		dprintk("%s spnfs not in use\n", __FUNCTION__);
+
+	/*
+	 * get_state is needed if we're a DS using spnfs.
+	 * Currently it doesn't hurt to define it even if we're not
+	 * using pNFS or we're an MDS.  Although it's way ugly to set it
+	 * here unnecessarily - could lead to error in the future.
+	 *
+	 * XXX Better to check an export time option instead.
+	 */
+	if (!inode->i_sb->s_export_op->get_state)
+		inode->i_sb->s_export_op->get_state = spnfs_get_state;
 #endif /* CONFIG_SPNFS */
 
 #endif /* CONFIG_PNFSD */
