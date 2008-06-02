@@ -215,8 +215,13 @@ static inline int pnfs_write_end(struct file *filp, struct page *page,
 		return 0;
 }
 
-static inline void pnfs_write_end_cleanup(void *fsdata)
+static inline void pnfs_write_end_cleanup(struct file *filp, void *fsdata)
 {
+	struct inode *inode = filp->f_dentry->d_inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	if (PNFS_EXISTS_LDIO_OP(nfss, write_end_cleanup))
+		nfss->pnfs_curr_ld->ld_io_ops->write_end_cleanup(filp, fsdata);
 	pnfs_free_fsdata(fsdata);
 }
 
@@ -322,7 +327,7 @@ static inline int pnfs_write_end(struct file *filp, struct page *page,
 	return 0;
 }
 
-static inline void pnfs_write_end_cleanup(void *fsdata)
+static inline void pnfs_write_end_cleanup(struct file *filp, void *fsdata)
 {
 }
 
