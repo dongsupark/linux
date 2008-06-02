@@ -824,6 +824,64 @@ bl_write_end(struct inode *inode, struct page *page, loff_t pos,
 	return 0;
 }
 
+/* Return any memory allocated to fsdata->private, and take advantage
+ * of no page locks to mark pages noted in write_begin as needing
+ * initialization.
+ */
+static void
+bl_write_end_cleanup(struct file *filp, struct pnfs_fsdata *fsdata)
+{
+	struct page *page;
+	pgoff_t index;
+	sector_t *pos;
+	struct address_space *mapping = filp->f_mapping;
+	struct pnfs_fsdata *fake_data;
+
+	if (!fsdata)
+		return;
+	pos = fsdata->private;
+	if (!pos)
+		return;
+	dprintk("%s enter with pos=%llu\n", __func__, (u64)(*pos));
+	for (; *pos != ~0; pos++) {
+		index = *pos >> (PAGE_CACHE_SHIFT - 9);
+		/* XXX How do we properly deal with failures here??? */
+		page = grab_cache_page_write_begin(mapping, index, 0);
+		if (!page) {
+			printk(KERN_ERR "%s BUG BUG BUG NoMem\n", __func__);
+			continue;
+		}
+		dprintk("%s: Examining block page\n", __func__);
+		print_page(page);
+		if (!PageMappedToDisk(page)) {
+			/* XXX How do we properly deal with failures here??? */
+			dprintk("%s Marking block page\n", __func__);
+			init_page_for_write(BLK_LSEG2EXT(fsdata->lseg), page,
+					    PAGE_CACHE_SIZE, PAGE_CACHE_SIZE,
+					    NULL);
+			print_page(page);
+			fake_data = kzalloc(sizeof(*fake_data), GFP_KERNEL);
+			if (!fake_data) {
+				printk(KERN_ERR "%s BUG BUG BUG NoMem\n",
+				       __func__);
+				unlock_page(page);
+				continue;
+			}
+			fake_data->ok_to_use_pnfs = 1;
+			fake_data->bypass_eof = 1;
+			mapping->a_ops->write_end(filp, mapping,
+						  index << PAGE_CACHE_SHIFT,
+						  PAGE_CACHE_SIZE,
+						  PAGE_CACHE_SIZE,
+						  page, fake_data);
+			/* Note fake_data is freed by nfs_write_end */
+		} else
+			unlock_page(page);
+	}
+	kfree(fsdata->private);
+	fsdata->private = NULL;
+}
+
 static ssize_t
 bl_get_stripesize(struct pnfs_layout_type *lo)
 {
@@ -869,6 +927,7 @@ static struct layoutdriver_io_operations blocklayout_io_operations = {
 	.write_pagelist			= bl_write_pagelist,
 	.write_begin			= bl_write_begin,
 	.write_end			= bl_write_end,
+	.write_end_cleanup		= bl_write_end_cleanup,
 	.alloc_layout			= bl_alloc_layout,
 	.free_layout			= bl_free_layout,
 	.alloc_lseg			= bl_alloc_lseg,
