@@ -53,6 +53,7 @@ enum pnfs_try_status {
 
 struct pnfs_fsdata {
 	struct pnfs_layout_segment *lseg;
+	void *private;
 };
 
 #ifdef CONFIG_NFS_V4_1
@@ -118,6 +119,8 @@ struct pnfs_layoutdriver_type {
 	int (*write_end)(struct inode *inode, struct page *page, loff_t pos,
 			 unsigned count, unsigned copied,
 			 struct pnfs_layout_segment *lseg);
+	void (*write_end_cleanup)(struct file *filp,
+				  struct pnfs_fsdata *fsdata);
 
 	/* Consistency ops */
 	/* 2 problems:
@@ -391,6 +394,8 @@ static inline void pnfs_write_end_cleanup(struct file *filp, void *fsdata)
 	struct nfs_server *nfss = NFS_SERVER(filp->f_dentry->d_inode);
 
 	if (fsdata && nfss->pnfs_curr_ld) {
+		if (nfss->pnfs_curr_ld->write_end_cleanup)
+			nfss->pnfs_curr_ld->write_end_cleanup(filp, fsdata);
 		if (nfss->pnfs_curr_ld->write_begin)
 			pnfs_free_fsdata(fsdata);
 	}
