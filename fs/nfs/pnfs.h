@@ -160,6 +160,8 @@ static inline void pnfs_write_end_cleanup(struct file *filp, void *fsdata)
 	if (fsdata) {
 		struct nfs_server *nfss = NFS_SERVER(filp->f_dentry->d_inode);
 
+		if (PNFS_EXISTS_LDIO_OP(nfss, write_end_cleanup))
+			nfss->pnfs_curr_ld->ld_io_ops->write_end_cleanup(filp, fsdata);
 		if (PNFS_EXISTS_LDIO_OP(nfss, write_begin))
 			pnfs_free_fsdata(fsdata);
 	}

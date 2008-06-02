@@ -31,6 +31,7 @@ struct pnfs_layoutdriver_type {
 
 struct pnfs_fsdata {
 	struct pnfs_layout_segment *lseg;
+	void *private;
 };
 
 #if defined(CONFIG_NFS_V4_1)
@@ -140,6 +141,8 @@ struct layoutdriver_io_operations {
 	int (*write_end)(struct inode *inode, struct page *page, loff_t pos,
 			 unsigned count, unsigned copied,
 			 struct pnfs_layout_segment *lseg);
+	void (*write_end_cleanup)(struct file *filp,
+				  struct pnfs_fsdata *fsdata);
 
 	/* Consistency ops */
 	/* 2 problems:
