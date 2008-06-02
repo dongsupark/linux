@@ -440,7 +440,7 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
  out:
 	unlock_page(page);
 	page_cache_release(page);
-	pnfs_write_end_cleanup(fsdata);
+	pnfs_write_end_cleanup(file, fsdata);
 
 	if (status < 0)
 		return status;

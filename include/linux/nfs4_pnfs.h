@@ -62,6 +62,7 @@ struct pnfs_layout_type {
 struct pnfs_fsdata {
 	int ok_to_use_pnfs;
 	struct pnfs_layout_segment *lseg;
+	void *private;
 };
 
 
@@ -157,6 +158,8 @@ struct layoutdriver_io_operations {
 	int (*write_end)(struct inode *inode, struct page *page, loff_t pos,
 			 unsigned count, unsigned copied,
 			 struct pnfs_fsdata *fsdata);
+	void (*write_end_cleanup)(struct file *filp,
+				  struct pnfs_fsdata *fsdata);
 	void (*new_request)(struct pnfs_layout_segment *lseg,
 			    struct nfs_page *req, loff_t pos, unsigned count,
 			    struct pnfs_fsdata *fsdata);
