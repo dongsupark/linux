@@ -372,6 +372,133 @@ static int gfs2_layout_return(struct inode *inode,
 
 	return 0;
 }
+
+static int gfs2_get_device_iter(struct super_block *sb,
+				struct pnfs_deviter_arg *arg)
+{
+	if (arg->type != LAYOUT_NFSV4_FILES) {
+		printk(KERN_ERR "%s: ERROR: layout type isn't 'file' "
+			"(type: %x)\n", __func__, arg->type);
+		return -ENOTSUPP;
+	}
+
+	if (arg->cookie == 0) {
+		arg->cookie = 1;
+		arg->verf = 1;
+		arg->devid = 1;
+	} else
+		arg->eof = 1;
+
+	return 0;
+}
+
+static int gfs2_get_device_info(struct super_block *sb,
+				struct pnfs_devinfo_arg *arg)
+{
+	int err, len, i = 0;
+	struct pnfs_filelayout_device fdev;
+	struct pnfs_filelayout_devaddr *daddr;
+	char *ds_buf, *bufp, *bufp2;
+
+	memset(&fdev, '\0', sizeof(fdev));
+	if (arg->type != LAYOUT_NFSV4_FILES) {
+		printk(KERN_ERR "%s: ERROR: layout type isn't 'file' "
+			"(type: %x)\n", __func__, arg->type);
+		err = -ENOTSUPP;
+		goto out;
+	}
+
+	if (arg->devid.pnfs_devid != 1) {
+		printk(KERN_DEBUG "%s: WARNING: didn't receive a deviceid of "
+			"1 (got: 0x%llx)\n", __func__, arg->devid.pnfs_devid);
+		err = -ENOENT;
+		goto out;
+	}
+
+	/* XXX: no notifications yet */
+	arg->notify_types = 0;
+
+	printk(KERN_DEBUG "%s: DEBUG: current entire DS list is |%s|\n",
+		__func__, pnfs_ds_list);
+	if (!*pnfs_ds_list) {
+		printk(KERN_ERR "%s: ERROR: pnfs_ds_list has no entries!\n",
+			__func__);
+		err = -EIO;
+		goto out;
+	}
+
+	err = -ENOMEM;
+	len = strlen(pnfs_ds_list) + 1;
+	ds_buf = kmalloc(len, GFP_KERNEL);
+	if (!ds_buf)
+		goto out;
+	memcpy(ds_buf, pnfs_ds_list, len);
+	bufp = bufp2 = ds_buf;
+
+	/* count the number of comma-delimited DS IPs */
+	fdev.fl_device_length = 1;
+	while ((bufp = strchr(bufp, ',')) != NULL) {
+		fdev.fl_device_length++;
+		bufp++;
+	}
+
+	len = sizeof(*fdev.fl_device_list) * fdev.fl_device_length;
+	fdev.fl_device_list = kzalloc(len, GFP_KERNEL);
+	if (!fdev.fl_device_list) {
+		printk(KERN_ERR "%s: ERROR: unable to kmalloc a device list "
+			"buffer for %d DSes.\n", __func__, i);
+		goto out;
+	}
+
+	fdev.fl_stripeindices_length = fdev.fl_device_length;
+	fdev.fl_stripeindices_list =
+		kzalloc(sizeof(u32) * fdev.fl_stripeindices_length, GFP_KERNEL);
+
+	if (!fdev.fl_stripeindices_list) {
+		printk(KERN_ERR "%s: ERROR: unable to kmalloc a stripeindices "
+			"list buffer for %d DSes.\n", __func__, i);
+		goto out;
+	}
+	for (i = 0; i < fdev.fl_stripeindices_length; i++)
+		fdev.fl_stripeindices_list[i] = i;
+
+	for (i = 0; (bufp = strsep(&bufp2, ",")) != NULL; i++) {
+		printk(KERN_DEBUG "%s: DEBUG: encoding DS |%s|\n", __func__,
+			bufp);
+
+		daddr = kmalloc(sizeof(*daddr), GFP_KERNEL);
+		if (!daddr) {
+			printk(KERN_ERR "%s: ERROR: unable to kmalloc a device "
+				"addr buffer.\n", __func__);
+			goto out;
+		}
+
+		daddr->r_netid.data = "tcp";
+		daddr->r_netid.len = 3;
+		len = strlen(bufp);
+		daddr->r_addr.data = kmalloc(len + 4, GFP_KERNEL);
+		memcpy(daddr->r_addr.data, bufp, len);
+		/*
+		 * append the port number.  interpreted as two more bytes
+		 * beyond the quad: ".8.1" -> 0x08.0x01 -> 0x0801 = port 2049.
+		 */
+		memcpy(daddr->r_addr.data + len, ".8.1", 4);
+		daddr->r_addr.len = len + 4;
+
+		fdev.fl_device_list[i].fl_multipath_length = 1;
+		fdev.fl_device_list[i].fl_multipath_list = daddr;
+	}
+
+	/* have nfsd encode the device info */
+	err = arg->func(&arg->xdr, &fdev);
+out:
+	for (i = 0; i < fdev.fl_device_length; i++)
+		kfree(fdev.fl_device_list[i].fl_multipath_list);
+	kfree(fdev.fl_device_list);
+	kfree(fdev.fl_stripeindices_list);
+	return err;
+}
+
 #endif /* CONFIG_PNFSD */
 
 #if defined(CONFIG_PNFSD)
@@ -380,6 +507,8 @@ const struct pnfs_export_operations gfs2_pnfs_ops = {
 	.layout_get = gfs2_layout_get,
 	.layout_commit = gfs2_layout_commit,
 	.layout_return = gfs2_layout_return,
+	.get_device_iter = gfs2_get_device_iter,
+	.get_device_info = gfs2_get_device_info,
 };
 #endif /* CONFIG_PNFSD */
 
