@@ -26,6 +26,16 @@
 #include "rgrp.h"
 #include "util.h"
 
+#if defined(CONFIG_PNFSD)
+#include <linux/nfs_fs.h>
+#include <linux/sunrpc/svc.h>
+#include <linux/nfsd/state.h>
+#include <linux/nfsd/nfsfh.h>
+#include <linux/nfsd/pnfsd.h>
+#include <linux/nfsd/nfs4layoutxdr.h>
+#include <linux/nfs4_pnfs.h>
+#endif /* CONFIG_PNFSD */
+
 #define GFS2_SMALL_FH_SIZE 4
 #define GFS2_LARGE_FH_SIZE 8
 #define GFS2_OLD_FH_SIZE 10
@@ -275,6 +285,104 @@ static struct dentry *gfs2_fh_to_parent(struct super_block *sb, struct fid *fid,
 		return NULL;
 	}
 }
+
+#if defined(CONFIG_PNFSD)
+static int gfs2_layout_type(void)
+{
+	return LAYOUT_NFSV4_FILES;
+}
+
+static int get_stripe_unit(int blocksize)
+{
+	if (blocksize >= NFSSVC_MAXBLKSIZE)
+		return blocksize;
+
+	return NFSSVC_MAXBLKSIZE - (NFSSVC_MAXBLKSIZE % blocksize);
+}
+
+/*
+ * Retrieve and encode a file layout onto the xdr stream.
+ * @inode: inode for which to retrieve layout
+ * @arg->xdr: xdr stream for encoding
+ * @arg->func: a call into file system to encode the layout on xdr stream.
+ */
+static int gfs2_layout_get(struct inode *inode, struct pnfs_layoutget_arg *arg)
+{
+	int rc = 0;
+	struct pnfs_filelayout_layout *layout = NULL;
+	struct knfsd_fh *fhp = NULL;
+
+	printk(KERN_DEBUG "%s: LAYOUT_GET\n", __func__);
+
+	/* Set layout indept response args */
+	arg->seg.layout_type = LAYOUT_NFSV4_FILES;
+	arg->seg.offset = 0;
+	arg->seg.length = inode->i_sb->s_maxbytes; /* The maximum file size */
+
+	layout = kzalloc(sizeof(*layout), GFP_KERNEL);
+	if (layout == NULL) {
+		rc = -ENOMEM;
+		goto error;
+	}
+
+	/* Set file layout response args */
+	layout->lg_layout_type = LAYOUT_NFSV4_FILES;
+	layout->lg_stripe_type = STRIPE_SPARSE;
+	layout->lg_commit_through_mds = true;
+	layout->lg_stripe_unit = get_stripe_unit(inode->i_sb->s_blocksize);
+	layout->lg_fh_length = 1;
+	layout->device_id.pnfs_fsid = arg->fsid;
+	layout->device_id.pnfs_devid = 1;			/*FSFTEMP*/
+	layout->lg_first_stripe_index = 0;			/*FSFTEMP*/
+	layout->lg_pattern_offset = 0;
+
+	fhp = kmalloc(sizeof(*fhp), GFP_KERNEL);
+	if (fhp == NULL) {
+		rc = -ENOMEM;
+		goto error;
+	}
+
+	memcpy(fhp, arg->fh, sizeof(*fhp));
+	pnfs_fh_mark_ds(fhp);
+	layout->lg_fh_list = fhp;
+
+	/* Call nfsd to encode layout */
+	rc = arg->func(&arg->xdr, layout);
+exit:
+	kfree(layout);
+	kfree(fhp);
+	return rc;
+
+error:
+	arg->seg.length = 0;
+	goto exit;
+}
+
+static int gfs2_layout_commit(struct inode *inode,
+			      struct nfsd4_pnfs_layoutcommit *p)
+{
+	printk(KERN_DEBUG "%s: LAYOUT_COMMIT (unimplemented)\n", __func__);
+
+	return 0;
+}
+
+static int gfs2_layout_return(struct inode *inode,
+			      struct nfsd4_pnfs_layoutreturn *p)
+{
+	printk(KERN_DEBUG "%s: LAYOUT_RETURN (unimplemented)\n", __func__);
+
+	return 0;
+}
+#endif /* CONFIG_PNFSD */
+
+#if defined(CONFIG_PNFSD)
+const struct pnfs_export_operations gfs2_pnfs_ops = {
+	.layout_type = gfs2_layout_type,
+	.layout_get = gfs2_layout_get,
+	.layout_commit = gfs2_layout_commit,
+	.layout_return = gfs2_layout_return,
+};
+#endif /* CONFIG_PNFSD */
 
 const struct export_operations gfs2_export_ops = {
 	.encode_fh = gfs2_encode_fh,
