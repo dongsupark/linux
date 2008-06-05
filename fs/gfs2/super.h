@@ -48,6 +48,9 @@ extern void gfs2_unfreeze_fs(struct gfs2_sbd *sdp);
 extern struct file_system_type gfs2_fs_type;
 extern struct file_system_type gfs2meta_fs_type;
 extern const struct export_operations gfs2_export_ops;
+#if defined(CONFIG_PNFSD)
+extern const struct pnfs_export_operations gfs2_pnfs_ops;
+#endif /* CONFIG_PNFSD */
 extern const struct super_operations gfs2_super_ops;
 extern const struct dentry_operations gfs2_dops;
 
