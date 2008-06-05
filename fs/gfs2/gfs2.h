@@ -22,5 +22,11 @@ enum {
 
 #define GFS2_FAST_NAME_SIZE 8
 
+#if defined(CONFIG_PNFSD)
+/* XXX: revisit; surely there's a better place for this? */
+#define XXX_PNFS_DS_LISTSZ 256
+extern char pnfs_ds_list[XXX_PNFS_DS_LISTSZ];
+#endif /* CONFIG_PNFSD */
+
 #endif /* __GFS2_DOT_H__ */
 
