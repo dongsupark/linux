@@ -29,6 +29,70 @@ static struct shrinker qd_shrinker = {
 	.seeks = DEFAULT_SEEKS,
 };
 
+/*
+ * XXX: the /proc interface for specifying pNFS DSes and possibly other
+ *  stuff in the future.  this should be pruned, replaced, or moved.
+ */
+#if defined(CONFIG_PNFSD)
+#include <linux/fs.h>
+#include <linux/sysctl.h>
+
+char pnfs_ds_list[XXX_PNFS_DS_LISTSZ];
+
+static struct ctl_table_header *gfs2_sysctl_table;
+
+static ctl_table gfs2_sysctls[] = {
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "pnfs_ds_list",
+		.data		= &pnfs_ds_list,
+		.maxlen		= XXX_PNFS_DS_LISTSZ,
+		.mode		= 0644,
+		.proc_handler	= &proc_dostring,
+		.strategy	= &sysctl_string,
+	},
+	{	.ctl_name	= 0 }
+};
+
+static ctl_table gfs2_sysctl_dir[] = {
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "gfs2",
+		.mode		= 0555,
+		.child		= gfs2_sysctls,
+	},
+	{	.ctl_name	= 0 }
+};
+
+static ctl_table gfs2_sysctl_root[] = {
+	{
+		.ctl_name	= CTL_FS,
+		.procname	= "fs",
+		.mode		= 0555,
+		.child		= gfs2_sysctl_dir,
+	},
+	{	.ctl_name	= 0 }
+};
+
+static int gfs2_register_sysctl(void)
+{
+	gfs2_sysctl_table = register_sysctl_table(gfs2_sysctl_root);
+	if (gfs2_sysctl_table == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
+static void gfs2_unregister_sysctl(void)
+{
+	unregister_sysctl_table(gfs2_sysctl_table);
+	gfs2_sysctl_table = NULL;
+}
+
+#else /* !CONFIG_PNFSD */
+#define gfs2_register_sysctl()		0
+#define gfs2_unregister_sysctl()	do { } while (0)
+#endif /* CONFIG_PNFSD */
+
 static void gfs2_init_inode_once(void *foo)
 {
 	struct gfs2_inode *ip = foo;
@@ -113,6 +177,10 @@ static int __init init_gfs2_fs(void)
 	if (error)
 		goto fail_unregister;
 
+	error = gfs2_register_sysctl();
+	if (error)
+		goto fail_unregister;
+
 	gfs2_register_debugfs();
 
 	printk("GFS2 (built %s %s) installed\n", __DATE__, __TIME__);
@@ -154,6 +222,7 @@ static void __exit exit_gfs2_fs(void)
 	unregister_shrinker(&qd_shrinker);
 	gfs2_glock_exit();
 	gfs2_unregister_debugfs();
+	gfs2_unregister_sysctl();
 	unregister_filesystem(&gfs2_fs_type);
 	unregister_filesystem(&gfs2meta_fs_type);
 
