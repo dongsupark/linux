@@ -48,6 +48,7 @@
 #include <linux/smp_lock.h>
 #include <linux/namei.h>
 #include <linux/mount.h>
+#include <linux/module.h>
 
 #include "nfs4_fs.h"
 #include "delegation.h"
@@ -4136,9 +4137,69 @@ int nfs4_proc_fs_locations(struct inode *dir, const struct qstr *name,
 }
 
 #ifdef CONFIG_NFS_V4_1
+/*
+ * nfs4_proc_exchange_id()
+ *
+ * Since the clientid has expired, all compounds using sessions
+ * associated with the stale clientid will be returning
+ * NFS4ERR_BADSESSION in the sequence operation, and will therefore
+ * be in some phase of session reset.
+ */
 static int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 {
-	return -1;	/* stub */
+	nfs4_verifier verifier;
+	struct nfs41_exchange_id_args args = {
+		.flags = clp->cl_exchange_flags,
+	};
+	struct nfs41_exchange_id_res res = {
+		.client = clp,
+	};
+	int status;
+	int loop = 0;
+	struct rpc_message msg = {
+		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_EXCHANGE_ID],
+		.rpc_argp = &args,
+		.rpc_resp = &res,
+		.rpc_cred = cred,
+	};
+	__be32 *p;
+
+	dprintk("--> %s\n", __func__);
+	BUG_ON(clp == NULL);
+	p = (u32 *)verifier.data;
+	*p++ = htonl((u32)clp->cl_boot_time.tv_sec);
+	*p = htonl((u32)clp->cl_boot_time.tv_nsec);
+	args.verifier = &verifier;
+
+	while (1) {
+		args.id_len = scnprintf(args.id, sizeof(args.id),
+					"%s/%s %u",
+					clp->cl_ipaddr,
+					rpc_peeraddr2str(clp->cl_rpcclient,
+							 RPC_DISPLAY_ADDR),
+					clp->cl_id_uniquifier);
+
+		status = rpc_call_sync(clp->cl_rpcclient, &msg, 0);
+
+		if (status != NFS4ERR_CLID_INUSE)
+			break;
+
+		if (signalled())
+			break;
+
+		/* Andy Adamson <andros at netapp.com>: Waiting a lease period
+		 * allows the server to throw away a clientid previously
+		 * established by this client. Of course, it doesn't help when
+		 * the conflicting clientid was established by another client.
+		 */
+		if (loop++ & 1)
+			ssleep(clp->cl_lease_time + 1);
+		else if (++clp->cl_id_uniquifier == 0)
+			break;
+	}
+
+	dprintk("<-- %s status= %d\n", __func__, status);
+	return status;
 }
 
 /*
