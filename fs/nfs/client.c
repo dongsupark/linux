@@ -218,6 +218,10 @@ static void nfs_free_client(struct nfs_client *clp)
 
 	if (clp->cl_machine_cred != NULL)
 		put_rpccred(clp->cl_machine_cred);
+#ifdef CONFIG_NFS_V4_1
+	if (clp->cl_ex_cred != NULL)
+		put_rpccred(clp->cl_ex_cred);
+#endif /* CONFIG_NFS_V4_1 */
 
 	kfree(clp->cl_hostname);
 	kfree(clp);

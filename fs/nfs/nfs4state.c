@@ -108,17 +108,19 @@ struct rpc_cred *nfs4_get_renew_cred_locked(struct nfs_client *clp)
 	return cred;
 }
 
-static struct rpc_cred *nfs4_get_renew_cred(struct nfs_client *clp)
+#if defined(CONFIG_NFS_V4_1)
+struct rpc_cred *nfs41_get_state_renewal_cred_locked(struct nfs_client *clp)
 {
 	struct rpc_cred *cred;
 
-	spin_lock(&clp->cl_lock);
-	cred = nfs4_get_renew_cred_locked(clp);
-	spin_unlock(&clp->cl_lock);
+	cred = clp->cl_ex_cred;
+	if (cred)
+		get_rpccred(cred);
 	return cred;
 }
+#endif /* CONFIG_NFS_V4_1 */
 
-static struct rpc_cred *nfs4_get_setclientid_cred(struct nfs_client *clp)
+struct rpc_cred *nfs4_get_setclientid_cred(struct nfs_client *clp)
 {
 	struct nfs4_state_owner *sp;
 	struct rb_node *pos;
@@ -1076,7 +1078,9 @@ static int nfs4_check_lease(struct nfs_client *clp)
 	/* Is the client already known to have an expired lease? */
 	if (test_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state))
 		return 0;
-	cred = nfs4_get_renew_cred(clp);
+	spin_lock(&clp->cl_lock);
+	cred = ops->get_state_renewal_cred_locked(clp);
+	spin_unlock(&clp->cl_lock);
 	if (cred == NULL) {
 		cred = nfs4_get_setclientid_cred(clp);
 		if (cred == NULL)
