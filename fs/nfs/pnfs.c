@@ -968,6 +968,9 @@ pnfs_layoutcommit_setup(struct pnfs_layoutcommit_data *data, int sync)
 	 * TODO: We may want to avoid memory copies by delay this
 	 * until xdr time.
 	 */
+	/* BUG - a major purpose of this call is to set (and thus allocate)
+	 * data->args.new_layout, but nfsi->lo_lock is currently held
+	 */
 	if (nfss->pnfs_curr_ld->ld_io_ops->setup_layoutcommit) {
 		result = nfss->pnfs_curr_ld->ld_io_ops->setup_layoutcommit(
 				nfsi->current_layout, data);
