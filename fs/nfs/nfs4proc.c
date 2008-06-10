@@ -4233,6 +4233,7 @@ static int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 	};
 	int status;
 	int loop = 0;
+	int got_cred = 0;
 	struct rpc_message msg = {
 		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_EXCHANGE_ID],
 		.rpc_argp = &args,
@@ -4243,6 +4244,16 @@ static int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 
 	dprintk("--> %s\n", __func__);
 	BUG_ON(clp == NULL);
+
+	if (!cred) {
+		/* FIXME: do we need to lock clp and take a ref count on cl_ex_cred? */
+		cred = clp->cl_ex_cred;
+		if (!cred) {
+			cred = nfs4_get_setclientid_cred(clp);
+			got_cred = (cred != NULL);
+		}
+	}
+
 	p = (u32 *)verifier.data;
 	*p++ = htonl((u32)clp->cl_boot_time.tv_sec);
 	*p = htonl((u32)clp->cl_boot_time.tv_nsec);
@@ -4274,17 +4285,18 @@ static int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 		else if (++clp->cl_id_uniquifier == 0)
 			break;
 	}
-	if (status == 0) {
+	if ((status == 0) && (cred != clp->cl_ex_cred) && (cred != NULL)) {
+		/* FIXME: do we need to lock clp here? */
 		if (clp->cl_ex_cred) {
 			dprintk("%s put cl_ex_cred %p\n", __func__,
 				clp->cl_ex_cred);
 			put_rpccred(clp->cl_ex_cred);
 		}
-
-		BUG_ON(cred == NULL);
 		clp->cl_ex_cred = get_rpccred(cred);
 		dprintk("%s set cl_ex_cred %p\n", __func__, clp->cl_ex_cred);
 	}
+	if (got_cred)
+		put_rpccred(cred);
 
 	dprintk("<-- %s status= %d\n", __func__, status);
 	return status;
