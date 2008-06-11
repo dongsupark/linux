@@ -82,18 +82,52 @@ bl_write_pagelist(struct pnfs_layout_type *lo,
 	return PNFS_NOT_ATTEMPTED;
 }
 
+/* STUB */
+static void
+release_extents(struct pnfs_block_layout *bl,
+		struct nfs4_pnfs_layout_segment *range)
+{
+	return;
+}
+
+/* STUB */
+static void
+release_inval_marks(void)
+{
+	return;
+}
+
+/* Note we are relying on caller locking to prevent nasty races. */
 static void
 bl_free_layout(struct pnfs_layout_type *lo)
 {
+	struct pnfs_block_layout	*bl;
+
 	dprintk("%s enter\n", __func__);
+	bl = BLK_LO2EXT(lo);
+	release_extents(bl, NULL);
+	release_inval_marks();
+	kfree(lo);
 	return;
 }
 
 static struct pnfs_layout_type *
 bl_alloc_layout(struct pnfs_mount_type *mtype, struct inode *inode)
 {
+	struct pnfs_layout_type		*lo;
+	struct pnfs_block_layout	*bl;
+
 	dprintk("%s enter\n", __func__);
-	return NULL;
+	lo = kzalloc(sizeof(*lo) + sizeof(*bl), GFP_KERNEL);
+	if (!lo)
+		return NULL;
+	bl = BLK_LO2EXT(lo);
+	spin_lock_init(&bl->bl_ext_lock);
+	INIT_LIST_HEAD(&bl->bl_extents[0]);
+	INIT_LIST_HEAD(&bl->bl_extents[1]);
+	bl->bl_blocksize = NFS_SERVER(inode)->pnfs_blksize >> 9;
+	INIT_INVAL_MARKS(&bl->bl_inval, bl->bl_blocksize);
+	return lo;
 }
 
 static void
