@@ -98,6 +98,31 @@ struct pnfs_blk_sig {
 	struct pnfs_blk_sig_comp	si_comps[PNFS_BLOCK_MAX_SIG_COMP];
 };
 
+struct pnfs_inval_markings {
+	/* STUB */
+};
+
+static inline void
+INIT_INVAL_MARKS(struct pnfs_inval_markings *marks, sector_t blocksize)
+{
+	/* STUB */
+}
+
+enum extentclass4 {
+	RW_EXTENT	= 0, /* READWRTE and INVAL */
+	RO_EXTENT	= 1, /* READ and NONE */
+	EXTENT_LISTS	= 2,
+};
+
+struct pnfs_block_layout {
+	struct pnfs_inval_markings bl_inval; /* tracks INVAL->RW transition */
+	spinlock_t		bl_ext_lock;   /* Protects list manipulation */
+	struct list_head	bl_extents[EXTENT_LISTS]; /* R and RW extents */
+	sector_t		bl_blocksize;  /* Server blocksize in sectors */
+};
+
+#define BLK_LO2EXT(lo) ((struct pnfs_block_layout *)lo->ld_data)
+
 uint32_t *blk_overflow(uint32_t *p, uint32_t *end, size_t nbytes);
 
 #define BLK_READBUF(p, e, nbytes)  do { \
