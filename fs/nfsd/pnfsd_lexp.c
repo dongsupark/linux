@@ -20,4 +20,23 @@
 
 #if defined(CONFIG_PNFSD_LOCAL_EXPORT)
 
+#include <linux/nfs_fs.h>
+#include <linux/sunrpc/svc.h>
+#include <linux/sunrpc/svc_xprt.h>
+#include <linux/nfsd/nfsfh.h>
+#include <linux/nfsd/state.h>
+#include <linux/nfsd/pnfsd.h>
+#include <linux/nfsd/nfs4layoutxdr.h>
+#include <linux/nfs4_pnfs.h>
+
+#define NFSDDBG_FACILITY NFSDDBG_PNFS
+
+static int
+pnfsd_lexp_layout_type(struct super_block *sb)
+{
+	int ret = LAYOUT_NFSV4_FILES;
+	dprintk("<-- %s: return %d\n", __func__, ret);
+	return ret;
+}
+
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
