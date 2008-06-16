@@ -184,4 +184,12 @@ error:
 	goto exit;
 }
 
+static int
+pnfsd_lexp_layout_commit(struct inode *inode, struct nfsd4_pnfs_layoutcommit *p)
+{
+	dprintk("%s: (unimplemented)\n", __func__);
+
+	return 0;
+}
+
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
