@@ -91,3 +91,14 @@ config PNFSD
 	  in the kernel's NFS server.
 
 	  Unless you're an NFS developer, say N.
+
+config PNFSD_LOCAL_EXPORT
+	bool "Enable pNFS support for exporting local filesystems for debugging purposes"
+	depends on PNFSD
+	help
+	  Say Y here if you want your pNFS server to export local file systems
+	  over the files layout type.  With this option the MDS (metadata
+	  server) functions also as a single DS (data server).  This is mostly
+	  useful for development and debugging purposes.
+
+	  If unsure, say N.
