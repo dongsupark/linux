@@ -18,3 +18,17 @@
  * by David M. Richter <richterd@citi.umich.edu>
  */
 
+#include <linux/sunrpc/svc_xprt.h>
+#include <linux/nfsd/nfs4layoutxdr.h>
+
+#include "pnfsd.h"
+
+#define NFSDDBG_FACILITY NFSDDBG_PNFS
+
+static int
+pnfsd_lexp_layout_type(struct super_block *sb)
+{
+	int ret = LAYOUT_NFSV4_1_FILES;
+	dprintk("<-- %s: return %d\n", __func__, ret);
+	return ret;
+}
