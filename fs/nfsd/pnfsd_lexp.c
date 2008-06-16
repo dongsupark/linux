@@ -206,4 +206,20 @@ static int pnfsd_lexp_get_state(struct inode *inode, struct knfsd_fh *fh,
 	return 0;	/* just use the current stateid */
 }
 
+static struct pnfs_export_operations pnfsd_lexp_ops = {
+	.layout_type = pnfsd_lexp_layout_type,
+	.get_device_info = pnfsd_lexp_get_device_info,
+	.get_device_iter = pnfsd_lexp_get_device_iter,
+	.layout_get = pnfsd_lexp_layout_get,
+	.layout_commit = pnfsd_lexp_layout_commit,
+	.layout_return = pnfsd_lexp_layout_return,
+	.get_state = pnfsd_lexp_get_state,
+};
+
+void
+pnfsd_lexp_init(struct inode *inode)
+{
+	inode->i_sb->s_pnfs_op = &pnfsd_lexp_ops;
+}
+
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */

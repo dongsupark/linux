@@ -99,6 +99,8 @@ void nfs4_pnfs_state_shutdown(void);
 #if defined(CONFIG_PNFSD_LOCAL_EXPORT)
 extern struct sockaddr pnfsd_lexp_addr;
 extern size_t pnfs_lexp_addr_len;
+
+void pnfsd_lexp_init(struct inode *inode);
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
 
 #endif /* CONFIG_PNFSD */
