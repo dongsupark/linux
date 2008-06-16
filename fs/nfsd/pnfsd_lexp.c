@@ -191,3 +191,12 @@ pnfsd_lexp_layout_commit(struct inode *inode,
 
 	return 0;
 }
+
+static int
+pnfsd_lexp_layout_return(struct inode *inode,
+			 const struct nfsd4_pnfs_layoutreturn_arg *args)
+{
+	dprintk("%s: (unimplemented)\n", __func__);
+
+	return 0;
+}
