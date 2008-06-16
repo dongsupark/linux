@@ -42,4 +42,23 @@ pnfsd_lexp_layout_type(struct super_block *sb)
 	return ret;
 }
 
+static int
+pnfsd_lexp_get_device_iter(struct super_block *sb,
+			   struct pnfs_deviter_arg *arg)
+{
+	dprintk("--> %s: sb=%p\n", __func__, sb);
+
+	BUG_ON(arg->type != LAYOUT_NFSV4_FILES);
+
+	if (arg->cookie == 0) {
+		arg->cookie = 1;
+		arg->verf = 1;
+		arg->devid = 1;
+	} else
+		arg->eof = 1;
+
+	dprintk("<-- %s: return 0\n", __func__);
+	return 0;
+}
+
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
