@@ -1822,6 +1822,13 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 	if (!conn)
 		goto out_free_session;
 
+#if defined(CONFIG_PNFSD_LOCAL_EXPORT)
+	/* XXX hack to get local ip address */
+	memcpy(&pnfsd_lexp_addr, &rqstp->rq_xprt->xpt_local,
+		sizeof(pnfsd_lexp_addr));
+	pnfs_lexp_addr_len = rqstp->rq_xprt->xpt_locallen;
+#endif /* CONFIG_PNFSD_LOCAL_EXPORT */
+
 	nfs4_lock_state();
 	unconf = find_unconfirmed_client(&cr_ses->clientid, true);
 	conf = find_confirmed_client(&cr_ses->clientid, true);
