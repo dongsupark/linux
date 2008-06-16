@@ -61,4 +61,67 @@ pnfsd_lexp_get_device_iter(struct super_block *sb,
 	return 0;
 }
 
+static int
+pnfsd_lexp_get_device_info(struct super_block *sb,
+			   struct pnfs_devinfo_arg *arg)
+{
+	int err;
+	struct pnfs_filelayout_device fdev;
+	struct pnfs_filelayout_multipath fl_devices[1];
+	u32 fl_stripe_indices[1] = { 0 };
+	struct pnfs_filelayout_devaddr daddr;
+	/* %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x.%03u.%03u */
+	char daddr_buf[8*4 + 2*3 + 10];
+
+	dprintk("--> %s: sb=%p\n", __func__, sb);
+
+	BUG_ON(arg->type != LAYOUT_NFSV4_FILES);
+
+	memset(&fdev, '\0', sizeof(fdev));
+
+	if (arg->devid.pnfs_devid != 1) {
+		printk(KERN_ERR "%s: WARNING: didn't receive a deviceid of 1 "
+			"(got: 0x%llx)\n", __func__, arg->devid.pnfs_devid);
+		err = -EINVAL;
+		goto out;
+	}
+
+	/* FIXME: no notifications yet */
+	arg->notify_types = 0;
+
+	/* count the number of comma-delimited DS IPs */
+	fdev.fl_device_length = 1;
+	fdev.fl_device_list = fl_devices;
+
+	fdev.fl_stripeindices_length = fdev.fl_device_length;
+	fdev.fl_stripeindices_list = fl_stripe_indices;
+
+	daddr.r_addr.data = daddr_buf;
+	daddr.r_addr.len = sizeof(daddr_buf);
+	err = __svc_print_netaddr(&pnfsd_lexp_addr, &daddr.r_addr);
+	if (err < 0)
+		goto out;
+	daddr.r_addr.len = err;
+	switch (pnfsd_lexp_addr.sa_family) {
+	case AF_INET:
+		daddr.r_netid.data = "tcp";
+		daddr.r_netid.len = 3;
+		break;
+	case AF_INET6:
+		daddr.r_netid.data = "tcp6";
+		daddr.r_netid.len = 4;
+		break;
+	default:
+		BUG();
+	}
+	fdev.fl_device_list[0].fl_multipath_length = 1;
+	fdev.fl_device_list[0].fl_multipath_list = &daddr;
+
+	/* have nfsd encode the device info */
+	err = arg->func(&arg->xdr, &fdev);
+out:
+	dprintk("<-- %s: return %d\n", __func__, err);
+	return err;
+}
+
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
