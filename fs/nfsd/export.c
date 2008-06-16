@@ -412,6 +412,11 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 		return -EINVAL;
 	}
 
+#if defined(CONFIG_PNFSD_LOCAL_EXPORT)
+	if (!inode->i_sb->s_pnfs_op)
+		pnfsd_lexp_init(inode);
+#endif /* CONFIG_PNFSD_LOCAL_EXPORT */
+
 	return 0;
 
 }
