@@ -25,6 +25,9 @@
 
 #define NFSDDBG_FACILITY NFSDDBG_PNFS
 
+struct sockaddr pnfsd_lexp_addr;
+size_t pnfs_lexp_addr_len;
+
 static int
 pnfsd_lexp_layout_type(struct super_block *sb)
 {
