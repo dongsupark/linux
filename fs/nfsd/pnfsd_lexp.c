@@ -181,3 +181,13 @@ error:
 	res->lg_seg.length = 0;
 	goto exit;
 }
+
+static int
+pnfsd_lexp_layout_commit(struct inode *inode,
+			 const struct nfsd4_pnfs_layoutcommit_arg *args,
+			 struct nfsd4_pnfs_layoutcommit_res *res)
+{
+	dprintk("%s: (unimplemented)\n", __func__);
+
+	return 0;
+}
