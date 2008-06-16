@@ -134,6 +134,8 @@ void pnfs_clear_device_notify(struct nfs4_client *);
 #if defined(CONFIG_PNFSD_LOCAL_EXPORT)
 extern struct sockaddr pnfsd_lexp_addr;
 extern size_t pnfs_lexp_addr_len;
+
+extern void pnfsd_lexp_init(struct inode *);
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
 
 #endif /* LINUX_NFSD_PNFSD_H */
