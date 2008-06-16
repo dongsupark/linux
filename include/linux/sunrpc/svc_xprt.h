@@ -205,4 +205,41 @@ static inline char *__svc_print_addr(const struct sockaddr *addr,
 
 	return buf;
 }
+
+/*
+ * Print a network address in a universal format (see rfc1833 and nfsv4.1)
+ */
+static inline int __svc_print_netaddr(struct sockaddr *addr,
+				      struct xdr_netobj *na)
+{
+	u16 port;
+	ssize_t len;
+
+	switch (addr->sa_family) {
+	case AF_INET: {
+		struct sockaddr_in *sin = (struct sockaddr_in *)addr;
+		port = ntohs(sin->sin_port);
+
+		len = snprintf(na->data, na->len, "%pI4.%u.%u",
+				&sin->sin_addr,
+				port >> 8, port & 0xff);
+		break;
+	}
+	case AF_INET6: {
+		struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)addr;
+		port = ntohs(sin6->sin6_port);
+
+		len = snprintf(na->data, na->len, "%pI6.%u.%u",
+				&sin6->sin6_addr,
+				port >> 8, port & 0xff);
+		break;
+	}
+	default:
+		snprintf(na->data, na->len, "unknown address type: %d",
+			 addr->sa_family);
+		len = -EINVAL;
+		break;
+	}
+	return len;
+}
 #endif /* SUNRPC_SVC_XPRT_H */
