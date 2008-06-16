@@ -360,6 +360,20 @@ static struct svc_export *svc_export_update(struct svc_export *new,
 					    struct svc_export *old);
 static struct svc_export *svc_export_lookup(struct svc_export *);
 
+static int pnfsd_check_export(struct inode *inode, int *flags)
+{
+#if defined(CONFIG_PNFSD)
+
+#if defined(CONFIG_PNFSD_LOCAL_EXPORT)
+	if (!inode->i_sb->s_pnfs_op)
+		pnfsd_lexp_init(inode);
+#endif /* CONFIG_PNFSD_LOCAL_EXPORT */
+
+#endif /* CONFIG_PNFSD */
+
+	return 0;
+}
+
 static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 {
 
@@ -407,8 +421,7 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 		return -EINVAL;
 	}
 
-	return 0;
-
+	return pnfsd_check_export(inode, flags);
 }
 
 #ifdef CONFIG_NFSD_V4
