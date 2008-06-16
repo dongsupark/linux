@@ -35,3 +35,23 @@ pnfsd_lexp_layout_type(struct super_block *sb)
 	dprintk("<-- %s: return %d\n", __func__, ret);
 	return ret;
 }
+
+static int
+pnfsd_lexp_get_device_iter(struct super_block *sb,
+			   u32 layout_type,
+			   struct nfsd4_pnfs_dev_iter_res *res)
+{
+	dprintk("--> %s: sb=%p\n", __func__, sb);
+
+	BUG_ON(layout_type != LAYOUT_NFSV4_1_FILES);
+
+	res->gd_eof = 1;
+	if (res->gd_cookie)
+		return -ENOENT;
+	res->gd_cookie = 1;
+	res->gd_verf = 1;
+	res->gd_devid = 1;
+
+	dprintk("<-- %s: return 0\n", __func__);
+	return 0;
+}
