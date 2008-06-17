@@ -661,6 +661,8 @@ bl_cleanup_layoutcommit(struct pnfs_layout_type *lo,
 			struct pnfs_layoutcommit_arg *arg, int status)
 {
 	dprintk("%s enter\n", __func__);
+	clean_pnfs_block_layoutupdate(BLK_LO2EXT(lo), arg, status);
+	kfree(arg->layoutdriver_data);
 }
 
 static void free_blk_mountid(struct block_mount_id *mid)
