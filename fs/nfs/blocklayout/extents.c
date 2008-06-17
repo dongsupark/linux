@@ -144,7 +144,6 @@ static int _set_range(struct my_tree_t *tree, int32_t tag, u64 s, u64 length)
 	return 0;
 }
 
-
 /* Ensure that future operations on given range of tree will not malloc */
 static int _preload_range(struct my_tree_t *tree, u64 offset, u64 length)
 {
@@ -679,6 +678,34 @@ find_get_extent(struct pnfs_block_layout *bl, sector_t isect,
 	return ret;
 }
 
+/* Similar to find_get_extent, but called with lock held, and ignores cow */
+static struct pnfs_block_extent *
+find_get_extent_locked(struct pnfs_block_layout *bl, sector_t isect)
+{
+	struct pnfs_block_extent *be, *ret = NULL;
+	int i;
+
+	dprintk("%s enter with isect %llu\n", __func__, (u64)isect);
+	for (i = 0; i < EXTENT_LISTS; i++) {
+		if (ret)
+			break;
+		list_for_each_entry(be, &bl->bl_extents[i], be_node) {
+			if (isect < be->be_f_offset)
+				break;
+			if (isect < be->be_f_offset + be->be_length) {
+				/* We have found an extent */
+				dprintk("%s Get %p (%i)\n", __func__, be,
+					atomic_read(&be->be_refcnt.refcount));
+				kref_get(&be->be_refcnt);
+				ret = be;
+				break;
+			}
+		}
+	}
+	print_bl_extent(ret);
+	return ret;
+}
+
 int
 encode_pnfs_block_layoutupdate4(struct pnfs_block_layout *bl,
 				struct pnfs_layoutcommit_arg *arg)
@@ -748,4 +775,100 @@ encode_pnfs_block_layoutupdate4(struct pnfs_block_layout *bl,
 	}
 	spin_unlock(&bl->bl_ext_lock);
 	return -ENOMEM;
+}
+
+/* Helper function to set_to_rw that initialize a new extent */
+static void
+_prep_new_extent(struct pnfs_block_extent *new,
+		 struct pnfs_block_extent *orig,
+		 sector_t offset, sector_t length, int state)
+{
+	kref_init(&new->be_refcnt);
+	/* don't need to INIT_LIST_HEAD(&new->be_node) */
+	memcpy(&new->be_devid, &orig->be_devid, sizeof(struct pnfs_deviceid));
+	new->be_mdev = orig->be_mdev;
+	new->be_f_offset = offset;
+	new->be_length = length;
+	new->be_v_offset = orig->be_v_offset - orig->be_f_offset + offset;
+	new->be_state = state;
+	new->be_inval = orig->be_inval;
+}
+
+u64 set_to_rw(struct pnfs_block_layout *bl, u64 offset, u64 length)
+{
+	u64 rv = 0;
+	struct pnfs_block_extent *be, *e1, *e2, *e3, *new, *old;
+	struct pnfs_block_extent *children[3];
+	int i = 0, j;
+
+	dprintk("%s(%llu, %llu)\n", __func__, offset, length);
+	/* Create storage for up to three new extents e1, e2, e3 */
+	e1 = kmalloc(sizeof(*e1), GFP_KERNEL);
+	e2 = kmalloc(sizeof(*e2), GFP_KERNEL);
+	e3 = kmalloc(sizeof(*e3), GFP_KERNEL);
+	/* BUG - we are ignoring any failure */
+	if (!e1 || !e2 || !e3)
+		goto out_nosplit;
+
+	spin_lock(&bl->bl_ext_lock);
+	be = find_get_extent_locked(bl, offset);
+	print_bl_extent(be);
+	rv = be->be_f_offset + be->be_length;
+	if (be->be_state != PNFS_BLOCK_INVALID_DATA) {
+		spin_unlock(&bl->bl_ext_lock);
+		goto out_nosplit;
+	}
+	/* Add e* to children, bumping e*'s krefs */
+	if (be->be_f_offset != offset) {
+		_prep_new_extent(e1, be, be->be_f_offset,
+				 offset - be->be_f_offset,
+				 PNFS_BLOCK_INVALID_DATA);
+		children[i++] = e1;
+		kref_get(&e1->be_refcnt);
+	} else
+		kfree(e1);
+	_prep_new_extent(e2, be, offset,
+			 min(length, be->be_f_offset + be->be_length - offset),
+			 PNFS_BLOCK_READWRITE_DATA);
+	children[i++] = e2;
+	kref_get(&e2->be_refcnt);
+	if (offset + length < be->be_f_offset + be->be_length) {
+		_prep_new_extent(e3, be, e2->be_f_offset + e2->be_length,
+				 be->be_f_offset + be->be_length -
+				 offset - length,
+				 PNFS_BLOCK_INVALID_DATA);
+		children[i++] = e3;
+		kref_get(&e3->be_refcnt);
+	} else
+		kfree(e3);
+
+	/* Remove be from list, and insert the e* */
+	/* We don't get refs on e*, since this list is the base reference
+	 * set when init'ed.
+	 */
+	if (i < 3)
+		children[i] = NULL;
+	new = children[0];
+	list_replace(&be->be_node, &new->be_node);
+	put_extent(be);
+	for (j = 1; j < i; j++) {
+		old = new;
+		new = children[j];
+		list_add(&new->be_node, &old->be_node);
+	}
+	spin_unlock(&bl->bl_ext_lock);
+
+	/* Since we removed the base reference above, be is now scheduled for
+	 * destruction.
+	 */
+	put_extent(be);
+	dprintk("%s returns %llu after split\n", __func__, rv);
+	return rv;
+
+ out_nosplit:
+	kfree(e1);
+	kfree(e2);
+	kfree(e3);
+	dprintk("%s returns %llu without splitting\n", __func__, rv);
+	return rv;
 }
