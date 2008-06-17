@@ -638,7 +638,37 @@ static void
 bl_cleanup_layoutcommit(struct pnfs_layout_type *lo,
 			struct pnfs_layoutcommit_data *data)
 {
-	dprintk("%s enter\n", __func__);
+	struct pnfs_layoutcommit_arg *arg = &data->args;
+
+	uint32_t *p = arg->new_layout;
+	int count, i;
+	u64 offset, length, end;
+	struct pnfs_block_layout *bl = BLK_LO2EXT(lo);
+
+	dprintk("%s enter, status=%i\n", __func__, data->status);
+	if (!p)
+		return;
+	READ32(count);
+	for (i = 0; i < count; i++) {
+		p += XDR_QUADLEN(NFS4_PNFS_DEVICEID4_SIZE);
+		READ64(offset);
+		READ64(length);
+		offset >>= 9;
+		length >>= 9;
+		end = offset + length;
+		p += 3; /* Skip past v_offset and state */
+		if (data->status) {
+			/* STUB FIXME */
+			/* We just toss info on what failed */
+			/* Do nothing */
+			;
+		} else {
+			do {
+				offset = set_to_rw(bl, offset, end - offset);
+			} while (offset < end);
+		}
+	}
+	kfree(arg->new_layout);
 }
 
 static void free_blk_mountid(struct block_mount_id *mid)
