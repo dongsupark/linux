@@ -959,6 +959,13 @@ struct pnfs_call_data {
 	u8			pnfsflags;
 	u8			how;		/* for FLUSH_STABLE */
 };
+
+/* files layout-type specific data for read, write, and commit */
+struct pnfs_fl_call_data {
+	struct rpc_clnt		*pnfs_client;	/* Holds pNFS device across async calls */
+	struct nfs_client	*ds_nfs_client;
+	__u64			orig_offset;
+};
 #endif /* CONFIG_PNFS */
 
 struct nfs_read_data {
