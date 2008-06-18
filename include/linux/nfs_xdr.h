@@ -947,6 +947,20 @@ struct nfs_page;
 
 #define NFS_PAGEVEC_SIZE	(8U)
 
+#if defined(CONFIG_PNFS)
+/* pnfsflag values */
+#define PNFS_NO_RPC		0x0001   /* non rpc result callback switch */
+
+/* pnfs-specific data needed for read, write, and commit calls */
+struct pnfs_call_data {
+	struct pnfs_layout_segment *lseg;
+	const struct rpc_call_ops *call_ops;
+	int			pnfs_error;
+	u8			pnfsflags;
+	u8			how;		/* for FLUSH_STABLE */
+};
+#endif /* CONFIG_PNFS */
+
 struct nfs_read_data {
 	int			flags;
 	struct rpc_task		task;
