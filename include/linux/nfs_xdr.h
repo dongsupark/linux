@@ -940,6 +940,11 @@ struct nfs_read_data {
 	struct page		*page_array[NFS_PAGEVEC_SIZE];
 };
 
+#if defined(CONFIG_PNFS)
+/* pnfsflag values */
+#define PNFS_NO_RPC		0x0001   /* non rpc result callback switch */
+#endif /* CONFIG_PNFS */
+
 struct nfs_write_data {
 	int			flags;
 	struct rpc_task		task;
