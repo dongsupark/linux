@@ -1258,6 +1258,22 @@ pnfs_set_ds_iosize(struct nfs_server *server)
 	}
 }
 
+static void
+pnfs_call_done(struct pnfs_call_data *pdata, struct rpc_task *task, void *data)
+{
+	put_lseg(pdata->lseg);
+	pdata->call_ops->rpc_call_done(task, data);
+	if (pdata->pnfsflags & PNFS_NO_RPC) {
+		pdata->call_ops->rpc_release(data);
+		return;
+	}
+	/*
+	 * just restore original rpc call ops
+	 * rpc_release will be called later by the rpc scheduling layer.
+	 */
+	task->tk_ops = pdata->call_ops;
+}
+
 /* Called on completion of layoutcommit */
 void
 pnfs_layoutcommit_done(struct pnfs_layoutcommit_data *data)
