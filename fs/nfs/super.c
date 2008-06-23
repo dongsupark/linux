@@ -2869,6 +2869,8 @@ static int nfs4_xdev_get_sb(struct file_system_type *fs_type, int flags,
 
 	security_sb_clone_mnt_opts(data->sb, s);
 
+	nfs4_init_pnfs(s, data->fh);
+
 	dprintk("<-- nfs4_xdev_get_sb() = 0\n");
 	return 0;
 
@@ -2953,6 +2955,8 @@ static int nfs4_remote_referral_get_sb(struct file_system_type *fs_type,
 	mnt->mnt_root = mntroot;
 
 	security_sb_clone_mnt_opts(data->sb, s);
+
+	nfs4_init_pnfs(s, &mntfh);
 
 	dprintk("<-- nfs4_referral_get_sb() = 0\n");
 	return 0;
