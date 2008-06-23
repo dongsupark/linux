@@ -965,6 +965,7 @@ struct pnfs_fl_call_data {
 	struct rpc_clnt		*pnfs_client;	/* Holds pNFS device across async calls */
 	struct nfs_client	*ds_nfs_client;
 	__u64			orig_offset;
+	int			commit_through_mds;
 };
 #endif /* CONFIG_PNFS */
 
