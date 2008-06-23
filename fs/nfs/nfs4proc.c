@@ -3317,6 +3317,25 @@ static void nfs4_proc_commit_setup(struct nfs_write_data *data, struct rpc_messa
 
 #if defined(CONFIG_NFS_V4_1)
 /*
+ * pNFS doew not send a getattr to Data Serfers on commit.
+ */
+static void
+pnfs4_proc_commit_setup(struct nfs_write_data *data, struct rpc_message *msg)
+{
+	struct nfs_server *server = NFS_SERVER(data->inode);
+
+	dprintk("--> %s ds_nfs_client %p commit_through_mds %d\n", __func__,
+		data->fldata.ds_nfs_client, data->fldata.commit_through_mds);
+
+	if (!data->fldata.ds_nfs_client || data->fldata.commit_through_mds)
+		return nfs4_proc_commit_setup(data, msg);
+
+	data->args.bitmask = server->attr_bitmask;
+	data->res.server = server;
+	msg->rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_PNFS_COMMIT];
+}
+
+/*
  * pNFS does not send a getattr on write.
  */
 static void pnfs4_proc_write_setup(struct nfs_write_data *data,
@@ -5944,6 +5963,7 @@ pnfs_v4_clientops_init(void)
 	p->read_done		= pnfs4_read_done;
 	p->write_setup		= pnfs4_proc_write_setup;
 	p->write_done		= pnfs4_write_done;
+	p->commit_setup		= pnfs4_proc_commit_setup;
 	p->commit_done		= pnfs4_commit_done;
 }
 #endif /* CONFIG_NFS_V4_1 */
