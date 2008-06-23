@@ -101,6 +101,9 @@ struct nfs_client_initdata {
 	size_t addrlen;
 	const struct nfs_rpc_ops *rpc_ops;
 	int proto;
+#ifdef CONFIG_NFS_V4
+	u32 minorversion;
+#endif
 };
 
 /*
@@ -149,6 +152,7 @@ static struct nfs_client *nfs_alloc_client(const struct nfs_client_initdata *cl_
 	rpc_init_wait_queue(&clp->cl_rpcwaitq, "NFS client");
 	clp->cl_boot_time = CURRENT_TIME;
 	clp->cl_state = 1 << NFS4CLNT_LEASE_EXPIRED;
+	clp->cl_minorversion = cl_init->minorversion;
 #endif
 	cred = rpc_lookup_machine_cred();
 	if (!IS_ERR(cred))
@@ -427,7 +431,11 @@ static struct nfs_client *nfs_match_client(const struct nfs_client_initdata *dat
 
 		if (clp->cl_proto != data->proto)
 			continue;
-
+#ifdef CONFIG_NFS_V4
+		/* Match minorversion */
+		if (clp->cl_minorversion != data->minorversion)
+			continue;
+#endif
 		/* Match the full socket address */
 		if (!nfs_sockaddr_cmp(sap, clap))
 			continue;
@@ -1116,6 +1124,7 @@ static int nfs4_set_client(struct nfs_server *server,
 		.addrlen = addrlen,
 		.rpc_ops = &nfs_v4_clientops,
 		.proto = proto,
+		.minorversion = minorversion,
 	};
 	struct nfs_client *clp;
 	int error;
