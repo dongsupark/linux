@@ -759,6 +759,12 @@ static int nfs4_stat_to_errno(int);
 				decode_sequence_maxsz + \
 				decode_putfh_maxsz + \
 				decode_write_maxsz)
+#define NFS4_enc_dscommit_sz	(compound_encode_hdr_maxsz + \
+				encode_putfh_maxsz + \
+				encode_commit_maxsz)
+#define NFS4_dec_dscommit_sz	(compound_decode_hdr_maxsz + \
+				decode_putfh_maxsz + \
+				decode_commit_maxsz)
 #endif /* CONFIG_PNFS */
 #endif /* CONFIG_NFS_V4_1 */
 
@@ -2882,6 +2888,28 @@ static int nfs4_xdr_enc_dswrite(struct rpc_rqst *req, uint32_t *p,
 	encode_sequence(&xdr, clp, &args->seq_args, &hdr);
 	encode_putfh(&xdr, args->fh, &hdr);
 	encode_write(&xdr, args, &hdr);
+	encode_nops(&hdr);
+	return 0;
+}
+
+/*
+ * Encode a pNFS File Layout Data Server COMMIT request
+ */
+static int nfs4_xdr_enc_dscommit(struct rpc_rqst *req, uint32_t *p,
+				 struct nfs_writeargs *args)
+{
+	struct xdr_stream xdr;
+	struct nfs_client *clp =
+		(struct nfs_client *)req->rq_task->tk_client->cl_private;
+	struct compound_hdr hdr = {
+		.minorversion = clp->cl_minorversion,
+	};
+
+	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
+	encode_compound_hdr(&xdr, req, &hdr);
+	encode_sequence(&xdr, clp, &args->seq_args, &hdr);
+	encode_putfh(&xdr, args->fh, &hdr);
+	encode_commit(&xdr, args, &hdr);
 	encode_nops(&hdr);
 	return 0;
 }
@@ -5969,6 +5997,31 @@ static int nfs4_xdr_dec_dswrite(struct rpc_rqst *rqstp, uint32_t *p,
 out:
 	return status;
 }
+
+/*
+ * Decode pNFS File Layout Data Server COMMIT response
+ */
+static int nfs4_xdr_dec_dscommit(struct rpc_rqst *rqstp, uint32_t *p,
+				 struct nfs_writeres *res)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr;
+	int status;
+
+	xdr_init_decode(&xdr, &rqstp->rq_rcv_buf, p);
+	status = decode_compound_hdr(&xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(&xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_putfh(&xdr);
+	if (status)
+		goto out;
+	status = decode_commit(&xdr, res);
+out:
+	return status;
+}
 #endif /* CONFIG_PNFS */
 #endif /* CONFIG_NFS_V4_1 */
 
@@ -6227,6 +6280,7 @@ struct rpc_procinfo	nfs4_procedures[] = {
   PROC(PNFS_LAYOUTCOMMIT, enc_layoutcommit,  dec_layoutcommit),
   PROC(PNFS_LAYOUTRETURN, enc_layoutreturn,  dec_layoutreturn),
   PROC(PNFS_WRITE, enc_dswrite,  dec_dswrite),
+  PROC(PNFS_COMMIT, enc_dscommit,  dec_dscommit),
 #endif /* CONFIG_PNFS */
 #endif /* CONFIG_NFS_V4_1 */
 };
