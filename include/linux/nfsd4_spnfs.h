@@ -304,6 +304,8 @@ int spnfs_remove(unsigned long);
 int spnfs_read(unsigned long, loff_t, unsigned long *, int, struct svc_rqst *);
 int spnfs_write(unsigned long, loff_t, size_t, int, struct svc_rqst *);
 int spnfs_getfh(int, struct nfs_fh *);
+int spnfs_test_layoutrecall(char *);
+int spnfs_layoutrecall(struct inode *, int);
 
 int nfsd_spnfs_new(void);
 void nfsd_spnfs_delete(void);
