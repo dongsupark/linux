@@ -303,12 +303,14 @@ int spnfs_get_state(struct inode *, void *, void *);
 int spnfs_remove(unsigned long);
 int spnfs_read(unsigned long, loff_t, unsigned long *, int, struct svc_rqst *);
 int spnfs_write(unsigned long, loff_t, size_t, int, struct svc_rqst *);
+int spnfs_getfh(int, struct nfs_fh *);
 
 int nfsd_spnfs_new(void);
 void nfsd_spnfs_delete(void);
 int spnfs_upcall(struct spnfs *, struct spnfs_msg *, union spnfs_msg_res *);
 int spnfs_enabled(void);
 int nfs4_spnfs_propagate_open(struct super_block *, struct svc_fh *, void *);
+int spnfs_init_proc(void);
 
 #endif /* __KERNEL__ */
 
