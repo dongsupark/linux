@@ -51,6 +51,7 @@
 #include <linux/sunrpc/clnt.h>
 #include <linux/workqueue.h>
 #include <linux/sunrpc/rpc_pipe_fs.h>
+#include <linux/proc_fs.h>
 
 #include <linux/nfs_fs.h>
 
@@ -273,4 +274,102 @@ int spnfs_enabled(void)
 {
 	return spnfs_enabled_at_some_point;
 }
+
+#ifdef CONFIG_PROC_FS
+
+/*
+ * procfs virtual files for user/kernel space communication:
+ *
+ * ctl - currently just an on/off switch...can be expanded
+ * getfh - fd to fh conversion
+ */
+
+static int ctl_write(struct file *file, const char __user *buf, size_t count,
+		       loff_t *offset)
+{
+	int cmd, rc;
+
+	if (copy_from_user((int *)&cmd, (int *)buf, sizeof(int)))
+		return -EFAULT;
+	if (cmd) {
+		rc = nfsd_spnfs_new();
+		if (rc != 0)
+			return rc;
+	} else
+		nfsd_spnfs_delete();
+
+	return count;
+}
+
+static struct file_operations ctl_ops = {
+	.write		= ctl_write,
+};
+
+static int getfh_open(struct inode *inode, struct file *file)
+{
+	file->private_data = kmalloc(sizeof(struct nfs_fh), GFP_KERNEL);
+	if (file->private_data == NULL)
+		return -ENOMEM;
+
+	return 0;
+}
+
+static int getfh_read(struct file *file, char __user *buf, size_t count,
+		      loff_t *offset)
+{
+	if (copy_to_user(buf, file->private_data, sizeof(struct nfs_fh)))
+		return -EFAULT;
+
+	return count;
+}
+
+static int getfh_write(struct file *file, const char __user *buf, size_t count,
+		       loff_t *offset)
+{
+	int fd;
+
+	if (copy_from_user((int *)&fd, (int *)buf, sizeof(int)))
+		return -EFAULT;
+	if (spnfs_getfh(fd, file->private_data) != 0)
+		return -EIO;
+
+	return count;
+}
+
+static int getfh_release(struct inode *inode, struct file *file)
+{
+	kfree(file->private_data);
+	return 0;
+}
+
+static struct file_operations getfh_ops = {
+	.open		= getfh_open,
+	.read		= getfh_read,
+	.write		= getfh_write,
+	.release	= getfh_release,
+};
+
+int
+spnfs_init_proc(void)
+{
+	struct proc_dir_entry *entry;
+
+	entry = proc_mkdir("fs/spnfs", NULL);
+	if (!entry)
+		return -ENOMEM;
+
+	entry = create_proc_entry("fs/spnfs/ctl", 0, NULL);
+	if (!entry)
+		return -ENOMEM;
+	entry->proc_fops = &ctl_ops;
+
+	entry = create_proc_entry("fs/spnfs/getfh", 0, NULL);
+	if (!entry)
+		return -ENOMEM;
+	entry->proc_fops = &getfh_ops;
+
+	return 0;
+}
+#endif /* CONFIG_PROC_FS */
+
 #endif /* CONFIG_SPNFS */

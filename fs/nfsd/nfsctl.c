@@ -41,6 +41,10 @@
 #include <asm/uaccess.h>
 #include <net/ipv6.h>
 
+#if defined(CONFIG_PROC_FS) && defined(CONFIG_SPNFS)
+#include <linux/nfsd4_spnfs.h>
+#endif /* CONFIG_PROC_FS && CONFIG_SPNFS */
+
 /*
  *	We have a single directory with 9 nodes in it.
  */
@@ -1441,15 +1445,6 @@ static struct file_system_type nfsd_fs_type = {
 	.kill_sb	= kill_litter_super,
 };
 
-#if defined(CONFIG_SPNFS)
-extern int (*spnfs_init)(void);
-extern void (*spnfs_delete)(void);
-extern struct nfs_fh * (*spnfs_getfh_vec)(int), *spnfs_getfh(int);
-
-int nfsd_spnfs_new(void);
-void nfsd_spnfs_delete(void);
-#endif /* CONFIG_SPNFS */
-
 #ifdef CONFIG_PROC_FS
 static int create_proc_exports_entry(void)
 {
@@ -1492,11 +1487,11 @@ static int __init init_nfsd(void)
 	retval = create_proc_exports_entry();
 	if (retval)
 		goto out_free_idmap;
-#if defined(CONFIG_SPNFS)
-	spnfs_init = nfsd_spnfs_new;
-	spnfs_delete = nfsd_spnfs_delete;
-	spnfs_getfh_vec = spnfs_getfh;
-#endif /* CONFIG_SPNFS */
+#if defined(CONFIG_PROC_FS) && defined(CONFIG_SPNFS)
+	retval = spnfs_init_proc();
+	if (retval != 0)
+		goto out_free_idmap;
+#endif /* CONFIG_PROC_FS && CONFIG_SPNFS */
 
 	retval = register_filesystem(&nfsd_fs_type);
 	if (retval)
@@ -1520,9 +1515,11 @@ out_free_stat:
 
 static void __exit exit_nfsd(void)
 {
-#if defined(CONFIG_SPNFS)
-	spnfs_init = NULL;
-#endif /* CONFIG_SPNFS */
+#if defined(CONFIG_PROC_FS) && defined(CONFIG_SPNFS)
+	remove_proc_entry("fs/nfs/spnfs/getfh", NULL);
+	remove_proc_entry("fs/nfs/spnfs/ctl", NULL);
+	remove_proc_entry("fs/nfs/spnfs", NULL);
+#endif /* CONFIG_PROC_FS && CONFIG_SPNFS */
 
 	nfsd_export_shutdown();
 	nfsd_reply_cache_shutdown();
