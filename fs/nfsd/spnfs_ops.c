@@ -153,6 +153,12 @@ spnfs_layoutreturn(struct inode *inode, void *pnfs_layout_return_p)
 }
 
 int
+spnfs_layoutrecall(void)
+{
+	return 0;
+}
+
+int
 spnfs_getdeviceiter(struct super_block *sb, struct pnfs_deviter_arg *iter)
 {
 	struct spnfs *spnfs = global_spnfs;   /* XXX keep up the pretence */
