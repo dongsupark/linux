@@ -282,8 +282,11 @@ int spnfs_enabled(void)
  *
  * ctl - currently just an on/off switch...can be expanded
  * getfh - fd to fh conversion
+ * recall - recall a layout from the command line, for example:
+ *		echo <path> > /proc/fs/spnfs/recall
  */
 
+/*************** start ctl **************************/
 static int ctl_write(struct file *file, const char __user *buf, size_t count,
 		       loff_t *offset)
 {
@@ -304,7 +307,10 @@ static int ctl_write(struct file *file, const char __user *buf, size_t count,
 static struct file_operations ctl_ops = {
 	.write		= ctl_write,
 };
+/*************** end ctl ****************************/
 
+
+/*************** start getfh ************************/
 static int getfh_open(struct inode *inode, struct file *file)
 {
 	file->private_data = kmalloc(sizeof(struct nfs_fh), GFP_KERNEL);
@@ -348,6 +354,41 @@ static struct file_operations getfh_ops = {
 	.write		= getfh_write,
 	.release	= getfh_release,
 };
+/*************** end getfh *************************/
+
+
+/*************** start recall layout ***************/
+static int recall_write(struct file *file, const char __user *buf, size_t count,
+			loff_t *offset)
+{
+	char path[128];
+	char *p;
+	int rc;
+
+	if (count > 128)
+		return -EINVAL;
+
+	if (copy_from_user(path, buf, count))
+		return -EFAULT;
+
+	/* assumes newline-terminated path */
+	p = memchr(path, '\n', count);
+	if (p == NULL)
+		return -EINVAL;
+	*p = '\0';
+
+	rc = spnfs_test_layoutrecall(path);
+	if (rc != 0)
+		return rc;
+
+	return count;
+}
+
+static struct file_operations recall_ops = {
+	.write		= recall_write,
+};
+/*************** end recall layout ***************/
+
 
 int
 spnfs_init_proc(void)
@@ -367,6 +408,11 @@ spnfs_init_proc(void)
 	if (!entry)
 		return -ENOMEM;
 	entry->proc_fops = &getfh_ops;
+
+	entry = create_proc_entry("fs/spnfs/recall", 0, NULL);
+	if (!entry)
+		return -ENOMEM;
+	entry->proc_fops = &recall_ops;
 
 	return 0;
 }
