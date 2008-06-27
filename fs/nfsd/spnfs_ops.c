@@ -153,9 +153,75 @@ spnfs_layoutreturn(struct inode *inode, void *pnfs_layout_return_p)
 }
 
 int
-spnfs_layoutrecall(void)
+spnfs_layoutrecall(struct inode *inode, int type)
 {
+	struct super_block *sb;
+	struct nfsd4_pnfs_cb_layout lr;
+
+	switch (type) {
+	case RECALL_FILE:
+		sb = inode->i_sb;
+		dprintk("%s: recalling layout for ino = %lu\n",
+			__func__, inode->i_ino);
+		break;
+	case RECALL_FSID:
+		sb = inode->i_sb;
+		dprintk("%s: recalling layout for fsid x (unimplemented)\n",
+			__func__);
+		return 0;
+	case RECALL_ALL:
+		/* XXX figure out how to get a sb since there's no inode ptr */
+		dprintk("%s: recalling all layouts (unimplemented)\n",
+			__func__);
+		return 0;
+	default:
+		return -EINVAL;
+	}
+
+	lr.cbl_recall_type = type;
+	lr.cbl_seg.layout_type = LAYOUT_NFSV4_FILES;
+	lr.cbl_seg.clientid = 0;
+	lr.cbl_seg.offset = 0;
+	lr.cbl_seg.length = NFS4_LENGTH_EOF;
+	lr.cbl_seg.iomode = IOMODE_ANY;
+	lr.cbl_layoutchanged = 0;
+
+	sb->s_export_op->cb_layout_recall(sb, inode, &lr);
+
 	return 0;
+}
+
+int
+spnfs_test_layoutrecall(char *path)
+{
+	struct nameidata nd;
+	struct inode *inode;
+	int type, rc;
+
+	dprintk("%s: path=%s\n", __func__, path);
+
+	if (strcmp(path, "all") == 0) {
+		inode = NULL;
+		type = RECALL_ALL;
+	} else {
+		rc = path_lookup(path, 0, &nd);
+		if (rc != 0)
+			return -ENOENT;
+
+		/*
+		 * XXX todo: add a RECALL_FSID scenario here...maybe if
+		 * inode is a dir...
+		 */
+
+		inode = nd.path.dentry->d_inode;
+		type = RECALL_FILE;
+	}
+
+	rc = spnfs_layoutrecall(inode, type);
+
+	if (type != RECALL_ALL)
+		path_put(&nd.path);
+	return rc;
 }
 
 int
