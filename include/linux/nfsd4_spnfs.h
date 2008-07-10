@@ -65,6 +65,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* layout */
 struct spnfs_msg_layoutget_args {
 	unsigned long inode;
+	unsigned long generation;
 };
 
 struct spnfs_filelayout_list {
@@ -84,6 +85,7 @@ struct spnfs_msg_layoutget_res {
 /* layoutcommit */
 struct spnfs_msg_layoutcommit_args {
 	unsigned long inode;
+	unsigned long generation;
 	u_int64_t file_size;
 };
 
@@ -141,6 +143,7 @@ struct spnfs_msg_getdeviceinfo_res {
 /* setattr */
 struct spnfs_msg_setattr_args {
 	unsigned long inode;
+	unsigned long generation;
 	int file_size;
 };
 
@@ -151,6 +154,7 @@ struct spnfs_msg_setattr_res {
 /* open */
 struct spnfs_msg_open_args {
 	unsigned long inode;
+	unsigned long generation;
 	int create;
 	int createmode;
 	int truncate;
@@ -184,6 +188,7 @@ struct spnfs_msg_create_res {
 /* remove */
 struct spnfs_msg_remove_args {
 	unsigned long inode;
+	unsigned long generation;
 };
 
 struct spnfs_msg_remove_res {
@@ -204,6 +209,7 @@ struct spnfs_msg_commit_res {
 /* read */
 struct spnfs_msg_read_args {
 	unsigned long inode;
+	unsigned long generation;
 	loff_t offset;
 	unsigned long len;
 };
@@ -216,6 +222,7 @@ struct spnfs_msg_read_res {
 /* write */
 struct spnfs_msg_write_args {
 	unsigned long inode;
+	unsigned long generation;
 	loff_t offset;
 	unsigned long len;
 	char data[SPNFS_MAX_IO];
@@ -300,9 +307,9 @@ int spnfs_setattr(void);
 int spnfs_open(struct inode *, void *);
 int spnfs_close(struct inode *);
 int spnfs_get_state(struct inode *, void *, void *);
-int spnfs_remove(unsigned long);
-int spnfs_read(unsigned long, loff_t, unsigned long *, int, struct svc_rqst *);
-int spnfs_write(unsigned long, loff_t, size_t, int, struct svc_rqst *);
+int spnfs_remove(unsigned long, unsigned long);
+int spnfs_read(struct inode *, loff_t, unsigned long *, int, struct svc_rqst *);
+int spnfs_write(struct inode *, loff_t, size_t, int, struct svc_rqst *);
 int spnfs_getfh(int, struct nfs_fh *);
 int spnfs_test_layoutrecall(char *);
 int spnfs_layoutrecall(struct inode *, int);

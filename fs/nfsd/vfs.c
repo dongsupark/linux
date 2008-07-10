@@ -1790,9 +1790,10 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 	struct inode	*dirp;
 	__be32		err;
 	int		host_err;
-#if defined(CONFIG_NFSD_V4)
+#if defined(CONFIG_SPNFS)
 	unsigned long	ino;
-#endif /* defined(CONFIG_NFSD_V4) */
+	unsigned long	generation;
+#endif /* defined(CONFIG_SPNFS) */
 
 	err = nfserr_acces;
 	if (!flen || isdotent(fname, flen))
@@ -1816,13 +1817,14 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 		goto out;
 	}
 
-#if defined(CONFIG_NFSD_V4)
+#if defined(CONFIG_SPNFS)
 	/*
 	 * Remember the inode number to communicate to the spnfsd
 	 * for removal of stripes
 	 */
 	ino = rdentry->d_inode->i_ino;
-#endif /* defined(CONFIG_NFS_V4) */
+	generation = rdentry->d_inode->i_generation;
+#endif /* defined(CONFIG_SPNFS) */
 
 	if (!type)
 		type = rdentry->d_inode->i_mode & S_IFMT;
@@ -1849,7 +1851,6 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 		goto out_drop;
 	if (EX_ISSYNC(fhp->fh_export))
 		host_err = nfsd_sync_dir(dentry);
-#if defined(CONFIG_NFSD_V4)
 #if defined(CONFIG_SPNFS)
 	/*
 	 * spnfs: notify spnfsd of removal to destroy stripes
@@ -1863,7 +1864,7 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 		BUG_ON(ino == 0);
 		dprintk("%s calling spnfs_remove inumber=%ld\n",
 			__FUNCTION__, ino);
-		if (spnfs_remove(ino) == 0) {
+		if (spnfs_remove(ino, generation) == 0) {
 			dprintk("%s spnfs_remove success\n", __FUNCTION__);
 		} else {
 			/* XXX How do we make this atomic? */
@@ -1872,7 +1873,6 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 		}
 	}
 #endif /* defined(CONFIG_SPNFS) */
-#endif /* defined(CONFIG_NFSD_V4) */
 
 out_drop:
 	mnt_drop_write(fhp->fh_export->ex_path.mnt);

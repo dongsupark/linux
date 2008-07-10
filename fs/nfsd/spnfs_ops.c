@@ -81,6 +81,7 @@ spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 
 	im.im_type = SPNFS_TYPE_LAYOUTGET;
 	im.im_args.layoutget_args.inode = inode->i_ino;
+	im.im_args.layoutget_args.generation = inode->i_generation;
 
 	/* call function to queue the msg for upcall */
 	if (spnfs_upcall(spnfs, &im, &res) != 0) {
@@ -404,6 +405,7 @@ spnfs_open(struct inode *inode, void *p)
 	poa = (struct nfsd4_pnfs_open *)p;
 	im.im_type = SPNFS_TYPE_OPEN;
 	im.im_args.open_args.inode = inode->i_ino;
+	im.im_args.open_args.generation = inode->i_generation;
 	im.im_args.open_args.create = poa->op_create;
 	im.im_args.open_args.createmode = poa->op_createmode;
 	im.im_args.open_args.truncate = poa->op_truncate;
@@ -472,7 +474,7 @@ spnfs_create(void)
  * Returns 0 on success otherwise error code
  */
 int
-spnfs_remove(unsigned long ino)
+spnfs_remove(unsigned long ino, unsigned long generation)
 {
 	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
 	struct spnfs_msg im;
@@ -481,6 +483,7 @@ spnfs_remove(unsigned long ino)
 
 	im.im_type = SPNFS_TYPE_REMOVE;
 	im.im_args.remove_args.inode = ino;
+	im.im_args.remove_args.generation = generation;
 
 	/* call function to queue the msg for upcall */
 	status = spnfs_upcall(spnfs, &im, &res);
@@ -496,7 +499,7 @@ remove_out:
 }
 
 int
-spnfs_read_one(unsigned long ino, loff_t offset, size_t len, char *buf)
+spnfs_read_one(struct inode *inode, loff_t offset, size_t len, char *buf)
 {
 	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
 	struct spnfs_msg im;
@@ -506,7 +509,8 @@ spnfs_read_one(unsigned long ino, loff_t offset, size_t len, char *buf)
 	unsigned long bytecount = 0;
 
 	im.im_type = SPNFS_TYPE_READ;
-	im.im_args.read_args.inode = ino;
+	im.im_args.read_args.inode = inode->i_ino;
+	im.im_args.read_args.generation = inode->i_generation;
 	while (todo > 0) {
 		im.im_args.read_args.offset = offset;
 		if (todo > SPNFS_MAX_IO)
@@ -548,7 +552,7 @@ read_out:
 }
 
 int
-spnfs_read(unsigned long ino, loff_t offset, unsigned long *lenp, int vlen,
+spnfs_read(struct inode *inode, loff_t offset, unsigned long *lenp, int vlen,
 		struct svc_rqst *rqstp)
 {
 	int vnum, err, bytecount = 0;
@@ -556,7 +560,7 @@ spnfs_read(unsigned long ino, loff_t offset, unsigned long *lenp, int vlen,
 
 	for (vnum = 0 ; vnum < vlen ; vnum++) {
 		iolen = rqstp->rq_vec[vnum].iov_len;
-		err = spnfs_read_one(ino, offset + bytecount, iolen,
+		err = spnfs_read_one(inode, offset + bytecount, iolen,
 				(char *)rqstp->rq_vec[vnum].iov_base);
 		if (err < 0)
 			return -EIO;
@@ -573,7 +577,7 @@ out:
 }
 
 int
-spnfs_write_one(unsigned long ino, loff_t offset, size_t len, char *buf)
+spnfs_write_one(struct inode *inode, loff_t offset, size_t len, char *buf)
 {
 	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
 	struct spnfs_msg im;
@@ -583,7 +587,8 @@ spnfs_write_one(unsigned long ino, loff_t offset, size_t len, char *buf)
 	unsigned long bytecount = 0;
 
 	im.im_type = SPNFS_TYPE_WRITE;
-	im.im_args.write_args.inode = ino;
+	im.im_args.write_args.inode = inode->i_ino;
+	im.im_args.write_args.generation = inode->i_generation;
 	while (todo > 0) {
 		im.im_args.write_args.offset = offset;
 		if (todo > SPNFS_MAX_IO)
@@ -627,7 +632,7 @@ write_out:
 }
 
 int
-spnfs_write(unsigned long ino, loff_t offset, size_t len, int vlen,
+spnfs_write(struct inode *inode, loff_t offset, size_t len, int vlen,
 		struct svc_rqst *rqstp)
 {
 	int vnum, err, bytecount = 0;
@@ -635,7 +640,7 @@ spnfs_write(unsigned long ino, loff_t offset, size_t len, int vlen,
 
 	for (vnum = 0 ; vnum < vlen ; vnum++) {
 		iolen = rqstp->rq_vec[vnum].iov_len;
-		err = spnfs_write_one(ino, offset + bytecount, iolen,
+		err = spnfs_write_one(inode, offset + bytecount, iolen,
 				(char *)rqstp->rq_vec[vnum].iov_base);
 		if (err != iolen) {
 			dprintk("err=%d expected %Zd\n", err, len);
