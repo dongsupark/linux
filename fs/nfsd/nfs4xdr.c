@@ -2849,7 +2849,7 @@ nfsd4_encode_read(struct nfsd4_compoundres *resp, __be32 nfserr,
 
 #if defined(CONFIG_SPNFS)
 	if (spnfs_enabled()) {
-		nfserr = spnfs_read(read->rd_fhp->fh_dentry->d_inode->i_ino,
+		nfserr = spnfs_read(read->rd_fhp->fh_dentry->d_inode,
 				    read->rd_offset, &maxcount, read->rd_vlen,
 				    resp->rqstp);
 		if (nfserr < 0)

@@ -793,7 +793,7 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 			   &write->wr_verifier);
 #if defined(CONFIG_SPNFS)
 	if (spnfs_enabled()) {
-		status = spnfs_write(cstate->current_fh.fh_dentry->d_inode->i_ino,
+		status = spnfs_write(cstate->current_fh.fh_dentry->d_inode,
 			write->wr_offset, write->wr_buflen, write->wr_vlen,
 			rqstp);
 		if (status < 0)
