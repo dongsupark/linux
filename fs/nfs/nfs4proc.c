@@ -503,6 +503,10 @@ static int nfs41_setup_sequence(struct nfs4_session *session,
 		dprintk("%s Session Reset\n", __func__);
 		spin_unlock(&tbl->slot_tbl_lock);
 		ret = nfs41_recover_session_sync(session);
+		if (test_bit(NFS4CLNT_LEASE_EXPIRED, &session->clp->cl_state)) {
+			printk(KERN_WARNING "%s Clientid Reset\n", __func__);
+			nfs4_schedule_state_recovery(session->clp);
+		}
 		if (ret)
 			return -EAGAIN;
 		nfs41_wait_session_reset(session);
