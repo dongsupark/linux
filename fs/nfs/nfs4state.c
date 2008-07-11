@@ -1026,6 +1026,8 @@ static void nfs4_state_end_reclaim_nograce(struct nfs_client *clp)
 
 static void nfs4_recovery_handle_error(struct nfs_client *clp, int error)
 {
+	if (clp->cl_minorversion != 0)
+		return;
 	switch (error) {
 		case -NFS4ERR_CB_PATH_DOWN:
 			nfs_handle_cb_pathdown(clp);
