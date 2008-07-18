@@ -73,6 +73,9 @@ int _pnfs_do_flush(struct inode *inode, struct nfs_page *req,
 		   struct pnfs_fsdata *fsdata);
 void _pnfs_modify_new_write_request(struct nfs_page *req,
 				    struct pnfs_fsdata *fsdata);
+void _pnfs_direct_init_io(struct inode *inode, struct nfs_open_context *ctx,
+			  size_t count, loff_t loff, int iswrite,
+			  size_t *rwsize, size_t *remaining);
 
 #define PNFS_EXISTS_LDIO_OP(srv, opname) ((srv)->pnfs_curr_ld &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops &&	\
@@ -222,6 +225,20 @@ static inline int pnfs_get_read_status(struct nfs_read_data *data)
 	return data->pdata.pnfs_error;
 }
 
+static inline void pnfs_direct_init_io(struct inode *inode,
+				       struct nfs_open_context *ctx,
+				       size_t count, loff_t loff, int iswrite,
+				       size_t *iosize, size_t *remaining)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	if (pnfs_enabled_sb(nfss))
+		return _pnfs_direct_init_io(inode, ctx, count, loff, iswrite,
+					    iosize, remaining);
+
+	return;
+}
+
 static inline int pnfs_use_rpc(struct nfs_server *nfss)
 {
 	if (pnfs_enabled_sb(nfss))
@@ -292,6 +309,14 @@ static inline int pnfs_get_write_status(struct nfs_write_data *data)
 static inline int pnfs_get_read_status(struct nfs_read_data *data)
 {
 	return 0;
+}
+
+/* Set num of remaining bytes, which is everything */
+static inline void pnfs_direct_init_io(struct inode *inode,
+				       struct nfs_open_context *ctx,
+				       size_t count, loff_t loff, int iswrite,
+				       size_t *iosize, size_t *remaining)
+{
 }
 
 static inline int pnfs_use_rpc(struct nfs_server *nfss)

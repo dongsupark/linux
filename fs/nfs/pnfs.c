@@ -1217,6 +1217,38 @@ pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
 	pnfs_set_pg_test(inode, pgio);
 }
 
+/* Retrieve I/O parameters for O_DIRECT.
+ * Out Args:
+ * iosize    - min of boundary and (rsize or wsize)
+ * remaining - # bytes remaining in the current stripe unit
+ */
+void
+_pnfs_direct_init_io(struct inode *inode, struct nfs_open_context *ctx,
+		     size_t count, loff_t loff, int iswrite, size_t *iosize,
+		     size_t *remaining)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	u32 boundary;
+	unsigned int rwsize;
+
+	if (count <= 0 ||
+	    below_threshold(inode, count, iswrite) ||
+	    pnfs_update_layout(inode, ctx, count, loff, IOMODE_READ, NULL))
+		return;
+
+	if (iswrite)
+		rwsize = nfss->ds_wsize;
+	else
+		rwsize = nfss->ds_rsize;
+
+	boundary = pnfs_getboundary(inode);
+
+	*iosize = min(rwsize, boundary);
+	*remaining = boundary - (do_div(loff, boundary));
+
+	dprintk("%s Rem %Zu iosize %Zu\n", __func__, *remaining, *iosize);
+}
+
 /*
  * Get a layoutout for COMMIT
  */
