@@ -55,6 +55,7 @@
 
 #include "internal.h"
 #include "iostat.h"
+#include "pnfs.h"
 
 #define NFSDBG_FACILITY		NFSDBG_VFS
 
@@ -326,6 +327,17 @@ static ssize_t nfs_direct_read_schedule_segment(struct nfs_direct_req *dreq,
 	unsigned int pgbase;
 	int result;
 	ssize_t started = 0;
+	size_t pnfs_stripe_rem = count;
+	enum pnfs_try_status trypnfs;
+
+	/* pnfs_stripe_rem will be set to the remaining bytes in
+	 * the first stripe_unit (which for standard nfs is count)
+	 */
+	pnfs_direct_init_io(inode, ctx, count, pos, 0, &rsize,
+			    &pnfs_stripe_rem);
+
+	dprintk("%s: pos %llu count %Zu wsize %Zu\n",
+		__func__, pos, count, rsize);
 
 	do {
 		struct nfs_read_data *data;
@@ -333,6 +345,10 @@ static ssize_t nfs_direct_read_schedule_segment(struct nfs_direct_req *dreq,
 
 		pgbase = user_addr & ~PAGE_MASK;
 		bytes = min(rsize,count);
+#if defined(CONFIG_PNFS)
+		bytes = min(bytes, pnfs_stripe_rem);
+		pnfs_stripe_rem = rsize;
+#endif /* CONFIG_PNFS */
 
 		result = -ENOMEM;
 		data = nfs_readdata_alloc(nfs_page_array_len(pgbase, bytes));
@@ -373,8 +389,14 @@ static ssize_t nfs_direct_read_schedule_segment(struct nfs_direct_req *dreq,
 		data->res.eof = 0;
 		data->res.count = bytes;
 
-		if (nfs_direct_read_execute(data, &task_setup_data, &msg))
+		trypnfs = pnfs_try_to_read_data(data, &nfs_read_direct_ops);
+		if (trypnfs == PNFS_ATTEMPTED) {
+			result = pnfs_get_read_status(data);
+			if (result)
+				break;
+		} else if (nfs_direct_read_execute(data, &task_setup_data, &msg)) {
 			break;
+		}
 
 		started += bytes;
 		user_addr += bytes;
