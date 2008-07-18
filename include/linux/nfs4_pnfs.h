@@ -15,6 +15,11 @@
 #include <linux/pnfs_xdr.h>
 #include <linux/nfs_page.h>
 
+enum pnfs_try_status {
+	PNFS_ATTEMPTED     = 0,
+	PNFS_NOT_ATTEMPTED = 1,
+};
+
 #define NFS4_PNFS_GETDEVLIST_MAXNUM 16
 
 /* Per-layout driver specific registration structure */
