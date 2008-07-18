@@ -190,12 +190,22 @@ static ssize_t nfs_direct_wait(struct nfs_direct_req *dreq)
 {
 	ssize_t result = -EIOCBQUEUED;
 
+	if (!pnfs_use_rpc(NFS_SERVER(dreq->inode))) {
+		/* FIXME: Right now non-rpc layout types must perform
+		 * syncronous direct i/o.
+		 * New pNFS callback to wait on outstanding requests?
+		 */
+		result = 0;
+		goto set_result;
+	}
+
 	/* Async requests don't wait here */
 	if (dreq->iocb)
 		goto out;
 
 	result = wait_for_completion_killable(&dreq->completion);
 
+set_result:
 	if (!result)
 		result = dreq->error;
 	if (!result)
