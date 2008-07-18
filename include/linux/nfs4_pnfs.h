@@ -12,6 +12,11 @@
 #ifndef LINUX_NFS4_PNFS_H
 #define LINUX_NFS4_PNFS_H
 
+enum pnfs_try_status {
+	PNFS_ATTEMPTED     = 0,
+	PNFS_NOT_ATTEMPTED = 1,
+};
+
 #if defined(CONFIG_PNFS)
 
 #include <linux/pnfs_xdr.h>
