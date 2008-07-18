@@ -1708,6 +1708,10 @@ nfsd_rename(struct svc_rqst *rqstp, struct svc_fh *ffhp, char *fname, int flen,
 	struct inode	*fdir, *tdir;
 	__be32		err;
 	int		host_err;
+#ifdef CONFIG_SPNFS
+	unsigned long ino = 0;
+	unsigned long generation = 0;
+#endif /* CONFIG_SPNFS */
 
 	err = fh_verify(rqstp, ffhp, S_IFDIR, NFSD_MAY_REMOVE);
 	if (err)
@@ -1771,7 +1775,23 @@ nfsd_rename(struct svc_rqst *rqstp, struct svc_fh *ffhp, char *fname, int flen,
 	if (host_err)
 		goto out_dput_new;
 
+#ifdef CONFIG_SPNFS
+	/*
+	 * if the target is a preexisting regular file, remember the
+	 * inode number and generation so we can delete the stripes
+	 */
+	if (ndentry && ndentry->d_inode && S_ISREG(ndentry->d_inode->i_mode)) {
+		ino = ndentry->d_inode->i_ino;
+		generation = ndentry->d_inode->i_generation;
+	}
+#endif /* CONFIG_SPNFS */
+
 	host_err = vfs_rename(fdir, odentry, tdir, ndentry);
+#ifdef CONFIG_SPNFS
+	if (!host_err && ino)
+		spnfs_remove(ino, generation);
+#endif /* CONFIG_SPNFS */
+
 	if (!host_err) {
 		host_err = commit_metadata(tfhp);
 		if (!host_err)
