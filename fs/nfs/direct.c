@@ -505,6 +505,7 @@ static void nfs_direct_write_reschedule(struct nfs_direct_req *dreq)
 		.workqueue = nfsiod_workqueue,
 		.flags = RPC_TASK_ASYNC,
 	};
+	enum pnfs_try_status trypnfs;
 
 	dreq->count = 0;
 	get_dreq(dreq);
@@ -528,6 +529,11 @@ static void nfs_direct_write_reschedule(struct nfs_direct_req *dreq)
 		 * Reuse data->task; data->args should not have changed
 		 * since the original request was sent.
 		 */
+		trypnfs = pnfs_try_to_write_data(data, &nfs_write_direct_ops,
+						 NFS_FILE_SYNC);
+		if (trypnfs == PNFS_ATTEMPTED)
+			continue;
+
 		nfs_direct_write_execute(data, &task_setup_data, &msg);
 	}
 
@@ -610,6 +616,7 @@ static void nfs_direct_commit_schedule(struct nfs_direct_req *dreq)
 		.workqueue = nfsiod_workqueue,
 		.flags = RPC_TASK_ASYNC,
 	};
+	enum pnfs_try_status trypnfs;
 
 	data->inode = dreq->inode;
 	data->cred = msg.rpc_cred;
@@ -622,6 +629,11 @@ static void nfs_direct_commit_schedule(struct nfs_direct_req *dreq)
 	data->res.fattr = &data->fattr;
 	data->res.verf = &data->verf;
 	nfs_fattr_init(&data->fattr);
+
+	trypnfs = pnfs_try_to_commit(data, &nfs_commit_direct_ops,
+				     RPC_TASK_ASYNC);
+	if (trypnfs == PNFS_ATTEMPTED)
+		return;
 
 	nfs_direct_commit_execute(dreq, data, &task_setup_data, &msg);
 }
@@ -670,6 +682,9 @@ static void nfs_direct_write_complete(struct nfs_direct_req *dreq, struct inode 
 static void nfs_direct_write_result(struct rpc_task *task, void *calldata)
 {
 	struct nfs_write_data *data = calldata;
+
+	dprintk("%s: verf: %d stable %d\n", __func__,
+		data->res.verf->committed, data->args.stable);
 
 	if (nfs_writeback_done(task, data) != 0)
 		return;
@@ -784,6 +799,17 @@ static ssize_t nfs_direct_write_schedule_segment(struct nfs_direct_req *dreq,
 	unsigned int pgbase;
 	int result;
 	ssize_t started = 0;
+	size_t pnfs_stripe_rem = count;
+	enum pnfs_try_status trypnfs;
+
+	/* pnfs_stripe_rem will be set to the remaining bytes in
+	 * the first stripe_unit (which for standard nfs is count)
+	 */
+	pnfs_direct_init_io(inode, ctx, count, pos, 1,
+			    &wsize, &pnfs_stripe_rem);
+
+	dprintk("%s: pos %llu count %Zu wsize %Zu\n",
+		__func__, pos, count, wsize);
 
 	do {
 		struct nfs_write_data *data;
@@ -792,6 +818,12 @@ static ssize_t nfs_direct_write_schedule_segment(struct nfs_direct_req *dreq,
 		pgbase = user_addr & ~PAGE_MASK;
 		bytes = min(wsize,count);
 
+#if defined(CONFIG_NFS_V4_1)
+		if (pnfs_enabled_sb(NFS_SERVER(inode))) {
+			bytes = min(bytes, pnfs_stripe_rem);
+			pnfs_stripe_rem = wsize;
+		}
+#endif /* CONFIG_NFS_V4_1 */
 		result = -ENOMEM;
 		data = nfs_writedata_alloc(nfs_page_array_len(pgbase, bytes));
 		if (unlikely(!data))
@@ -835,8 +867,15 @@ static ssize_t nfs_direct_write_schedule_segment(struct nfs_direct_req *dreq,
 		data->res.verf = &data->verf;
 		nfs_fattr_init(&data->fattr);
 
-		if (nfs_direct_write_execute(data, &task_setup_data, &msg))
+		trypnfs = pnfs_try_to_write_data(data, &nfs_write_direct_ops,
+						 sync);
+		if (trypnfs == PNFS_ATTEMPTED) {
+			result = pnfs_get_write_status(data);
+			if (result)
+				break;
+		} else if (nfs_direct_write_execute(data, &task_setup_data, &msg)) {
 			break;
+		}
 
 		started += bytes;
 		user_addr += bytes;
