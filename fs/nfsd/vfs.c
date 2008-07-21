@@ -1738,7 +1738,7 @@ nfsd_rename(struct svc_rqst *rqstp, struct svc_fh *ffhp, char *fname, int flen,
 	host_err = vfs_rename(fdir, odentry, tdir, ndentry);
 
 #ifdef CONFIG_SPNFS
-	if (!host_err && ino)
+	if (spnfs_enabled() && (!host_err && ino))
 		spnfs_remove(ino, generation);
 #endif /* CONFIG_SPNFS */
 
