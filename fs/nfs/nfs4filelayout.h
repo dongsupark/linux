@@ -100,6 +100,8 @@ extern struct pnfs_client_operations *pnfs_callback_ops;
 char *deviceid_fmt(const struct pnfs_deviceid *dev_id);
 int  nfs4_pnfs_devlist_init(struct nfs4_pnfs_dev_hlist *hlist);
 void nfs4_pnfs_devlist_destroy(struct nfs4_pnfs_dev_hlist *hlist);
+void nfs4_pnfs_dev_destroy(struct nfs4_pnfs_dev_hlist *hlist,
+				struct pnfs_deviceid *dev_id);
 int nfs4_pnfs_dserver_get(struct pnfs_layout_segment *lseg,
 			  loff_t offset,
 			  size_t count,
