@@ -158,6 +158,21 @@ filelayout_uninitialize_mountpoint(struct pnfs_mount_type *mountid)
 	return 0;
 }
 
+int
+filelayout_device_delete(struct pnfs_mount_type *mountid,
+				struct pnfs_deviceid *dev_id)
+{
+	struct filelayout_mount_type *fl_mt = NULL;
+
+	if (mountid) {
+		fl_mt = (struct filelayout_mount_type *)mountid->mountid;
+
+		if (fl_mt != NULL)
+			nfs4_pnfs_dev_destroy(fl_mt->hlist, dev_id);
+	}
+	return 0;
+}
+
 /* This function is used by the layout driver to calculate the
  * offset of the file on the dserver based on whether the
  * layout type is STRIPE_DENSE or STRIPE_SPARSE
@@ -774,6 +789,7 @@ struct layoutdriver_io_operations filelayout_io_operations = {
 	.free_lseg               = filelayout_free_lseg,
 	.initialize_mountpoint   = filelayout_initialize_mountpoint,
 	.uninitialize_mountpoint = filelayout_uninitialize_mountpoint,
+	.device_delete           = filelayout_device_delete,
 };
 
 struct layoutdriver_policy_operations filelayout_policy_operations = {
