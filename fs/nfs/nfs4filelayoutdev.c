@@ -61,6 +61,9 @@
 struct nfs4_file_layout_dsaddr *nfs4_file_layout_dsaddr_get(
 					struct filelayout_mount_type *mt,
 					struct pnfs_deviceid *dev_id);
+struct nfs4_file_layout_dsaddr *nfs4_pnfs_device_item_find(
+					struct nfs4_pnfs_dev_hlist *hlist,
+					struct pnfs_deviceid *dev_id);
 
 void
 print_ds_list(struct nfs4_multipath *multipath)
@@ -381,6 +384,24 @@ nfs4_pnfs_devlist_destroy(struct nfs4_pnfs_dev_hlist *hlist)
 			device_destroy(dsaddr, hlist);
 		}
 	}
+}
+
+/* De-alloc a devices for a mount point. */
+void
+nfs4_pnfs_dev_destroy(struct nfs4_pnfs_dev_hlist *hlist,
+			struct pnfs_deviceid *dev_id)
+{
+	struct nfs4_file_layout_dsaddr *dsaddr;
+
+	if (hlist == NULL)
+		return;
+
+	dprintk("%s: dev_id=%s\n", __func__, deviceid_fmt(dev_id));
+
+	dsaddr = nfs4_pnfs_device_item_find(hlist, dev_id);
+	if (dsaddr)
+		/* device_destroy grabs hlist->dev_lock */
+		device_destroy(dsaddr, hlist);
 }
 
 /*
@@ -746,6 +767,19 @@ nfs4_file_layout_dsaddr_get(struct filelayout_mount_type *mt,
 
 	if (dsaddr == NULL)
 		dsaddr = get_device_info(mt, dev_id);
+	return dsaddr;
+}
+
+struct nfs4_file_layout_dsaddr *
+nfs4_pnfs_device_item_find(struct nfs4_pnfs_dev_hlist *hlist,
+			   struct pnfs_deviceid *dev_id)
+{
+	struct nfs4_file_layout_dsaddr *dsaddr;
+
+	read_lock(&hlist->dev_lock);
+	dsaddr = _device_lookup(hlist, dev_id);
+	read_unlock(&hlist->dev_lock);
+
 	return dsaddr;
 }
 
