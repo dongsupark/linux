@@ -65,7 +65,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern struct spnfs *global_spnfs;
 
 int
-spnfs_layout_type(void)
+spnfs_layout_type(struct super_block *sb)
 {
 	return LAYOUT_NFSV4_FILES;
 }
