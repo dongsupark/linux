@@ -65,7 +65,7 @@ extern struct spnfs *global_spnfs;
 static struct inode *recall_inode;
 
 int
-spnfs_layout_type(void)
+spnfs_layout_type(struct super_block *sb)
 {
 	return LAYOUT_NFSV4_FILES;
 }
