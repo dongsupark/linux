@@ -287,7 +287,7 @@ static struct dentry *gfs2_fh_to_parent(struct super_block *sb, struct fid *fid,
 }
 
 #if defined(CONFIG_PNFSD)
-static int gfs2_layout_type(void)
+static int gfs2_layout_type(struct super_block *sb)
 {
 	return LAYOUT_NFSV4_FILES;
 }
