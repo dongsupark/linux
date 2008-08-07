@@ -297,7 +297,7 @@ struct spnfs {
 	struct mutex		spnfs_plock;
 };
 
-int spnfs_layout_type(void);
+int spnfs_layout_type(struct super_block *);
 int spnfs_layoutget(struct inode *, struct pnfs_layoutget_arg *);
 int spnfs_layoutcommit(void);
 int spnfs_layoutreturn(struct inode *, void *);
