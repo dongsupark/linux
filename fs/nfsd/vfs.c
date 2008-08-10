@@ -1689,6 +1689,7 @@ nfsd_rename(struct svc_rqst *rqstp, struct svc_fh *ffhp, char *fname, int flen,
 #ifdef CONFIG_SPNFS
 	unsigned long ino = 0;
 	unsigned long generation = 0;
+	unsigned int nlink = 0;
 #endif /* CONFIG_SPNFS */
 
 	err = fh_verify(rqstp, ffhp, S_IFDIR, NFSD_MAY_REMOVE);
@@ -1756,18 +1757,21 @@ nfsd_rename(struct svc_rqst *rqstp, struct svc_fh *ffhp, char *fname, int flen,
 #ifdef CONFIG_SPNFS
 	/*
 	 * if the target is a preexisting regular file, remember the
-	 * inode number and generation so we can delete the stripes
+	 * inode number and generation so we can delete the stripes;
+	 * save the link count as well so that the stripes only get
+	 * get deleted when the last link is deleted
 	 */
 	if (ndentry && ndentry->d_inode && S_ISREG(ndentry->d_inode->i_mode)) {
 		ino = ndentry->d_inode->i_ino;
 		generation = ndentry->d_inode->i_generation;
+		nlink = ndentry->d_inode->i_nlink;
 	}
 #endif /* CONFIG_SPNFS */
 
 	host_err = vfs_rename(fdir, odentry, tdir, ndentry);
 
 #ifdef CONFIG_SPNFS
-	if (spnfs_enabled() && (!host_err && ino))
+	if (spnfs_enabled() && (!host_err && ino && nlink == 1))
 		spnfs_remove(ino, generation);
 #endif /* CONFIG_SPNFS */
 
@@ -1814,6 +1818,7 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 #if defined(CONFIG_SPNFS)
 	unsigned long	ino;
 	unsigned long	generation;
+	unsigned int	nlink;
 #endif /* defined(CONFIG_SPNFS) */
 
 	err = nfserr_acces;
@@ -1841,10 +1846,12 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 #if defined(CONFIG_SPNFS)
 	/*
 	 * Remember the inode number to communicate to the spnfsd
-	 * for removal of stripes
+	 * for removal of stripes; save the link count as well so that
+	 * the stripes only get get deleted when the last link is deleted
 	 */
 	ino = rdentry->d_inode->i_ino;
 	generation = rdentry->d_inode->i_generation;
+	nlink = rdentry->d_inode->i_nlink;
 #endif /* defined(CONFIG_SPNFS) */
 
 	if (!type)
@@ -1881,7 +1888,7 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 	if (sb->s_export_op->spnfs_remove) {
 */
 	dprintk("%s check if spnfs_enabled\n", __FUNCTION__);
-	if (spnfs_enabled()) {
+	if (spnfs_enabled() && nlink == 1) {
 		BUG_ON(ino == 0);
 		dprintk("%s calling spnfs_remove inumber=%ld\n",
 			__FUNCTION__, ino);
