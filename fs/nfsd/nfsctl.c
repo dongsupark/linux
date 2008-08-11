@@ -1380,10 +1380,17 @@ out_free_stat:
 static void __exit exit_nfsd(void)
 {
 #if defined(CONFIG_PROC_FS) && defined(CONFIG_SPNFS)
+	remove_proc_entry("fs/nfs/spnfs/recall", NULL);
+	remove_proc_entry("fs/nfs/spnfs/layoutseg", NULL);
 	remove_proc_entry("fs/nfs/spnfs/getfh", NULL);
 	remove_proc_entry("fs/nfs/spnfs/ctl", NULL);
 	remove_proc_entry("fs/nfs/spnfs", NULL);
 #endif /* CONFIG_PROC_FS && CONFIG_SPNFS */
+
+#if defined(CONFIG_PROC_FS) && defined(CONFIG_SPNFS_LAYOUTSEGMENTS)
+	remove_proc_entry("fs/nfs/spnfs/layoutseg", NULL);
+	remove_proc_entry("fs/nfs/spnfs/layoutsegsize", NULL);
+#endif /* CONFIG_PROC_FS && CONFIG_SPNFS_LAYOUTSEGMENTS */
 
 	nfsd_export_shutdown();
 	nfsd_reply_cache_shutdown();

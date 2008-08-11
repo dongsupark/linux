@@ -98,3 +98,12 @@ config SPNFS
 	  Say Y here if you want spNFS server support.
 
 	  If unsure, say N.
+
+config SPNFS_LAYOUTSEGMENTS
+	bool "Allow spNFS to return partial file layouts (EXPERIMENTAL)"
+	depends on SPNFS
+	select RPCSEC_GSS_KRB5
+	help
+	  Say Y here if you want spNFS to be able to return layout segments.
+
+	  If unsure, say N.
