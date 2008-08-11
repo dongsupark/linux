@@ -283,6 +283,14 @@ panlayout_get_io_threshold(struct pnfs_layout_type *layoutid,
 }
 
 static struct layoutdriver_policy_operations panlayout_policy_operations = {
+/*
+ * Don't gather across stripes, but rather gather (coalesce) up to
+ * the stripe size.
+ *
+ * FIXME: change interface to use merge_align, merge_count
+ */
+	.flags                 = PNFS_LAYOUTGET_ON_OPEN |
+	                         PNFS_LAYOUTRET_ON_SETATTR,
 	.get_stripesize        = panlayout_get_stripesize,
 	.get_blocksize         = panlayout_get_blocksize,
 	.get_read_threshold    = panlayout_get_io_threshold,
