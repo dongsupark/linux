@@ -61,6 +61,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
 
+#ifdef CONFIG_SPNFS_LAYOUTSEGMENTS
+extern int spnfs_use_layoutsegments;
+extern uint64_t layoutsegment_size;
+#endif /* CONFIG_SPNFS_LAYOUTSEGMENTS */
 extern struct spnfs *global_spnfs;
 static struct inode *recall_inode;
 
@@ -94,7 +98,17 @@ spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 		goto layoutget_cleanup;
 
 	lgp->return_on_close = 0;
+#if defined(CONFIG_SPNFS_LAYOUTSEGMENTS)
+	/* if spnfs_use_layoutsegments & layoutsegment_size == 0, use */
+	/* the amount requested by the client.			      */
+	if (spnfs_use_layoutsegments) {
+		if (layoutsegment_size != 0)
+			lgp->seg.length = layoutsegment_size;
+	} else
+		lgp->seg.length = NFS4_LENGTH_EOF;
+#else
 	lgp->seg.length = NFS4_LENGTH_EOF;
+#endif /* CONFIG_SPNFS_LAYOUTSEGMENTS */
 
 	flp = kmalloc(sizeof(struct pnfs_filelayout_layout), GFP_KERNEL);
 	if (flp == NULL) {

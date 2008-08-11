@@ -73,6 +73,11 @@ static struct rpc_pipe_ops spnfs_upcall_ops = {
 
 /* evil global variable */
 struct spnfs *global_spnfs;
+#ifdef CONFIG_SPNFS_LAYOUTSEGMENTS
+int spnfs_use_layoutsegments;
+uint64_t layoutsegment_size;
+#endif /* CONFIG_SPNFS_LAYOUTSEGMENTS */
+
 /*
  * Used by spnfs_enabled()
  * Tracks if the subsystem has been initialized at some point.  It doesn't
@@ -390,6 +395,47 @@ static struct file_operations recall_ops = {
 /*************** end recall layout ***************/
 
 
+#ifdef CONFIG_SPNFS_LAYOUTSEGMENTS
+/*************** start layoutseg **************************/
+static int layoutseg_write(struct file *file, const char __user *buf,
+				size_t count, loff_t *offset)
+{
+	char cmd[3];
+
+	if (copy_from_user(cmd, buf, 1))
+		return -EFAULT;
+	if (cmd[0] == '0')
+		spnfs_use_layoutsegments = 0;
+	else
+		spnfs_use_layoutsegments = 1;
+
+	return count;
+}
+
+static struct file_operations layoutseg_ops = {
+	.write		= layoutseg_write,
+};
+/*************** end layoutseg ****************************/
+
+/*************** start layoutsegsize **************************/
+static int layoutsegsize_write(struct file *file, const char __user *buf,
+				size_t count, loff_t *offset)
+{
+	char cmd[50];
+
+	if (copy_from_user(cmd, buf, 49))
+		return -EFAULT;
+	layoutsegment_size = simple_strtoull(cmd, NULL, 10);
+
+	return count;
+}
+
+static struct file_operations layoutsegsize_ops = {
+	.write		= layoutsegsize_write,
+};
+/*************** end layoutsegsize ****************************/
+#endif /* CONFIG_SPNFS_LAYOUTSEGMENTS */
+
 int
 spnfs_init_proc(void)
 {
@@ -413,6 +459,18 @@ spnfs_init_proc(void)
 	if (!entry)
 		return -ENOMEM;
 	entry->proc_fops = &recall_ops;
+
+#ifdef CONFIG_SPNFS_LAYOUTSEGMENTS
+	entry = create_proc_entry("fs/spnfs/layoutseg", 0, NULL);
+	if (!entry)
+		return -ENOMEM;
+	entry->proc_fops = &layoutseg_ops;
+
+	entry = create_proc_entry("fs/spnfs/layoutsegsize", 0, NULL);
+	if (!entry)
+		return -ENOMEM;
+	entry->proc_fops = &layoutsegsize_ops;
+#endif /* CONFIG_SPNFS_LAYOUTSEGMENTS */
 
 	return 0;
 }
