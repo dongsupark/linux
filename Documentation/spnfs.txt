@@ -31,6 +31,13 @@ add these options to your .config file
 	CONFIG_PNFSD=y
 	CONFIG_SPNFS=y
 
+By default, spNFS uses whole-file layouts.  Layout segments can be enabled
+by adding:
+
+	CONFIG_SPNFS_LAYOUTSEGMENTS=y
+
+to your .config file.
+
 Building and installation of kernel+modules is as usual.
 This kernel should be installed and booted on the client, MDS and DSs.
 
@@ -158,6 +165,34 @@ You should see stripe files on each under /pnfs (per the sample) named
 of data written to foo, DS2 will contain the next <stripe size> bytes, etc.
 Removing /mnt/foo will remove the corresponding stripe files on the DSs.
 Other file system operations should behave (mostly :-) as expected.
+
+
+Layout Segments
+---------------
+
+If the kernel is compiled to support layout segments, there will
+be two files created under /proc/fs/spnfs for controlling layout
+segment functionality.
+
+To enable layout segments, write a '1' to /proc/fs/spnfs/layoutseg, e.g.:
+
+	echo 1 > /proc/fs/spnfs/layoutseg
+
+Layout segments can be disabled (returning to whole-file layouts) by
+writing a '0' to /proc/fs/spnfs/layoutseg:
+
+	echo 0 > /proc/fs/spnfs/layoutseg
+
+When layout segments are enabled, the size of the layouts returned can
+be specified by writing a decimal number (ascii representation) to
+/proc/fs/spnfs/layoutsegsize:
+
+	echo 1024 > /proc/fs/spnfs/layoutsegsize
+
+The value'0' has a special meaning--it causes the server to return a
+layout that is exactly the size requested by the client:
+
+	echo 0 > /proc/fs/spnfs/layoutsegsize
 
 
 Troubleshooting
