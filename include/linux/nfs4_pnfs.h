@@ -195,6 +195,11 @@ enum layoutdriver_policy_flags {
 
 	/* Should the NFS req. gather algorithm cross stripe boundaries? */
 	PNFS_GATHER_ACROSS_STRIPES	= 1 << 1,
+
+	/* Should the pNFS client issue a layoutget call in the
+	 * same compound as the OPEN operation?
+	 */
+	PNFS_LAYOUTGET_ON_OPEN		= 1 << 2,
 };
 
 struct layoutdriver_policy_operations {
@@ -235,6 +240,15 @@ static inline int
 pnfs_ld_gather_across_stripes(struct pnfs_layoutdriver_type *ld)
 {
 	return ld->ld_policy_ops->flags & PNFS_GATHER_ACROSS_STRIPES;
+}
+
+/* Should the pNFS client issue a layoutget call in the
+ * same compound as the OPEN operation?
+ */
+static inline int
+pnfs_ld_layoutget_on_open(struct pnfs_layoutdriver_type *ld)
+{
+	return ld->ld_policy_ops->flags & PNFS_LAYOUTGET_ON_OPEN;
 }
 
 struct pnfs_device {
