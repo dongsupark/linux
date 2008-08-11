@@ -112,6 +112,8 @@ struct layoutdriver_io_operations filelayout_io_operations = {
 };
 
 struct layoutdriver_policy_operations filelayout_policy_operations = {
+	.flags                 = PNFS_USE_RPC_CODE |
+	                         PNFS_LAYOUTGET_ON_OPEN,
 };
 
 struct pnfs_layoutdriver_type filelayout_type = {
