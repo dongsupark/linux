@@ -135,6 +135,7 @@ struct layoutdriver_io_operations {
 };
 
 struct layoutdriver_policy_operations {
+	unsigned flags;
 };
 
 struct pnfs_device {
