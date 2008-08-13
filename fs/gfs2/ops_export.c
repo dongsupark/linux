@@ -34,6 +34,8 @@
 #include <linux/nfsd/pnfsd.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 #include <linux/nfs4_pnfs.h>
+
+static struct kmem_cache *gfs2_pnfs_layout_cachep;
 #endif /* CONFIG_PNFSD */
 
 #define GFS2_SMALL_FH_SIZE 4
@@ -287,6 +289,23 @@ static struct dentry *gfs2_fh_to_parent(struct super_block *sb, struct fid *fid,
 }
 
 #if defined(CONFIG_PNFSD)
+int gfs2_pnfs_init_layout_cache(void)
+{
+	gfs2_pnfs_layout_cachep = kmem_cache_create("gfs2_pnfs_layout",
+				    sizeof(struct pnfs_filelayout_layout) +
+				    sizeof(struct knfsd_fh),
+				    0, 0, NULL);
+	if (!gfs2_pnfs_layout_cachep)
+		return -ENOMEM;
+	return 0;
+}
+
+void gfs2_pnfs_destroy_layout_cache(void)
+{
+	if (gfs2_pnfs_layout_cachep)
+		kmem_cache_destroy(gfs2_pnfs_layout_cachep);
+}
+
 static int gfs2_layout_type(struct super_block *sb)
 {
 	return LAYOUT_NFSV4_FILES;
@@ -310,7 +329,6 @@ static int gfs2_layout_get(struct inode *inode, struct pnfs_layoutget_arg *arg)
 {
 	int rc = 0;
 	struct pnfs_filelayout_layout *layout = NULL;
-	struct knfsd_fh *fhp = NULL;
 
 	printk(KERN_DEBUG "%s: LAYOUT_GET\n", __func__);
 
@@ -319,7 +337,7 @@ static int gfs2_layout_get(struct inode *inode, struct pnfs_layoutget_arg *arg)
 	arg->seg.offset = 0;
 	arg->seg.length = inode->i_sb->s_maxbytes; /* The maximum file size */
 
-	layout = kzalloc(sizeof(*layout), GFP_KERNEL);
+	layout = kmem_cache_alloc(gfs2_pnfs_layout_cachep, GFP_KERNEL);
 	if (layout == NULL) {
 		rc = -ENOMEM;
 		goto error;
@@ -335,22 +353,15 @@ static int gfs2_layout_get(struct inode *inode, struct pnfs_layoutget_arg *arg)
 	layout->device_id.pnfs_devid = 1;			/*FSFTEMP*/
 	layout->lg_first_stripe_index = 0;			/*FSFTEMP*/
 	layout->lg_pattern_offset = 0;
+	layout->lg_fh_list = (void *)(layout + 1);
 
-	fhp = kmalloc(sizeof(*fhp), GFP_KERNEL);
-	if (fhp == NULL) {
-		rc = -ENOMEM;
-		goto error;
-	}
-
-	memcpy(fhp, arg->fh, sizeof(*fhp));
-	pnfs_fh_mark_ds(fhp);
-	layout->lg_fh_list = fhp;
+	memcpy(layout->lg_fh_list, arg->fh, sizeof(struct knfsd_fh));
+	pnfs_fh_mark_ds(layout->lg_fh_list);
 
 	/* Call nfsd to encode layout */
 	rc = arg->func(&arg->xdr, layout);
 exit:
-	kfree(layout);
-	kfree(fhp);
+	kmem_cache_free(gfs2_pnfs_layout_cachep, layout);
 	return rc;
 
 error:

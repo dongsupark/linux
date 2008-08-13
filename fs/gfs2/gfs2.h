@@ -26,6 +26,13 @@ enum {
 /* XXX: revisit; surely there's a better place for this? */
 #define XXX_PNFS_DS_LISTSZ 256
 extern char pnfs_ds_list[XXX_PNFS_DS_LISTSZ];
+
+extern int gfs2_pnfs_init_layout_cache(void);
+extern void gfs2_pnfs_destroy_layout_cache(void);
+
+#else /* !CONFIG_PNFSD */
+#define gfs2_pnfs_init_layout_cache()		0
+#define gfs2_pnfs_destroy_layout_cache()	do { } while (0)
 #endif /* CONFIG_PNFSD */
 
 #endif /* __GFS2_DOT_H__ */

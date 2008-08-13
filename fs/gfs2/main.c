@@ -164,6 +164,10 @@ static int __init init_gfs2_fs(void)
 	if (!gfs2_quotad_cachep)
 		goto fail;
 
+	error = gfs2_pnfs_init_layout_cache();
+	if (error)
+		goto fail;
+
 	error = register_filesystem(&gfs2_fs_type);
 	if (error)
 		goto fail;
@@ -186,6 +190,7 @@ fail_unregister:
 	unregister_filesystem(&gfs2_fs_type);
 fail:
 	gfs2_glock_exit();
+	gfs2_pnfs_destroy_layout_cache();
 
 	if (gfs2_quotad_cachep)
 		kmem_cache_destroy(gfs2_quotad_cachep);
@@ -219,6 +224,7 @@ static void __exit exit_gfs2_fs(void)
 	unregister_filesystem(&gfs2_fs_type);
 	unregister_filesystem(&gfs2meta_fs_type);
 
+	gfs2_pnfs_destroy_layout_cache();
 	kmem_cache_destroy(gfs2_quotad_cachep);
 	kmem_cache_destroy(gfs2_rgrpd_cachep);
 	kmem_cache_destroy(gfs2_bufdata_cachep);
