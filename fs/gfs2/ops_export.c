@@ -423,7 +423,7 @@ static int gfs2_get_device_info(struct super_block *sb,
 	if (arg->devid.pnfs_devid != 1) {
 		printk(KERN_DEBUG "%s: WARNING: didn't receive a deviceid of "
 			"1 (got: 0x%llx)\n", __func__, arg->devid.pnfs_devid);
-		err = -EINVAL;
+		err = -ENOENT;
 		goto out;
 	}
 
