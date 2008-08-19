@@ -31,6 +31,7 @@
 
 struct nfs_callback_data {
 	unsigned int users;
+	struct svc_serv *serv;
 	struct svc_rqst *rqst;
 	struct task_struct *task;
 };
@@ -253,6 +254,7 @@ int nfs_callback_up(u32 minorversion, void *args)
 	svc_sock_update_bufs(serv);
 
 	sprintf(svc_name, "nfsv4.%u-svc", minorversion);
+	nfs_callback_info.serv = serv;
 	nfs_callback_info.rqst = rqst;
 	nfs_callback_info.task = kthread_run(callback_svc,
 					     nfs_callback_info.rqst,
@@ -260,6 +262,7 @@ int nfs_callback_up(u32 minorversion, void *args)
 	if (IS_ERR(nfs_callback_info.task)) {
 		ret = PTR_ERR(nfs_callback_info.task);
 		svc_exit_thread(nfs_callback_info.rqst);
+		nfs_callback_info.serv = NULL;
 		nfs_callback_info.rqst = NULL;
 		nfs_callback_info.task = NULL;
 		goto out_err;
@@ -292,6 +295,7 @@ void nfs_callback_down(void)
 	if (nfs_callback_info.users == 0 && nfs_callback_info.task != NULL) {
 		kthread_stop(nfs_callback_info.task);
 		svc_exit_thread(nfs_callback_info.rqst);
+		nfs_callback_info.serv = NULL;
 		nfs_callback_info.rqst = NULL;
 		nfs_callback_info.task = NULL;
 	}
