@@ -292,8 +292,8 @@ int spnfs_enabled(void)
  */
 
 /*************** start ctl **************************/
-static int ctl_write(struct file *file, const char __user *buf, size_t count,
-		       loff_t *offset)
+static ssize_t ctl_write(struct file *file, const char __user *buf,
+			 size_t count, loff_t *offset)
 {
 	int cmd, rc;
 
@@ -325,8 +325,8 @@ static int getfh_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int getfh_read(struct file *file, char __user *buf, size_t count,
-		      loff_t *offset)
+static ssize_t getfh_read(struct file *file, char __user *buf, size_t count,
+			  loff_t *offset)
 {
 	if (copy_to_user(buf, file->private_data, sizeof(struct nfs_fh)))
 		return -EFAULT;
@@ -334,8 +334,8 @@ static int getfh_read(struct file *file, char __user *buf, size_t count,
 	return count;
 }
 
-static int getfh_write(struct file *file, const char __user *buf, size_t count,
-		       loff_t *offset)
+static ssize_t getfh_write(struct file *file, const char __user *buf,
+			   size_t count, loff_t *offset)
 {
 	int fd;
 
@@ -363,8 +363,8 @@ static struct file_operations getfh_ops = {
 
 
 /*************** start recall layout ***************/
-static int recall_write(struct file *file, const char __user *buf, size_t count,
-			loff_t *offset)
+static ssize_t recall_write(struct file *file, const char __user *buf,
+			    size_t count, loff_t *offset)
 {
 	char path[128];
 	char *p;
@@ -397,8 +397,8 @@ static struct file_operations recall_ops = {
 
 #ifdef CONFIG_SPNFS_LAYOUTSEGMENTS
 /*************** start layoutseg **************************/
-static int layoutseg_write(struct file *file, const char __user *buf,
-				size_t count, loff_t *offset)
+static ssize_t layoutseg_write(struct file *file, const char __user *buf,
+			       size_t count, loff_t *offset)
 {
 	char cmd[3];
 
@@ -418,8 +418,8 @@ static struct file_operations layoutseg_ops = {
 /*************** end layoutseg ****************************/
 
 /*************** start layoutsegsize **************************/
-static int layoutsegsize_write(struct file *file, const char __user *buf,
-				size_t count, loff_t *offset)
+static ssize_t layoutsegsize_write(struct file *file, const char __user *buf,
+				   size_t count, loff_t *offset)
 {
 	char cmd[50];
 
