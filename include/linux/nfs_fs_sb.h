@@ -63,7 +63,8 @@ struct nfs_client {
 	 */
 	char			cl_ipaddr[48];
 	unsigned char		cl_id_uniquifier;
-#endif
+	u32			cl_minorversion;
+#endif /* CONFIG_NFS_V4 */
 };
 
 /*

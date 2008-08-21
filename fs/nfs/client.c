@@ -1107,7 +1107,8 @@ static int nfs4_set_client(struct nfs_server *server,
 		const size_t addrlen,
 		const char *ip_addr,
 		rpc_authflavor_t authflavour,
-		int proto, const struct rpc_timeout *timeparms)
+		int proto, const struct rpc_timeout *timeparms,
+		u32 minorversion)
 {
 	struct nfs_client_initdata cl_init = {
 		.hostname = hostname,
@@ -1169,7 +1170,8 @@ static int nfs4_init_server(struct nfs_server *server,
 			data->client_address,
 			data->auth_flavors[0],
 			data->nfs_server.protocol,
-			&timeparms);
+			&timeparms,
+			data->minorversion);
 	if (error < 0)
 		goto error;
 
@@ -1287,7 +1289,8 @@ struct nfs_server *nfs4_create_referral_server(struct nfs_clone_mount *data,
 				parent_client->cl_ipaddr,
 				data->authflavor,
 				parent_server->client->cl_xprt->prot,
-				parent_server->client->cl_timeout);
+				parent_server->client->cl_timeout,
+				parent_client->cl_minorversion);
 	if (error < 0)
 		goto error;
 
