@@ -366,23 +366,48 @@ static struct file_operations getfh_ops = {
 static ssize_t recall_write(struct file *file, const char __user *buf,
 			    size_t count, loff_t *offset)
 {
-	char path[128];
-	char *p;
+	char input[128];
+	char *path, *str, *p;
 	int rc;
+	u64 off = 0, len = 0;
 
 	if (count > 128)
 		return -EINVAL;
 
-	if (copy_from_user(path, buf, count))
+	if (copy_from_user(input, buf, count))
 		return -EFAULT;
 
 	/* assumes newline-terminated path */
-	p = memchr(path, '\n', count);
+	p = memchr(input, '\n', count);
 	if (p == NULL)
 		return -EINVAL;
 	*p = '\0';
 
-	rc = spnfs_test_layoutrecall(path);
+	/*
+	 * Scan for path and, optionally, an offset and length
+	 * of a layout segment to be recalled; if there are two
+	 * fields, they're assumed to be path and offset.
+	 */
+	p = input;
+	path = strsep(&p, " ");
+	if (path == NULL)
+		return -EINVAL;
+
+	str = strsep(&p, " ");
+	if (str != NULL) {
+		rc = strict_strtoull(str, 10, &off);
+		if (rc != 0)
+			return -EINVAL;
+
+		str = strsep(&p, " ");
+		if (str != NULL) {
+			rc = strict_strtoull(str, 10, &len);
+			if (rc != 0)
+				return -EINVAL;
+		}
+	}
+
+	rc = spnfs_test_layoutrecall(path, off, len);
 	if (rc != 0)
 		return rc;
 
