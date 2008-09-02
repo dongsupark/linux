@@ -168,7 +168,7 @@ spnfs_layoutreturn(struct inode *inode, void *pnfs_layout_return_p)
 }
 
 int
-spnfs_layoutrecall(struct inode *inode, int type)
+spnfs_layoutrecall(struct inode *inode, int type, u64 offset, u64 len)
 {
 	struct super_block *sb;
 	struct nfsd4_pnfs_cb_layout lr;
@@ -196,8 +196,8 @@ spnfs_layoutrecall(struct inode *inode, int type)
 	lr.cbl_recall_type = type;
 	lr.cbl_seg.layout_type = LAYOUT_NFSV4_FILES;
 	lr.cbl_seg.clientid = 0;
-	lr.cbl_seg.offset = 0;
-	lr.cbl_seg.length = NFS4_LENGTH_EOF;
+	lr.cbl_seg.offset = offset;
+	lr.cbl_seg.length = len;
 	lr.cbl_seg.iomode = IOMODE_ANY;
 	lr.cbl_layoutchanged = 0;
 
@@ -207,13 +207,14 @@ spnfs_layoutrecall(struct inode *inode, int type)
 }
 
 int
-spnfs_test_layoutrecall(char *path)
+spnfs_test_layoutrecall(char *path, u64 offset, u64 len)
 {
 	struct nameidata nd;
 	struct inode *inode;
 	int type, rc;
 
-	dprintk("%s: path=%s\n", __func__, path);
+	dprintk("%s: path=%s, offset=%llu, len=%llu\n",
+		__func__, path, offset, len);
 
 	if (strcmp(path, "all") == 0) {
 		inode = NULL;
@@ -232,7 +233,10 @@ spnfs_test_layoutrecall(char *path)
 		type = RECALL_FILE;
 	}
 
-	rc = spnfs_layoutrecall(inode, type);
+	if (len == 0)
+		len = NFS4_LENGTH_EOF;
+
+	rc = spnfs_layoutrecall(inode, type, offset, len);
 
 	if (type != RECALL_ALL)
 		path_put(&nd.path);
