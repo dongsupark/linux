@@ -141,6 +141,7 @@ struct pnfs_block_layout {
 	sector_t		bl_blocksize;  /* Server blocksize in sectors */
 };
 
+#define BLK_LSEG2EXT(lseg) ((struct pnfs_block_layout *)lseg->layout->ld_data)
 #define BLK_LO2EXT(lo) ((struct pnfs_block_layout *)lo->ld_data)
 
 uint32_t *blk_overflow(uint32_t *p, uint32_t *end, size_t nbytes);
@@ -182,6 +183,8 @@ int nfs4_blkdev_put(struct block_device *bdev);
 struct pnfs_block_dev *nfs4_blk_decode_device(struct super_block *sb,
 					      struct pnfs_device *dev,
 					      struct list_head *sdlist);
+int nfs4_blk_process_layoutget(struct pnfs_block_layout *bl,
+			       struct nfs4_pnfs_layoutget_res *lgr);
 int nfs4_blk_create_scsi_disk_list(struct list_head *);
 void nfs4_blk_destroy_disk_list(struct list_head *);
 /* blocklayoutdm.c */

@@ -147,15 +147,40 @@ static void
 bl_free_lseg(struct pnfs_layout_segment *lseg)
 {
 	dprintk("%s enter\n", __func__);
-	return;
+	kfree(lseg);
 }
 
+/* Because the generic infrastructure does not correctly merge layouts,
+ * we pretty much ignore lseg, and store all data layout wide, so we
+ * can correctly merge.  Eventually we should push some correct merge
+ * behavior up to the generic code, as the current behavior tends to
+ * cause lots of unnecessary overlapping LAYOUTGET requests.
+ */
 static struct pnfs_layout_segment *
 bl_alloc_lseg(struct pnfs_layout_type *lo,
 	      struct nfs4_pnfs_layoutget_res *lgr)
 {
+	struct pnfs_layout_segment *lseg;
+	int status;
+
 	dprintk("%s enter\n", __func__);
-	return NULL;
+	lseg = kzalloc(sizeof(*lseg) + 0, GFP_KERNEL);
+	if (!lseg)
+		return NULL;
+	status = nfs4_blk_process_layoutget(BLK_LO2EXT(lo), lgr);
+	if (status) {
+		/* We don't want to call the full-blown bl_free_lseg,
+		 * since on error extents were not touched.
+		 */
+		/* STUB - we really want to distinguish between 2 error
+		 * conditions here.  This lseg failed, but lo data structures
+		 * are OK, or we hosed the lo data structures.  The calling
+		 * code probably needs to distinguish this too.
+		 */
+		kfree(lseg);
+		return ERR_PTR(status);
+	}
+	return lseg;
 }
 
 static int

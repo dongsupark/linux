@@ -549,3 +549,12 @@ nfs4_blk_decode_device(struct super_block *sb,
 	kfree(vols);
 	return rv;
 }
+
+/* XDR decode pnfs_block_layout4 structure */
+int
+nfs4_blk_process_layoutget(struct pnfs_block_layout *bl,
+			   struct nfs4_pnfs_layoutget_res *lgr)
+{
+	/* STUB */
+	return -EIO;
+}
