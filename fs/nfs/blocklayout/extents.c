@@ -53,3 +53,15 @@ put_extent(struct pnfs_block_extent *be)
 	}
 }
 
+struct pnfs_block_extent *alloc_extent(void)
+{
+	struct pnfs_block_extent *be;
+
+	be = kmalloc(sizeof(struct pnfs_block_extent), GFP_KERNEL);
+	if (!be)
+		return NULL;
+	INIT_LIST_HEAD(&be->be_node);
+	kref_init(&be->be_refcnt);
+	be->be_inval = NULL;
+	return be;
+}

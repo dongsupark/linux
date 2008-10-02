@@ -141,6 +141,7 @@ struct pnfs_block_layout {
 	sector_t		bl_blocksize;  /* Server blocksize in sectors */
 };
 
+#define BLK_ID(lo)     ((struct block_mount_id *)(PNFS_MOUNTID(lo)->mountid))
 #define BLK_LSEG2EXT(lseg) ((struct pnfs_block_layout *)lseg->layout->ld_data)
 #define BLK_LO2EXT(lo) ((struct pnfs_block_layout *)lo->ld_data)
 
@@ -194,4 +195,5 @@ int nfs4_blk_flatten(struct pnfs_blk_volume *, int, struct pnfs_block_dev *);
 void free_block_dev(struct pnfs_block_dev *bdev);
 /* extents.c */
 void put_extent(struct pnfs_block_extent *be);
+struct pnfs_block_extent *alloc_extent(void);
 #endif /* FS_NFS_NFS4BLOCKLAYOUT_H */
