@@ -98,8 +98,28 @@ struct pnfs_blk_sig {
 	struct pnfs_blk_sig_comp	si_comps[PNFS_BLOCK_MAX_SIG_COMP];
 };
 
+enum exstate4 {
+	PNFS_BLOCK_READWRITE_DATA	= 0,
+	PNFS_BLOCK_READ_DATA		= 1,
+	PNFS_BLOCK_INVALID_DATA		= 2, /* mapped, but data is invalid */
+	PNFS_BLOCK_NONE_DATA		= 3  /* unmapped, it's a hole */
+};
+
 struct pnfs_inval_markings {
 	/* STUB */
+};
+
+/* sector_t fields are all in 512-byte sectors */
+struct pnfs_block_extent {
+	struct kref	be_refcnt;
+	struct list_head be_node;	/* link into lseg list */
+	struct pnfs_deviceid be_devid;  /* STUB - remevable??? */
+	struct block_device *be_mdev;
+	sector_t	be_f_offset;	/* the starting offset in the file */
+	sector_t	be_length;	/* the size of the extent */
+	sector_t	be_v_offset;	/* the starting offset in the volume */
+	enum exstate4	be_state;	/* the state of this extent */
+	struct pnfs_inval_markings *be_inval; /* tracks INVAL->RW transition */
 };
 
 static inline void
@@ -169,5 +189,6 @@ struct pnfs_block_dev *nfs4_blk_init_metadev(struct super_block *sb,
 					     struct pnfs_device *dev);
 int nfs4_blk_flatten(struct pnfs_blk_volume *, int, struct pnfs_block_dev *);
 void free_block_dev(struct pnfs_block_dev *bdev);
-
+/* extents.c */
+void put_extent(struct pnfs_block_extent *be);
 #endif /* FS_NFS_NFS4BLOCKLAYOUT_H */

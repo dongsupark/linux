@@ -82,12 +82,25 @@ bl_write_pagelist(struct pnfs_layout_type *lo,
 	return PNFS_NOT_ATTEMPTED;
 }
 
-/* STUB */
+/* FIXME - range ignored */
 static void
 release_extents(struct pnfs_block_layout *bl,
 		struct nfs4_pnfs_layout_segment *range)
 {
-	return;
+	int i;
+	struct pnfs_block_extent *be;
+
+	spin_lock(&bl->bl_ext_lock);
+	for (i = 0; i < EXTENT_LISTS; i++) {
+		while (!list_empty(&bl->bl_extents[i])) {
+			be = list_first_entry(&bl->bl_extents[i],
+					      struct pnfs_block_extent,
+					      be_node);
+			list_del(&be->be_node);
+			put_extent(be);
+		}
+	}
+	spin_unlock(&bl->bl_ext_lock);
 }
 
 /* STUB */
