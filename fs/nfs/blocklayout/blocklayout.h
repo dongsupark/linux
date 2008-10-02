@@ -134,6 +134,14 @@ enum extentclass4 {
 	EXTENT_LISTS	= 2,
 };
 
+static inline int choose_list(enum exstate4 state)
+{
+	if (state == PNFS_BLOCK_READ_DATA || state == PNFS_BLOCK_NONE_DATA)
+		return RO_EXTENT;
+	else
+		return RW_EXTENT;
+}
+
 struct pnfs_block_layout {
 	struct pnfs_inval_markings bl_inval; /* tracks INVAL->RW transition */
 	spinlock_t		bl_ext_lock;   /* Protects list manipulation */
@@ -196,4 +204,6 @@ void free_block_dev(struct pnfs_block_dev *bdev);
 /* extents.c */
 void put_extent(struct pnfs_block_extent *be);
 struct pnfs_block_extent *alloc_extent(void);
+int add_and_merge_extent(struct pnfs_block_layout *bl,
+			 struct pnfs_block_extent *new);
 #endif /* FS_NFS_NFS4BLOCKLAYOUT_H */

@@ -639,7 +639,7 @@ nfs4_blk_process_layoutget(struct pnfs_block_layout *bl,
 	uint32_t *end = (uint32_t *)((char *)lgr->layout.buf + lgr->layout.len);
 	int i, status = -EIO;
 	uint32_t count;
-	struct pnfs_block_extent *be = NULL;
+	struct pnfs_block_extent *be = NULL, *save;
 	uint64_t tmp; /* Used by READSECTOR */
 	struct layout_verification lv = {
 		.mode = lgr->lseg.iomode,
@@ -703,9 +703,22 @@ nfs4_blk_process_layoutget(struct pnfs_block_layout *bl,
 	/* Extents decoded properly, now try to merge them in to
 	 * existing layout extents.
 	 */
-	/* STUB - instead we just throw them away */
+	spin_lock(&bl->bl_ext_lock);
+	list_for_each_entry_safe(be, save, &extents, be_node) {
+		list_del(&be->be_node);
+		status = add_and_merge_extent(bl, be);
+		if (status) {
+			spin_unlock(&bl->bl_ext_lock);
+			/* This is a fairly catastrophic error, as the
+			 * entire layout extent lists are now corrupted.
+			 * We should have some way to distinguish this.
+			 */
+			be = NULL;
+			goto out_err;
+		}
+	}
+	spin_unlock(&bl->bl_ext_lock);
 	status = 0;
-	goto out_err;
  out:
 	dprintk("%s returns %i\n", __func__, status);
 	return status;
