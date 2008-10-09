@@ -33,6 +33,12 @@
 #include "blocklayout.h"
 #define NFSDBG_FACILITY         NFSDBG_PNFS_LD
 
+int is_sector_initialized(struct pnfs_inval_markings *marks, sector_t isect)
+{
+       /* STUB */
+       return 0;
+}
+
 static void print_bl_extent(struct pnfs_block_extent *be)
 {
 	dprintk("PRINT EXTENT extent %p\n", be);
