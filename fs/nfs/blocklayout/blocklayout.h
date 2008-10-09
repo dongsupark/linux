@@ -207,6 +207,7 @@ find_get_extent(struct pnfs_block_layout *bl, sector_t isect,
 		struct pnfs_block_extent **cow_read);
 void put_extent(struct pnfs_block_extent *be);
 struct pnfs_block_extent *alloc_extent(void);
+int is_sector_initialized(struct pnfs_inval_markings *marks, sector_t isect);
 int add_and_merge_extent(struct pnfs_block_layout *bl,
 			 struct pnfs_block_extent *new);
 #endif /* FS_NFS_NFS4BLOCKLAYOUT_H */
