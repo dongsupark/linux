@@ -200,4 +200,10 @@ pnfsd_lexp_layout_return(struct inode *inode, struct nfsd4_pnfs_layoutreturn *p)
 	return 0;
 }
 
+static int pnfsd_lexp_get_state(struct inode *inode, struct knfsd_fh *fh,
+				struct pnfs_get_state *p)
+{
+	return 0;	/* just use the current stateid */
+}
+
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
