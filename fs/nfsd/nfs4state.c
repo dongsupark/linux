@@ -5180,11 +5180,13 @@ nomatching_layout(struct super_block *sb, struct nfs4_layoutrecall *clr)
 		sb->s_export_op->layout_return(clr->clr_file ?
 			clr->clr_file->fi_inode : NULL, &lr);
 
+	nfs4_lock_state();
 	if (clr->cb.cbl_recall_type == RECALL_FILE)
 		pnfs_return_file_layouts(clr->clr_client, clr->clr_file, &lr);
 	else
 		pnfs_return_client_layouts(clr->clr_client, &lr,
 					   clr->cb.cbl_fsid.major);
+	nfs4_unlock_state();
 }
 
 /*
@@ -5264,7 +5266,8 @@ out:
 }
 
 /*
- * Recall a layout synchronously
+ * Recall a layout synchronously.
+ * Called with state lock.
  */
 static void
 sync_layout_recall(struct super_block *sb, struct list_head *todolist)
@@ -5298,7 +5301,10 @@ sync_layout_recall(struct super_block *sb, struct list_head *todolist)
 		list_add(&pending->clr_perclnt,
 			 &pending->clr_client->cl_layoutrecalls);
 
+		/* Unlock while issuing call to client */
+		nfs4_unlock_state();
 		status = nfsd4_cb_layout(pending);
+		nfs4_lock_state();
 		if (status) {
 			printk("%s: clp %p cb_client %p fp %p "
 			       "failed with status %d\n", __func__,
