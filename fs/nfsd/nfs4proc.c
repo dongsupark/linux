@@ -1139,6 +1139,7 @@ nfsd4_getdevinfo(struct svc_rqst *rqstp,
 	struct svc_export *exp = NULL;
 	u32 fsidv = gdp->gd_devid.pnfs_fsid;
 	int status;
+	clientid_t clid;
 
 	dprintk("%s: type %u dev_id %llx:%llx maxcnt %u\n",
 	       __func__, gdp->gd_type, gdp->gd_devid.pnfs_fsid,
@@ -1171,6 +1172,10 @@ nfsd4_getdevinfo(struct svc_rqst *rqstp,
 
 	/* Set up arguments so device can be retrieved at encode time */
 	gdp->gd_sb = sb;
+
+	/* Update notifications */
+	copy_clientid(&clid, cstate->slot->sl_session);
+	pnfs_set_device_notify(&clid, gdp->gd_notify_types);
 out:
 	return status;
 }
