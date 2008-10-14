@@ -93,6 +93,7 @@ static struct kmem_cache *pnfs_layout_slab;
 static struct kmem_cache *pnfs_layoutrecall_slab;
 
 static int expire_layout(struct nfs4_layout *lp);
+static void dequeue_layout(struct nfs4_layout *lp);
 static void destroy_layout(struct nfs4_layout *lp);
 static void layoutrecall_done(struct nfs4_layoutrecall *clr);
 #endif /* CONFIG_PNFSD */
@@ -733,7 +734,6 @@ expire_client(struct nfs4_client *clp)
 				lp->lo_file);
 		BUG_ON(lp->lo_client != clp);
 		expire_layout(lp);
-		destroy_layout(lp);
 	}
 	while (!list_empty(&clp->cl_layoutrecalls)) {
 		lrp = list_entry(clp->cl_layoutrecalls.next,
@@ -4452,15 +4452,20 @@ init_layout(struct nfs4_layout_state *ls,
 }
 
 static void
+dequeue_layout(struct nfs4_layout *lp)
+{
+	list_del(&lp->lo_perclnt);
+	list_del(&lp->lo_perfile);
+	list_del(&lp->lo_perstate);
+}
+
+static void
 destroy_layout(struct nfs4_layout *lp)
 {
 	struct nfs4_client *clp;
 	struct nfs4_file *fp;
 	struct nfs4_layout_state *ls;
 
-	list_del(&lp->lo_perclnt);
-	list_del(&lp->lo_perfile);
-	list_del(&lp->lo_perstate);
 	clp = lp->lo_client;
 	fp = lp->lo_file;
 	ls = lp->lo_state;
@@ -4480,6 +4485,7 @@ expire_layout(struct nfs4_layout *lp)
 	struct nfs4_client *clp;
 	struct nfs4_file *fp;
 	struct nfsd4_pnfs_layoutreturn lr;
+	int status;
 
 	clp = lp->lo_client;
 	fp = lp->lo_file;
@@ -4490,6 +4496,10 @@ expire_layout(struct nfs4_layout *lp)
 	if (!fp->fi_inode->i_sb->s_pnfs_op->layout_return)
 		return 0;
 
+	/* Remove from all lists to allow
+	 * unlocking state to call file system */
+	dequeue_layout(lp);
+
 	lr.lr_return_type = RETURN_FILE;
 	lr.lr_reclaim = 0;
 	lr.lr_flags = LR_FLAG_EXPIRE;
@@ -4498,8 +4508,12 @@ expire_layout(struct nfs4_layout *lp)
 	lr.lr_seg.iomode = IOMODE_ANY;
 	lr.lr_seg.offset = 0;
 	lr.lr_seg.length = NFS4_MAX_UINT64;
-	return fp->fi_inode->i_sb->s_pnfs_op->layout_return(
-		fp->fi_inode, &lr);
+	nfs4_unlock_state();
+	status = fp->fi_inode->i_sb->s_pnfs_op->layout_return(
+		 fp->fi_inode, &lr);
+	nfs4_lock_state();
+	destroy_layout(lp);
+	return status;
 }
 
 /*
@@ -4711,6 +4725,9 @@ nfs4_pnfs_get_layout(struct svc_fh *current_fh,
 
 	dprintk("NFSD: %s Begin\n", __func__);
 
+	can_merge = sb->s_pnfs_op->can_merge_layouts != NULL &&
+		    sb->s_pnfs_op->can_merge_layouts(args->seg.layout_type);
+
 	nfs4_lock_state();
 	fp = find_alloc_file(ino, current_fh);
 	clp = find_confirmed_client((clientid_t *)&args->seg.clientid);
@@ -4728,9 +4745,6 @@ nfs4_pnfs_get_layout(struct svc_fh *current_fh,
 		goto out;
 	}
 
-	can_merge = sb->s_pnfs_op->can_merge_layouts != NULL &&
-		    sb->s_pnfs_op->can_merge_layouts(args->seg.layout_type);
-
 	/* pre-alloc layout in case we can't merge after we call
 	 * the file system
 	 */
@@ -4743,7 +4757,9 @@ nfs4_pnfs_get_layout(struct svc_fh *current_fh,
 		__func__, args->seg.layout_type, args->xdr.maxcount,
 		args->seg.iomode, args->seg.offset, args->seg.length);
 
+	nfs4_unlock_state();
 	status = sb->s_pnfs_op->layout_get(ino, args);
+	nfs4_lock_state();
 
 	dprintk("pNFS %s: post-export status %d "
 		"iomode %u offset %llu length %llu\n",
@@ -4851,8 +4867,10 @@ pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
 			continue;
 		layouts_found++;
 		trim_layout(&lp->lo_seg, &lrp->lr_seg);
-		if (!lp->lo_seg.length)
+		if (!lp->lo_seg.length) {
+			dequeue_layout(lp);
 			destroy_layout(lp);
+		}
 	}
 
 	return layouts_found;
@@ -4876,6 +4894,7 @@ pnfs_return_client_layouts(struct nfs4_client *clp,
 			continue;
 
 		layouts_found++;
+		dequeue_layout(lp);
 		destroy_layout(lp);
 	}
 
