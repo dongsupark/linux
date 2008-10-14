@@ -284,6 +284,7 @@ struct nfs4_layoutrecall {
 struct nfs4_notify_device {
 	struct nfsd4_pnfs_cb_dev_list  *nd_list;
 	struct nfs4_client	       *nd_client;
+	struct list_head	        nd_perclnt;
 };
 
 #endif /* CONFIG_PNFSD */

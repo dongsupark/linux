@@ -5460,17 +5460,49 @@ err:
 	return status;
 }
 
+/* Create a list of clients to send device notifications. */
+static int
+create_device_notify_list(struct list_head *todolist,
+			  struct nfsd4_pnfs_cb_dev_list *ndl)
+{
+	int status = 0, i;
+	struct nfs4_client *clp = NULL;
+	struct nfs4_notify_device *cbnd;
+
+	nfs4_lock_state();
+
+	/* Create notify client list */
+	for (i = 0; i < CLIENT_HASH_SIZE; i++)
+		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
+			if (atomic_read(&clp->cl_deviceref) <= 0)
+				continue;
+			cbnd = kmalloc(sizeof(*cbnd), GFP_KERNEL);
+			if (!cbnd) {
+				status = -ENOMEM;
+				goto out;
+			}
+			cbnd->nd_list = ndl;
+			cbnd->nd_client = clp;
+			list_add(&cbnd->nd_perclnt, todolist);
+			atomic_inc(&clp->cl_count);
+		}
+
+out:
+	nfs4_unlock_state();
+	return status;
+}
+
 /*
- * Spawn a thread to perform a device notify
- *
+ * For each client that a device, send a device notification.
+ * XXX: Need to track which clients have which devices.
  */
 int nfsd_device_notify_cb(struct super_block *sb,
 			  struct nfsd4_pnfs_cb_dev_list *ndl)
 {
-	struct nfs4_notify_device cbnd;
-	struct nfs4_client *clp = NULL;
-	unsigned int i, notify_num = 0;
-	int did_lock, status2, status = 0;
+	struct nfs4_notify_device *cbnd;
+	unsigned int notify_num = 0;
+	int status2, status = 0;
+	struct list_head todolist;
 
 	BUG_ON(!ndl || ndl->cbd_len == 0 || !ndl->cbd_list);
 
@@ -5479,25 +5511,25 @@ int nfsd_device_notify_cb(struct super_block *sb,
 	if (nfsd_serv == NULL)
 		return -ENOENT;
 
-	did_lock = nfs4_lock_state_nested();
+	INIT_LIST_HEAD(&todolist);
 
-	cbnd.nd_list = ndl;
-	for (i = 0; i < CLIENT_HASH_SIZE; i++)
-		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
-			if (atomic_read(&clp->cl_deviceref) <= 0)
-				continue;
-			cbnd.nd_client = clp;
-			status2 = nfsd4_cb_notify_device(&cbnd);
-			pnfs_clear_device_notify(clp);
-			if (status2)
-				status = status2;
-			notify_num++;
-		}
+	status = create_device_notify_list(&todolist, ndl);
 
-	dprintk("NFSD %s: i %d status %d clients %u\n",
-		__func__, i , status, notify_num);
-	if (did_lock)
-		nfs4_unlock_state();
+	while (!list_empty(&todolist)) {
+		cbnd = list_entry(todolist.next, struct nfs4_notify_device,
+				  nd_perclnt);
+		list_del_init(&cbnd->nd_perclnt);
+		status2 = nfsd4_cb_notify_device(cbnd);
+		pnfs_clear_device_notify(cbnd->nd_client);
+		put_nfs4_client(cbnd->nd_client);
+		if (status2)
+			status = status2;
+		notify_num++;
+		kfree(cbnd);
+	}
+
+	dprintk("NFSD %s: status %d clients %u\n",
+		__func__, status, notify_num);
 	return status;
 }
 
