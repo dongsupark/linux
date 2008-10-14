@@ -94,7 +94,7 @@ int nfs4_pnfs_get_layout(struct svc_fh *, struct pnfs_layoutget_arg *,
 int nfs4_pnfs_return_layout(struct super_block *, struct svc_fh *,
 					struct nfsd4_pnfs_layoutreturn *);
 void pnfs_set_device_notify(clientid_t *clid, unsigned int types);
-
+void nfs4_pnfs_state_shutdown(void);
 #endif /* CONFIG_PNFSD */
 
 #endif /* LINUX_NFSD_PNFSD_H */
