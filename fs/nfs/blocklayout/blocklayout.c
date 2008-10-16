@@ -328,6 +328,33 @@ bl_read_pagelist(struct pnfs_layout_type *lo,
 	return PNFS_NOT_ATTEMPTED;
 }
 
+static void mark_extents_written(struct pnfs_block_layout *bl,
+				 __u64 offset, __u32 count)
+{
+	sector_t isect, end;
+	struct pnfs_block_extent *be;
+
+	dprintk("%s(%llu, %u)\n", __func__, offset, count);
+	if (count == 0)
+		return;
+	isect = (offset & (long)(PAGE_CACHE_MASK)) >> 9;
+	end = (offset + count + PAGE_CACHE_SIZE - 1) & (long)(PAGE_CACHE_MASK);
+	end >>= 9;
+	while (isect < end) {
+		be = find_get_extent(bl, isect, NULL);
+		BUG_ON(!be); /* FIXME */
+		if (be->be_state != PNFS_BLOCK_INVALID_DATA)
+			isect += be->be_length;
+		else {
+			sector_t len;
+			len = min(end, be->be_f_offset + be->be_length) - isect;
+			mark_for_commit(be, isect, len); /* What if fails? */
+			isect += len;
+		}
+		put_extent(be);
+	}
+}
+
 /* STUB - this needs thought */
 static inline void
 bl_done_with_wpage(struct page *page, const int ok)
@@ -375,6 +402,14 @@ static void bl_write_cleanup(struct work_struct *work)
 	dprintk("%s enter\n", __func__);
 	task = container_of(work, struct rpc_task, u.tk_work);
 	wdata = container_of(task, struct nfs_write_data, task);
+	if (!wdata->task.tk_status) {
+		/* Marks for LAYOUTCOMMIT */
+		/* BUG - this should be called after each bio, not after
+		 * all finish, unless have some way of storing success/failure
+		 */
+		mark_extents_written(BLK_LSEG2EXT(wdata->pdata.lseg),
+				     wdata->args.offset, wdata->args.count);
+	}
 	pnfs_callback_ops->nfs_writelist_complete(wdata);
 }
 
@@ -534,6 +569,8 @@ bl_alloc_layout(struct pnfs_mount_type *mtype, struct inode *inode)
 	spin_lock_init(&bl->bl_ext_lock);
 	INIT_LIST_HEAD(&bl->bl_extents[0]);
 	INIT_LIST_HEAD(&bl->bl_extents[1]);
+	INIT_LIST_HEAD(&bl->bl_commit);
+	bl->bl_count = 0;
 	bl->bl_blocksize = NFS_SERVER(inode)->pnfs_blksize >> 9;
 	INIT_INVAL_MARKS(&bl->bl_inval, bl->bl_blocksize);
 	return lo;
