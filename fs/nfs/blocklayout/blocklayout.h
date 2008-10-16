@@ -138,6 +138,15 @@ struct pnfs_block_extent {
 	struct pnfs_inval_markings *be_inval; /* tracks INVAL->RW transition */
 };
 
+/* Shortened extent used by LAYOUTCOMMIT */
+struct pnfs_block_short_extent {
+	struct list_head bse_node;
+	struct pnfs_deviceid bse_devid;	/* STUB - removable??? */
+	struct block_device *bse_mdev;
+	sector_t	bse_f_offset;	/* the starting offset in the file */
+	sector_t	bse_length;	/* the size of the extent */
+};
+
 static inline void
 INIT_INVAL_MARKS(struct pnfs_inval_markings *marks, sector_t blocksize)
 {
@@ -166,6 +175,8 @@ struct pnfs_block_layout {
 	struct pnfs_inval_markings bl_inval; /* tracks INVAL->RW transition */
 	spinlock_t		bl_ext_lock;   /* Protects list manipulation */
 	struct list_head	bl_extents[EXTENT_LISTS]; /* R and RW extents */
+	struct list_head	bl_commit;	/* Needs layout commit */
+	unsigned int		bl_count;	/* entries in bl_commit */
 	sector_t		bl_blocksize;  /* Server blocksize in sectors */
 };
 
@@ -234,4 +245,6 @@ struct pnfs_block_extent *get_extent(struct pnfs_block_extent *be);
 int is_sector_initialized(struct pnfs_inval_markings *marks, sector_t isect);
 int add_and_merge_extent(struct pnfs_block_layout *bl,
 			 struct pnfs_block_extent *new);
+int mark_for_commit(struct pnfs_block_extent *be,
+		    sector_t offset, sector_t length);
 #endif /* FS_NFS_NFS4BLOCKLAYOUT_H */
