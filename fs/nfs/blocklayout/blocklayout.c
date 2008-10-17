@@ -631,7 +631,7 @@ bl_setup_layoutcommit(struct pnfs_layout_type *lo,
 		arg->lseg.length += mask;
 		arg->lseg.length &= ~mask;
 	}
-	return 0;
+	return encode_pnfs_block_layoutupdate4(BLK_LO2EXT(lo), arg);
 }
 
 static void
