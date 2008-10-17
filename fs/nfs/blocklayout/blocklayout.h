@@ -181,6 +181,13 @@ struct pnfs_block_layout {
 	sector_t		bl_blocksize;  /* Server blocksize in sectors */
 };
 
+/* this struct is comunicated between:
+ * bl_setup_layoutcommit && bl_encode_layoutcommit && bl_cleanup_layoutcommit
+ */
+struct bl_layoutupdate_data {
+	struct list_head ranges;
+};
+
 #define BLK_ID(lo)     ((struct block_mount_id *)(PNFS_MOUNTID(lo)->mountid))
 #define BLK_LSEG2EXT(lseg) ((struct pnfs_block_layout *)lseg->layout->ld_data)
 #define BLK_LO2EXT(lo) ((struct pnfs_block_layout *)lo->ld_data)
@@ -217,6 +224,18 @@ uint32_t *blk_overflow(uint32_t *p, uint32_t *end, size_t nbytes);
 	} \
 	(x) = tmp >> 9; \
 } while (0)
+
+#define WRITE32(n)               do { \
+	*p++ = htonl(n); \
+	} while (0)
+#define WRITE64(n)               do {                           \
+	*p++ = htonl((uint32_t)((n) >> 32));			\
+	*p++ = htonl((uint32_t)(n));				\
+} while (0)
+#define WRITEMEM(ptr, nbytes)     do {                          \
+	p = xdr_encode_opaque_fixed(p, ptr, nbytes);	\
+} while (0)
+#define WRITE_DEVID(x)  WRITEMEM((x)->data, NFS4_PNFS_DEVICEID4_SIZE)
 
 /* blocklayoutdev.c */
 struct block_device *nfs4_blkdev_get(dev_t dev);
