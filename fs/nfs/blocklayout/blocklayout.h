@@ -217,6 +217,18 @@ uint32_t *blk_overflow(uint32_t *p, uint32_t *end, size_t nbytes);
 	(x) = tmp >> 9; \
 } while (0)
 
+#define WRITE32(n)               do { \
+	*p++ = htonl(n); \
+	} while (0)
+#define WRITE64(n)               do {                           \
+	*p++ = htonl((uint32_t)((n) >> 32));			\
+	*p++ = htonl((uint32_t)(n));				\
+} while (0)
+#define WRITEMEM(ptr, nbytes)     do {                          \
+	p = xdr_encode_opaque_fixed(p, ptr, nbytes);	\
+} while (0)
+#define WRITE_DEVID(x)  WRITEMEM((x)->data, NFS4_PNFS_DEVICEID4_SIZE)
+
 /* blocklayoutdev.c */
 struct block_device *nfs4_blkdev_get(dev_t dev);
 int nfs4_blkdev_put(struct block_device *bdev);
@@ -243,6 +255,8 @@ void put_extent(struct pnfs_block_extent *be);
 struct pnfs_block_extent *alloc_extent(void);
 struct pnfs_block_extent *get_extent(struct pnfs_block_extent *be);
 int is_sector_initialized(struct pnfs_inval_markings *marks, sector_t isect);
+int encode_pnfs_block_layoutupdate4(struct pnfs_block_layout *bl,
+				    struct pnfs_layoutcommit_arg *arg);
 int add_and_merge_extent(struct pnfs_block_layout *bl,
 			 struct pnfs_block_extent *new);
 int mark_for_commit(struct pnfs_block_extent *be,

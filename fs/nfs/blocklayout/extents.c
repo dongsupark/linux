@@ -678,3 +678,75 @@ find_get_extent(struct pnfs_block_layout *bl, sector_t isect,
 	print_bl_extent(ret);
 	return ret;
 }
+
+int
+encode_pnfs_block_layoutupdate4(struct pnfs_block_layout *bl,
+				struct pnfs_layoutcommit_arg *arg)
+{
+	sector_t start, end;
+	struct pnfs_block_short_extent *lce, *save;
+	LIST_HEAD(ranges);
+	unsigned int count;
+	int size;
+	__be32 *p;
+
+	dprintk("%s enter\n", __func__);
+	start = arg->lseg.offset >> 9;
+	end = start + (arg->lseg.length >> 9);
+	dprintk("%s set start=%llu, end=%llu\n",
+		__func__, (u64)start, (u64)end);
+
+	/* BUG - creation of bl_commit is buggy - need to wait for
+	 * entire block to be marked WRITTEN before it can be added.
+	 */
+	spin_lock(&bl->bl_ext_lock);
+	list_splice_init(&bl->bl_commit, &ranges);
+	count = bl->bl_count;
+	bl->bl_count = 0;
+	/* Want to adjust for possible truncate */
+	/* We now want to adjust argument range */
+	spin_unlock(&bl->bl_ext_lock);
+
+	dprintk("%s found %i ranges\n", __func__, count);
+	if (count == 0)
+		return 0;
+	/* XDR encode the ranges found */
+	size = (NFS4_PNFS_DEVICEID4_SIZE + 28) * count + 4;
+	arg->new_layout = kmalloc(size, GFP_KERNEL);
+	if (!arg->new_layout)
+		goto out_err;
+	arg->new_layout_size = size;
+
+	p = arg->new_layout;
+	WRITE32(count);
+	list_for_each_entry_safe(lce, save, &ranges, bse_node) {
+		WRITE_DEVID(&lce->bse_devid);
+		WRITE64(lce->bse_f_offset << 9);
+		WRITE64(lce->bse_length << 9);
+		WRITE64(0LL);
+		WRITE32(PNFS_BLOCK_READWRITE_DATA);
+		kfree(lce);
+	}
+	return 0;
+
+ out_err:
+	/* We need to put ranges back into commit list, but it
+	 * might have changed in the meantime.
+	 */
+	/* We need to remove the IN_COMMIT marks */
+	spin_lock(&bl->bl_ext_lock);
+	/* Optimize for the simple case */
+	if (!bl->bl_count) {
+		/* The commit list is still empty, things are simple */
+		list_splice(&ranges, &bl->bl_commit);
+		bl->bl_count = count;
+	} else {
+		/* Reversing the (sorted) range list causes each entry to
+		 * immediately placed at the beginning of bl_commit
+		 */
+		list_for_each_entry_safe_reverse(lce, save, &ranges, bse_node)
+			add_to_commitlist(bl, lce);
+	}
+	spin_unlock(&bl->bl_ext_lock);
+	return -ENOMEM;
+}
