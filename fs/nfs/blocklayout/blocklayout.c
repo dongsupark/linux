@@ -653,6 +653,7 @@ bl_encode_layoutcommit(struct pnfs_layout_type *lo, struct xdr_stream *xdr,
 		       const struct pnfs_layoutcommit_arg *arg)
 {
 	dprintk("%s enter\n", __func__);
+	encode_pnfs_block_layoutupdate(BLK_LO2EXT(lo), xdr, arg);
 }
 
 static void
