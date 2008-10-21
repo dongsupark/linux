@@ -349,6 +349,31 @@ int mark_written_sectors(struct pnfs_inval_markings *marks,
 	return status;
 }
 
+static void print_short_extent(struct pnfs_block_short_extent *be)
+{
+	dprintk("PRINT SHORT EXTENT extent %p\n", be);
+	if (be) {
+		dprintk("        be_f_offset %llu\n", (u64)be->bse_f_offset);
+		dprintk("        be_length   %llu\n", (u64)be->bse_length);
+	}
+}
+
+void print_clist(struct list_head *list, unsigned int count)
+{
+	struct pnfs_block_short_extent *be;
+	unsigned int i = 0;
+
+	dprintk("****************\n");
+	dprintk("Extent list looks like:\n");
+	list_for_each_entry(be, list, bse_node) {
+		i++;
+		print_short_extent(be);
+	}
+	if (i != count)
+		dprintk("\n\nExpected %u entries\n\n\n", count);
+	dprintk("****************\n");
+}
+
 /* Note: In theory, we should do more checking that devid's match between
  * old and new, but if they don't, the lists are too corrupt to salvage anyway.
  */
@@ -360,6 +385,9 @@ static void add_to_commitlist(struct pnfs_block_layout *bl,
 	struct pnfs_block_short_extent *old, *save;
 	sector_t end = new->bse_f_offset + new->bse_length;
 
+	dprintk("%s enter\n", __func__);
+	print_short_extent(new);
+	print_clist(clist, bl->bl_count);
 	bl->bl_count++;
 	/* Scan for proper place to insert, extending new to the left
 	 * as much as possible.
@@ -409,6 +437,8 @@ static void add_to_commitlist(struct pnfs_block_layout *bl,
 			kfree(old);
 		}
 	}
+	dprintk("%s: after merging\n", __func__);
+	print_clist(clist, bl->bl_count);
 }
 
 /* Note the range described by offset, length is guaranteed to be contained
