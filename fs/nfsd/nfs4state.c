@@ -1394,6 +1394,10 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		cr_ses->flags &= ~SESSION4_PERSIST;
 		cr_ses->flags &= ~SESSION4_RDMA;
 
+		if (!(unconf->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_MDS) &&
+		    (unconf->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_DS))
+			cr_ses->flags &= ~SESSION4_BACK_CHAN;
+
 		if (cr_ses->flags & SESSION4_BACK_CHAN) {
 			unconf->cl_cb_xprt = rqstp->rq_xprt;
 			svc_xprt_get(unconf->cl_cb_xprt);
