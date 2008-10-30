@@ -117,6 +117,7 @@ struct nfs_fsinfo {
 	__u32			lease_time; /* in seconds */
 #if defined(CONFIG_NFS_V4_1)
 	__u32			layouttype; /* supported pnfs layout driver */
+	__u32			blksize; /* preferred pnfs io block size */
 #endif
 };
 
