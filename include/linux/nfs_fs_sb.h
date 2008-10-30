@@ -160,6 +160,7 @@ struct nfs_server {
 	void			       *pnfs_ld_data; /* Per-mount data */
 	unsigned int			ds_rsize;  /* Data server read size */
 	unsigned int			ds_wsize;  /* Data server write size */
+	u32				pnfs_blksize; /* layout_blksize attr */
 #endif
 	void (*destroy)(struct nfs_server *);
 

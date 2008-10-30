@@ -116,6 +116,7 @@ struct nfs_fsinfo {
 	__u64			maxfilesize;
 	__u32			lease_time; /* in seconds */
 	__u32			layouttype; /* supported pnfs layout driver */
+	__u32			blksize; /* preferred pnfs io block size */
 };
 
 struct nfs_fsstat {
