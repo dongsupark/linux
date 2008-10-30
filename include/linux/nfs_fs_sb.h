@@ -159,6 +159,7 @@ struct nfs_server {
 #endif
 
 #ifdef CONFIG_NFS_V4_1
+	u32				pnfs_blksize; /* layout_blksize attr */
 	struct pnfs_layoutdriver_type  *pnfs_curr_ld; /* Active layout driver */
 	void			       *pnfs_ld_data; /* Per-mount data */
 	unsigned int			ds_rsize;  /* Data server read size */

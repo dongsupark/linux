@@ -113,7 +113,11 @@ static int nfs4_stat_to_errno(int);
 #define encode_restorefh_maxsz  (op_encode_hdr_maxsz)
 #define decode_restorefh_maxsz  (op_decode_hdr_maxsz)
 #define encode_fsinfo_maxsz	(encode_getattr_maxsz)
-#define decode_fsinfo_maxsz	(op_decode_hdr_maxsz + 11)
+/* The 5 accounts for the PNFS attributes, and assumes that at most three
+ * layout types will be returned.
+ */
+#define decode_fsinfo_maxsz	(op_decode_hdr_maxsz + \
+				 nfs4_fattr_bitmap_maxsz + 8 + 5)
 #define encode_renew_maxsz	(op_encode_hdr_maxsz + 3)
 #define decode_renew_maxsz	(op_decode_hdr_maxsz)
 #define encode_setclientid_maxsz \
@@ -1125,8 +1129,11 @@ static void encode_getfattr(struct xdr_stream *xdr, const u32* bitmask, struct c
 
 static void encode_fsinfo(struct xdr_stream *xdr, const u32* bitmask, struct compound_hdr *hdr)
 {
-	encode_getattr_two(xdr, bitmask[0] & nfs4_fsinfo_bitmap[0],
-			   bitmask[1] & nfs4_fsinfo_bitmap[1], hdr);
+	encode_getattr_three(xdr,
+			     bitmask[0] & nfs4_fsinfo_bitmap[0],
+			     bitmask[1] & nfs4_fsinfo_bitmap[1],
+			     bitmask[2] & nfs4_fsinfo_bitmap[2],
+			     hdr);
 }
 
 static void encode_fs_locations(struct xdr_stream *xdr, const u32* bitmask, struct compound_hdr *hdr)
@@ -2646,7 +2653,7 @@ static int nfs4_xdr_enc_setclientid_confirm(struct rpc_rqst *req, __be32 *p, str
 	struct compound_hdr hdr = {
 		.nops	= 0,
 	};
-	const u32 lease_bitmap[2] = { FATTR4_WORD0_LEASE_TIME, 0 };
+	const u32 lease_bitmap[3] = { FATTR4_WORD0_LEASE_TIME, 0, 0 };
 
 	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
 	encode_compound_hdr(&xdr, req, &hdr);
@@ -2785,7 +2792,7 @@ static int nfs4_xdr_enc_get_lease_time(struct rpc_rqst *req, uint32_t *p,
 	struct compound_hdr hdr = {
 		.minorversion = nfs4_xdr_minorversion(&args->la_seq_args),
 	};
-	const u32 lease_bitmap[2] = { FATTR4_WORD0_LEASE_TIME, 0 };
+	const u32 lease_bitmap[3] = { FATTR4_WORD0_LEASE_TIME, 0, 0 };
 
 	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
 	encode_compound_hdr(&xdr, req, &hdr);
@@ -4351,6 +4358,28 @@ static int decode_attr_pnfstype(struct xdr_stream *xdr, uint32_t *bitmap,
 	}
 	return status;
 }
+
+/*
+ * The prefered block size for layout directed io
+ */
+static int decode_attr_layout_blksize(struct xdr_stream *xdr, uint32_t *bitmap,
+				      uint32_t *res)
+{
+	__be32 *p;
+
+	dprintk("%s: bitmap is %x\n", __func__, bitmap[2]);
+	*res = 0;
+	if (bitmap[2] & FATTR4_WORD2_LAYOUT_BLKSIZE) {
+		p = xdr_inline_decode(xdr, 4);
+		if (unlikely(!p)) {
+			print_overflow_msg(__func__, xdr);
+			return -EIO;
+		}
+		*res = be32_to_cpup(p);
+		bitmap[2] &= ~FATTR4_WORD2_LAYOUT_BLKSIZE;
+	}
+	return 0;
+}
 #endif /* CONFIG_NFS_V4_1 */
 
 static int decode_fsinfo(struct xdr_stream *xdr, struct nfs_fsinfo *fsinfo)
@@ -4380,6 +4409,9 @@ static int decode_fsinfo(struct xdr_stream *xdr, struct nfs_fsinfo *fsinfo)
 	fsinfo->wtpref = fsinfo->wtmax;
 #if defined(CONFIG_NFS_V4_1)
 	status = decode_attr_pnfstype(xdr, bitmap, &fsinfo->layouttype);
+	if (status)
+		goto xdr_error;
+	status = decode_attr_layout_blksize(xdr, bitmap, &fsinfo->blksize);
 	if (status)
 		goto xdr_error;
 #endif /* CONFIG_NFS_V4_1 */
