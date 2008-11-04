@@ -1273,7 +1273,8 @@ call_status(struct rpc_task *task)
 		break;
 	case -ECONNREFUSED:
 	case -ENOTCONN:
-		rpc_force_rebind(clnt);
+		if (clnt)
+			rpc_force_rebind(clnt);
 		task->tk_action = call_bind;
 		break;
 	case -EAGAIN:
@@ -1284,9 +1285,10 @@ call_status(struct rpc_task *task)
 		rpc_exit(task, status);
 		break;
 	default:
-		if (clnt->cl_chatty)
+		if (!clnt || clnt->cl_chatty)
 			printk("%s: RPC call returned error %d\n",
-			       clnt->cl_protname, -status);
+			       clnt ? clnt->cl_protname : "<unknown protocol>",
+			       -status);
 		rpc_exit(task, status);
 	}
 }
