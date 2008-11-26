@@ -612,6 +612,7 @@ static int nfs_create_rpc_client(struct nfs_client *clp,
 	}
 
 	clp->cl_rpcclient = clnt;
+	clnt->cl_private = clp;
 	return 0;
 }
 
