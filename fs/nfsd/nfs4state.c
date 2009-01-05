@@ -96,6 +96,7 @@ static int expire_layout(struct nfs4_layout *lp);
 static void dequeue_layout(struct nfs4_layout *lp);
 static void destroy_layout(struct nfs4_layout *lp);
 static void layoutrecall_done(struct nfs4_layoutrecall *clr);
+static void release_pnfs_ds_dev_list(struct nfs4_stateid *stp);
 #endif /* CONFIG_PNFSD */
 
 /* Locking: */
@@ -325,6 +326,9 @@ static void unhash_generic_stateid(struct nfs4_stateid *stp)
 	list_del(&stp->st_hash);
 	list_del(&stp->st_perfile);
 	list_del(&stp->st_perstateowner);
+#if defined(CONFIG_PNFSD)
+	release_pnfs_ds_dev_list(stp);
+#endif /* CONFIG_PNFSD */
 }
 
 static void free_generic_stateid(struct nfs4_stateid *stp)
@@ -1892,6 +1896,9 @@ init_stateid(struct nfs4_stateid *stp, struct nfs4_file *fp, struct nfsd4_open *
 	INIT_LIST_HEAD(&stp->st_perstateowner);
 	INIT_LIST_HEAD(&stp->st_lockowners);
 	INIT_LIST_HEAD(&stp->st_perfile);
+#if defined(CONFIG_PNFSD)
+	INIT_LIST_HEAD(&stp->st_pnfs_ds_id);
+#endif /* CONFIG_PNFSD */
 	list_add(&stp->st_hash, &stateid_hashtbl[hashval]);
 	list_add(&stp->st_perstateowner, &sop->so_stateids);
 	list_add(&stp->st_perfile, &fp->fi_stateids);
@@ -3467,6 +3474,9 @@ alloc_init_lock_stateid(struct nfs4_stateowner *sop, struct nfs4_file *fp, struc
 	INIT_LIST_HEAD(&stp->st_perfile);
 	INIT_LIST_HEAD(&stp->st_perstateowner);
 	INIT_LIST_HEAD(&stp->st_lockowners); /* not used */
+#if defined(CONFIG_PNFSD)
+	INIT_LIST_HEAD(&stp->st_pnfs_ds_id);
+#endif /* CONFIG_PNFSD */
 	list_add(&stp->st_hash, &lockstateid_hashtbl[hashval]);
 	list_add(&stp->st_perfile, &fp->fi_stateids);
 	list_add(&stp->st_perstateowner, &sop->so_stateids);
@@ -4030,6 +4040,9 @@ nfs4_state_init(void)
 	for (i = 0; i < CLIENT_HASH_SIZE; i++)
 		INIT_LIST_HEAD(&reclaim_str_hashtbl[i]);
 	reclaim_str_hashtbl_size = 0;
+#if defined(CONFIG_PNFSD)
+	nfs4_pnfs_state_init();
+#endif /* CONFIG_PNFSD */
 	return 0;
 }
 
@@ -4587,6 +4600,37 @@ layoutrecall_done(struct nfs4_layoutrecall *clr)
 }
 
 /*
+ * get_state() and cb_get_state() are
+ */
+static void
+release_pnfs_ds_dev_list(struct nfs4_stateid *stp)
+{
+	struct pnfs_ds_dev_entry *ddp;
+
+	while (!list_empty(&stp->st_pnfs_ds_id)) {
+		ddp = list_entry(stp->st_pnfs_ds_id.next,
+				struct pnfs_ds_dev_entry, dd_dev_entry);
+		list_del(&ddp->dd_dev_entry);
+		kfree(ddp);
+	}
+}
+
+static int
+nfs4_add_pnfs_ds_dev(struct nfs4_stateid *stp, u32 dsid)
+{
+	struct pnfs_ds_dev_entry *ddp;
+
+	ddp = kmalloc(sizeof(*ddp), GFP_KERNEL);
+	if (!ddp)
+		return -ENOMEM;
+
+	INIT_LIST_HEAD(&ddp->dd_dev_entry);
+	list_add(&ddp->dd_dev_entry, &stp->st_pnfs_ds_id);
+	ddp->dd_dsid = dsid;
+	return 0;
+}
+
+/*
  * are two octet ranges overlapping?
  * start1            last1
  *   |-----------------|
@@ -5025,6 +5069,60 @@ out:
 	nfs4_unlock_state();
 
 	dprintk("pNFS %s: exit status %d \n", __func__, status);
+	return status;
+}
+
+
+/*
+ * PNFS Metadata server export operations callback for get_state
+ *
+ * called by the cluster fs when it receives a get_state() from a data
+ * server.
+ * returns status, or pnfs_get_state* with pnfs_get_state->status set.
+ *
+ */
+int
+nfs4_pnfs_cb_get_state(struct super_block *sb, struct pnfs_get_state *arg)
+{
+	struct nfs4_stateid *stp;
+	int flags = LOCK_STATE | OPEN_STATE; /* search both hash tables */
+	int status = -EINVAL;
+	struct inode *ino;
+	struct nfs4_delegation *dl;
+
+	dprintk("NFSD: %s sid=" STATEID_FMT " ino %llu\n", __func__,
+		STATEID_VAL(&arg->stid), arg->ino);
+
+	nfs4_lock_state();
+	stp = find_stateid(&arg->stid, flags);
+	if (!stp) {
+		ino = iget_locked(sb, arg->ino);
+		if (!ino)
+			goto out;
+
+		if (ino->i_state & I_NEW) {
+			iget_failed(ino);
+			goto out;
+		}
+
+		dl = find_delegation_stateid(ino, &arg->stid);
+		if (dl)
+			status = 0;
+
+		iput(ino);
+	} else {
+		/* XXX ANDROS: marc removed nfs4_check_fh - how come? */
+
+		/* arg->devid is the Data server id, set by the cluster fs */
+		status = nfs4_add_pnfs_ds_dev(stp, arg->dsid);
+		if (status)
+			goto out;
+
+		arg->access = stp->st_access_bmap;
+		arg->clid = stp->st_stateowner->so_client->cl_clientid;
+	}
+out:
+	nfs4_unlock_state();
 	return status;
 }
 

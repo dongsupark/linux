@@ -185,6 +185,17 @@ struct nfsd4_pnfs_cb_layout {
 	struct nfs4_fsid	cbl_fsid;
 };
 
+/* pNFS Metadata to Data server state communication */
+struct pnfs_get_state {
+	u32			dsid;    /* request */
+	u64			ino;      /* request */
+	stateid_t		stid;     /* request;response */
+	clientid_t		clid;     /* response */
+	u32			access;    /* response */
+	u32			stid_gen;    /* response */
+	u32			verifier[2]; /* response */
+};
+
 /*
  * callbacks provided by the nfsd
  */
@@ -224,6 +235,12 @@ struct pnfs_export_operations {
 	int (*layout_return) (struct inode *, struct nfsd4_pnfs_layoutreturn *);
 	/* Can layout segments be merged for this layout type? */
 	int (*can_merge_layouts) (u32 layout_type);
+
+	/* pNFS Files layout specific operations */
+
+	/* Call fs on DS only */
+	int (*get_state) (struct inode *, struct knfsd_fh *,
+			  struct pnfs_get_state *);
 };
 
 /*

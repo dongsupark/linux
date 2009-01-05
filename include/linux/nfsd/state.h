@@ -383,6 +383,15 @@ struct nfs4_file {
 #endif /* CONFIG_PNFSD */
 };
 
+#if defined(CONFIG_PNFSD)
+/* pNFS Metadata server state */
+
+struct pnfs_ds_dev_entry {
+	struct list_head	dd_dev_entry; /* st_pnfs_ds_id entry */
+	u32			dd_dsid;
+};
+#endif /* CONFIG_PNFSD */
+
 /*
 * nfs4_stateid can either be an open stateid or (eventually) a lock stateid
 *
@@ -405,6 +414,9 @@ struct nfs4_stateid {
 	struct list_head              st_perfile;
 	struct list_head              st_perstateowner;
 	struct list_head              st_lockowners;
+#if defined(CONFIG_PNFSD)
+	struct list_head              st_pnfs_ds_id;
+#endif /* CONFIG_PNFSD */
 	struct nfs4_stateowner      * st_stateowner;
 	struct nfs4_file            * st_file;
 	stateid_t                     st_stateid;
