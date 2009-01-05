@@ -31,6 +31,10 @@
 #include <linux/sunrpc/svc.h>
 #include <linux/nfsd/nfsd.h>
 #include <linux/nfsd/nfsfh.h>
+#if defined(CONFIG_PNFSD)
+#include <linux/nfsd/state.h>
+#include <linux/nfsd/pnfsd.h>
+#endif
 #include <linux/nfsd/syscall.h>
 #include <linux/lockd/bind.h>
 #include <linux/sunrpc/msg_prot.h>

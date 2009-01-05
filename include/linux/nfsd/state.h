@@ -234,6 +234,8 @@ struct nfs4_client {
 						/* wait here for slots */
 #if defined(CONFIG_PNFSD)
 	struct list_head	cl_layouts;	/* outstanding layouts */
+	struct list_head	cl_layoutrecalls; /* outstanding layoutrecall
+						     callbacks */
 #endif /* CONFIG_PNFSD */
 };
 
@@ -265,6 +267,16 @@ struct nfs4_layout {
 	struct nfs4_client		*lo_client;
 	struct nfs4_layout_state	*lo_state;
 	struct nfsd4_layout_seg 	lo_seg;
+};
+
+/* layoutrecall request (from exported filesystem) */
+struct nfs4_layoutrecall {
+	struct kref			clr_ref;
+	struct nfsd4_pnfs_cb_layout	cb;	/* request */
+	struct list_head		clr_perclnt; /* on cl_layoutrecalls */
+	struct nfs4_client	       *clr_client;
+	struct nfs4_file	       *clr_file;
+	struct timespec			clr_time;	/* last activity */
 };
 
 #endif /* CONFIG_PNFSD */
@@ -439,6 +451,9 @@ extern int nfs4_has_reclaimed_state(const char *name, bool use_exchange_id);
 extern void nfsd4_recdir_purge_old(void);
 extern int nfsd4_create_clid_dir(struct nfs4_client *clp);
 extern void nfsd4_remove_clid_dir(struct nfs4_client *clp);
+#if defined(CONFIG_PNFSD)
+extern int nfsd4_cb_layout(struct nfs4_layoutrecall *lp);
+#endif /* CONFIG_PNFSD */
 
 static inline void
 nfs4_put_stateowner(struct nfs4_stateowner *so)

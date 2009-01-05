@@ -90,8 +90,11 @@ static void nfs4_set_recdir(char *recdir);
  * Layout state - NFSv4.1 pNFS
  */
 static struct kmem_cache *pnfs_layout_slab;
+static struct kmem_cache *pnfs_layoutrecall_slab;
+
 static int expire_layout(struct nfs4_layout *lp);
 static void destroy_layout(struct nfs4_layout *lp);
+static void layoutrecall_done(struct nfs4_layoutrecall *clr);
 #endif /* CONFIG_PNFSD */
 
 /* Locking: */
@@ -695,6 +698,7 @@ expire_client(struct nfs4_client *clp)
 	struct list_head reaplist;
 #if defined(CONFIG_PNFSD)
 	struct nfs4_layout *lp;
+	struct nfs4_layoutrecall *lrp;
 #endif /* CONFIG_PNFSD */
 
 	dprintk("NFSD: expire_client cl_count %d\n",
@@ -727,6 +731,14 @@ expire_client(struct nfs4_client *clp)
 		expire_layout(lp);
 		destroy_layout(lp);
 	}
+	while (!list_empty(&clp->cl_layoutrecalls)) {
+		lrp = list_entry(clp->cl_layoutrecalls.next,
+				struct nfs4_layoutrecall, clr_perclnt);
+		dprintk("NFSD: expire client. lrp %p, fp %p\n", lrp,
+			lrp->clr_file);
+		BUG_ON(lrp->clr_client != clp);
+		layoutrecall_done(lrp);
+	}
 #endif /* CONFIG_PNFSD */
 	while (!list_empty(&clp->cl_openowners)) {
 		sop = list_entry(clp->cl_openowners.next, struct nfs4_stateowner, so_perclient);
@@ -757,6 +769,7 @@ static struct nfs4_client *create_client(struct xdr_netobj name, char *recdir)
 	INIT_LIST_HEAD(&clp->cl_delegations);
 #if defined(CONFIG_PNFSD)
 	INIT_LIST_HEAD(&clp->cl_layouts);
+	INIT_LIST_HEAD(&clp->cl_layoutrecalls);
 #endif /* CONFIG_PNFSD */
 	INIT_LIST_HEAD(&clp->cl_sessions);
 	INIT_LIST_HEAD(&clp->cl_lru);
@@ -1768,6 +1781,7 @@ nfsd4_free_slabs(void)
 	nfsd4_free_slab(&deleg_slab);
 #if defined(CONFIG_PNFSD)
 	nfsd4_free_slab(&pnfs_layout_slab);
+	nfsd4_free_slab(&pnfs_layoutrecall_slab);
 #endif /* CONFIG_PNFSD */
 }
 
@@ -1794,6 +1808,10 @@ nfsd4_init_slabs(void)
 	pnfs_layout_slab = kmem_cache_create("pnfs_layouts",
 			sizeof(struct nfs4_layout), 0, 0, NULL);
 	if (pnfs_layout_slab == NULL)
+		goto out_nomem;
+	pnfs_layoutrecall_slab = kmem_cache_create("pnfs_layoutrecalls",
+			sizeof(struct nfs4_layoutrecall), 0, 0, NULL);
+	if (pnfs_layoutrecall_slab == NULL)
 		goto out_nomem;
 #endif /* CONFIG_PNFSD */
 
@@ -4481,6 +4499,76 @@ expire_layout(struct nfs4_layout *lp)
 }
 
 /*
+ * Create a layoutrecall structure
+ * An optional layoutrecall can be cloned (except for the layoutrecall lists)
+ */
+static struct nfs4_layoutrecall *
+alloc_init_layoutrecall(struct nfsd4_pnfs_cb_layout *cbl,
+			struct nfs4_client *clp,
+			struct nfs4_file *lrfile)
+{
+	struct nfs4_layoutrecall *clr;
+
+	dprintk("NFSD %s\n", __func__);
+	clr = kmem_cache_alloc(pnfs_layoutrecall_slab, GFP_KERNEL);
+	if (clr == NULL)
+		return clr;
+
+	dprintk("NFSD %s -->\n", __func__);
+
+	memset(clr, 0, sizeof(*clr));
+	if (lrfile)
+		get_nfs4_file(lrfile);
+	clr->clr_client = clp;
+	clr->clr_file = lrfile;
+	clr->cb = *cbl;
+
+	kref_init(&clr->clr_ref);
+	INIT_LIST_HEAD(&clr->clr_perclnt);
+
+	dprintk("NFSD %s return %p\n", __func__, clr);
+	return clr;
+}
+
+static void
+get_layoutrecall(struct nfs4_layoutrecall *clr)
+{
+	dprintk("pNFS %s: clr %p clr_ref %d\n", __func__, clr,
+		atomic_read(&clr->clr_ref.refcount));
+	kref_get(&clr->clr_ref);
+}
+
+static void
+destroy_layoutrecall(struct kref *kref)
+{
+	struct nfs4_layoutrecall *clr =
+		container_of(kref, struct nfs4_layoutrecall, clr_ref);
+	dprintk("pNFS %s: clr %p fp %p clp %p\n", __func__, clr,
+		clr->clr_file, clr->clr_client);
+	BUG_ON(!list_empty(&clr->clr_perclnt));
+	if (clr->clr_file)
+		put_nfs4_file(clr->clr_file);
+	kmem_cache_free(pnfs_layoutrecall_slab, clr);
+}
+
+static inline void
+put_layoutrecall(struct nfs4_layoutrecall *clr)
+{
+	dprintk("pNFS %s: clr %p clr_ref %d\n", __func__, clr,
+		atomic_read(&clr->clr_ref.refcount));
+	kref_put(&clr->clr_ref, destroy_layoutrecall);
+}
+
+static void
+layoutrecall_done(struct nfs4_layoutrecall *clr)
+{
+	dprintk("pNFS %s: clr %p clr_ref %d\n", __func__, clr,
+		atomic_read(&clr->clr_ref.refcount));
+	list_del_init(&clr->clr_perclnt);
+	put_layoutrecall(clr);
+}
+
+/*
  * are two octet ranges overlapping?
  * start1            last1
  *   |-----------------|
@@ -4513,6 +4601,35 @@ static inline int
 same_fsid(struct nfs4_fsid *fsid, struct svc_fh *current_fh)
 {
 	return same_fsid_major(fsid, current_fh->fh_export->ex_fsid);
+}
+
+/*
+ * find a layout recall conflicting with the specified layoutget
+ */
+static int
+is_layout_recalled(struct nfs4_client *clp,
+		   struct svc_fh *current_fh,
+		   struct nfsd4_layout_seg *seg)
+{
+	struct nfs4_layoutrecall *clr;
+
+	list_for_each_entry (clr, &clp->cl_layoutrecalls, clr_perclnt) {
+		if (clr->cb.cbl_seg.layout_type != seg->layout_type)
+			continue;
+		if (clr->cb.cbl_recall_type == RECALL_ALL)
+			return 1;
+		if (clr->cb.cbl_recall_type == RECALL_FSID) {
+			if (same_fsid(&clr->cb.cbl_fsid, current_fh))
+				return 1;
+			else
+				continue;
+		}
+		BUG_ON(clr->cb.cbl_recall_type != RECALL_FILE);
+		if (clr->cb.cbl_seg.clientid == seg->clientid &&
+		    lo_seg_overlapping(&clr->cb.cbl_seg, seg))
+			return 1;
+	}
+	return 0;
 }
 
 /*
@@ -4601,6 +4718,11 @@ nfs4_pnfs_get_layout(struct svc_fh *current_fh,
 	status = nfs4_process_layout_stateid(clp, fp, stateid, &ls);
 	if (status)
 		goto out;
+
+	if (is_layout_recalled(clp, current_fh, &args->seg)) {
+		status = nfserr_recallconflict;
+		goto out;
+	}
 
 	can_merge = sb->s_pnfs_op->can_merge_layouts != NULL &&
 		    sb->s_pnfs_op->can_merge_layouts(args->seg.layout_type);
@@ -4756,6 +4878,53 @@ pnfs_return_client_layouts(struct nfs4_client *clp,
 	return layouts_found;
 }
 
+static int
+recall_return_perfect_match(struct nfs4_layoutrecall *clr,
+			    struct nfsd4_pnfs_layoutreturn *lrp,
+			    struct nfs4_file *fp,
+			    struct svc_fh *current_fh)
+{
+	if (clr->cb.cbl_seg.iomode != lrp->lr_seg.iomode ||
+	    clr->cb.cbl_recall_type != lrp->lr_return_type)
+		return 0;
+
+	return (clr->cb.cbl_recall_type == RECALL_FILE &&
+		clr->clr_file == fp &&
+		clr->cb.cbl_seg.offset == lrp->lr_seg.offset &&
+		clr->cb.cbl_seg.length == lrp->lr_seg.length) ||
+
+		(clr->cb.cbl_recall_type == RECALL_FSID &&
+		 same_fsid(&clr->cb.cbl_fsid, current_fh)) ||
+
+		clr->cb.cbl_recall_type == RECALL_ALL;
+}
+
+static int
+recall_return_partial_match(struct nfs4_layoutrecall *clr,
+			    struct nfsd4_pnfs_layoutreturn *lrp,
+			    struct nfs4_file *fp,
+			    struct svc_fh *current_fh)
+{
+	/* iomode matching? */
+	if (clr->cb.cbl_seg.iomode != lrp->lr_seg.iomode &&
+	    clr->cb.cbl_seg.iomode != IOMODE_ANY &&
+	    lrp->lr_seg.iomode != IOMODE_ANY)
+		return 0;
+
+	if (clr->cb.cbl_recall_type == RECALL_ALL ||
+	    lrp->lr_return_type == RETURN_ALL)
+		return 1;
+
+	/* fsid matches? */
+	if (clr->cb.cbl_recall_type == RECALL_FSID ||
+	    lrp->lr_return_type == RETURN_FSID)
+		return same_fsid(&clr->cb.cbl_fsid, current_fh);
+
+	/* file matches, range overlapping? */
+	return clr->clr_file == fp &&
+	       lo_seg_overlapping(&clr->cb.cbl_seg, &lrp->lr_seg);
+}
+
 int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 				struct nfsd4_pnfs_layoutreturn *lrp)
 {
@@ -4764,6 +4933,7 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 	struct inode *ino = current_fh->fh_dentry->d_inode;
 	struct nfs4_file *fp = NULL;
 	struct nfs4_client *clp;
+	struct nfs4_layoutrecall *clr, *nextclr;
 	u64 ex_fsid = current_fh->fh_export->ex_fsid;
 
 	dprintk("NFSD: %s\n", __func__);
@@ -4811,12 +4981,289 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 		ex_fsid,
 		lrp->lr_seg.offset, lrp->lr_seg.length, layouts_found);
 
+	/* update layoutrecalls
+	 * note: for RETURN_{FSID,ALL}, fp may be NULL
+	 */
+	list_for_each_entry_safe (clr, nextclr, &clp->cl_layoutrecalls,
+				  clr_perclnt) {
+		if (clr->cb.cbl_seg.layout_type != lrp->lr_seg.layout_type)
+			continue;
+
+		if (recall_return_perfect_match(clr, lrp, fp, current_fh))
+			layoutrecall_done(clr);
+		else if (layouts_found &&
+			 recall_return_partial_match(clr, lrp, fp, current_fh))
+			clr->clr_time = CURRENT_TIME;
+	}
+
 out:
 	if (fp)
 		put_nfs4_file(fp);
 	nfs4_unlock_state();
 
 	dprintk("pNFS %s: exit status %d \n", __func__, status);
+	return status;
+}
+
+static int
+cl_has_file_layout(struct nfs4_client *clp, struct nfs4_file *lrfile,
+		   stateid_t *lsid)
+{
+	struct nfs4_layout *lp;
+	struct nfs4_layout_state *ls;
+
+	list_for_each_entry(lp, &clp->cl_layouts, lo_perclnt) {
+		if (lp->lo_file != lrfile)
+			continue;
+
+		ls = find_get_layout_state(clp, lrfile);
+		if (!ls) {
+			/* This shouldn't happen as the file should have a
+			 * layout stateid if it has a layout.
+			 */
+			printk(KERN_ERR "%s: file %p has no layout stateid\n",
+				__func__, lrfile);
+			WARN_ON(1);
+			break;
+		}
+		memcpy(lsid, &ls->ls_stateid, sizeof(stateid_t));
+		put_layout_state(ls);
+		return 1;
+	}
+
+	return 0;
+}
+
+static int
+cl_has_fsid_layout(struct nfs4_client *clp, struct nfs4_fsid *fsid)
+{
+	struct nfs4_layout *lp;
+
+	/* note: minor version unused */
+	list_for_each_entry(lp, &clp->cl_layouts, lo_perclnt)
+		if (lp->lo_file->fi_fsid.major == fsid->major)
+			return 1;
+
+	return 0;
+}
+
+static int
+cl_has_any_layout(struct nfs4_client *clp)
+{
+	return !list_empty(&clp->cl_layouts);
+}
+
+static int
+cl_has_layout(struct nfs4_client *clp, struct nfsd4_pnfs_cb_layout *cbl,
+	      struct nfs4_file *lrfile, stateid_t *lsid)
+{
+	switch (cbl->cbl_recall_type) {
+	case RECALL_FILE:
+		return cl_has_file_layout(clp, lrfile, lsid);
+	case RECALL_FSID:
+		return cl_has_fsid_layout(clp, &cbl->cbl_fsid);
+	default:
+		return cl_has_any_layout(clp);
+	}
+}
+
+static void
+nomatching_layout(struct super_block *sb, struct nfs4_layoutrecall *clr)
+{
+	struct nfsd4_pnfs_layoutreturn lr;
+
+	dprintk("%s: clp %p fp %p: "
+		"simulating layout_return\n", __func__,
+		clr->clr_client,
+		clr->clr_file);
+	lr.lr_return_type = clr->cb.cbl_recall_type;
+	lr.lr_seg = clr->cb.cbl_seg;
+	lr.lr_reclaim = 0;
+	lr.lr_flags = LR_FLAG_INTERN;
+	if (sb->s_pnfs_op->layout_return)
+		sb->s_pnfs_op->layout_return(clr->clr_file ?
+			clr->clr_file->fi_inode : NULL, &lr);
+
+	if (clr->cb.cbl_recall_type == RECALL_FILE)
+		pnfs_return_file_layouts(clr->clr_client, clr->clr_file, &lr);
+	else
+		pnfs_return_client_layouts(clr->clr_client, &lr,
+					   clr->cb.cbl_fsid.major);
+}
+
+/*
+ * look for matching layout for the given client
+ * and add a pending layout recall to the todo list
+ * if found any.
+ * returns:
+ *   0 if layouts found or negative error.
+ */
+static int
+lo_recall_per_client(struct nfs4_client *clp,
+		     struct nfsd4_pnfs_cb_layout *cbl,
+		     struct nfs4_file *lrfile,
+		     struct list_head *todolist)
+{
+	stateid_t lsid;
+	struct nfs4_layoutrecall *pending;
+
+	if (!cl_has_layout(clp, cbl, lrfile, &lsid))
+		return -ENOENT;
+
+	/* Matching put done by layoutreturn */
+	pending = alloc_init_layoutrecall(cbl, clp, lrfile);
+	/* out of memory, drain todo queue */
+	if (!pending)
+		return -ENOMEM;
+
+	pending->cb.cbl_sid = lsid;
+	list_add(&pending->clr_perclnt, todolist);
+	return 0;
+}
+
+/* Create a layoutrecall structure for each client based on the
+ * original structure. */
+static int
+create_layout_recall_list(struct list_head *todolist,
+			  struct nfsd4_pnfs_cb_layout *cbl,
+			  struct nfs4_file *lrfile)
+{
+	struct nfs4_client *clp;
+	unsigned int i, len = 0;
+	int status = 0;
+
+	dprintk("%s: -->\n", __func__);
+
+	/* If client given by fs, just do single client */
+	if (cbl->cbl_seg.clientid) {
+		clp = find_confirmed_client((clientid_t *)&cbl->cbl_seg.clientid);
+		if (!clp) {
+			status = -ENOENT;
+			dprintk("%s: clientid %llx not found\n", __func__,
+				(unsigned long long)cbl->cbl_seg.clientid);
+			goto out;
+		}
+
+		status = lo_recall_per_client(clp, cbl, lrfile, todolist);
+		if (!status)
+			len++;
+		goto out;
+	}
+
+	/* Check all clients for layout matches */
+	for (i = 0; i < CLIENT_HASH_SIZE; i++)
+		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
+			status = lo_recall_per_client(clp, cbl, lrfile,
+						      todolist);
+			if (!status)
+				len++;
+			else if (status != -ENOENT)
+				goto out;
+		}
+out:
+	dprintk("%s: <-- list len %u status %d\n", __func__, len, status);
+	return status;
+}
+
+/*
+ * Recall a layout synchronously
+ */
+static void
+sync_layout_recall(struct super_block *sb, struct list_head *todolist)
+{
+	struct nfs4_layoutrecall *pending;
+	int status;
+
+	dprintk("%s: -->\n", __func__);
+
+	while (!list_empty(todolist)) {
+		pending = list_entry(todolist->next, struct nfs4_layoutrecall,
+				     clr_perclnt);
+		list_del_init(&pending->clr_perclnt);
+		dprintk("%s: clp %p cb_client %p fp %p\n", __func__,
+			pending->clr_client,
+			pending->clr_client->cl_callback.cb_client,
+			pending->clr_file);
+		if (unlikely(!pending->clr_client->cl_callback.cb_client)) {
+			printk(KERN_INFO
+			       "%s: clientid %08x/%08x has no callback path\n",
+			       __func__,
+			       pending->clr_client->cl_clientid.cl_boot,
+			       pending->clr_client->cl_clientid.cl_id);
+			put_layoutrecall(pending);
+			continue;
+		}
+
+		pending->clr_time = CURRENT_TIME;
+		get_layoutrecall(pending);
+		/* Add to list so corresponding layoutreturn can find req */
+		list_add(&pending->clr_perclnt,
+			 &pending->clr_client->cl_layoutrecalls);
+
+		status = nfsd4_cb_layout(pending);
+		if (status) {
+			printk("%s: clp %p cb_client %p fp %p "
+			       "failed with status %d\n", __func__,
+			       pending->clr_client,
+			       pending->clr_client->cl_callback.cb_client,
+			       pending->clr_file,
+			       status);
+			if (status == -NFS4ERR_NOMATCHING_LAYOUT)
+				nomatching_layout(sb, pending);
+			/* Cleanup since layoutreturn will not be called */
+			layoutrecall_done(pending);
+		}
+
+		put_layoutrecall(pending);
+	}
+}
+
+/*
+ * Spawn a thread to perform a recall layout
+ *
+ */
+int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
+			  struct nfsd4_pnfs_cb_layout *cbl)
+{
+	int status;
+	struct nfs4_file *lrfile = NULL;
+	struct list_head todolist;
+
+	dprintk("NFSD nfsd_layout_recall_cb: inode %p cbl %p\n", inode, cbl);
+	BUG_ON(!cbl);
+	BUG_ON(cbl->cbl_recall_type != RECALL_FILE &&
+	       cbl->cbl_recall_type != RECALL_FSID &&
+	       cbl->cbl_recall_type != RECALL_ALL);
+	BUG_ON(cbl->cbl_recall_type == RECALL_FILE && !inode);
+	BUG_ON(cbl->cbl_seg.iomode != IOMODE_READ &&
+	       cbl->cbl_seg.iomode != IOMODE_RW &&
+	       cbl->cbl_seg.iomode != IOMODE_ANY);
+	BUG_ON(!inode && cbl->cbl_recall_type == RECALL_FILE);
+
+	if (nfsd_serv == NULL)
+		return -ENOENT;
+
+	nfs4_lock_state();
+	status = -ENOENT;
+	if (inode) {
+		lrfile = find_file(inode);
+		if (!lrfile) {
+			dprintk("NFSD nfsd_layout_recall_cb: "
+				"nfs4_file not found\n");
+			goto err;
+		}
+		if (cbl->cbl_recall_type == RECALL_FSID)
+			cbl->cbl_fsid = lrfile->fi_fsid;
+	}
+
+	INIT_LIST_HEAD(&todolist);
+	/* If status != 0, drain todolist and return error */
+	status = create_layout_recall_list(&todolist, cbl, lrfile);
+
+	/* XXX: spin off thread? */
+	sync_layout_recall(sb, &todolist);
+err:
+	nfs4_unlock_state();
 	return status;
 }
 
