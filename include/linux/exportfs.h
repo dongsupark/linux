@@ -152,6 +152,11 @@ struct export_operations {
 	int (*get_name)(struct dentry *parent, char *name,
 			struct dentry *child);
 	struct dentry * (*get_parent)(struct dentry *child);
+#if defined(CONFIG_PNFSD)
+	/* pNFS operations */
+		/* pNFS: returns the verifier */
+	void (*get_verifier) (struct super_block *sb, u32 *p);
+#endif /* CONFIG_PNFSD */
 };
 
 extern int exportfs_encode_fh(struct dentry *dentry, struct fid *fid,
