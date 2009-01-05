@@ -24,6 +24,11 @@
 #include <linux/nfsd/nfsd.h>
 #include "auth.h"
 
+#if defined(CONFIG_PNFSD)
+#include <linux/nfsd/state.h>
+#include <linux/nfsd/nfsd4_pnfs.h>
+#endif /* CONFIG_PNFSD */
+
 #define NFSDDBG_FACILITY		NFSDDBG_FH
 
 
@@ -120,6 +125,7 @@ static __be32 nfsd_setuser_and_check_port(struct svc_rqst *rqstp,
 static __be32 nfsd_set_fh_dentry(struct svc_rqst *rqstp, struct svc_fh *fhp)
 {
 	struct knfsd_fh	*fh = &fhp->fh_handle;
+	int fsid_type;
 	struct fid *fid = NULL, sfid;
 	struct svc_export *exp;
 	struct dentry *dentry;
@@ -140,7 +146,12 @@ static __be32 nfsd_set_fh_dentry(struct svc_rqst *rqstp, struct svc_fh *fhp)
 			return error;
 		if (fh->fh_auth_type != 0)
 			return error;
-		len = key_len(fh->fh_fsid_type) / 4;
+#if defined(CONFIG_PNFSD)
+		fsid_type = pnfs_fh_fsid_type(fh);
+#else /* !CONFIG_PNFSD */
+		fsid_type = fh->fh_fsid_type;
+#endif /* CONFIG_PNFSD */
+		len = key_len(fsid_type) / 4;
 		if (len == 0)
 			return error;
 		if  (fh->fh_fsid_type == FSID_MAJOR_MINOR) {
@@ -153,7 +164,7 @@ static __be32 nfsd_set_fh_dentry(struct svc_rqst *rqstp, struct svc_fh *fhp)
 		data_left -= len;
 		if (data_left < 0)
 			return error;
-		exp = rqst_exp_find(rqstp, fh->fh_fsid_type, fh->fh_auth);
+		exp = rqst_exp_find(rqstp, fsid_type, fh->fh_auth);
 		fid = (struct fid *)(fh->fh_auth + len);
 	} else {
 		__u32 tfh[2];
