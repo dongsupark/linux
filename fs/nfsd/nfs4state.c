@@ -4635,4 +4635,153 @@ out_freelayout:
 	goto out;
 }
 
+static void
+trim_layout(struct nfsd4_layout_seg *lo, struct nfsd4_layout_seg *lr)
+{
+	u64 lo_start = lo->offset;
+	u64 lo_end = end_offset(lo_start, lo->length);
+	u64 lr_start = lr->offset;
+	u64 lr_end = end_offset(lr_start, lr->length);
+
+	dprintk("%s:Begin lo %llu:%lld lr %llu:%lld\n", __func__,
+		lo->offset, lo->length, lr->offset, lr->length);
+
+	/* lr fully covers lo? */
+	if (lr_start <= lo_start && lo_end <= lr_end) {
+		lo->length = 0;
+		goto out;
+	}
+
+	/*
+	 * split not supported yet. retain layout segment.
+	 * remains must be returned by the client
+	 * on the final layout return.
+	 */
+	if (lo_start < lr_start && lr_end < lo_end) {
+		dprintk("%s: split not supported\n", __func__);
+		goto out;
+	}
+
+	if (lo_start < lr_start)
+		lo_end = lr_start - 1;
+	else /* lr_end < lo_end */
+		lo_start = lr_end + 1;
+
+	lo->offset = lo_start;
+	lo->length = (lo_end == NFS4_MAX_UINT64) ? lo_end : lo_end - lo_start;
+out:
+	dprintk("%s:End lo %llu:%lld\n", __func__, lo->offset, lo->length);
+}
+
+static int
+pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
+			 struct nfsd4_pnfs_layoutreturn *lrp)
+{
+	int layouts_found = 0;
+	struct nfs4_layout *lp, *nextlp;
+
+	dprintk("%s: clp %p fp %p\n", __func__, clp, fp);
+	list_for_each_entry_safe (lp, nextlp, &fp->fi_layouts, lo_perfile) {
+		dprintk("%s: lp %p client %p,%p lo_type %x,%x iomode %d,%d\n",
+			__func__, lp,
+			lp->lo_client, clp,
+			lp->lo_seg.layout_type, lrp->lr_seg.layout_type,
+			lp->lo_seg.iomode, lrp->lr_seg.iomode);
+		if (lp->lo_client != clp ||
+		    lp->lo_seg.layout_type != lrp->lr_seg.layout_type ||
+		    (lp->lo_seg.iomode != lrp->lr_seg.iomode &&
+		     lrp->lr_seg.iomode != IOMODE_ANY) ||
+		    !lo_seg_overlapping(&lp->lo_seg, &lrp->lr_seg))
+			continue;
+		layouts_found++;
+		trim_layout(&lp->lo_seg, &lrp->lr_seg);
+		if (!lp->lo_seg.length)
+			destroy_layout(lp);
+	}
+
+	return layouts_found;
+}
+
+static int
+pnfs_return_client_layouts(struct nfs4_client *clp,
+			   struct nfsd4_pnfs_layoutreturn *lrp, u64 ex_fsid)
+{
+	int layouts_found = 0;
+	struct nfs4_layout *lp, *nextlp;
+
+	list_for_each_entry_safe (lp, nextlp, &clp->cl_layouts, lo_perclnt) {
+		if (lrp->lr_seg.layout_type != lp->lo_seg.layout_type ||
+		    (lrp->lr_seg.iomode != lp->lo_seg.iomode &&
+		     lrp->lr_seg.iomode != IOMODE_ANY))
+			continue;
+
+		if (lrp->lr_return_type == RETURN_FSID &&
+		    !same_fsid_major(&lp->lo_file->fi_fsid, ex_fsid))
+			continue;
+
+		layouts_found++;
+		destroy_layout(lp);
+	}
+
+	return layouts_found;
+}
+
+int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
+				struct nfsd4_pnfs_layoutreturn *lrp)
+{
+	int status = 0;
+	int layouts_found = 0;
+	struct inode *ino = current_fh->fh_dentry->d_inode;
+	struct nfs4_file *fp = NULL;
+	struct nfs4_client *clp;
+	u64 ex_fsid = current_fh->fh_export->ex_fsid;
+
+	dprintk("NFSD: %s\n", __func__);
+
+	/* call exported filesystem layout_return first */
+	if (sb->s_pnfs_op->layout_return) {
+		status = sb->s_pnfs_op->layout_return(ino, lrp);
+
+		dprintk("pNFS %s: status %d ino %p return type %d\n",
+			__func__, status, ino, lrp->lr_return_type);
+		status = 0;
+	}
+
+	nfs4_lock_state();
+	clp = find_confirmed_client((clientid_t *)&lrp->lr_seg.clientid);
+	if (!clp)
+		goto out;
+
+	fp = find_file(ino);
+	if (lrp->lr_return_type == RETURN_FILE) {
+		if (!fp) {
+			printk(KERN_ERR "%s: RETURN_FILE: no nfs4_file for "
+					"ino %p:%lu\n",
+				__func__, ino, ino ? ino->i_ino : 0L);
+			goto out;
+		}
+
+		/* update layouts */
+		layouts_found = pnfs_return_file_layouts(clp, fp, lrp);
+	} else {
+		layouts_found = pnfs_return_client_layouts(clp, lrp, ex_fsid);
+	}
+
+	dprintk("pNFS %s: clp %p fp %p layout_type 0x%x iomode %d "
+		"return_type %d fsid 0x%llx offset %llu length %llu: "
+		"layouts_found %d\n",
+		__func__, clp, fp, lrp->lr_seg.layout_type,
+		lrp->lr_seg.iomode, lrp->lr_return_type,
+		ex_fsid,
+		lrp->lr_seg.offset, lrp->lr_seg.length, layouts_found);
+
+out:
+	if (fp)
+		put_nfs4_file(fp);
+	nfs4_unlock_state();
+
+	dprintk("pNFS %s: exit status %d \n", __func__, status);
+	return status;
+}
+
 #endif /* CONFIG_PNFSD */

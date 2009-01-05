@@ -160,6 +160,21 @@ struct nfsd4_pnfs_layoutcommit {
 	u64			lc_newsize;	/* response */
 };
 
+enum layoutreturn_flags {
+	LR_FLAG_INTERN = 1 << 0
+};
+
+struct nfsd4_pnfs_layoutreturn {
+	u32			lr_return_type;	/* request */
+	struct nfsd4_layout_seg	lr_seg;		/* request */
+	u32			lr_reclaim;	/* request */
+	u32			lr_flags;
+	stateid_t		lr_sid;		/* request/resopnse */
+	u32			lrf_body_len;	/* request */
+	void			*lrf_body;	/* request */
+	u32			lrs_present;	/* response */
+};
+
 struct pnfs_export_operations {
 	/* Returns the supported pnfs_layouttype4. */
 	int (*layout_type) (struct super_block *);
@@ -186,6 +201,8 @@ struct pnfs_export_operations {
 	int (*layout_get) (struct inode *, struct pnfs_layoutget_arg *);
 	/* Commit changes to layout */
 	int (*layout_commit) (struct inode *, struct nfsd4_pnfs_layoutcommit *);
+	/* Returns the layout */
+	int (*layout_return) (struct inode *, struct nfsd4_pnfs_layoutreturn *);
 	/* Can layout segments be merged for this layout type? */
 	int (*can_merge_layouts) (u32 layout_type);
 };

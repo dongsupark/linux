@@ -42,6 +42,8 @@
 
 int nfs4_pnfs_get_layout(struct svc_fh *, struct pnfs_layoutget_arg *,
 					stateid_t *);
+int nfs4_pnfs_return_layout(struct super_block *, struct svc_fh *,
+					struct nfsd4_pnfs_layoutreturn *);
 
 #endif /* CONFIG_PNFSD */
 
