@@ -3468,6 +3468,12 @@ nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, int nfserr,
 
 	sb = gdev->gd_sb;
 
+	/* Set the file layout encoding function.  Once other layout
+	 * types are added to the kernel they can be set here
+	 */
+	if (gdev->gd_type == LAYOUT_NFSV4_FILES)
+		args.func = filelayout_encode_devinfo;
+
 	/* If maxcount is 0 then just update notifications */
 	if (gdev->gd_maxcount != 0) {
 		/* FIXME: this will be bound by the session max response */
