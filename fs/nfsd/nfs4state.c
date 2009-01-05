@@ -2987,6 +2987,17 @@ nfs4_preprocess_stateid_op(struct svc_fh *current_fh, stateid_t *stateid, int fl
 	if (io_during_grace_disallowed(ino, flags))
 		return nfserr_grace;
 
+#if defined(CONFIG_PNFSD)
+	if (pnfs_fh_is_ds(&current_fh->fh_handle)) {
+		if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
+			status = nfserr_bad_stateid;
+		else
+			status = nfs4_preprocess_pnfs_ds_stateid(current_fh,
+								 stateid);
+		goto out;
+	}
+#endif /* CONFIG_PNFSD */
+
 	if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
 		return check_special_stateids(current_fh, stateid, flags);
 
