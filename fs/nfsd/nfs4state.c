@@ -1140,8 +1140,23 @@ nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
 static void
 nfsd4_set_ex_flags(struct nfs4_client *new, struct nfsd4_exchange_id *clid)
 {
+#if defined(CONFIG_PNFSD)
+	int mds_and_ds = EXCHGID4_FLAG_USE_PNFS_MDS | EXCHGID4_FLAG_USE_PNFS_DS;
+	int mds_or_ds = 0;
+
+	/* Save the client's MDS or DS flags, or set them both.
+	 * XXX We currently do not have a method of determining
+	 * what a server supports prior to receiving a filehandle
+	 * e.g. at exchange id time. */
+	mds_or_ds = clid->flags & mds_and_ds;
+	if (mds_or_ds)
+		new->cl_exchange_flags |= mds_or_ds;
+	else
+		new->cl_exchange_flags |= mds_and_ds;
+#else  /* CONFIG_PNFSD */
 	/* pNFS is not supported */
 	new->cl_exchange_flags |= EXCHGID4_FLAG_USE_NON_PNFS;
+#endif /* CONFIG_PNFSD */
 
 	/* Referrals are supported, Migration is not. */
 	new->cl_exchange_flags |= EXCHGID4_FLAG_SUPP_MOVED_REFER;
@@ -2684,6 +2699,11 @@ nfs4_laundromat(void)
 		nfsd4_end_grace();
 	list_for_each_safe(pos, next, &client_lru) {
 		clp = list_entry(pos, struct nfs4_client, cl_lru);
+#if defined(CONFIG_PNFSD)
+		if (clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_DS &&
+		    !(clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_MDS))
+			continue;
+#endif /* CONFIG_PNFSD */
 		if (time_after((unsigned long)clp->cl_time, (unsigned long)cutoff)) {
 			t = clp->cl_time - cutoff;
 			if (clientid_val > t)
