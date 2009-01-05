@@ -40,6 +40,7 @@
 #define _LINUX_NFSD_XDR4_H
 
 #include <linux/nfs4.h>
+#include <linux/nfsd/nfsd4_pnfs.h>
 
 #define NFSD4_MAX_TAGLEN	128
 #define XDR_LEN(n)                     (((n) + 3) & ~3)
@@ -438,6 +439,10 @@ struct nfsd4_op {
 		struct nfsd4_verify		verify;
 		struct nfsd4_write		write;
 		struct nfsd4_release_lockowner	release_lockowner;
+#if defined(CONFIG_PNFSD)
+		struct nfsd4_pnfs_getdevlist	pnfs_getdevlist;
+		struct nfsd4_pnfs_getdevinfo	pnfs_getdevinfo;
+#endif /* CONFIG_PNFSD */
 #if defined(CONFIG_NFSD_V4_1)
 		struct nfsd4_exchange_id	exchange_id;
 		struct nfsd4_create_session	create_session;
@@ -573,6 +578,10 @@ extern __be32 nfsd4_delegreturn(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *, struct nfsd4_delegreturn *dr);
 extern __be32 nfsd4_renew(struct svc_rqst *rqstp,
 			  struct nfsd4_compound_state *, clientid_t *clid);
+#if defined(CONFIG_PNFSD)
+extern void nfsd4_devlist_free(struct nfsd4_pnfs_getdevlist *gdlp);
+#endif /* CONFIG_PNFSD */
+
 #endif
 
 /*

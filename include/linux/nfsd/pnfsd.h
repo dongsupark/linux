@@ -1,4 +1,5 @@
-nux/include/nfsd/pnfsd.h
+/*
+ *  linux/include/nfsd/pnfsd.h
  *
  *  Copyright (c) 2005 The Regents of the University of Michigan.
  *  All rights reserved.

@@ -69,6 +69,54 @@ enum fid_type {
 	FILEID_UDF_WITH_PARENT = 0x52,
 };
 
+#if defined(CONFIG_PNFSD)
+
+typedef struct {
+	uint64_t	pnfs_fsid;	/* fsid */
+	uint64_t	pnfs_devid;	/* deviceid */
+} deviceid_t;
+
+/* XDR stream arguments and results.  Exported file system uses this
+ * struct to encode information and return how many bytes were encoded.
+ */
+struct pnfs_xdr_info {
+	struct nfsd4_compoundres *resp;
+	u32 maxcount;		/* in */
+	u32 bytes_written;	/* out */
+};
+
+/* Used by get_device_info to encode a device (da_addr_body in spec)
+ * Args:
+ * xdr - xdr stream
+ * device - pointer to device to be encoded
+*/
+typedef int (*pnfs_encodedev_t)(struct pnfs_xdr_info *xdr, void *device);
+
+/* Arguments for get_device_info */
+struct pnfs_devinfo_arg {
+	u32 type;			/* request */
+	deviceid_t devid;		/* request */
+	u32 notify_types;		/* request/response */
+	struct pnfs_xdr_info xdr;	/* request/response */
+	pnfs_encodedev_t func;		/* request */
+};
+
+/* Used by get_device_iter to retrieve all available devices.
+ * Args:
+ * type - layout type
+ * cookie/verf - index and verifier of current list item
+ * export_id - Minor part of deviceid_t
+ * eof - end of file?
+ */
+struct pnfs_deviter_arg {
+	u32 type;	/* request */
+	u64 cookie;	/* request/response */
+	u64 verf;	/* request/response */
+	u64 devid;	/* response */
+	u32 eof;	/* response */
+};
+#endif /* CONFIG_PNFSD */
+
 struct fid {
 	union {
 		struct {
@@ -158,6 +206,19 @@ struct export_operations {
 	void (*get_verifier) (struct super_block *sb, u32 *p);
 		/* pNFS: Returns the supported pnfs_layouttype4. */
 	int (*layout_type)(struct super_block *sb);
+	/* Retrieve and encode a device onto the xdr stream.
+	 * Args:
+	 * sb - superblock
+	 * arg - layout type, device id, maxcount
+	 * arg.xdr - xdr stream for encoding
+	 * arg.func - Optional function called by file system to encode
+	 * device on xdr stream.
+	 */
+	int (*get_device_info) (struct super_block *sb,
+				struct pnfs_devinfo_arg *arg);
+	/* Retrieve all available devices via an iterator */
+	int (*get_device_iter) (struct super_block *sb,
+				struct pnfs_deviter_arg *arg);
 #endif /* CONFIG_PNFSD */
 };
 

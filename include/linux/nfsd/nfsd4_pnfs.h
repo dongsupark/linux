@@ -38,7 +38,26 @@
 
 #if defined(CONFIG_PNFSD)
 
+#include <linux/exportfs.h>
+
 /* pNFS structs */
+
+struct nfsd4_pnfs_getdevlist {
+	u32             gd_type;	/* request */
+	u32		gd_maxnum;	/* request */
+	u64		gd_cookie;	/* request - response */
+	u64		gd_verf;	/* request - response */
+	struct svc_fh 	*gd_fhp;	/* response */
+	u32		gd_eof;		/* response */
+};
+
+struct nfsd4_pnfs_getdevinfo {
+	u32		gd_type;	/* request */
+	deviceid_t	gd_devid;	/* request */
+	u32		gd_maxcount;	/* request */
+	u32		gd_notify_types; /* request */
+	struct super_block *gd_sb;
+};
 
 #endif /* CONFIG_PNFSD */
 
