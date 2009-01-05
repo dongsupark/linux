@@ -545,6 +545,53 @@ enum state_protect_how4 {
 	SP4_SSV		= 2
 };
 
+#if defined(CONFIG_PNFS) || defined(CONFIG_PNFSD)
+enum pnfs_layouttype {
+	LAYOUT_NFSV4_FILES  = 1,
+	LAYOUT_OSD2_OBJECTS = 2,
+	LAYOUT_BLOCK_VOLUME = 3,
+	LAYOUT_PVFS2        = 4
+};
+
+/* FIXME: should recall and return types be combined? */
+enum pnfs_layoutrecall_type {
+	RECALL_FILE = 1,
+	RECALL_FSID = 2,
+	RECALL_ALL  = 3
+};
+
+enum pnfs_layoutreturn_type {
+	RETURN_FILE = 1,
+	RETURN_FSID = 2,
+	RETURN_ALL  = 3
+};
+
+enum pnfs_iomode {
+	IOMODE_READ = 1,
+	IOMODE_RW = 2,
+	IOMODE_ANY = 3,
+};
+
+
+enum pnfs_notify_deviceid_type4 {
+	NOTIFY_DEVICEID4_CHANGE = 1 << 1,
+	NOTIFY_DEVICEID4_DELETE = 1 << 2,
+};
+
+#define NFL4_UFLG_MASK			0x0000003F
+#define NFL4_UFLG_DENSE			0x00000001
+#define NFL4_UFLG_COMMIT_THRU_MDS	0x00000002
+#define NFL4_UFLG_STRIPE_UNIT_SIZE_MASK	0xFFFFFFC0
+
+/* Encoded in the loh_body field of type layouthint4 */
+enum filelayout_hint_care4 {
+	NFLH4_CARE_DENSE		= NFL4_UFLG_DENSE,
+	NFLH4_CARE_COMMIT_THRU_MDS	= NFL4_UFLG_COMMIT_THRU_MDS,
+	NFLH4_CARE_STRIPE_UNIT_SIZE	= 0x00000040,
+	NFLH4_CARE_STRIPE_COUNT		= 0x00000080
+};
+#endif /* defined(CONFIG_PNFS) || defined(CONFIG_PNFSD) */
+
 #endif
 #endif
 
