@@ -1355,6 +1355,66 @@ nfsd4_decode_layoutget(struct nfsd4_compoundargs *argp,
 
 	DECODE_TAIL;
 }
+
+/* LAYOUTCOMMIT: minorversion1-19.txt
+
+     struct pnfs_layoutupdate4 {
+            pnfs_layouttype4        type;
+            opaque                  layoutupdate_data<>;
+     };
+
+
+u64             offset4                 offset;
+u64             length4                 length;
+u64             length4                 last_write_offset;
+u32 + u64 + u32       newtime4                time_modify;
+u32 + u64 + u32       newtime4                time_access;
+u32             pnfs_layoutupdate4      layoutupdate;
+*/
+static __be32
+nfsd4_decode_layoutcommit(struct nfsd4_compoundargs *argp,
+			  struct nfsd4_pnfs_layoutcommit *lcp)
+{
+	DECODE_HEAD;
+	u32 timechange;
+
+	READ_BUF(20);
+	READ64(lcp->lc_seg.offset);
+	READ64(lcp->lc_seg.length);
+	READ32(lcp->lc_reclaim);
+	nfsd4_decode_stateid(argp, &lcp->lc_sid);
+	READ_BUF(4);
+	READ32(lcp->lc_newoffset);
+	if (lcp->lc_newoffset) {
+		READ_BUF(8);
+		READ64(lcp->lc_last_wr);
+	} else
+		lcp->lc_last_wr = 0;
+	READ_BUF(4);
+	READ32(timechange);
+	if (timechange) {
+		READ_BUF(12);
+		READ64(lcp->lc_mtime.seconds);
+		READ32(lcp->lc_mtime.nseconds);
+	} else {
+		lcp->lc_mtime.seconds = 0;
+		lcp->lc_mtime.nseconds = 0;
+	}
+	READ_BUF(8);
+	READ32(lcp->lc_seg.layout_type);
+	/* XXX: saving XDR'ed layout update. Since we don't have the
+	 * current_fh yet, and therefore no export_ops, we can't call
+	 * the layout specific decode routines. File and pVFS2
+	 * do not use the layout update....
+	 */
+	READ32(lcp->lc_up_len);
+	if (lcp->lc_up_len > 0) {
+		READ_BUF(lcp->lc_up_len);
+		READMEM(lcp->lc_up_layout, lcp->lc_up_len);
+	}
+
+	DECODE_TAIL;
+}
 #endif /* CONFIG_PNFSD */
 
 static __be32
@@ -1461,7 +1521,7 @@ static nfsd4_dec nfsd41_dec_ops[] = {
 #if defined(CONFIG_PNFSD)
 	[OP_GETDEVICEINFO]	(nfsd4_dec)nfsd4_decode_getdevinfo,
 	[OP_GETDEVICELIST]	(nfsd4_dec)nfsd4_decode_getdevlist,
-	[OP_LAYOUTCOMMIT]	(nfsd4_dec)nfsd4_decode_notsupp,
+	[OP_LAYOUTCOMMIT]	(nfsd4_dec)nfsd4_decode_layoutcommit,
 	[OP_LAYOUTGET]		(nfsd4_dec)nfsd4_decode_layoutget,
 	[OP_LAYOUTRETURN]	(nfsd4_dec)nfsd4_decode_notsupp,
 #else  /* CONFIG_PNFSD */
@@ -3528,6 +3588,33 @@ nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
 
 	return nfs_ok;
 }
+
+/* LAYOUTCOMMIT: minorversion1-19.txt
+     struct LAYOUTCOMMIT4resok {
+            newsize4                 newsize;
+     };
+
+*/
+static __be32
+nfsd4_encode_layoutcommit(struct nfsd4_compoundres *resp, int nfserr,
+			  struct nfsd4_pnfs_layoutcommit *lcp)
+{
+	ENCODE_HEAD;
+
+	if (nfserr)
+		goto out;
+
+	RESERVE_SPACE(4);
+	WRITE32(lcp->lc_size_chg);
+	ADJUST_ARGS();
+	if (lcp->lc_size_chg) {
+		RESERVE_SPACE(8);
+		WRITE64(lcp->lc_newsize);
+		ADJUST_ARGS();
+	}
+out:
+	return nfserr;
+}
 #endif /* CONFIG_PNFSD */
 
 static __be32
@@ -3593,7 +3680,7 @@ static nfsd4_enc nfsd4_enc_ops[] = {
 #if defined(CONFIG_PNFSD)
 	[OP_GETDEVICEINFO]	= (nfsd4_enc)nfsd4_encode_getdevinfo,
 	[OP_GETDEVICELIST]	= (nfsd4_enc)nfsd4_encode_getdevlist,
-	[OP_LAYOUTCOMMIT]	= (nfsd4_enc)nfsd4_encode_noop,
+	[OP_LAYOUTCOMMIT]	= (nfsd4_enc)nfsd4_encode_layoutcommit,
 	[OP_LAYOUTGET]		= (nfsd4_enc)nfsd4_encode_layoutget,
 	[OP_LAYOUTRETURN]	= (nfsd4_enc)nfsd4_encode_noop,
 #else  /* CONFIG_PNFSD */

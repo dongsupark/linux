@@ -967,6 +967,89 @@ out:
 }
 
 static __be32
+nfsd4_layoutcommit(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_layoutcommit *lcp)
+{
+	int status;
+	struct inode *ino = NULL;
+	struct iattr ia;
+	struct super_block *sb;
+	struct svc_fh *current_fh = &cstate->current_fh;
+
+	dprintk("NFSD: nfsd4_layoutcommit \n");
+	status = fh_verify(rqstp, current_fh, 0, NFSD_MAY_NOP);
+	if (status) {
+		printk("%s: verify filehandle failed\n", __func__);
+		goto out;
+	}
+
+	status = nfserr_inval;
+	ino = current_fh->fh_dentry->d_inode;
+	if (!ino)
+		goto out;
+
+	status = nfserr_inval;
+	sb = ino->i_sb;
+	if (!sb)
+		goto out;
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(sb, lcp->lc_seg.layout_type);
+	if (status)
+		goto out;
+
+	/* This will only extend the file length.  Do a quick
+	 * check to see if there is any point in waiting for the update
+	 * locks.
+	 * TODO: Is this correct for all back ends?
+	 */
+	dprintk("%s:new offset: %d new size: %llu old size: %lld\n",
+		__func__, lcp->lc_newoffset, lcp->lc_last_wr + 1, ino->i_size);
+
+	fh_lock(current_fh);
+	if ((lcp->lc_newoffset == 0) ||
+	    ((lcp->lc_last_wr + 1) <= ino->i_size)) {
+		status = 0;
+		lcp->lc_size_chg = 0;
+		fh_unlock(current_fh);
+		goto out;
+	}
+
+	/* Set clientid from sessionid */
+	copy_clientid((clientid_t *)&lcp->lc_seg.clientid, cstate->session);
+
+	/* Try our best to update the file size */
+	dprintk("%s: Modifying file size\n", __func__);
+	ia.ia_valid = ATTR_SIZE;
+	ia.ia_size = lcp->lc_last_wr + 1;
+	if (sb->s_pnfs_op->layout_commit) {
+		status = sb->s_pnfs_op->layout_commit(ino, lcp);
+		dprintk("%s:layout_commit result %d\n", __func__, status);
+	} else {
+		status = notify_change(current_fh->fh_dentry, &ia);
+		dprintk("%s:notify_change result %d\n", __func__, status);
+	}
+
+	fh_unlock(current_fh);
+
+	if (!status) {
+		if (EX_ISSYNC(current_fh->fh_export)) {
+			dprintk("%s:Synchronously writing inode size %llu\n",
+				__func__, ino->i_size);
+			write_inode_now(ino, 1);
+		}
+		lcp->lc_size_chg = 1;
+		lcp->lc_newsize = ino->i_size;
+		status = 0;
+	}
+out:
+	return status;
+}
+
+static __be32
 nfsd4_getdevinfo(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *cstate,
 		struct nfsd4_pnfs_getdevinfo *gdp)
@@ -1384,6 +1467,10 @@ static struct nfsd4_operation nfsd4_ops[] = {
 	[OP_LAYOUTGET] = {
 		.op_func = (nfsd4op_func)nfsd4_layoutget,
 		.op_name = "OP_LAYOUTGET",
+	},
+	[OP_LAYOUTCOMMIT] = {
+		.op_func = (nfsd4op_func)nfsd4_layoutcommit,
+		.op_name = "OP_LAYOUTCOMMIT",
 	},
 #endif /* CONFIG_PNFSD */
 };

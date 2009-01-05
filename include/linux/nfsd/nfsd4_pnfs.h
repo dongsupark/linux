@@ -38,6 +38,7 @@
 
 #if defined(CONFIG_PNFSD)
 
+#include <linux/nfs_xdr.h>
 #include <linux/exportfs.h>
 
 typedef struct {
@@ -146,6 +147,19 @@ struct nfsd4_pnfs_layoutget {
 	stateid_t		lg_sid;		/* request/response */
 };
 
+struct nfsd4_pnfs_layoutcommit {
+	struct nfsd4_layout_seg	lc_seg;		/* request */
+	u32			lc_reclaim;	/* request */
+	u32			lc_newoffset;	/* request */
+	u64			lc_last_wr;	/* request */
+	struct nfstime4		lc_mtime;	/* request */
+	stateid_t		lc_sid;		/* request */
+	u32			lc_up_len;	/* layout length */
+	void			*lc_up_layout;	/* decoded by callback */
+	u32			lc_size_chg;	/* boolean for response */
+	u64			lc_newsize;	/* response */
+};
+
 struct pnfs_export_operations {
 	/* Returns the supported pnfs_layouttype4. */
 	int (*layout_type) (struct super_block *);
@@ -170,6 +184,8 @@ struct pnfs_export_operations {
 	 * layout on xdr stream.
 	 */
 	int (*layout_get) (struct inode *, struct pnfs_layoutget_arg *);
+	/* Commit changes to layout */
+	int (*layout_commit) (struct inode *, struct nfsd4_pnfs_layoutcommit *);
 	/* Can layout segments be merged for this layout type? */
 	int (*can_merge_layouts) (u32 layout_type);
 };
