@@ -126,8 +126,14 @@ struct nfsd4_layout_seg {
 
 /* Used by layout_get to encode layout (loc_body var in spec)
  * Args:
- * xdr - xdr stream
- * layout - pointer to layout to be encoded
+ * minlength - min number of accessible bytes given by layout
+ * func - per layout encoding function
+ * export_id - Major part of deviceid_t.  File system uses this
+ * to build the deviceid returned in the layout.
+ * fh - fs can modify the file handle for use on data servers
+ * seg - layout info requested and layout info returned
+ * xdr - xdr info
+ * return_on_close - true if layout to be returned on file close
  * TODO: use common func with dev?
  */
 typedef int (*pnfs_encodelayout_t)(struct pnfs_xdr_info *xdr, void *layout);
@@ -263,7 +269,13 @@ struct export_operations {
 		/* pNFS: returns the layout */
 	int (*layout_return) (struct inode *inode, void *p);
 
+		/* callback from fs on MDS only */
+	int (*cb_get_state) (struct super_block *sb, void *state);
 	int (*cb_layout_recall) (struct super_block *sb, struct inode *inode, void *p);
+		/* call fs on DS only */
+	int (*get_state) (struct inode *inode, void *fh, void *state);
+		/* callback from fs on DS only */
+	int (*cb_change_state) (void *p);
 #endif /* CONFIG_PNFSD */
 };
 

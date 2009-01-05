@@ -360,6 +360,24 @@ static void svc_export_request(struct cache_detail *cd,
 }
 
 #if defined(CONFIG_PNFSD)
+static int cb_get_state(struct super_block *sb, void *p)
+{
+	struct pnfs_get_state *os = (struct pnfs_get_state *)p;
+
+	dprintk("cb_get_state os %p\n", os);
+
+	return nfs4_pnfs_cb_get_state(sb, os);
+}
+
+static int cb_change_state(void *p)
+{
+	struct pnfs_get_state *os = (struct pnfs_get_state *)p;
+
+	dprintk("cb_change_state os %p\n", os);
+
+	return nfs4_pnfs_cb_change_state(os);
+}
+
 static int cb_layout_recall(struct super_block *sb, struct inode *inode,
 			    void *p)
 {
@@ -406,6 +424,11 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 	}
 
 #if defined(CONFIG_PNFSD)
+	dprintk("set cb_get_state %p\n", cb_get_state);
+	if (!inode->i_sb->s_export_op->cb_get_state)
+		inode->i_sb->s_export_op->cb_get_state = cb_get_state;
+	if (!inode->i_sb->s_export_op->cb_change_state)
+		inode->i_sb->s_export_op->cb_change_state = cb_change_state;
 	if (!inode->i_sb->s_export_op->cb_layout_recall)
 		inode->i_sb->s_export_op->cb_layout_recall = cb_layout_recall;
 #endif /* CONFIG_PNFSD */
