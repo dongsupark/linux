@@ -442,6 +442,7 @@ struct nfsd4_op {
 #if defined(CONFIG_PNFSD)
 		struct nfsd4_pnfs_getdevlist	pnfs_getdevlist;
 		struct nfsd4_pnfs_getdevinfo	pnfs_getdevinfo;
+		struct nfsd4_pnfs_layoutget	pnfs_layoutget;
 #endif /* CONFIG_PNFSD */
 #if defined(CONFIG_NFSD_V4_1)
 		struct nfsd4_exchange_id	exchange_id;

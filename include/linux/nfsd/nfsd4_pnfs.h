@@ -59,6 +59,15 @@ struct nfsd4_pnfs_getdevinfo {
 	struct super_block *gd_sb;
 };
 
+struct nfsd4_pnfs_layoutget {
+	struct nfsd4_layout_seg	lg_seg;		/* request */
+	u32			lg_signal;	/* request */
+	u64			lg_minlength;	/* request */
+	u32			lg_maxcount;	/* request */
+	struct svc_fh		*lg_fhp;	/* response */
+	stateid_t		lg_sid;		/* request/response */
+};
+
 #endif /* CONFIG_PNFSD */
 
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */

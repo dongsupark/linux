@@ -115,6 +115,34 @@ struct pnfs_deviter_arg {
 	u64 devid;	/* response */
 	u32 eof;	/* response */
 };
+
+struct nfsd4_layout_seg {
+	u64	clientid;
+	u32	layout_type;
+	u32	iomode;
+	u64	offset;
+	u64	length;
+};
+
+/* Used by layout_get to encode layout (loc_body var in spec)
+ * Args:
+ * xdr - xdr stream
+ * layout - pointer to layout to be encoded
+ * TODO: use common func with dev?
+ */
+typedef int (*pnfs_encodelayout_t)(struct pnfs_xdr_info *xdr, void *layout);
+
+/* Arguments for layoutget */
+struct pnfs_layoutget_arg {
+	u64			minlength;	/* request */
+	pnfs_encodelayout_t 	func;		/* request */
+	u64			fsid;		/* request */
+	struct knfsd_fh		*fh;		/* request/response */
+	struct nfsd4_layout_seg	seg;		/* request/response */
+	struct pnfs_xdr_info	xdr;		/* request/response */
+	u32			return_on_close;/* response */
+};
+
 #endif /* CONFIG_PNFSD */
 
 struct fid {
@@ -219,6 +247,17 @@ struct export_operations {
 	/* Retrieve all available devices via an iterator */
 	int (*get_device_iter) (struct super_block *sb,
 				struct pnfs_deviter_arg *arg);
+		/* can layout segments be merged for this layout type? */
+	int (*can_merge_layouts)(u32 layout_type);
+	/* Retrieve and encode a layout onto the xdr stream.
+	 * Args:
+	 * inode - inode for which to retrieve layout
+	 * arg.xdr - xdr stream for encoding
+	 * arg.func - Optional function called by file system to encode
+	 * layout on xdr stream.
+	 */
+	int (*layout_get) (struct inode *inode,
+			   struct pnfs_layoutget_arg *arg);
 #endif /* CONFIG_PNFSD */
 };
 
