@@ -905,6 +905,67 @@ out:
 	return status;
 }
 
+/*
+ * NOTE: to implement CB_LAYOUTRECALL, need to associate layouts with clientid
+ */
+static __be32
+nfsd4_layoutget(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_layoutget *lgp)
+{
+	int status;
+	struct super_block *sb;
+	struct svc_fh *current_fh = &cstate->current_fh;
+
+	status = fh_verify(rqstp, current_fh, 0, NFSD_MAY_NOP);
+	if (status) {
+		printk("pNFS %s: verify filehandle failed\n", __func__);
+		goto out;
+	}
+
+	status = nfserr_inval;
+	sb = current_fh->fh_dentry->d_inode->i_sb;
+	if (!sb)
+		goto out;
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(sb, lgp->lg_seg.layout_type);
+	if (status)
+		goto out;
+
+	/* check to see if pNFS is supported. */
+	status = nfserr_layoutunavailable;
+	if (!sb->s_pnfs_op->layout_get) {
+		printk(KERN_INFO "pNFS %s: Underlying file system "
+		       "does not support layout_get\n", __func__);
+		goto out;
+	}
+
+	status = nfserr_inval;
+	if (lgp->lg_seg.iomode != IOMODE_READ &&
+	    lgp->lg_seg.iomode != IOMODE_RW &&
+	    lgp->lg_seg.iomode != IOMODE_ANY) {
+		dprintk("pNFS %s: invalid iomode %d\n", __func__,
+			lgp->lg_seg.iomode);
+		goto out;
+	}
+
+	status = nfserr_badiomode;
+	if (lgp->lg_seg.iomode == IOMODE_ANY) {
+		dprintk("pNFS %s: IOMODE_ANY is not allowed\n", __func__);
+		goto out;
+	}
+
+	/* Set up arguments so layout can be retrieved at encode time */
+	lgp->lg_fhp = current_fh;
+	copy_clientid((clientid_t *)&lgp->lg_seg.clientid, cstate->session);
+	status = nfs_ok;
+out:
+	return status;
+}
+
 static __be32
 nfsd4_getdevinfo(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *cstate,
@@ -1319,6 +1380,10 @@ static struct nfsd4_operation nfsd4_ops[] = {
 		.op_func = (nfsd4op_func)nfsd4_getdevinfo,
 		.op_flags = ALLOWED_WITHOUT_FH,
 		.op_name = "OP_GETDEVICEINFO",
+	},
+	[OP_LAYOUTGET] = {
+		.op_func = (nfsd4op_func)nfsd4_layoutget,
+		.op_name = "OP_LAYOUTGET",
 	},
 #endif /* CONFIG_PNFSD */
 };

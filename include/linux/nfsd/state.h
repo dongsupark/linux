@@ -232,7 +232,31 @@ struct nfs4_client {
 	struct svc_xprt		*cl_cb_xprt;	/* 4.1 callback transport */
 	struct rpc_wait_queue	cl_cb_waitq;	/* backchannel callers may */
 						/* wait here for slots */
+#if defined(CONFIG_PNFSD)
+	struct list_head	cl_layouts;	/* outstanding layouts */
+#endif /* CONFIG_PNFSD */
 };
+
+struct nfs4_fsid {
+        u64     major;
+        u64     minor;
+};
+
+#if defined(CONFIG_PNFSD)
+
+#include <linux/nfsd/nfsd4_pnfs.h>
+
+/* outstanding layout */
+struct nfs4_layout {
+	struct list_head	lo_perfile;	/* hash by f_id */
+	struct list_head	lo_perclnt;	/* hash by clientid */
+	struct list_head	lo_recall_lru; /* when in recall */
+	struct nfs4_file	*lo_file;	/* backpointer */
+	struct nfs4_client	*lo_client;
+	struct nfsd4_layout_seg lo_seg;
+};
+
+#endif /* CONFIG_PNFSD */
 
 /* struct nfs4_client_reset
  * one per old client. Populates reset_str_hashtbl. Filled from conf_id_hashtbl
@@ -320,10 +344,19 @@ struct nfs4_file {
 	struct list_head        fi_hash;    /* hash by "struct inode *" */
 	struct list_head        fi_stateids;
 	struct list_head	fi_delegations;
+#if defined(CONFIG_PNFSD)
+	struct list_head	fi_layouts;
+#endif /* CONFIG_PNFSD */
 	struct inode		*fi_inode;
 	u32                     fi_id;      /* used with stateowner->so_id 
 					     * for stateid_hashtbl hash */
 	bool			fi_had_conflict;
+#if defined(CONFIG_PNFSD)
+	/* used by layoutget / layoutrecall */
+	struct nfs4_fsid	fi_fsid;
+	u32			fi_fhlen;
+	u8			fi_fhval[NFS4_FHSIZE];
+#endif /* CONFIG_PNFSD */
 };
 
 /*

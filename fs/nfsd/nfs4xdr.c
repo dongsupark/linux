@@ -59,6 +59,7 @@
 #include <linux/sunrpc/svcauth_gss.h>
 #if defined(CONFIG_PNFSD)
 #include <linux/exportfs.h>
+#include <linux/nfsd/pnfsd.h>
 #endif /* CONFIG_PNFSD */
 
 #define NFSDDBG_FACILITY		NFSDDBG_XDR
@@ -1325,6 +1326,35 @@ nfsd4_decode_getdevinfo(struct nfsd4_compoundargs *argp,
 
 	DECODE_TAIL;
 }
+
+/* LAYOUTGET: minorversion1-19.txt
+u32     int32                   signal_layout_available;
+u32     pnfs_layouttype4        layout_type;
+u32     pnfs_layoutiomode4      iomode;
+u64     offset4                 offset;
+u64     length4                 length;
+u64     length4                 minlength;
+u32     count4                  maxcount;
+*/
+static __be32
+nfsd4_decode_layoutget(struct nfsd4_compoundargs *argp,
+			struct nfsd4_pnfs_layoutget *lgp)
+{
+	DECODE_HEAD;
+
+	READ_BUF(36);
+	READ32(lgp->lg_signal);
+	READ32(lgp->lg_seg.layout_type);
+	READ32(lgp->lg_seg.iomode);
+	READ64(lgp->lg_seg.offset);
+	READ64(lgp->lg_seg.length);
+	READ64(lgp->lg_minlength);
+	nfsd4_decode_stateid(argp, &lgp->lg_sid);
+	READ_BUF(4);
+	READ32(lgp->lg_maxcount);
+
+	DECODE_TAIL;
+}
 #endif /* CONFIG_PNFSD */
 
 static __be32
@@ -1432,7 +1462,7 @@ static nfsd4_dec nfsd41_dec_ops[] = {
 	[OP_GETDEVICEINFO]	(nfsd4_dec)nfsd4_decode_getdevinfo,
 	[OP_GETDEVICELIST]	(nfsd4_dec)nfsd4_decode_getdevlist,
 	[OP_LAYOUTCOMMIT]	(nfsd4_dec)nfsd4_decode_notsupp,
-	[OP_LAYOUTGET]		(nfsd4_dec)nfsd4_decode_notsupp,
+	[OP_LAYOUTGET]		(nfsd4_dec)nfsd4_decode_layoutget,
 	[OP_LAYOUTRETURN]	(nfsd4_dec)nfsd4_decode_notsupp,
 #else  /* CONFIG_PNFSD */
 	[OP_GETDEVICEINFO]	(nfsd4_dec)nfsd4_decode_notsupp,
@@ -3393,6 +3423,111 @@ toosmall:
 	ADJUST_ARGS();
 	goto out;
 }
+
+/* LAYOUTGET: minorversion1-19.txt
+       struct LAYOUTGET4resok {
+u32            bool                    logr_return_on_close;
+opaque[16]     stateid4                logr_stateid;
+u32 + array    layout4                 logr_layout<>;
+       };
+
+       struct layout4 {
+u64            offset4                 lo_offset;
+u64            length4                 lo_length;
+u32            layoutiomode4           lo_iomode;
+               layout_content4         lo_content;
+       };
+
+       struct layout_content4 {
+u32            layouttype4             loc_type;
+u32 + len      opaque                  loc_body<>;
+       };
+*/
+static __be32
+nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
+		       int nfserr,
+		       struct nfsd4_pnfs_layoutget *lgp)
+{
+	int maxcount, leadcount;
+	struct super_block *sb;
+	unsigned int *p_start = resp->p;
+	struct pnfs_layoutget_arg args = {
+		.return_on_close = 0,
+	};
+	ENCODE_HEAD;
+
+	dprintk("%s: err %d\n", __func__, nfserr);
+	if (nfserr)
+		return nfserr;
+
+	sb = lgp->lg_fhp->fh_dentry->d_inode->i_sb;
+	maxcount = PAGE_SIZE;
+	if (maxcount > lgp->lg_maxcount)
+		maxcount = lgp->lg_maxcount;
+
+	/* Check for space on xdr stream */
+	leadcount = 36 + sizeof(stateid_opaque_t);
+	RESERVE_SPACE(leadcount);
+	/* encode layout metadata after file system encodes layout */
+	p += XDR_QUADLEN(leadcount);
+	ADJUST_ARGS();
+
+	/* Ensure have room for ret_on_close, off, len, iomode, type */
+	maxcount -= leadcount;
+	if (maxcount < 0) {
+		printk(KERN_ERR "%s: buffer too small\n", __func__);
+		return nfserr_toosmall;
+	}
+
+	/* Set args for call to fs */
+	args.minlength = lgp->lg_minlength;
+	args.seg = lgp->lg_seg;
+	args.fh = &lgp->lg_fhp->fh_handle;
+	args.fsid = lgp->lg_fhp->fh_export->ex_fsid;
+
+	/* Set xdr info so file system can encode layout */
+	args.xdr.resp = resp;
+	args.xdr.maxcount = maxcount;
+
+	/* Retrieve, encode, and merge layout */
+	nfserr = nfs4_pnfs_get_layout(lgp->lg_fhp, &args);
+	if (nfserr)
+		return nfserr;
+
+	/* Ensure file system returned enough bytes for the client
+	 * to access.
+	 */
+	if (args.seg.length < lgp->lg_minlength)
+		return nfserr_badlayout;
+
+	/* The file system should never write 0 bytes without
+	 * returning an error
+	 */
+	BUG_ON(args.xdr.bytes_written <= 0);
+
+	/* Rewind to beginning and encode attrs */
+	resp->p = p_start;
+	RESERVE_SPACE(4);
+	WRITE32(args.return_on_close);
+	ADJUST_ARGS();
+	nfsd4_encode_stateid(resp, &lgp->lg_sid);
+	RESERVE_SPACE(28);
+	/* FIXME: response logr_layout array count, always one for now */
+	WRITE32(1);
+	WRITE64(args.seg.offset);
+	WRITE64(args.seg.length);
+	WRITE32(args.seg.iomode);
+	WRITE32(args.seg.layout_type);
+	ADJUST_ARGS();
+
+	/* Update the xdr stream with the number of bytes written
+	 * by the file system
+	 */
+	p += XDR_QUADLEN(args.xdr.bytes_written);
+	ADJUST_ARGS();
+
+	return nfs_ok;
+}
 #endif /* CONFIG_PNFSD */
 
 static __be32
@@ -3459,7 +3594,7 @@ static nfsd4_enc nfsd4_enc_ops[] = {
 	[OP_GETDEVICEINFO]	= (nfsd4_enc)nfsd4_encode_getdevinfo,
 	[OP_GETDEVICELIST]	= (nfsd4_enc)nfsd4_encode_getdevlist,
 	[OP_LAYOUTCOMMIT]	= (nfsd4_enc)nfsd4_encode_noop,
-	[OP_LAYOUTGET]		= (nfsd4_enc)nfsd4_encode_noop,
+	[OP_LAYOUTGET]		= (nfsd4_enc)nfsd4_encode_layoutget,
 	[OP_LAYOUTRETURN]	= (nfsd4_enc)nfsd4_encode_noop,
 #else  /* CONFIG_PNFSD */
 	[OP_GETDEVICEINFO]	= (nfsd4_enc)nfsd4_encode_noop,
