@@ -464,6 +464,7 @@ extern void nfsd4_recdir_purge_old(void);
 extern int nfsd4_create_clid_dir(struct nfs4_client *clp);
 extern void nfsd4_remove_clid_dir(struct nfs4_client *clp);
 #if defined(CONFIG_PNFSD)
+extern int nfs4_preprocess_pnfs_ds_stateid(struct svc_fh *, stateid_t *);
 extern int nfsd4_cb_layout(struct nfs4_layoutrecall *lp);
 extern void nfs4_ds_get_verifier(stateid_t *stateid,
 				 struct super_block *sb, u32 *p);

@@ -479,6 +479,56 @@ out_noput:
 	return dsp;
 }
 
+int
+nfs4_preprocess_pnfs_ds_stateid(struct svc_fh *cfh, stateid_t *stateid)
+{
+	struct pnfs_ds_stateid *dsp;
+	int status = 0;
+
+	dprintk("pNFSD: %s --> " STATEID_FMT "\n", __func__,
+		STATEID_VAL(stateid));
+
+	/* Must release state lock while verifying stateid on mds */
+	nfs4_unlock_state();
+	ds_lock_state();
+	dsp = nfsv4_ds_get_state(cfh, stateid);
+	if (dsp) {
+		get_ds_stateid(dsp);
+		dprintk("pNFSD: %s Found " STATEID_FMT "\n", __func__,
+			STATEID_VAL(&dsp->ds_stid));
+	}
+
+	dprintk("NFSD: %s: dsp %p fh_size %u:%u "
+		"fh [%08x:%08x:%08x:%08x]:[%08x:%08x:%08x:%08x] "
+		"gen %x:%x\n",
+		__func__, dsp, cfh->fh_handle.fh_size, dsp->ds_fh.fh_size,
+		((unsigned*)&cfh->fh_handle.fh_base)[0],
+		((unsigned*)&cfh->fh_handle.fh_base)[1],
+		((unsigned*)&cfh->fh_handle.fh_base)[2],
+		((unsigned*)&cfh->fh_handle.fh_base)[3],
+		((unsigned*)&dsp->ds_fh.fh_base)[0],
+		((unsigned*)&dsp->ds_fh.fh_base)[1],
+		((unsigned*)&dsp->ds_fh.fh_base)[2],
+		((unsigned*)&dsp->ds_fh.fh_base)[3],
+		stateid->si_generation, dsp->ds_stid.si_generation);
+
+	if (!dsp ||
+	    (cfh->fh_handle.fh_size != dsp->ds_fh.fh_size) ||
+	    (memcmp(&cfh->fh_handle.fh_base, &dsp->ds_fh.fh_base,
+		    dsp->ds_fh.fh_size) != 0) ||
+	    (stateid->si_generation > dsp->ds_stid.si_generation))
+		status = nfserr_bad_stateid;
+	else if (stateid->si_generation < dsp->ds_stid.si_generation)
+		status = nfserr_old_stateid;
+
+	if (dsp)
+		put_ds_stateid(dsp);
+	ds_unlock_state();
+	nfs4_lock_state();
+	dprintk("pNFSD: %s <-- status %d\n", __func__, be32_to_cpu(status));
+	return status;
+}
+
 void
 nfs4_ds_get_verifier(stateid_t *stateid, struct super_block *sb, u32 *p)
 {
