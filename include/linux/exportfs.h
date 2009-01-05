@@ -156,6 +156,8 @@ struct export_operations {
 	/* pNFS operations */
 		/* pNFS: returns the verifier */
 	void (*get_verifier) (struct super_block *sb, u32 *p);
+		/* pNFS: Returns the supported pnfs_layouttype4. */
+	int (*layout_type)(struct super_block *sb);
 #endif /* CONFIG_PNFSD */
 };
 
