@@ -260,6 +260,8 @@ struct export_operations {
 			   struct pnfs_layoutget_arg *arg);
 		/* pNFS: commit changes to layout */
 	int (*layout_commit) (struct inode *inode, void *p);
+		/* pNFS: returns the layout */
+	int (*layout_return) (struct inode *inode, void *p);
 #endif /* CONFIG_PNFSD */
 };
 
