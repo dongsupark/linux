@@ -859,6 +859,96 @@ nfsd4_layout_verify(struct super_block *sb, unsigned int layout_type)
 out:
 	return status;
 }
+
+static __be32
+nfsd4_getdevlist(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_getdevlist *gdlp)
+{
+	struct super_block *sb;
+	struct svc_fh *current_fh = &cstate->current_fh;
+	int status;
+
+	dprintk("%s: type %u maxnum %u cookie %llu verf %llu\n",
+		__func__, gdlp->gd_type, gdlp->gd_maxnum,
+		gdlp->gd_cookie, gdlp->gd_verf);
+
+
+	status = fh_verify(rqstp, current_fh, 0, NFSD_MAY_NOP);
+	if (status) {
+		printk("pNFS %s: verify filehandle failed\n", __func__);
+		goto out;
+	}
+
+	status = nfserr_inval;
+	sb = current_fh->fh_dentry->d_inode->i_sb;
+	if (!sb)
+		goto out;
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(sb, gdlp->gd_type);
+	if (status)
+		goto out;
+
+	/* Do nothing if underlying file system does not support
+	 * getdevicelist */
+	if (!sb->s_pnfs_op->get_device_iter) {
+		status = nfserr_notsupp;
+		goto out;
+	}
+
+	/* Set up arguments so device can be retrieved at encode time */
+	gdlp->gd_fhp = &cstate->current_fh;
+out:
+	return status;
+}
+
+static __be32
+nfsd4_getdevinfo(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_getdevinfo *gdp)
+{
+	struct super_block *sb;
+	struct svc_export *exp = NULL;
+	u32 fsidv = gdp->gd_devid.pnfs_fsid;
+	int status;
+
+	dprintk("%s: type %u dev_id %llx:%llx maxcnt %u\n",
+	       __func__, gdp->gd_type, gdp->gd_devid.pnfs_fsid,
+	       gdp->gd_devid.pnfs_devid, gdp->gd_maxcount);
+
+	status = nfserr_inval;
+	exp = rqst_exp_find(rqstp, FSID_NUM, &fsidv);
+	dprintk("%s: exp %p\n", __func__, exp);
+	if (IS_ERR(exp)) {
+		status = nfserrno(PTR_ERR(exp));
+		goto out;
+	}
+	sb = exp->ex_path.dentry->d_inode->i_sb;
+	exp_put(exp);
+	dprintk("%s: sb %p\n", __func__, sb);
+	if (!sb)
+		goto out;
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(sb, gdp->gd_type);
+	if (status)
+		goto out;
+
+	if (!sb->s_pnfs_op->get_device_info) {
+		status = nfserr_notsupp;
+		goto out;
+	}
+
+	/* Set up arguments so device can be retrieved at encode time */
+	gdp->gd_sb = sb;
+out:
+	return status;
+}
 #endif /* CONFIG_PNFSD */
 
 /*
@@ -1220,6 +1310,17 @@ static struct nfsd4_operation nfsd4_ops[] = {
 		.op_flags = ALLOWED_WITHOUT_FH | ALLOWED_AS_FIRST_OP,
 		.op_name = "OP_SEQUENCE",
 	},
+#if defined(CONFIG_PNFSD)
+	[OP_GETDEVICELIST] = {
+		.op_func = (nfsd4op_func)nfsd4_getdevlist,
+		.op_name = "OP_GETDEVICELIST",
+	},
+	[OP_GETDEVICEINFO] = {
+		.op_func = (nfsd4op_func)nfsd4_getdevinfo,
+		.op_flags = ALLOWED_WITHOUT_FH,
+		.op_name = "OP_GETDEVICEINFO",
+	},
+#endif /* CONFIG_PNFSD */
 };
 
 static const char *nfsd4_op_name(unsigned opnum)
