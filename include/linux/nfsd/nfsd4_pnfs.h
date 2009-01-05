@@ -38,6 +38,7 @@
 
 #if defined(CONFIG_PNFSD)
 
+#include <linux/nfs_xdr.h>
 #include <linux/exportfs.h>
 
 /* pNFS structs */
@@ -66,6 +67,19 @@ struct nfsd4_pnfs_layoutget {
 	u32			lg_maxcount;	/* request */
 	struct svc_fh		*lg_fhp;	/* response */
 	stateid_t		lg_sid;		/* request/response */
+};
+
+struct nfsd4_pnfs_layoutcommit {
+	struct nfsd4_layout_seg	lc_seg;		/* request */
+	u32			lc_reclaim;	/* request */
+	u32			lc_newoffset;	/* request */
+	u64			lc_last_wr;	/* request */
+	struct nfstime4		lc_mtime;	/* request */
+	stateid_t		lc_sid;		/* request */
+	u32			lc_up_len;	/* layout length */
+	void			*lc_up_layout;	/* decoded by callback */
+	u32			lc_size_chg;	/* boolean for response */
+	u64			lc_newsize;	/* response */
 };
 
 #endif /* CONFIG_PNFSD */
