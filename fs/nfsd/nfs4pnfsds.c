@@ -157,7 +157,7 @@ find_pnfs_ds_clientid(clientid_t *clid)
 	return NULL;
 }
 
-struct pnfs_ds_stateid *
+static struct pnfs_ds_stateid *
 find_pnfs_ds_stateid(stateid_t *stid)
 {
 	struct pnfs_ds_stateid *local = NULL;
@@ -477,6 +477,41 @@ out_noput:
 		dsp = NULL;
 	dprintk("pNFSD: %s <-- dsp %p\n", __func__, dsp);
 	return dsp;
+}
+
+void
+nfs4_ds_get_verifier(stateid_t *stateid, struct super_block *sb, u32 *p)
+{
+	struct pnfs_ds_stateid *dsp = NULL;
+
+	if (!sb->s_pnfs_op->get_verifier)
+		return;
+
+	dprintk("pNFSD: %s --> stid %p\n", __func__, stateid);
+
+	ds_lock_state();
+	if (stateid != NULL) {
+		dsp = find_pnfs_ds_stateid(stateid);
+		if (dsp)
+			get_ds_stateid(dsp);
+	}
+
+	/* XXX: Should we fetch the stateid or wait if some other
+	 * thread is currently retrieving the stateid ? */
+	if (dsp && test_bit(DS_STATEID_VALID, &dsp->ds_flags)) {
+		*p++ = dsp->ds_verifier[0];
+		*p++ = dsp->ds_verifier[1];
+		put_ds_stateid(dsp);
+	} else {
+		/* must be on MDS */
+		ds_unlock_state();
+		sb->s_pnfs_op->get_verifier(sb, p);
+		ds_lock_state();
+		p += 2;
+	}
+	ds_unlock_state();
+	dprintk("pNFSD: %s <-- dsp %p\n", __func__, dsp);
+	return;
 }
 
 #endif /* CONFIG_PNFSD */
