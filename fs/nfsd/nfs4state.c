@@ -90,6 +90,7 @@ static void nfs4_set_recdir(char *recdir);
  * Layout state - NFSv4.1 pNFS
  */
 static struct kmem_cache *pnfs_layout_slab;
+static void destroy_layout(struct nfs4_layout *lp);
 #endif /* CONFIG_PNFSD */
 
 /* Locking: */
@@ -691,6 +692,9 @@ expire_client(struct nfs4_client *clp)
 	struct nfs4_stateowner *sop;
 	struct nfs4_delegation *dp;
 	struct list_head reaplist;
+#if defined(CONFIG_PNFSD)
+	struct nfs4_layout *lp;
+#endif /* CONFIG_PNFSD */
 
 	dprintk("NFSD: expire_client cl_count %d\n",
 	                    atomic_read(&clp->cl_count));
@@ -713,6 +717,15 @@ expire_client(struct nfs4_client *clp)
 	list_del(&clp->cl_idhash);
 	list_del(&clp->cl_strhash);
 	list_del(&clp->cl_lru);
+#if defined(CONFIG_PNFSD)
+	while (!list_empty(&clp->cl_layouts)) {
+		lp = list_entry(clp->cl_layouts.next, struct nfs4_layout, lo_perclnt);
+		dprintk("NFSD: expire client. lp %p, fp %p\n", lp,
+				lp->lo_file);
+		BUG_ON(lp->lo_client != clp);
+		destroy_layout(lp);
+	}
+#endif /* CONFIG_PNFSD */
 	while (!list_empty(&clp->cl_openowners)) {
 		sop = list_entry(clp->cl_openowners.next, struct nfs4_stateowner, so_perclient);
 		release_openowner(sop);
