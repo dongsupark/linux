@@ -31,6 +31,10 @@
 #include <linux/sunrpc/svc.h>
 #include <linux/nfsd/nfsd.h>
 #include <linux/nfsd/nfsfh.h>
+#if defined(CONFIG_PNFSD)
+#include <linux/nfsd/state.h>
+#include <linux/nfsd/pnfsd.h>
+#endif
 #include <linux/nfsd/syscall.h>
 #include <linux/lockd/bind.h>
 #include <linux/sunrpc/msg_prot.h>
@@ -355,6 +359,18 @@ static void svc_export_request(struct cache_detail *cd,
 	(*bpp)[-1] = '\n';
 }
 
+#if defined(CONFIG_PNFSD)
+static int cb_layout_recall(struct super_block *sb, struct inode *inode,
+			    void *p)
+{
+	struct nfsd4_pnfs_cb_layout *lr = p;
+
+	dprintk("cb_layout_recall lr %p\n", lr);
+
+	return nfsd_layout_recall_cb(sb, inode, lr);
+}
+#endif /* CONFIG_PNFSD */
+
 static struct svc_export *svc_export_update(struct svc_export *new,
 					    struct svc_export *old);
 static struct svc_export *svc_export_lookup(struct svc_export *);
@@ -388,6 +404,11 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 		dprintk("exp_export: export of invalid fs type.\n");
 		return -EINVAL;
 	}
+
+#if defined(CONFIG_PNFSD)
+	if (!inode->i_sb->s_export_op->cb_layout_recall)
+		inode->i_sb->s_export_op->cb_layout_recall = cb_layout_recall;
+#endif /* CONFIG_PNFSD */
 
 	return 0;
 

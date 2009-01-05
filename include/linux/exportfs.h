@@ -262,6 +262,8 @@ struct export_operations {
 	int (*layout_commit) (struct inode *inode, void *p);
 		/* pNFS: returns the layout */
 	int (*layout_return) (struct inode *inode, void *p);
+
+	int (*cb_layout_recall) (struct super_block *sb, struct inode *inode, void *p);
 #endif /* CONFIG_PNFSD */
 };
 
