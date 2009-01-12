@@ -133,6 +133,11 @@ struct nfs_server {
 						   that are supported on this
 						   filesystem */
 #endif
+
+#ifdef CONFIG_PNFS
+	u32				pnfs_fs_ltype;/* fs_layouttype attr */
+#endif /* CONFIG_PNFS */
+
 	void (*destroy)(struct nfs_server *);
 
 	atomic_t active; /* Keep trace of any activity to this server */

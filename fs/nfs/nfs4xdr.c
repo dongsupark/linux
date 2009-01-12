@@ -3557,6 +3557,54 @@ xdr_error:
 	return status;
 }
 
+#if defined(CONFIG_PNFS)
+/*
+ * Decode potentially multiple layout types. Currently we only support
+ * one layout driver per file system.
+ */
+static int decode_pnfs_list(struct xdr_stream *xdr, uint32_t *layoutclass)
+{
+	uint32_t *p;
+	int num;
+
+	READ_BUF(4);
+	READ32(num);
+
+	/* pNFS is not supported by the underlying file system */
+	if (num == 0) {
+		*layoutclass = 0;
+		return 0;
+	}
+
+	/* TODO: We will eventually support multiple layout drivers ? */
+	if (num > 1)
+		printk(KERN_INFO "%s: Warning: Multiple pNFS layout drivers "
+			"per filesystem not supported\n", __func__);
+
+	/* Decode and set first layout type */
+	READ_BUF(num * 4);
+	READ32(*layoutclass);
+	return 0;
+}
+
+/*
+ * The type of file system exported
+ */
+static int decode_attr_pnfstype(struct xdr_stream *xdr, uint32_t *bitmap,
+				uint32_t *layoutclass)
+{
+	int status = 0;
+
+	dprintk("%s: bitmap is %x\n", __func__, bitmap[1]);
+	if (unlikely(bitmap[1] & (FATTR4_WORD1_FS_LAYOUT_TYPES - 1U)))
+		return -EIO;
+	if (likely(bitmap[1] & FATTR4_WORD1_FS_LAYOUT_TYPES)) {
+		status = decode_pnfs_list(xdr, layoutclass);
+		bitmap[1] &= ~FATTR4_WORD1_FS_LAYOUT_TYPES;
+	}
+	return status;
+}
+#endif /* CONFIG_PNFS */
 
 static int decode_fsinfo(struct xdr_stream *xdr, struct nfs_fsinfo *fsinfo)
 {
@@ -3583,6 +3631,11 @@ static int decode_fsinfo(struct xdr_stream *xdr, struct nfs_fsinfo *fsinfo)
 	if ((status = decode_attr_maxwrite(xdr, bitmap, &fsinfo->wtmax)) != 0)
 		goto xdr_error;
 	fsinfo->wtpref = fsinfo->wtmax;
+#if defined(CONFIG_PNFS)
+	status = decode_attr_pnfstype(xdr, bitmap, &fsinfo->layoutclass);
+	if (status)
+		goto xdr_error;
+#endif /* CONFIG_PNFS */
 
 	status = verify_attr_len(xdr, savep, attrlen);
 xdr_error:
