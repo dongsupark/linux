@@ -985,6 +985,9 @@ struct nfs_write_data {
 };
 
 struct nfs_access_entry;
+#if defined(CONFIG_PNFS)
+struct nfs4_pnfs_layoutget;
+#endif /* CONFIG_PNFS */
 
 /*
  * RPC procedure vector for NFSv2/NFSv3 demuxing
