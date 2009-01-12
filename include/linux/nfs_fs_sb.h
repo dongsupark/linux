@@ -162,6 +162,9 @@ struct nfs_server {
 
 #ifdef CONFIG_NFS_V4_1
 	u32				pnfs_fs_ltype;/* fs_layouttype attr */
+	struct pnfs_layoutdriver_type  *pnfs_curr_ld; /* Active layout driver */
+	struct pnfs_mount_type         *pnfs_mountid; /* Mount identifier for
+							 layout driver */
 #endif /* CONFIG_NFS_V4_1 */
 
 	void (*destroy)(struct nfs_server *);

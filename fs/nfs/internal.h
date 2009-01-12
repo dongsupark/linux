@@ -201,6 +201,10 @@ extern const u32 nfs41_maxwrite_overhead;
 extern struct rpc_procinfo nfs4_procedures[];
 #endif
 
+#ifdef CONFIG_NFS_V4_1
+extern void pnfs_v4_clientops_init(void);
+#endif /* CONFIG_NFS_V4_1 */
+
 /* proc.c */
 void nfs_close_context(struct nfs_open_context *ctx, int is_sync);
 

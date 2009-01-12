@@ -64,6 +64,7 @@
 #include "iostat.h"
 #include "internal.h"
 #include "fscache.h"
+#include "pnfs.h"
 
 #define NFSDBG_FACILITY		NFSDBG_VFS
 
@@ -2540,6 +2541,20 @@ out_no_address:
 }
 
 /*
+ * Initialize the pNFS layout driver and setup pNFS related parameters
+ */
+static void nfs4_init_pnfs(struct super_block *sb, struct nfs_fh *fh)
+{
+#if defined(CONFIG_NFS_V4_1)
+	struct nfs_server *server = NFS_SB(sb);
+	struct nfs_client *clp = server->nfs_client;
+
+	if (nfs4_has_session(clp))
+		set_pnfs_layoutdriver(sb, fh, server->pnfs_fs_ltype);
+#endif /* CONFIG_NFS_V4_1 */
+}
+
+/*
  * Get the superblock for the NFS4 root partition
  */
 static int nfs4_remote_get_sb(struct file_system_type *fs_type,
@@ -2605,6 +2620,8 @@ static int nfs4_remote_get_sb(struct file_system_type *fs_type,
 	error = security_sb_set_mnt_opts(s, &data->lsm_opts);
 	if (error)
 		goto error_splat_root;
+
+	nfs4_init_pnfs(s, mntfh);
 
 	s->s_flags |= MS_ACTIVE;
 	mnt->mnt_sb = s;
@@ -2774,6 +2791,9 @@ static void nfs4_kill_super(struct super_block *sb)
 	dprintk("--> %s\n", __func__);
 	nfs_super_return_all_delegations(sb);
 	kill_anon_super(sb);
+#ifdef CONFIG_NFS_V4_1
+	unmount_pnfs_layoutdriver(sb);
+#endif
 	nfs_fscache_release_super_cookie(sb);
 	nfs_free_server(server);
 	dprintk("<-- %s\n", __func__);

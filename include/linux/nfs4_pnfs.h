@@ -20,13 +20,40 @@ struct pnfs_layoutdriver_type {
 	struct layoutdriver_policy_operations *ld_policy_ops;
 };
 
+/* Layout driver specific identifier for a mount point.  For each mountpoint
+ * a reference is stored in the nfs_server structure.
+ */
+struct pnfs_mount_type {
+	void *mountid;
+};
+
 /* Layout driver I/O operations.
  * Either the pagecache or non-pagecache read/write operations must be implemented
  */
 struct layoutdriver_io_operations {
+	/* Registration information for a new mounted file system
+	 */
+	struct pnfs_mount_type * (*initialize_mountpoint) (struct super_block *, struct nfs_fh *fh);
+	int (*uninitialize_mountpoint) (struct pnfs_mount_type *mountid);
 };
 
 struct layoutdriver_policy_operations {
 };
+
+/* pNFS client callback functions.
+ * These operations allow the layout driver to access pNFS client
+ * specific information or call pNFS client->server operations.
+ * E.g., getdeviceinfo, I/O callbacks, etc
+ */
+struct pnfs_client_operations {
+};
+
+extern struct pnfs_client_operations pnfs_ops;
+
+extern struct pnfs_client_operations *pnfs_register_layoutdriver(struct pnfs_layoutdriver_type *);
+extern void pnfs_unregister_layoutdriver(struct pnfs_layoutdriver_type *);
+
+#define NFS4_PNFS_MAX_LAYOUTS 4
+#define NFS4_PNFS_PRIVATE_LAYOUT 0x80000000
 
 #endif /* LINUX_NFS4_PNFS_H */

@@ -5370,6 +5370,18 @@ const struct nfs_rpc_ops nfs_v4_clientops = {
 	.close_context  = nfs4_close_context,
 };
 
+#if defined(CONFIG_NFS_V4_1)
+const struct nfs_rpc_ops pnfs_v4_clientops;
+
+void
+pnfs_v4_clientops_init(void)
+{
+	struct nfs_rpc_ops *p = (struct nfs_rpc_ops *)&pnfs_v4_clientops;
+
+	memcpy(p, &nfs_v4_clientops, sizeof(*p));
+}
+#endif /* CONFIG_NFS_V4_1 */
+
 /*
  * Local variables:
  *  c-basic-offset: 8

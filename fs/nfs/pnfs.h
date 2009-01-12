@@ -13,6 +13,12 @@
 #define FS_NFS_PNFS_H
 
 #ifdef CONFIG_NFS_V4_1
+
+/* pnfs.c */
+void set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id);
+void unmount_pnfs_layoutdriver(struct super_block *sb);
+int pnfs_initialize(void);
+void pnfs_uninitialize(void);
 #endif /* CONFIG_NFS_V4_1 */
 
 #endif /* FS_NFS_PNFS_H */
