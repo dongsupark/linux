@@ -14,6 +14,12 @@
 
 #ifdef CONFIG_PNFS
 
+#include <linux/nfs4_pnfs.h>
+#include <linux/pnfs_xdr.h>
+
+/* nfs4proc.c */
+extern int pnfs4_proc_layoutget(struct nfs4_pnfs_layoutget *lgp);
+
 /* pnfs.c */
 void set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id);
 void unmount_pnfs_layoutdriver(struct super_block *sb);
