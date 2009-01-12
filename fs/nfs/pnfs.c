@@ -41,6 +41,7 @@
 #include <linux/smp_lock.h>
 #include <linux/nfs_fs.h>
 #include <linux/nfs_mount.h>
+#include <linux/pnfs_xdr.h>
 #include <linux/nfs4_pnfs.h>
 
 #include "internal.h"
@@ -192,6 +193,52 @@ pnfs_unregister_layoutdriver(struct pnfs_layoutdriver_type *ld_type)
 		spin_unlock(&pnfs_spinlock);
 		kfree(pnfs_mod);
 	}
+}
+
+/*
+* Get layout from server.
+*    for now, assume that whole file layouts are requested.
+*    arg->offset: 0
+*    arg->length: all ones
+*
+*    for now, assume the LAYOUTGET operation is triggered by an I/O request.
+*    the count field is the count in the I/O request, and will be used
+*    as the minlength. for the file operation that piggy-backs
+*    the LAYOUTGET operation with an OPEN, s
+*    arg->minlength = count.
+*/
+static int
+get_layout(struct inode *ino,
+	   struct nfs_open_context *ctx,
+	   struct nfs4_pnfs_layout_segment *range,
+	   struct pnfs_layout_segment **lsegpp,
+	   struct pnfs_layout_type *lo)
+{
+	int status;
+	struct nfs_server *server = NFS_SERVER(ino);
+	struct nfs4_pnfs_layoutget *lgp;
+
+	dprintk("--> %s\n", __func__);
+
+	lgp = kzalloc(sizeof(*lgp), GFP_KERNEL);
+	if (lgp == NULL)
+		return -ENOMEM;
+	lgp->lo = lo;
+	lgp->args.lseg.iomode = range->iomode;
+	lgp->args.lseg.offset = range->offset;
+	lgp->args.lseg.length = range->length;
+	lgp->args.type = server->pnfs_curr_ld->id;
+	lgp->args.minlength = lgp->args.lseg.length;
+	lgp->args.maxcount = PNFS_LAYOUT_MAXSIZE;
+	lgp->args.inode = ino;
+	lgp->args.ctx = ctx;
+	lgp->lsegpp = lsegpp;
+
+	/* Retrieve layout information from server */
+	status = NFS_PROTO(ino)->pnfs_layoutget(lgp);
+
+	dprintk("<-- %s status %d\n", __func__, status);
+	return status;
 }
 
 /* Callback operations for layout drivers.

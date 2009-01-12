@@ -949,6 +949,9 @@ struct nfs_write_data {
 };
 
 struct nfs_access_entry;
+#if defined(CONFIG_PNFS)
+struct nfs4_pnfs_layoutget;
+#endif /* CONFIG_PNFS */
 
 /*
  * RPC procedure vector for NFSv2/NFSv3 demuxing
@@ -1006,6 +1009,9 @@ struct nfs_rpc_ops {
 	int	(*lock)(struct file *, int, struct file_lock *);
 	int	(*lock_check_bounds)(const struct file_lock *);
 	void	(*clear_acl_cache)(struct inode *);
+#if defined(CONFIG_PNFS)
+	int	(*pnfs_layoutget)(struct nfs4_pnfs_layoutget *layout);
+#endif /* CONFIG_PNFS */
 };
 
 /*
