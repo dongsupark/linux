@@ -35,6 +35,7 @@ struct pnfs_mount_type {
  */
 struct pnfs_layout_type {
 	struct inode *inode;
+	nfs4_stateid stateid;
 	u8 ld_data[];			/* layout driver private data */
 };
 
