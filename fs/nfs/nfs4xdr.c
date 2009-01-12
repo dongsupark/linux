@@ -50,6 +50,7 @@
 #include <linux/nfs4.h>
 #include <linux/nfs_fs.h>
 #include <linux/nfs_idmap.h>
+#include <linux/pnfs_xdr.h>
 #include "nfs4_fs.h"
 #include "internal.h"
 
@@ -302,6 +303,11 @@ static int nfs4_stat_to_errno(int);
 				XDR_QUADLEN(NFS4_MAX_SESSIONID_LEN) + 5)
 #define encode_reclaim_complete_maxsz	(op_encode_hdr_maxsz + 4)
 #define decode_reclaim_complete_maxsz	(op_decode_hdr_maxsz + 4)
+#define encode_layoutget_sz	(op_encode_hdr_maxsz + 10 + \
+				encode_stateid_maxsz)
+#define decode_layoutget_maxsz	(op_decode_hdr_maxsz + 8 + \
+				decode_stateid_maxsz + \
+				XDR_QUADLEN(PNFS_LAYOUT_MAXSIZE))
 #else /* CONFIG_NFS_V4_1 */
 #define encode_sequence_maxsz	0
 #define decode_sequence_maxsz	0
@@ -685,6 +691,14 @@ static int nfs4_stat_to_errno(int);
 #define NFS4_dec_reclaim_complete_sz	(compound_decode_hdr_maxsz + \
 					 decode_sequence_maxsz + \
 					 decode_reclaim_complete_maxsz)
+#define NFS4_enc_layoutget_sz	(compound_encode_hdr_maxsz + \
+				encode_sequence_maxsz + \
+				encode_putfh_maxsz +        \
+				encode_layoutget_sz)
+#define NFS4_dec_layoutget_sz	(compound_decode_hdr_maxsz + \
+				decode_sequence_maxsz + \
+				decode_putfh_maxsz +        \
+				decode_layoutget_maxsz)
 
 const u32 nfs41_maxwrite_overhead = ((RPC_MAX_HEADER_WITH_AUTH +
 				      compound_encode_hdr_maxsz +
@@ -1696,6 +1710,37 @@ static void encode_sequence(struct xdr_stream *xdr,
 #endif /* CONFIG_NFS_V4_1 */
 }
 
+#ifdef CONFIG_NFS_V4_1
+static void
+encode_layoutget(struct xdr_stream *xdr,
+		      const struct nfs4_pnfs_layoutget_arg *args,
+		      struct compound_hdr *hdr)
+{
+	__be32 *p;
+
+	p = reserve_space(xdr, 44 + NFS4_STATEID_SIZE);
+	*p++ = cpu_to_be32(OP_LAYOUTGET);
+	*p++ = cpu_to_be32(0);     /* Signal layout available */
+	*p++ = cpu_to_be32(args->type);
+	*p++ = cpu_to_be32(args->lseg.iomode);
+	p = xdr_encode_hyper(p, args->lseg.offset);
+	p = xdr_encode_hyper(p, args->lseg.length);
+	p = xdr_encode_hyper(p, args->minlength);
+	p = xdr_encode_opaque_fixed(p, &args->stateid.data, NFS4_STATEID_SIZE);
+	*p = cpu_to_be32(args->maxcount);
+
+	dprintk("%s: 1st type:0x%x iomode:%d off:%lu len:%lu mc:%d\n",
+		__func__,
+		args->type,
+		args->lseg.iomode,
+		(unsigned long)args->lseg.offset,
+		(unsigned long)args->lseg.length,
+		args->maxcount);
+	hdr->nops++;
+	hdr->replen += decode_layoutget_maxsz;
+}
+#endif /* CONFIG_NFS_V4_1 */
+
 /*
  * END OF "GENERIC" ENCODE ROUTINES.
  */
@@ -2499,6 +2544,25 @@ static int nfs4_xdr_enc_reclaim_complete(struct rpc_rqst *req, uint32_t *p,
 	return 0;
 }
 
+/*
+ *  Encode LAYOUTGET request
+ */
+static int nfs4_xdr_enc_layoutget(struct rpc_rqst *req, uint32_t *p,
+				  struct nfs4_pnfs_layoutget_arg *args)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr = {
+		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
+	};
+
+	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
+	encode_compound_hdr(&xdr, req, &hdr);
+	encode_sequence(&xdr, &args->seq_args, &hdr);
+	encode_putfh(&xdr, NFS_FH(args->inode), &hdr);
+	encode_layoutget(&xdr, args, &hdr);
+	encode_nops(&hdr);
+	return 0;
+}
 #endif /* CONFIG_NFS_V4_1 */
 
 static void print_overflow_msg(const char *func, const struct xdr_stream *xdr)
@@ -4742,6 +4806,77 @@ out_overflow:
 #endif /* CONFIG_NFS_V4_1 */
 }
 
+#if defined(CONFIG_NFS_V4_1)
+static int decode_layoutget(struct xdr_stream *xdr, struct rpc_rqst *req,
+			    struct nfs4_pnfs_layoutget_res *res)
+{
+	__be32 *p;
+	int status;
+	u32 layout_count, dummy;
+
+	status = decode_op_hdr(xdr, OP_LAYOUTGET);
+	if (status)
+		return status;
+	p = xdr_inline_decode(xdr, 8 + NFS4_STATEID_SIZE);
+	if (unlikely(!p))
+		goto out_overflow;
+	res->return_on_close = be32_to_cpup(p++);
+	p = xdr_decode_opaque_fixed(p, res->stateid.data, NFS4_STATEID_SIZE);
+	layout_count = be32_to_cpup(p);
+	if (!layout_count) {
+		dprintk("%s: server responded with empty layout array\n",
+			__func__);
+		return -EINVAL;
+	}
+
+	p = xdr_inline_decode(xdr, 24);
+	if (unlikely(!p))
+		goto out_overflow;
+	p = xdr_decode_hyper(p, &res->lseg.offset);
+	p = xdr_decode_hyper(p, &res->lseg.length);
+	res->lseg.iomode = be32_to_cpup(p++);
+	res->type = be32_to_cpup(p++);
+
+	status = decode_opaque_inline(xdr, &res->layout.len, (char **)&p);
+	if (unlikely(status))
+		return status;
+
+	dprintk("%s roff:%lu rlen:%lu riomode:%d, lo_type:0x%x, lo.len:%d\n",
+		__func__,
+		(unsigned long)res->lseg.offset,
+		(unsigned long)res->lseg.length,
+		res->lseg.iomode,
+		res->type,
+		res->layout.len);
+
+	/* presuambly, pnfs4_proc_layoutget allocated a single page */
+	if (res->layout.len > PAGE_SIZE)
+		return -ENOMEM;
+	memcpy(res->layout.buf, p, res->layout.len);
+
+	/* FIXME: the whole layout array should be passed up to the pnfs
+	 * client */
+	if (layout_count > 1) {
+		dprintk("%s: server responded with %d layouts, dropping tail\n",
+			__func__, layout_count);
+
+		while (--layout_count) {
+			p = xdr_inline_decode(xdr, 24);
+			if (unlikely(!p))
+				goto out_overflow;
+			status = decode_opaque_inline(xdr, &dummy, (char **)&p);
+			if (unlikely(status))
+				return status;
+		}
+	}
+
+	return 0;
+out_overflow:
+	print_overflow_msg(__func__, xdr);
+	return -EIO;
+}
+#endif /* CONFIG_NFS_V4_1 */
+
 /*
  * END OF "GENERIC" DECODE ROUTINES.
  */
@@ -5756,6 +5891,31 @@ static int nfs4_xdr_dec_reclaim_complete(struct rpc_rqst *rqstp, uint32_t *p,
 		status = decode_reclaim_complete(&xdr, (void *)NULL);
 	return status;
 }
+
+/*
+ * Decode LAYOUTGET response
+ */
+static int nfs4_xdr_dec_layoutget(struct rpc_rqst *rqstp, uint32_t *p,
+				  struct nfs4_pnfs_layoutget_res *res)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr;
+	int status;
+
+	xdr_init_decode(&xdr, &rqstp->rq_rcv_buf, p);
+	status = decode_compound_hdr(&xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(&xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_putfh(&xdr);
+	if (status)
+		goto out;
+	status = decode_layoutget(&xdr, rqstp, res);
+out:
+	return status;
+}
 #endif /* CONFIG_NFS_V4_1 */
 
 __be32 *nfs4_decode_dirent(__be32 *p, struct nfs_entry *entry, int plus)
@@ -5933,6 +6093,7 @@ struct rpc_procinfo	nfs4_procedures[] = {
   PROC(SEQUENCE,	enc_sequence,	dec_sequence),
   PROC(GET_LEASE_TIME,	enc_get_lease_time,	dec_get_lease_time),
   PROC(RECLAIM_COMPLETE, enc_reclaim_complete,  dec_reclaim_complete),
+  PROC(PNFS_LAYOUTGET,  enc_layoutget,     dec_layoutget),
 #endif /* CONFIG_NFS_V4_1 */
 };
 

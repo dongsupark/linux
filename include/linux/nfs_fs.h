@@ -97,6 +97,9 @@ struct nfs_delegation;
 
 struct posix_acl;
 
+struct pnfs_layout_type {
+};
+
 /*
  * nfs fs inode data in memory
  */
@@ -181,6 +184,9 @@ struct nfs_inode {
 	struct nfs_delegation	*delegation;
 	fmode_t			 delegation_state;
 	struct rw_semaphore	rwsem;
+#if defined(CONFIG_NFS_V4_1)
+	struct pnfs_layout_type layout;
+#endif /* CONFIG_NFS_V4_1 */
 #endif /* CONFIG_NFS_V4*/
 #ifdef CONFIG_NFS_FSCACHE
 	struct fscache_cookie	*fscache;
