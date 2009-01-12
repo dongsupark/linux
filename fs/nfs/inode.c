@@ -47,6 +47,7 @@
 #include "iostat.h"
 #include "internal.h"
 #include "fscache.h"
+#include "pnfs.h"
 
 #define NFSDBG_FACILITY		NFSDBG_VFS
 
@@ -1475,6 +1476,12 @@ static int __init init_nfs_fs(void)
 	if (err)
 		goto out0;
 
+#ifdef CONFIG_PNFS
+	err = pnfs_initialize();
+	if (err)
+		goto out00;
+#endif /* CONFIG_PNFS */
+
 #ifdef CONFIG_PROC_FS
 	rpc_proc_register(&nfs_rpcstat);
 #endif
@@ -1485,6 +1492,10 @@ out:
 #ifdef CONFIG_PROC_FS
 	rpc_proc_unregister("nfs");
 #endif
+#ifdef CONFIG_PNFS
+out00:
+	pnfs_uninitialize();
+#endif /* CONFIG_PNFS */
 	nfs_destroy_directcache();
 out0:
 	nfs_destroy_writepagecache();
@@ -1514,6 +1525,9 @@ static void __exit exit_nfs_fs(void)
 	nfs_fscache_unregister();
 #ifdef CONFIG_PROC_FS
 	rpc_proc_unregister("nfs");
+#endif
+#ifdef CONFIG_PNFS
+	pnfs_uninitialize();
 #endif
 	unregister_nfs_fs();
 	nfs_fs_proc_exit();

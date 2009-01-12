@@ -175,6 +175,9 @@ static inline void nfs4_restart_rpc(struct rpc_task *task,
 #endif /* CONFIG_NFS_V4_1 */
 	rpc_restart_call(task);
 }
+#ifdef CONFIG_PNFS
+extern void pnfs_v4_clientops_init(void);
+#endif /* CONFIG_PNFS */
 
 /* nfs4xdr.c */
 #ifdef CONFIG_NFS_V4
