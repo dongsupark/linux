@@ -301,6 +301,12 @@ put_unlock_current_layout(struct nfs_inode *nfsi,
 	BUG_ON(lo->refcount <= 0);
 
 	if (--lo->refcount == 0 && list_empty(&lo->segs)) {
+		struct layoutdriver_io_operations *io_ops =
+			PNFS_LD_IO_OPS(lo);
+
+		dprintk("%s: freeing layout %p\n", __func__, lo);
+		io_ops->free_layout(lo);
+
 		nfsi->current_layout = NULL;
 
 		/* Unlist the inode. */
@@ -526,6 +532,68 @@ pnfs_free_layout(struct pnfs_layout_type *lo,
 	}
 
 	dprintk("%s:Return\n", __func__);
+}
+
+static int
+return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
+	      enum pnfs_layoutrecall_type type)
+{
+	struct nfs4_pnfs_layoutreturn *lrp;
+	struct nfs_server *server = NFS_SERVER(ino);
+	int status = -ENOMEM;
+
+	dprintk("--> %s\n", __func__);
+
+	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
+	if (lrp == NULL)
+		goto out;
+	lrp->args.reclaim = 0;
+	lrp->args.layout_type = server->pnfs_curr_ld->id;
+	lrp->args.return_type = type;
+	lrp->args.lseg = *range;
+	lrp->args.inode = ino;
+
+	status = server->nfs_client->rpc_ops->pnfs_layoutreturn(lrp);
+out:
+	dprintk("<-- %s status: %d\n", __func__, status);
+	return status;
+}
+
+int
+_pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
+		    enum pnfs_layoutrecall_type type)
+{
+	struct pnfs_layout_type *lo;
+	struct nfs_inode *nfsi = NFS_I(ino);
+	struct nfs4_pnfs_layout_segment arg;
+	int status;
+
+	dprintk("--> %s type %d\n", __func__, type);
+
+	if (range)
+		arg = *range;
+	else {
+		arg.iomode = IOMODE_ANY;
+		arg.offset = 0;
+		arg.length = ~0;
+	}
+	if (type == RECALL_FILE) {
+		lo = get_lock_current_layout(nfsi);
+		if (lo == NULL) {
+			status = -EIO;
+			goto out;
+		}
+		pnfs_free_layout(lo, &arg);
+		/* unlock w/o put rebalanced by eventual call to
+		 * pnfs_layout_release
+		 */
+		spin_unlock(&nfsi->lo_lock);
+	}
+
+	status = return_layout(ino, &arg, type);
+out:
+	dprintk("<-- %s status: %d\n", __func__, status);
+	return status;
 }
 
 /*

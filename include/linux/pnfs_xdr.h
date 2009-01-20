@@ -91,6 +91,30 @@ struct pnfs_layoutcommit_data {
 	int status;
 };
 
+struct nfs4_pnfs_layoutreturn_arg {
+	__u32	reclaim;
+	__u32	layout_type;
+	__u32	return_type;
+	struct nfs4_pnfs_layout_segment lseg;
+	nfs4_stateid stateid;
+	struct inode *inode;
+	struct nfs4_sequence_args seq_args;
+};
+
+struct nfs4_pnfs_layoutreturn_res {
+	struct nfs4_sequence_res seq_res;
+	u32 lrs_present;
+	nfs4_stateid stateid;
+};
+
+struct nfs4_pnfs_layoutreturn {
+	struct pnfs_layout_type *lo;
+	struct nfs4_pnfs_layoutreturn_arg args;
+	struct nfs4_pnfs_layoutreturn_res res;
+	struct rpc_cred *cred;
+	int rpc_status;
+};
+
 #endif /* CONFIG_PNFS */
 
 #endif /* LINUX_PNFS_XDR_H */
