@@ -314,6 +314,12 @@ static int nfs4_stat_to_errno(int);
 				op_encode_hdr_maxsz +          \
 				encode_stateid_maxsz)
 #define decode_layoutcommit_maxsz (3 + op_decode_hdr_maxsz)
+#define encode_layoutreturn_sz	(8 + op_encode_hdr_maxsz + \
+				encode_stateid_maxsz + \
+				1 /* FIXME: opaque lrf_body always empty at
+				   *the moment */)
+#define decode_layoutreturn_maxsz (op_decode_hdr_maxsz + \
+				1 + decode_stateid_maxsz)
 #else /* CONFIG_NFS_V4_1 */
 #define encode_sequence_maxsz	0
 #define decode_sequence_maxsz	0
@@ -715,6 +721,14 @@ static int nfs4_stat_to_errno(int);
 				decode_putfh_maxsz + \
 				decode_layoutcommit_maxsz + \
 				decode_getattr_maxsz)
+#define NFS4_enc_layoutreturn_sz (compound_encode_hdr_maxsz + \
+				encode_sequence_maxsz + \
+				encode_putfh_maxsz + \
+				encode_layoutreturn_sz)
+#define NFS4_dec_layoutreturn_sz (compound_decode_hdr_maxsz + \
+				decode_sequence_maxsz + \
+				decode_putfh_maxsz + \
+				decode_layoutreturn_maxsz)
 
 const u32 nfs41_maxwrite_overhead = ((RPC_MAX_HEADER_WITH_AUTH +
 				      compound_encode_hdr_maxsz +
@@ -1800,6 +1814,31 @@ encode_layoutcommit(struct xdr_stream *xdr,
 	hdr->replen += decode_layoutcommit_maxsz;
 	return 0;
 }
+
+static void
+encode_layoutreturn(struct xdr_stream *xdr,
+		    const struct nfs4_pnfs_layoutreturn_arg *args,
+		    struct compound_hdr *hdr)
+{
+	__be32 *p;
+
+	p = reserve_space(xdr, 20);
+	*p++ = cpu_to_be32(OP_LAYOUTRETURN);
+	*p++ = cpu_to_be32(args->reclaim);
+	*p++ = cpu_to_be32(args->layout_type);
+	*p++ = cpu_to_be32(args->lseg.iomode);
+	*p = cpu_to_be32(args->return_type);
+	if (args->return_type == RETURN_FILE) {
+		p = reserve_space(xdr, 20 + NFS4_STATEID_SIZE);
+		p = xdr_encode_hyper(p, args->lseg.offset);
+		p = xdr_encode_hyper(p, args->lseg.length);
+		p = xdr_encode_opaque_fixed(p, &args->stateid.data,
+					    NFS4_STATEID_SIZE);
+		*p = cpu_to_be32(0); /* FIXME: opaque lrf_body currently always empty */
+	}
+	hdr->nops++;
+	hdr->replen += decode_layoutreturn_maxsz;
+}
 #endif /* CONFIG_NFS_V4_1 */
 
 /*
@@ -2642,6 +2681,26 @@ static int nfs4_xdr_enc_layoutcommit(struct rpc_rqst *req, uint32_t *p,
 	encode_putfh(&xdr, args->fh, &hdr);
 	encode_layoutcommit(&xdr, args, &hdr);
 	encode_getfattr(&xdr, args->bitmask, &hdr);
+	encode_nops(&hdr);
+	return 0;
+}
+
+/*
+ * Encode LAYOUTRETURN request
+ */
+static int nfs4_xdr_enc_layoutreturn(struct rpc_rqst *req, uint32_t *p,
+				     struct nfs4_pnfs_layoutreturn_arg *args)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr = {
+		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
+	};
+
+	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
+	encode_compound_hdr(&xdr, req, &hdr);
+	encode_sequence(&xdr, &args->seq_args, &hdr);
+	encode_putfh(&xdr, NFS_FH(args->inode), &hdr);
+	encode_layoutreturn(&xdr, args, &hdr);
 	encode_nops(&hdr);
 	return 0;
 }
@@ -4958,6 +5017,27 @@ out_overflow:
 	return -EIO;
 }
 
+static int decode_layoutreturn(struct xdr_stream *xdr,
+			       struct nfs4_pnfs_layoutreturn_res *res)
+{
+	__be32 *p;
+	int status;
+
+	status = decode_op_hdr(xdr, OP_LAYOUTRETURN);
+	if (status)
+		return status;
+	p = xdr_inline_decode(xdr, 4);
+	if (unlikely(!p))
+		goto out_overflow;
+	res->lrs_present = be32_to_cpup(p);
+	if (res->lrs_present)
+		status = decode_stateid(xdr, &res->stateid);
+	return status;
+out_overflow:
+	print_overflow_msg(__func__, xdr);
+	return -EIO;
+}
+
 static int decode_layoutcommit(struct xdr_stream *xdr,
 				    struct rpc_rqst *req,
 				    struct pnfs_layoutcommit_res *res)
@@ -6028,6 +6108,31 @@ out:
 }
 
 /*
+ * Decode LAYOUTRETURN response
+ */
+static int nfs4_xdr_dec_layoutreturn(struct rpc_rqst *rqstp, uint32_t *p,
+				     struct nfs4_pnfs_layoutreturn_res *res)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr;
+	int status;
+
+	xdr_init_decode(&xdr, &rqstp->rq_rcv_buf, p);
+	status = decode_compound_hdr(&xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(&xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_putfh(&xdr);
+	if (status)
+		goto out;
+	status = decode_layoutreturn(&xdr, res);
+out:
+	return status;
+}
+
+/*
  * Decode LAYOUTCOMMIT response
  */
 static int nfs4_xdr_dec_layoutcommit(struct rpc_rqst *rqstp, uint32_t *p,
@@ -6234,6 +6339,7 @@ struct rpc_procinfo	nfs4_procedures[] = {
   PROC(RECLAIM_COMPLETE, enc_reclaim_complete,  dec_reclaim_complete),
   PROC(PNFS_LAYOUTGET,  enc_layoutget,     dec_layoutget),
   PROC(PNFS_LAYOUTCOMMIT, enc_layoutcommit,  dec_layoutcommit),
+  PROC(PNFS_LAYOUTRETURN, enc_layoutreturn,  dec_layoutreturn),
 #endif /* CONFIG_NFS_V4_1 */
 };
 
