@@ -144,6 +144,18 @@ struct layoutdriver_policy_operations {
 
 	/* test for nfs page cache coalescing */
 	int (*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
+
+	/* Retreive the block size of the file system.  If gather_across_stripes == 1,
+	 * then the file system will gather requests into the block size.
+	 * TODO: Where will the layout driver get this info?  It is hard coded in PVFS2.
+	 */
+	ssize_t (*get_blocksize) (struct pnfs_mount_type *);
+
+	/* Read requests under this value are sent to the NFSv4 server */
+	ssize_t (*get_read_threshold) (struct pnfs_layout_type *, struct inode *);
+
+	/* Write requests under this value are sent to the NFSv4 server */
+	ssize_t (*get_write_threshold) (struct pnfs_layout_type *, struct inode *);
 };
 
 struct pnfs_device {
