@@ -57,6 +57,7 @@
 #include "internal.h"
 #include "iostat.h"
 #include "callback.h"
+#include "pnfs.h"
 
 #define NFSDBG_FACILITY		NFSDBG_PROC
 
@@ -4894,6 +4895,7 @@ static void nfs4_pnfs_layoutget_done(struct rpc_task *task, void *calldata)
 	if (RPC_ASSASSINATED(task))
 		return;
 
+	pnfs_get_layout_done(lgp, task->tk_status);
 	dprintk("<-- %s\n", __func__);
 }
 
@@ -4938,8 +4940,11 @@ static int pnfs4_proc_layoutget(struct nfs4_pnfs_layoutget *lgp)
 		goto out;
 	}
 	status = nfs4_wait_for_completion_rpc_task(task);
-	if (status == 0)
+	if (status == 0) {
 		status = lgp->status;
+		if (status == 0)
+			status = pnfs_layout_process(lgp);
+	}
 	rpc_put_task(task);
 out:
 	dprintk("<-- %s status=%d\n", __func__, status);

@@ -158,10 +158,17 @@ struct pnfs_client_operations*
 pnfs_register_layoutdriver(struct pnfs_layoutdriver_type *ld_type)
 {
 	struct pnfs_module *pnfs_mod;
+	struct layoutdriver_io_operations *io_ops = ld_type->ld_io_ops;
 
 	if (!pnfs_initialized) {
 		printk(KERN_ERR "%s Registration failure. "
 		       "pNFS not initialized.\n", __func__);
+		return NULL;
+	}
+
+	if (!io_ops->alloc_lseg || !io_ops->free_lseg) {
+		printk(KERN_ERR "%s Layout driver must provide "
+		       "alloc_lseg and free_lseg.\n", __func__);
 		return NULL;
 	}
 
@@ -195,6 +202,151 @@ pnfs_unregister_layoutdriver(struct pnfs_layoutdriver_type *ld_type)
 		spin_unlock(&pnfs_spinlock);
 		kfree(pnfs_mod);
 	}
+}
+
+/*
+ * pNFS client layout cache
+ */
+#if defined(CONFIG_SMP)
+#define BUG_ON_UNLOCKED_LO(lo) \
+	BUG_ON(!spin_is_locked(&PNFS_NFS_INODE(lo)->lo_lock))
+#else /* CONFIG_SMP */
+#define BUG_ON_UNLOCKED_LO(lo) do {} while (0)
+#endif /* CONFIG_SMP */
+
+/*
+ * get and lock nfs->current_layout
+ */
+static inline struct pnfs_layout_type *
+get_lock_current_layout(struct nfs_inode *nfsi)
+{
+	struct pnfs_layout_type *lo;
+
+	spin_lock(&nfsi->lo_lock);
+	lo = nfsi->current_layout;
+	if (lo)
+		lo->refcount++;
+	else
+		spin_unlock(&nfsi->lo_lock);
+
+	return lo;
+}
+
+/*
+ * put and unlock nfs->current_layout
+ */
+static inline void
+put_unlock_current_layout(struct nfs_inode *nfsi,
+			    struct pnfs_layout_type *lo)
+{
+	struct nfs_client *clp;
+
+	BUG_ON_UNLOCKED_LO(lo);
+	BUG_ON(lo->refcount <= 0);
+
+	if (--lo->refcount == 0 && list_empty(&lo->segs)) {
+		nfsi->current_layout = NULL;
+
+		/* Unlist the inode. */
+		clp = NFS_SERVER(&nfsi->vfs_inode)->nfs_client;
+		spin_lock(&clp->cl_lock);
+		list_del_init(&nfsi->lo_inodes);
+		spin_unlock(&clp->cl_lock);
+	}
+	spin_unlock(&nfsi->lo_lock);
+}
+
+static inline void
+init_lseg(struct pnfs_layout_type *lo, struct pnfs_layout_segment *lseg)
+{
+	INIT_LIST_HEAD(&lseg->fi_list);
+	kref_init(&lseg->kref);
+	lseg->layout = lo;
+}
+
+static void
+destroy_lseg(struct kref *kref)
+{
+	struct pnfs_layout_segment *lseg =
+		container_of(kref, struct pnfs_layout_segment, kref);
+
+	dprintk("--> %s\n", __func__);
+	PNFS_LD_IO_OPS(lseg->layout)->free_lseg(lseg);
+}
+
+static inline void
+put_lseg(struct pnfs_layout_segment *lseg)
+{
+	if (!lseg)
+		return;
+	kref_put(&lseg->kref, destroy_lseg);
+}
+
+static inline u64
+end_offset(u64 start, u64 len)
+{
+	u64 end;
+
+	end = start + len;
+	return end >= start ? end: NFS4_MAX_UINT64;
+}
+
+/* last octet in a range */
+static inline u64
+last_byte_offset(u64 start, u64 len)
+{
+	u64 end;
+
+	BUG_ON(!len);
+	end = start + len;
+	return end > start ? end - 1: NFS4_MAX_UINT64;
+}
+
+/*
+ * is l2 fully contained in l1?
+ *   start1                             end1
+ *   [----------------------------------)
+ *           start2           end2
+ *           [----------------)
+ */
+static inline int
+lo_seg_contained(struct nfs4_pnfs_layout_segment *l1,
+		 struct nfs4_pnfs_layout_segment *l2)
+{
+	u64 start1 = l1->offset;
+	u64 end1 = end_offset(start1, l1->length);
+	u64 start2 = l2->offset;
+	u64 end2 = end_offset(start2, l2->length);
+
+	return (start1 <= start2) && (end1 >= end2);
+}
+
+/*
+ * is l1 and l2 intersecting?
+ *   start1                             end1
+ *   [----------------------------------)
+ *                              start2           end2
+ *                              [----------------)
+ */
+static inline int
+lo_seg_intersecting(struct nfs4_pnfs_layout_segment *l1,
+		    struct nfs4_pnfs_layout_segment *l2)
+{
+	u64 start1 = l1->offset;
+	u64 end1 = end_offset(start1, l1->length);
+	u64 start2 = l2->offset;
+	u64 end2 = end_offset(start2, l2->length);
+
+	return (end1 == NFS4_MAX_UINT64 || end1 > start2) &&
+	       (end2 == NFS4_MAX_UINT64 || end2 > start1);
+}
+
+static void
+pnfs_set_layout_stateid(struct pnfs_layout_type *lo, nfs4_stateid *stateid)
+{
+	write_seqlock(&lo->seqlock);
+	memcpy(lo->stateid.data, stateid->data, sizeof(lo->stateid.data));
+	write_sequnlock(&lo->seqlock);
 }
 
 static void
@@ -276,6 +428,417 @@ get_layout(struct inode *ino,
 	status = NFS_PROTO(ino)->pnfs_layoutget(lgp);
 
 	dprintk("<-- %s status %d\n", __func__, status);
+	return status;
+}
+
+static inline int
+free_matching_lseg(struct pnfs_layout_segment *lseg,
+		   struct nfs4_pnfs_layout_segment *range)
+{
+	return (range->iomode == IOMODE_ANY ||
+		lseg->range.iomode == range->iomode) &&
+	       lo_seg_intersecting(&lseg->range, range);
+}
+
+static void
+pnfs_free_layout(struct pnfs_layout_type *lo,
+		 struct nfs4_pnfs_layout_segment *range)
+{
+	struct pnfs_layout_segment *lseg, *next;
+	dprintk("%s:Begin lo %p offset %llu length %llu iomode %d\n",
+		__func__, lo, range->offset, range->length, range->iomode);
+
+	BUG_ON_UNLOCKED_LO(lo);
+	list_for_each_entry_safe (lseg, next, &lo->segs, fi_list) {
+		if (!free_matching_lseg(lseg, range))
+			continue;
+		dprintk("%s: freeing lseg %p iomode %d "
+			"offset %llu length %llu\n", __func__,
+			lseg, lseg->range.iomode, lseg->range.offset,
+			lseg->range.length);
+		list_del(&lseg->fi_list);
+		put_lseg(lseg);
+	}
+
+	dprintk("%s:Return\n", __func__);
+}
+
+/*
+ * cmp two layout segments for sorting into layout cache
+ */
+static inline s64
+cmp_layout(struct nfs4_pnfs_layout_segment *l1,
+	   struct nfs4_pnfs_layout_segment *l2)
+{
+	s64 d;
+
+	/* higher offset > lower offset */
+	d = l1->offset - l2->offset;
+	if (d)
+		return d;
+
+	/* longer length > shorter length */
+	d = l1->length - l2->length;
+	if (d)
+		return d;
+
+	/* read > read/write */
+	return (int)(l1->iomode == IOMODE_READ) -
+	       (int)(l2->iomode == IOMODE_READ);
+}
+
+static void
+pnfs_insert_layout(struct pnfs_layout_type *lo,
+		   struct pnfs_layout_segment *lseg)
+{
+	struct pnfs_layout_segment *lp;
+	int found = 0;
+
+	dprintk("%s:Begin\n", __func__);
+
+	BUG_ON_UNLOCKED_LO(lo);
+	list_for_each_entry (lp, &lo->segs, fi_list) {
+		if (cmp_layout(&lp->range, &lseg->range) > 0)
+			continue;
+		list_add_tail(&lseg->fi_list, &lp->fi_list);
+		dprintk("%s: inserted lseg %p "
+			"iomode %d offset %llu length %llu before "
+			"lp %p iomode %d offset %llu length %llu\n",
+			__func__, lseg, lseg->range.iomode,
+			lseg->range.offset, lseg->range.length,
+			lp, lp->range.iomode, lp->range.offset,
+			lp->range.length);
+		found = 1;
+		break;
+	}
+	if (!found) {
+		list_add_tail(&lseg->fi_list, &lo->segs);
+		dprintk("%s: inserted lseg %p "
+			"iomode %d offset %llu length %llu at tail\n",
+			__func__, lseg, lseg->range.iomode,
+			lseg->range.offset, lseg->range.length);
+	}
+
+	dprintk("%s:Return\n", __func__);
+}
+
+static struct pnfs_layout_type *
+alloc_init_layout(struct inode *ino, struct layoutdriver_io_operations *io_ops)
+{
+	struct pnfs_layout_type *lo;
+
+	lo = io_ops->alloc_layout(NFS_SERVER(ino)->pnfs_mountid, ino);
+	if (!lo) {
+		printk(KERN_ERR
+			"%s: out of memory: io_ops->alloc_layout failed\n",
+			__func__);
+		return NULL;
+	}
+
+	seqlock_init(&lo->seqlock);
+	memset(&lo->stateid, 0, NFS4_STATEID_SIZE);
+	lo->refcount = 1;
+	INIT_LIST_HEAD(&lo->segs);
+	lo->roc_iomode = 0;
+	lo->inode = ino;
+	return lo;
+}
+
+static int pnfs_wait_schedule(void *word)
+{
+	if (signal_pending(current))
+		return -ERESTARTSYS;
+	schedule();
+	return 0;
+}
+
+/*
+ * get, possibly allocate, and lock current_layout
+ *
+ * Note: If successful, nfsi->lo_lock is taken and the caller
+ * must put and unlock current_layout by using put_unlock_current_layout()
+ * when the returned layout is released.
+ */
+static struct pnfs_layout_type *
+get_lock_alloc_layout(struct inode *ino,
+		      struct layoutdriver_io_operations *io_ops)
+{
+	struct nfs_inode *nfsi = NFS_I(ino);
+	struct pnfs_layout_type *lo;
+	int res;
+
+	dprintk("%s Begin\n", __func__);
+
+	while ((lo = get_lock_current_layout(nfsi)) == NULL) {
+		/* Compete against other threads on who's doing the allocation,
+		 * wait until bit is cleared if we lost this race.
+		 */
+		res = wait_on_bit_lock(
+			&nfsi->pnfs_layout_state, NFS_INO_LAYOUT_ALLOC,
+			pnfs_wait_schedule, TASK_INTERRUPTIBLE);
+		if (res) {
+			lo = ERR_PTR(res);
+			break;
+		}
+
+		/* Was current_layout already allocated while we slept?
+		 * If so, retry get_lock'ing it. Otherwise, allocate it.
+		 */
+		if (nfsi->current_layout)
+			continue;
+
+		lo = alloc_init_layout(ino, io_ops);
+		if (lo) {
+			struct nfs_client *clp = NFS_SERVER(ino)->nfs_client;
+
+			/* must grab the layout lock before the client lock */
+			spin_lock(&nfsi->lo_lock);
+			BUG_ON(nfsi->current_layout != NULL);
+			nfsi->current_layout = lo;
+
+			spin_lock(&clp->cl_lock);
+			if (list_empty(&nfsi->lo_inodes))
+				list_add_tail(&nfsi->lo_inodes, &clp->cl_lo_inodes);
+			spin_unlock(&clp->cl_lock);
+		} else
+			lo = ERR_PTR(-ENOMEM);
+
+		/* release the NFS_INO_LAYOUT_ALLOC bit and wake up waiters */
+		clear_bit_unlock(NFS_INO_LAYOUT_ALLOC, &nfsi->pnfs_layout_state);
+		wake_up_bit(&nfsi->pnfs_layout_state, NFS_INO_LAYOUT_ALLOC);
+		break;
+	}
+
+#ifdef NFS_DEBUG
+	if (!IS_ERR(lo))
+		dprintk("%s Return %p\n", __func__, lo);
+	else
+		dprintk("%s Return error %ld\n", __func__, PTR_ERR(lo));
+#endif
+	return lo;
+}
+
+static inline int
+has_matching_lseg(struct pnfs_layout_segment *lseg,
+		  struct nfs4_pnfs_layout_segment *range)
+{
+	struct nfs4_pnfs_layout_segment range1;
+
+	if ((range->iomode != IOMODE_READ && lseg->range.iomode != IOMODE_RW) ||
+	    !lo_seg_intersecting(&lseg->range, range))
+		return 0;
+
+	/* range1 covers only the first byte in the range */
+	range1 = *range;
+	range1.length = 1;
+	return lo_seg_contained(&lseg->range, &range1);
+}
+
+/*
+ * lookup range in layout
+ */
+static struct pnfs_layout_segment *
+pnfs_has_layout(struct pnfs_layout_type *lo,
+		struct nfs4_pnfs_layout_segment *range,
+		int take_ref)
+{
+	struct pnfs_layout_segment *lseg, *ret = NULL;
+
+	dprintk("%s:Begin\n", __func__);
+
+	BUG_ON_UNLOCKED_LO(lo);
+	list_for_each_entry (lseg, &lo->segs, fi_list) {
+		if (has_matching_lseg(lseg, range)) {
+			ret = lseg;
+			if (take_ref)
+				kref_get(&ret->kref);
+			break;
+		}
+	}
+
+	dprintk("%s:Return %p\n", __func__, ret);
+	return ret;
+}
+
+/* Update the file's layout for the given range and iomode.
+ * Layout is retreived from the server if needed.
+ * If lsegpp is given, the appropriate layout segment is referenced and
+ * returned to the caller.
+ */
+int
+pnfs_update_layout(struct inode *ino,
+		   struct nfs_open_context *ctx,
+		   size_t count,
+		   loff_t pos,
+		   enum pnfs_iomode iomode,
+		   struct pnfs_layout_segment **lsegpp)
+{
+	struct nfs4_pnfs_layout_segment arg = {
+		.iomode = iomode,
+		.offset = pos,
+		.length = count
+	};
+	struct nfs_inode *nfsi = NFS_I(ino);
+	struct nfs_server *nfss = NFS_SERVER(ino);
+	struct pnfs_layout_type *lo;
+	struct pnfs_layout_segment *lseg = NULL;
+	int result = -EIO;
+
+	lo = get_lock_alloc_layout(ino, nfss->pnfs_curr_ld->ld_io_ops);
+	if (IS_ERR(lo)) {
+		dprintk("%s ERROR: can't get pnfs_layout_type\n", __func__);
+		result = PTR_ERR(lo);
+		goto out;
+	}
+
+	/* Check to see if the layout for the given range already exists */
+	lseg = pnfs_has_layout(lo, &arg, lsegpp != NULL);
+	if (lseg) {
+		dprintk("%s: Using cached layout %p for %llu@%llu iomode %d)\n",
+			__func__,
+			nfsi->current_layout,
+			arg.length,
+			arg.offset,
+			arg.iomode);
+
+		result = 0;
+		goto out_put;
+	}
+
+	/* if get layout already failed once goto out */
+	if (test_bit(NFS_INO_LAYOUT_FAILED, &nfsi->pnfs_layout_state)) {
+		if (unlikely(nfsi->pnfs_layout_suspend &&
+		    get_seconds() >= nfsi->pnfs_layout_suspend)) {
+			dprintk("%s: layout_get resumed\n", __func__);
+			clear_bit(NFS_INO_LAYOUT_FAILED,
+				  &nfsi->pnfs_layout_state);
+			nfsi->pnfs_layout_suspend = 0;
+		} else {
+			result = 1;
+			goto out_put;
+		}
+	}
+
+	/* Lose lock, but not reference, match this with pnfs_layout_release */
+	spin_unlock(&nfsi->lo_lock);
+
+	result = get_layout(ino, ctx, &arg, lsegpp, lo);
+out:
+	dprintk("%s end (err:%d) state 0x%lx lseg %p\n",
+			__func__, result, nfsi->pnfs_layout_state, lseg);
+	return result;
+out_put:
+	if (lsegpp)
+		*lsegpp = lseg;
+	put_unlock_current_layout(nfsi, lo);
+	goto out;
+}
+
+void
+pnfs_get_layout_done(struct nfs4_pnfs_layoutget *lgp, int rpc_status)
+{
+	struct nfs4_pnfs_layoutget_res *res = &lgp->res;
+	struct pnfs_layout_segment *lseg = NULL;
+	struct nfs_inode *nfsi = NFS_I(lgp->lo->inode);
+	time_t suspend = 0;
+
+	dprintk("-->%s\n", __func__);
+
+	lgp->status = rpc_status;
+	if (rpc_status) {
+		dprintk("%s: ERROR retrieving layout %d\n",
+			__func__, rpc_status);
+
+		switch (rpc_status) {
+		case -ENOENT:   /* NFS4ERR_BADLAYOUT */
+			/* transient error, don't mark with
+			 * NFS_INO_LAYOUT_FAILED */
+			lgp->status = 1;
+			break;
+		case -EAGAIN:   /* NFS4ERR_LAYOUTTRYLATER,
+				 * NFS4ERR_RECALLCONFLICT, NFS4ERR_LOCKED
+				 */
+			suspend = get_seconds() + 1;
+			dprintk("%s: layout_get suspended until %ld\n",
+				__func__, suspend);
+			break;
+		case -EINVAL:   /* NFS4ERR_INVAL, NFSERR_BADIOMODE,
+				 * NFS4ERR_UNKNOWN_LAYOUTTYPE
+				 */
+		case -ENOTSUPP:	/* NFS4ERR_LAYOUTUNAVAILABLE */
+		case -ETOOSMALL:/* NFS4ERR_TOOSMALL */
+		default:
+			/* suspend layout get for ever for this file */
+			dprintk("%s: no layout_get until %ld\n",
+				__func__, suspend);
+			/* mark with NFS_INO_LAYOUT_FAILED */
+			break;
+		}
+		goto get_out;
+	}
+
+	if (res->layout.len <= 0) {
+		printk(KERN_ERR
+		       "%s: ERROR!  Layout size is ZERO!\n", __func__);
+		lgp->status =  -EIO;
+		goto get_out;
+	}
+
+	lgp->status = 0;
+
+get_out:
+	/* remember that get layout failed and don't try again */
+	if (lgp->status < 0) {
+		set_bit(NFS_INO_LAYOUT_FAILED, &nfsi->pnfs_layout_state);
+		nfsi->pnfs_layout_suspend = suspend;
+	}
+
+	dprintk("%s end (err:%d) state 0x%lx lseg %p\n",
+		__func__, lgp->status, nfsi->pnfs_layout_state, lseg);
+	return;
+}
+
+int
+pnfs_layout_process(struct nfs4_pnfs_layoutget *lgp)
+{
+	struct pnfs_layout_type *lo = lgp->lo;
+	struct nfs4_pnfs_layoutget_res *res = &lgp->res;
+	struct pnfs_layout_segment *lseg;
+	struct nfs_inode *nfsi = NFS_I(lo->inode);
+	int status = 0;
+
+	/* Inject layout blob into I/O device driver */
+	lseg = PNFS_LD_IO_OPS(lo)->alloc_lseg(lo, res);
+	if (!lseg || IS_ERR(lseg)) {
+		if (!lseg)
+			status = -ENOMEM;
+		else
+			status = PTR_ERR(lseg);
+		printk(KERN_ERR "%s: Could not allocate layout: error %d\n",
+		       __func__, status);
+		goto out;
+	}
+
+	init_lseg(lo, lseg);
+	lseg->range = res->lseg;
+	if (lgp->lsegpp) {
+		kref_get(&lseg->kref);
+		*lgp->lsegpp = lseg;
+	}
+
+	spin_lock(&nfsi->lo_lock);
+	pnfs_insert_layout(lo, lseg);
+
+	if (res->return_on_close) {
+		lo->roc_iomode |= res->lseg.iomode;
+		if (!lo->roc_iomode)
+			lo->roc_iomode = IOMODE_ANY;
+	}
+
+	/* Done processing layoutget. Set the layout stateid */
+	pnfs_set_layout_stateid(lo, &res->stateid);
+	spin_unlock(&nfsi->lo_lock);
+out:
 	return status;
 }
 

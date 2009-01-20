@@ -1355,6 +1355,11 @@ struct inode *nfs_alloc_inode(struct super_block *sb)
 #ifdef CONFIG_NFS_V4
 	nfsi->nfs4_acl = NULL;
 #endif /* CONFIG_NFS_V4 */
+#ifdef CONFIG_PNFS
+	INIT_LIST_HEAD(&nfsi->lo_inodes);
+	nfsi->pnfs_layout_state = 0;
+	nfsi->current_layout = NULL;
+#endif /* CONFIG_PNFS */
 	return &nfsi->vfs_inode;
 }
 
@@ -1371,6 +1376,10 @@ static inline void nfs4_init_once(struct nfs_inode *nfsi)
 	nfsi->delegation_state = 0;
 	init_rwsem(&nfsi->rwsem);
 #endif
+#ifdef CONFIG_PNFS
+	init_waitqueue_head(&nfsi->lo_waitq);
+	spin_lock_init(&nfsi->lo_lock);
+#endif /* CONFIG_PNFS */
 }
 
 static void init_once(void *foo)

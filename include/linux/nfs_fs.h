@@ -184,6 +184,20 @@ struct nfs_inode {
 	struct nfs_delegation	*delegation;
 	fmode_t			 delegation_state;
 	struct rw_semaphore	rwsem;
+
+	/* pNFS layout information */
+#if defined(CONFIG_PNFS)
+	/* Inodes having layouts */
+	struct list_head	lo_inodes;
+
+	unsigned long pnfs_layout_state;
+#define NFS_INO_LAYOUT_FAILED	0	/* get layout failed, stop trying */
+#define NFS_INO_LAYOUT_ALLOC	1	/* bit lock for layout allocation */
+	time_t pnfs_layout_suspend;
+	wait_queue_head_t lo_waitq;
+	spinlock_t lo_lock;
+	struct pnfs_layout_type *current_layout;
+#endif /* CONFIG_PNFS */
 #endif /* CONFIG_NFS_V4*/
 #ifdef CONFIG_NFS_FSCACHE
 	struct fscache_cookie	*fscache;

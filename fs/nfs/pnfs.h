@@ -20,10 +20,16 @@
 /* pnfs.c */
 extern const nfs4_stateid zero_stateid;
 
+int pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
+	size_t count, loff_t pos, enum pnfs_iomode access_type,
+	struct pnfs_layout_segment **lsegpp);
+
 void set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id);
 void unmount_pnfs_layoutdriver(struct super_block *sb);
 int pnfs_initialize(void);
 void pnfs_uninitialize(void);
+void pnfs_get_layout_done(struct nfs4_pnfs_layoutget *, int rpc_status);
+int pnfs_layout_process(struct nfs4_pnfs_layoutget *lgp);
 
 #define PNFS_EXISTS_LDIO_OP(srv, opname) ((srv)->pnfs_curr_ld &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops &&	\
