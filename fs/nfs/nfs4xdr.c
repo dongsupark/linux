@@ -312,6 +312,12 @@ static int nfs4_stat_to_errno(int);
 				op_encode_hdr_maxsz +          \
 				encode_stateid_maxsz)
 #define decode_layoutcommit_maxsz (3 + op_decode_hdr_maxsz)
+#define encode_layoutreturn_sz	(8 + op_encode_hdr_maxsz + \
+				encode_stateid_maxsz + \
+				1 /* FIXME: opaque lrf_body always empty at
+				   *the moment */)
+#define decode_layoutreturn_maxsz (op_decode_hdr_maxsz + \
+				1 + decode_stateid_maxsz)
 #endif /* CONFIG_PNFS */
 #else /* CONFIG_NFS_V4_1 */
 #define encode_sequence_maxsz	0
@@ -710,6 +716,14 @@ static int nfs4_stat_to_errno(int);
 				decode_putfh_maxsz + \
 				decode_layoutcommit_maxsz + \
 				decode_getattr_maxsz)
+#define NFS4_enc_layoutreturn_sz (compound_encode_hdr_maxsz + \
+				encode_sequence_maxsz + \
+				encode_putfh_maxsz + \
+				encode_layoutreturn_sz)
+#define NFS4_dec_layoutreturn_sz (compound_decode_hdr_maxsz + \
+				decode_sequence_maxsz + \
+				decode_putfh_maxsz + \
+				decode_layoutreturn_maxsz)
 #endif /* CONFIG_PNFS */
 
 static const umode_t nfs_type2fmt[] = {
@@ -1782,6 +1796,30 @@ encode_layoutcommit(struct xdr_stream *xdr,
 	hdr->replen += decode_layoutcommit_maxsz;
 	return 0;
 }
+
+static void
+encode_layoutreturn(struct xdr_stream *xdr,
+		    const struct nfs4_pnfs_layoutreturn_arg *args,
+		    struct compound_hdr *hdr)
+{
+	__be32 *p;
+
+	RESERVE_SPACE(20);
+	WRITE32(OP_LAYOUTRETURN);
+	WRITE32(args->reclaim);
+	WRITE32(args->layout_type);
+	WRITE32(args->lseg.iomode);
+	WRITE32(args->return_type);
+	if (args->return_type == RETURN_FILE) {
+		RESERVE_SPACE(20 + NFS4_STATEID_SIZE);
+		WRITE64(args->lseg.offset);
+		WRITE64(args->lseg.length);
+		WRITEMEM(&args->stateid.data, NFS4_STATEID_SIZE);
+		WRITE32(0); /* FIXME: opaque lrf_body currently always empty */
+	}
+	hdr->nops++;
+	hdr->replen += decode_layoutreturn_maxsz;
+}
 #endif /* CONFIG_PNFS */
 
 /*
@@ -2607,6 +2645,26 @@ static int nfs4_xdr_enc_layoutcommit(struct rpc_rqst *req, uint32_t *p,
 	encode_putfh(&xdr, args->fh, &hdr);
 	encode_layoutcommit(&xdr, args, &hdr);
 	encode_getfattr(&xdr, args->bitmask, &hdr);
+	encode_nops(&hdr);
+	return 0;
+}
+
+/*
+ * Encode LAYOUTRETURN request
+ */
+static int nfs4_xdr_enc_layoutreturn(struct rpc_rqst *req, uint32_t *p,
+				     struct nfs4_pnfs_layoutreturn_arg *args)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr = {
+		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
+	};
+
+	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
+	encode_compound_hdr(&xdr, req, &hdr);
+	encode_sequence(&xdr, &args->seq_args, &hdr);
+	encode_putfh(&xdr, NFS_FH(args->inode), &hdr);
+	encode_layoutreturn(&xdr, args, &hdr);
 	encode_nops(&hdr);
 	return 0;
 }
@@ -4589,6 +4647,24 @@ static int decode_layoutget(struct xdr_stream *xdr, struct rpc_rqst *req,
 	return 0;
 }
 
+static int decode_layoutreturn(struct xdr_stream *xdr,
+			       struct nfs4_pnfs_layoutreturn_res *res)
+{
+	__be32 *p;
+	int status;
+
+	status = decode_op_hdr(xdr, OP_LAYOUTRETURN);
+	if (status)
+		return status;
+	READ_BUF(4);
+	READ32(res->lrs_present);
+	if (res->lrs_present) {
+		READ_BUF(NFS4_STATEID_SIZE);
+		COPYMEM(res->stateid.data, NFS4_STATEID_SIZE);
+	}
+	return 0;
+}
+
 static int decode_layoutcommit(struct xdr_stream *xdr,
 				    struct rpc_rqst *req,
 				    struct pnfs_layoutcommit_res *res)
@@ -5612,6 +5688,31 @@ out:
 }
 
 /*
+ * Decode LAYOUTRETURN response
+ */
+static int nfs4_xdr_dec_layoutreturn(struct rpc_rqst *rqstp, uint32_t *p,
+				     struct nfs4_pnfs_layoutreturn_res *res)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr;
+	int status;
+
+	xdr_init_decode(&xdr, &rqstp->rq_rcv_buf, p);
+	status = decode_compound_hdr(&xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(&xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_putfh(&xdr);
+	if (status)
+		goto out;
+	status = decode_layoutreturn(&xdr, res);
+out:
+	return status;
+}
+
+/*
  * Decode LAYOUTCOMMIT response
  */
 static int nfs4_xdr_dec_layoutcommit(struct rpc_rqst *rqstp, uint32_t *p,
@@ -5819,6 +5920,7 @@ struct rpc_procinfo	nfs4_procedures[] = {
 #if defined(CONFIG_PNFS)
   PROC(PNFS_LAYOUTGET,  enc_layoutget,     dec_layoutget),
   PROC(PNFS_LAYOUTCOMMIT, enc_layoutcommit,  dec_layoutcommit),
+  PROC(PNFS_LAYOUTRETURN, enc_layoutreturn,  dec_layoutreturn),
 #endif /* CONFIG_PNFS */
 };
 

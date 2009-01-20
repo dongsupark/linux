@@ -5087,6 +5087,89 @@ static int pnfs4_proc_layoutcommit(struct pnfs_layoutcommit_data *data)
 			pnfs_async_layoutcommit(data);
 }
 
+static void
+nfs4_pnfs_layoutreturn_prepare(struct rpc_task *task, void *calldata)
+{
+	struct nfs4_pnfs_layoutreturn *lrp = calldata;
+	struct inode *ino = lrp->args.inode;
+	struct nfs_server *server = NFS_SERVER(ino);
+
+	dprintk("--> %s\n", __func__);
+	if (nfs4_setup_sequence(server->nfs_client, &lrp->args.seq_args,
+				&lrp->res.seq_res, 0, task))
+		return;
+	rpc_call_start(task);
+}
+
+static void nfs4_pnfs_layoutreturn_done(struct rpc_task *task, void *calldata)
+{
+	struct nfs4_pnfs_layoutreturn *lrp = calldata;
+	struct inode *ino = lrp->args.inode;
+	struct nfs_server *server = NFS_SERVER(ino);
+
+	dprintk("--> %s\n", __func__);
+
+	nfs4_sequence_done(server, &lrp->res.seq_res, task->tk_status);
+	/* no restart */
+	nfs4_sequence_free_slot(server->nfs_client, &lrp->res.seq_res);
+
+	dprintk("<-- %s\n", __func__);
+}
+
+static void nfs4_pnfs_layoutreturn_release(void *calldata)
+{
+	struct nfs4_pnfs_layoutreturn *lrp = calldata;
+
+	dprintk("--> %s return_type %d lo %p\n", __func__,
+		lrp->args.return_type, lrp->lo);
+
+	if (lrp->args.return_type == RECALL_FILE)
+		pnfs_layout_release(lrp->lo);
+	kfree(calldata);
+	dprintk("<-- %s\n", __func__);
+}
+
+static const struct rpc_call_ops nfs4_pnfs_layoutreturn_call_ops = {
+	.rpc_call_prepare = nfs4_pnfs_layoutreturn_prepare,
+	.rpc_call_done = nfs4_pnfs_layoutreturn_done,
+	.rpc_release = nfs4_pnfs_layoutreturn_release,
+};
+
+static int pnfs4_proc_layoutreturn(struct nfs4_pnfs_layoutreturn *lrp)
+{
+	struct inode *ino = lrp->args.inode;
+	struct nfs_server *server = NFS_SERVER(ino);
+	struct rpc_task *task;
+	struct rpc_message msg = {
+		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_PNFS_LAYOUTRETURN],
+		.rpc_argp = &lrp->args,
+		.rpc_resp = &lrp->res,
+	};
+	struct rpc_task_setup task_setup_data = {
+		.rpc_client = server->client,
+		.rpc_message = &msg,
+		.callback_ops = &nfs4_pnfs_layoutreturn_call_ops,
+		.callback_data = lrp,
+		.flags = RPC_TASK_ASYNC,
+	};
+	int status;
+
+	dprintk("--> %s\n", __func__);
+	lrp->res.seq_res.sr_slotid = NFS4_MAX_SLOT_TABLE;
+	task = rpc_run_task(&task_setup_data);
+	if (IS_ERR(task)) {
+		status = PTR_ERR(task);
+		goto out;
+	}
+	status = nfs4_wait_for_completion_rpc_task(task);
+	if (status == 0)
+		status = task->tk_status;
+	rpc_put_task(task);
+out:
+	dprintk("<-- %s\n", __func__);
+	return status;
+}
+
 #endif /* CONFIG_PNFS */
 
 struct nfs4_state_recovery_ops nfs40_reboot_recovery_ops = {
@@ -5227,6 +5310,7 @@ pnfs_v4_clientops_init(void)
 	memcpy(p, &nfs_v4_clientops, sizeof(*p));
 	p->pnfs_layoutget	= pnfs4_proc_layoutget;
 	p->pnfs_layoutcommit	= pnfs4_proc_layoutcommit;
+	p->pnfs_layoutreturn	= pnfs4_proc_layoutreturn;
 }
 #endif /* CONFIG_PNFS */
 
