@@ -53,6 +53,8 @@
 #ifdef CONFIG_PNFS
 #define NFSDBG_FACILITY		NFSDBG_PNFS
 
+#define MIN_POOL_LC		(4)
+
 static int pnfs_initialized;
 
 /* Locking:
@@ -66,6 +68,23 @@ static spinlock_t pnfs_spinlock = __SPIN_LOCK_UNLOCKED(pnfs_spinlock);
  * pnfs_modules_tbl holds all pnfs modules
  */
 static struct list_head	pnfs_modules_tbl;
+static struct kmem_cache *pnfs_cachep;
+static mempool_t *pnfs_layoutcommit_mempool;
+
+static inline struct pnfs_layoutcommit_data *pnfs_layoutcommit_alloc(void)
+{
+	struct pnfs_layoutcommit_data *p =
+			mempool_alloc(pnfs_layoutcommit_mempool, GFP_NOFS);
+	if (p)
+		memset(p, 0, sizeof(*p));
+
+	return p;
+}
+
+void pnfs_layoutcommit_free(struct pnfs_layoutcommit_data *p)
+{
+	mempool_free(p, pnfs_layoutcommit_mempool);
+}
 
 /*
  * struct pnfs_module - One per pNFS device module.
@@ -80,6 +99,21 @@ pnfs_initialize(void)
 {
 	INIT_LIST_HEAD(&pnfs_modules_tbl);
 
+	pnfs_cachep = kmem_cache_create("pnfs_layoutcommit_data",
+					sizeof(struct pnfs_layoutcommit_data),
+					0, SLAB_HWCACHE_ALIGN, NULL);
+	if (pnfs_cachep == NULL)
+		return -ENOMEM;
+
+	pnfs_layoutcommit_mempool = mempool_create(MIN_POOL_LC,
+						   mempool_alloc_slab,
+						   mempool_free_slab,
+						   pnfs_cachep);
+	if (pnfs_layoutcommit_mempool == NULL) {
+		kmem_cache_destroy(pnfs_cachep);
+		return -ENOMEM;
+	}
+
 	pnfs_v4_clientops_init();
 
 	pnfs_initialized = 1;
@@ -88,6 +122,8 @@ pnfs_initialize(void)
 
 void pnfs_uninitialize(void)
 {
+	mempool_destroy(pnfs_layoutcommit_mempool);
+	kmem_cache_destroy(pnfs_cachep);
 }
 
 /* search pnfs_modules_tbl for right pnfs module */
@@ -103,6 +139,26 @@ find_pnfs(u32 id, struct pnfs_module **module) {
 		}
 	}
 	return 0;
+}
+
+/* Set context to indicate we require a layoutcommit
+ * If we don't even have a layout, we don't need to commit it.
+ */
+void
+pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx)
+{
+	dprintk("%s: current_layout=%p layoutcommit_ctx=%p ctx=%p\n", __func__,
+		nfsi->current_layout, nfsi->layoutcommit_ctx, ctx);
+	spin_lock(&nfsi->lo_lock);
+	if (nfsi->current_layout && !nfsi->layoutcommit_ctx) {
+		nfsi->layoutcommit_ctx = get_nfs_open_context(ctx);
+		nfsi->change_attr++;
+		spin_unlock(&nfsi->lo_lock);
+		dprintk("%s: Set layoutcommit_ctx=%p\n", __func__,
+			nfsi->layoutcommit_ctx);
+		return;
+	}
+	spin_unlock(&nfsi->lo_lock);
 }
 
 /* Unitialize a mountpoint in a layout driver */
@@ -851,6 +907,143 @@ pnfs_layout_process(struct nfs4_pnfs_layoutget *lgp)
 	spin_unlock(&nfsi->lo_lock);
 out:
 	return status;
+}
+
+/* Called on completion of layoutcommit */
+void
+pnfs_layoutcommit_done(struct pnfs_layoutcommit_data *data)
+{
+	struct nfs_server *nfss = NFS_SERVER(data->inode);
+	struct nfs_inode *nfsi = NFS_I(data->inode);
+
+	dprintk("%s: (status %d)\n", __func__, data->status);
+
+	/* TODO: For now, set an error in the open context (just like
+	 * if a commit failed) We may want to do more, much more, like
+	 * replay all writes through the NFSv4
+	 * server, or something.
+	 */
+	if (data->status < 0) {
+		printk(KERN_ERR "%s, Layoutcommit Failed! = %d\n",
+		       __func__, data->status);
+		data->ctx->error = data->status;
+	}
+
+	/* TODO: Maybe we should avoid this by allowing the layout driver
+	 * to directly xdr its layout on the wire.
+	 */
+	if (nfss->pnfs_curr_ld->ld_io_ops->cleanup_layoutcommit)
+		nfss->pnfs_curr_ld->ld_io_ops->cleanup_layoutcommit(
+							nfsi->current_layout,
+							data);
+
+	/* release the open_context acquired in pnfs_writeback_done */
+	put_nfs_open_context(data->ctx);
+}
+
+/*
+ * Set up the argument/result storage required for the RPC call.
+ */
+static int
+pnfs_layoutcommit_setup(struct pnfs_layoutcommit_data *data, int sync)
+{
+	struct nfs_inode *nfsi = NFS_I(data->inode);
+	struct nfs_server *nfss = NFS_SERVER(data->inode);
+	int result = 0;
+
+	dprintk("%s Begin (sync:%d)\n", __func__, sync);
+	data->args.fh = NFS_FH(data->inode);
+	data->args.layout_type = nfss->pnfs_curr_ld->id;
+
+	/* Initialize new layout size.
+	 * layout driver's setup_layoutcommit may optionally set
+	 * the actual size of an updated layout.
+	 */
+	data->args.new_layout_size = 0;
+	data->args.new_layout = NULL;
+
+	/* TODO: Need to determine the correct values */
+	data->args.time_modify_changed = 0;
+
+	/* Set values from inode so it can be reset
+	 */
+	data->args.lseg.iomode = IOMODE_RW;
+	data->args.lseg.offset = nfsi->pnfs_write_begin_pos;
+	data->args.lseg.length = nfsi->pnfs_write_end_pos - nfsi->pnfs_write_begin_pos + 1;
+	data->args.lastbytewritten = nfsi->pnfs_write_end_pos;
+	data->args.bitmask = nfss->attr_bitmask;
+	data->res.server = nfss;
+
+	/* Call layout driver to set the arguments.
+	 * TODO: We may want to avoid memory copies by delay this
+	 * until xdr time.
+	 */
+	if (nfss->pnfs_curr_ld->ld_io_ops->setup_layoutcommit) {
+		result = nfss->pnfs_curr_ld->ld_io_ops->setup_layoutcommit(
+				nfsi->current_layout, data);
+		if (result)
+			goto out;
+	}
+	pnfs_get_layout_stateid(&data->args.stateid, nfsi->current_layout);
+	data->res.fattr = &data->fattr;
+	nfs_fattr_init(&data->fattr);
+
+	if (sync)
+		goto out;
+
+out:
+	dprintk("%s End Status %d\n", __func__, result);
+	return result;
+}
+
+/* Issue a async layoutcommit for an inode.
+ */
+int
+pnfs_layoutcommit_inode(struct inode *inode, int sync)
+{
+	struct pnfs_layoutcommit_data *data;
+	struct nfs_inode *nfsi = NFS_I(inode);
+	int status = 0;
+
+	dprintk("%s Begin (sync:%d)\n", __func__, sync);
+
+	data = pnfs_layoutcommit_alloc();
+	if (!data)
+		return -ENOMEM;
+
+	spin_lock(&nfsi->lo_lock);
+	if (!nfsi->layoutcommit_ctx) {
+		pnfs_layoutcommit_free(data);
+		goto out_unlock;
+	}
+
+	data->inode = inode;
+	data->cred  = nfsi->layoutcommit_ctx->cred;
+	data->ctx = nfsi->layoutcommit_ctx;
+
+	/* Set up layout commit args*/
+	status = pnfs_layoutcommit_setup(data, sync);
+	if (status)
+		goto out_unlock;
+
+	/* Clear layoutcommit properties in the inode so
+	 * new lc info can be generated
+	 */
+	nfsi->pnfs_write_begin_pos = 0;
+	nfsi->pnfs_write_end_pos = 0;
+	nfsi->layoutcommit_ctx = NULL;
+
+	/* release lock on pnfs layoutcommit attrs */
+	spin_unlock(&nfsi->lo_lock);
+
+	data->is_sync = sync;
+	status = NFS_PROTO(inode)->pnfs_layoutcommit(data);
+out:
+	dprintk("%s end (err:%d)\n", __func__, status);
+	return status;
+out_unlock:
+	spin_unlock(&nfsi->lo_lock);
+	goto out;
 }
 
 /* Callback operations for layout drivers.
