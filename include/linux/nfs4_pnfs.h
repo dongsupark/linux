@@ -16,6 +16,14 @@
 
 #include <linux/pnfs_xdr.h>
 
+#define NFS4_PNFS_GETDEVLIST_MAXNUM 16
+
+/* NFS4_GETDEVINFO_MAXSIZE is based on file layoutdriver with 4096 stripe
+ * indices and 64 multipath data server each with 2 data servers per
+ * multipath with ipv4 addresses r_addr and "tcp" r_netid.
+ */
+#define NFS4_GETDEVINFO_MAXSIZE (4096 * 6)
+
 /* Per-layout driver specific registration structure */
 struct pnfs_layoutdriver_type {
 	const u32 id;
@@ -133,12 +141,33 @@ struct layoutdriver_io_operations {
 struct layoutdriver_policy_operations {
 };
 
+struct pnfs_device {
+	struct pnfs_deviceid dev_id;
+	unsigned int  layout_type;
+	unsigned int  mincount;
+	struct page **pages;
+	void          *area;
+	unsigned int  pgbase;
+	unsigned int  pglen;
+	unsigned int  dev_notify_types;
+};
+
+struct pnfs_devicelist {
+	unsigned int		eof;
+	unsigned int		num_devs;
+	struct pnfs_deviceid	dev_id[NFS4_PNFS_GETDEVLIST_MAXNUM];
+};
+
 /* pNFS client callback functions.
  * These operations allow the layout driver to access pNFS client
  * specific information or call pNFS client->server operations.
  * E.g., getdeviceinfo, I/O callbacks, etc
  */
 struct pnfs_client_operations {
+	int (*nfs_getdevicelist) (struct super_block *sb, struct nfs_fh *fh,
+				  struct pnfs_devicelist *devlist);
+	int (*nfs_getdeviceinfo) (struct super_block *sb,
+				  struct pnfs_device *dev);
 	void (*nfs_return_layout) (struct inode *);
 };
 
