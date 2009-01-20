@@ -98,8 +98,12 @@ struct nfs_delegation;
 struct posix_acl;
 
 struct pnfs_layout_type {
+	int refcount;
+	struct list_head segs;		/* layout segments list */
+	int roc_iomode;			/* iomode to return on close, 0=none */
 	seqlock_t seqlock;		/* Protects the stateid */
 	nfs4_stateid stateid;
+	void *ld_data;			/* layout driver private data */
 };
 
 /*
@@ -186,7 +190,18 @@ struct nfs_inode {
 	struct nfs_delegation	*delegation;
 	fmode_t			 delegation_state;
 	struct rw_semaphore	rwsem;
+
+	/* pNFS layout information */
 #if defined(CONFIG_NFS_V4_1)
+	/* Inodes having layouts */
+	struct list_head	lo_inodes;
+
+	unsigned long pnfs_layout_state;
+#define NFS_INO_LAYOUT_FAILED	0	/* get layout failed, stop trying */
+#define NFS_INO_LAYOUT_ALLOC	1	/* bit lock for layout allocation */
+	time_t pnfs_layout_suspend;
+	wait_queue_head_t lo_waitq;
+	spinlock_t lo_lock;
 	struct pnfs_layout_type layout;
 #endif /* CONFIG_NFS_V4_1 */
 #endif /* CONFIG_NFS_V4*/

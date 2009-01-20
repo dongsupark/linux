@@ -12,6 +12,8 @@
 #ifndef LINUX_NFS4_PNFS_H
 #define LINUX_NFS4_PNFS_H
 
+#include <linux/pnfs_xdr.h>
+
 /* Per-layout driver specific registration structure */
 struct pnfs_layoutdriver_type {
 	const u32 id;
@@ -27,10 +29,89 @@ struct pnfs_mount_type {
 	void *mountid;
 };
 
+#if defined(CONFIG_NFS_V4_1)
+
+static inline struct nfs_inode *
+PNFS_NFS_INODE(struct pnfs_layout_type *lo)
+{
+	return container_of(lo, struct nfs_inode, layout);
+}
+
+static inline struct inode *
+PNFS_INODE(struct pnfs_layout_type *lo)
+{
+	return &PNFS_NFS_INODE(lo)->vfs_inode;
+}
+
+static inline struct nfs_server *
+PNFS_NFS_SERVER(struct pnfs_layout_type *lo)
+{
+	return NFS_SERVER(PNFS_INODE(lo));
+}
+
+static inline struct pnfs_mount_type *
+PNFS_MOUNTID(struct pnfs_layout_type *lo)
+{
+	return NFS_SERVER(PNFS_INODE(lo))->pnfs_mountid;
+}
+
+static inline void *
+PNFS_LD_DATA(struct pnfs_layout_type *lo)
+{
+	return lo->ld_data;
+}
+
+static inline struct pnfs_layoutdriver_type *
+PNFS_LD(struct pnfs_layout_type *lo)
+{
+	return NFS_SERVER(PNFS_INODE(lo))->pnfs_curr_ld;
+}
+
+static inline struct layoutdriver_io_operations *
+PNFS_LD_IO_OPS(struct pnfs_layout_type *lo)
+{
+	return PNFS_LD(lo)->ld_io_ops;
+}
+
+static inline struct layoutdriver_policy_operations *
+PNFS_LD_POLICY_OPS(struct pnfs_layout_type *lo)
+{
+	return PNFS_LD(lo)->ld_policy_ops;
+}
+
+static inline bool
+has_layout(struct nfs_inode *nfsi)
+{
+	return nfsi->layout.ld_data != NULL;
+}
+
+#endif /* CONFIG_NFS_V4_1 */
+
+struct pnfs_layout_segment {
+	struct list_head fi_list;
+	struct nfs4_pnfs_layout_segment range;
+	struct kref kref;
+	struct pnfs_layout_type *layout;
+	u8 ld_data[];			/* layout driver private data */
+};
+
+static inline void *
+LSEG_LD_DATA(struct pnfs_layout_segment *lseg)
+{
+	return lseg->ld_data;
+}
+
 /* Layout driver I/O operations.
  * Either the pagecache or non-pagecache read/write operations must be implemented
  */
 struct layoutdriver_io_operations {
+	/* Layout information. For each inode, alloc_layout is executed once to retrieve an
+	 * inode specific layout structure.  Each subsequent layoutget operation results in
+	 * a set_layout call to set the opaque layout in the layout driver.*/
+	void * (*alloc_layout) (struct pnfs_mount_type *mountid, struct inode *inode);
+	struct pnfs_layout_segment * (*alloc_lseg) (struct pnfs_layout_type *layoutid, struct nfs4_pnfs_layoutget_res *lgr);
+	void (*free_lseg) (struct pnfs_layout_segment *lseg);
+
 	/* Registration information for a new mounted file system
 	 */
 	struct pnfs_mount_type * (*initialize_mountpoint) (struct super_block *, struct nfs_fh *fh);
