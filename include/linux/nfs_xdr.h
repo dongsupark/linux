@@ -988,6 +988,7 @@ struct nfs_access_entry;
 #if defined(CONFIG_PNFS)
 struct nfs4_pnfs_layoutget;
 struct pnfs_layoutcommit_data;
+struct nfs4_pnfs_layoutreturn;
 #endif /* CONFIG_PNFS */
 
 /*
