@@ -112,6 +112,15 @@ struct layoutdriver_io_operations {
 	struct pnfs_layout_segment * (*alloc_lseg) (struct pnfs_layout_type *layoutid, struct nfs4_pnfs_layoutget_res *lgr);
 	void (*free_lseg) (struct pnfs_layout_segment *lseg);
 
+	int (*setup_layoutcommit) (struct pnfs_layout_type *layoutid,
+				    struct pnfs_layoutcommit_arg *args);
+	void (*encode_layoutcommit) (struct pnfs_layout_type *layoutid,
+				     struct xdr_stream *xdr,
+				     const struct pnfs_layoutcommit_arg *args);
+	void (*cleanup_layoutcommit) (struct pnfs_layout_type *layoutid,
+				      struct pnfs_layoutcommit_arg *args,
+				      int status);
+
 	/* Registration information for a new mounted file system
 	 */
 	struct pnfs_mount_type * (*initialize_mountpoint) (struct super_block *, struct nfs_fh *fh);

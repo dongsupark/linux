@@ -29,6 +29,7 @@
 #include "iostat.h"
 #include "nfs4_fs.h"
 #include "fscache.h"
+#include "pnfs.h"
 
 #define NFSDBG_FACILITY		NFSDBG_PAGECACHE
 
@@ -1422,6 +1423,13 @@ static int nfs_commit_inode(struct inode *inode, int how)
 			wait_on_bit(&NFS_I(inode)->flags, NFS_INO_COMMIT,
 					nfs_wait_bit_killable,
 					TASK_KILLABLE);
+#ifdef CONFIG_NFS_V4_1
+		if (may_wait && NFS_I(inode)->layoutcommit_ctx) {
+			error = pnfs_layoutcommit_inode(inode, 1);
+			if (error < 0)
+				return error;
+		}
+#endif /* CONFIG_NFS_V4_1 */
 	} else
 		nfs_commit_clear_lock(NFS_I(inode));
 out:

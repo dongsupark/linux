@@ -52,4 +52,39 @@ struct nfs4_pnfs_layoutget {
 	int status;
 };
 
+struct pnfs_layoutcommit_arg {
+	nfs4_stateid stateid;
+	__u64 lastbytewritten;
+	__u32 time_modify_changed;
+	struct timespec time_modify;
+	const u32 *bitmask;
+	struct nfs_fh *fh;
+	struct inode *inode;
+
+	/* Values set by layout driver */
+	struct nfs4_pnfs_layout_segment lseg;
+	__u32 layout_type;
+	void *layoutdriver_data;
+	struct nfs4_sequence_args seq_args;
+};
+
+struct pnfs_layoutcommit_res {
+	__u32 sizechanged;
+	__u64 newsize;
+	struct nfs_fattr *fattr;
+	const struct nfs_server *server;
+	struct nfs4_sequence_res seq_res;
+};
+
+struct pnfs_layoutcommit_data {
+	struct rpc_task task;
+	bool is_sync;
+	struct rpc_cred *cred;
+	struct nfs_fattr fattr;
+	struct nfs_open_context *ctx;
+	struct pnfs_layoutcommit_arg args;
+	struct pnfs_layoutcommit_res res;
+	int status;
+};
+
 #endif /* LINUX_PNFS_XDR_H */
