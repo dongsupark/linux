@@ -88,6 +88,10 @@ struct nfs_client {
 	struct nfs4_session	*cl_session; 	/* sharred session */
 #endif /* CONFIG_NFS_V4_1 */
 
+#ifdef CONFIG_PNFS
+	struct list_head	cl_lo_inodes;	/* Inodes having layouts */
+#endif /* CONFIG_PNFS */
+
 #ifdef CONFIG_NFS_FSCACHE
 	struct fscache_cookie	*fscache;	/* client index cache cookie */
 #endif

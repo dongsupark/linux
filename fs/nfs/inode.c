@@ -1378,6 +1378,15 @@ void nfs4_clear_inode(struct inode *inode)
 }
 #endif
 
+static void pnfs_alloc_init_inode(struct nfs_inode *nfsi)
+{
+#ifdef CONFIG_PNFS
+	nfsi->pnfs_layout_state = 0;
+	memset(&nfsi->layout.stateid, 0, NFS4_STATEID_SIZE);
+	nfsi->layout.roc_iomode = 0;
+#endif /* CONFIG_PNFS */
+}
+
 struct inode *nfs_alloc_inode(struct super_block *sb)
 {
 	struct nfs_inode *nfsi;
@@ -1393,12 +1402,39 @@ struct inode *nfs_alloc_inode(struct super_block *sb)
 #ifdef CONFIG_NFS_V4
 	nfsi->nfs4_acl = NULL;
 #endif /* CONFIG_NFS_V4 */
+	pnfs_alloc_init_inode(nfsi);
 	return &nfsi->vfs_inode;
+}
+
+static void pnfs_destroy_inode(struct nfs_inode *nfsi)
+{
+#ifdef CONFIG_PNFS
+	BUG_ON(!list_empty(&nfsi->lo_inodes));
+	BUG_ON(!list_empty(&nfsi->layout.segs));
+	BUG_ON(nfsi->layout.refcount);
+	BUG_ON(nfsi->layout.ld_data);
+#endif /* CONFIG_PNFS */
 }
 
 void nfs_destroy_inode(struct inode *inode)
 {
-	kmem_cache_free(nfs_inode_cachep, NFS_I(inode));
+	struct nfs_inode *nfsi = NFS_I(inode);
+
+	pnfs_destroy_inode(nfsi);
+	kmem_cache_free(nfs_inode_cachep, nfsi);
+}
+
+static void pnfs_init_once(struct nfs_inode *nfsi)
+{
+#ifdef CONFIG_PNFS
+	INIT_LIST_HEAD(&nfsi->lo_inodes);
+	init_waitqueue_head(&nfsi->lo_waitq);
+	spin_lock_init(&nfsi->lo_lock);
+	seqlock_init(&nfsi->layout.seqlock);
+	INIT_LIST_HEAD(&nfsi->layout.segs);
+	nfsi->layout.refcount = 0;
+	nfsi->layout.ld_data = NULL;
+#endif /* CONFIG_PNFS */
 }
 
 static inline void nfs4_init_once(struct nfs_inode *nfsi)
@@ -1425,6 +1461,7 @@ static void init_once(void *foo)
 	INIT_HLIST_HEAD(&nfsi->silly_list);
 	init_waitqueue_head(&nfsi->waitqueue);
 	nfs4_init_once(nfsi);
+	pnfs_init_once(nfsi);
 }
 
 static int __init nfs_init_inodecache(void)
