@@ -1095,6 +1095,16 @@ static int nfs_update_inode(struct inode *inode, struct nfs_fattr *fattr)
 			!test_bit(NFS_INO_MOUNTPOINT, &nfsi->flags))
 		server->fsid = fattr->fsid;
 
+#ifdef CONFIG_PNFS
+	/*
+	 * file needs layout commit, server attributes may be stale
+	 */
+	if (nfsi->layoutcommit_ctx && nfsi->change_attr >= fattr->change_attr) {
+		dprintk("NFS: %s: layoutcommit is needed for file %s/%ld\n",
+			__func__, inode->i_sb->s_id, inode->i_ino);
+		return 0;
+	}
+#endif /* CONFIG_PNFS */
 	/*
 	 * Update the read time so we don't revalidate too often.
 	 */
@@ -1252,6 +1262,9 @@ struct inode *nfs_alloc_inode(struct super_block *sb)
 	INIT_LIST_HEAD(&nfsi->lo_inodes);
 	nfsi->pnfs_layout_state = 0;
 	nfsi->current_layout = NULL;
+	nfsi->layoutcommit_ctx = NULL;
+	nfsi->pnfs_write_begin_pos = 0;
+	nfsi->pnfs_write_end_pos = 0;
 #endif /* CONFIG_PNFS */
 	return &nfsi->vfs_inode;
 }

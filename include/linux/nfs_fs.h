@@ -198,6 +198,13 @@ struct nfs_inode {
 	wait_queue_head_t lo_waitq;
 	spinlock_t lo_lock;
 	struct pnfs_layout_type *current_layout;
+	/* use rpc_creds in this open_context to send LAYOUTCOMMIT to MDS */
+	struct nfs_open_context *layoutcommit_ctx;
+	/* DH: These vars keep track of the maximum write range
+	 * so the values can be used for layoutcommit.
+	 */
+	loff_t			pnfs_write_begin_pos;
+	loff_t			pnfs_write_end_pos;
 #endif /* CONFIG_PNFS */
 #endif /* CONFIG_NFS_V4*/
 	struct inode		vfs_inode;

@@ -951,6 +951,7 @@ struct nfs_write_data {
 struct nfs_access_entry;
 #if defined(CONFIG_PNFS)
 struct nfs4_pnfs_layoutget;
+struct pnfs_layoutcommit_data;
 #endif /* CONFIG_PNFS */
 
 /*
@@ -1011,6 +1012,7 @@ struct nfs_rpc_ops {
 	void	(*clear_acl_cache)(struct inode *);
 #if defined(CONFIG_PNFS)
 	int	(*pnfs_layoutget)(struct nfs4_pnfs_layoutget *layout);
+	int	(*pnfs_layoutcommit)  (struct pnfs_layoutcommit_data *);
 #endif /* CONFIG_PNFS */
 };
 

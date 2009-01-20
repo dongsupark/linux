@@ -53,6 +53,7 @@
 #include "callback.h"
 #include "delegation.h"
 #include "internal.h"
+#include "pnfs.h"
 
 #define OPENOWNER_POOL_SIZE	8
 
@@ -498,8 +499,15 @@ static void __nfs4_close(struct path *path, struct nfs4_state *state, fmode_t fm
 	if (!call_close) {
 		nfs4_put_open_state(state);
 		nfs4_put_state_owner(owner);
-	} else
+	} else {
+#ifdef CONFIG_PNFS
+		struct nfs_inode *nfsi = NFS_I(state->inode);
+
+		if (nfsi->layoutcommit_ctx)
+			pnfs_layoutcommit_inode(state->inode, 0);
+#endif /* CONFIG_PNFS */
 		nfs4_do_close(path, state, wait);
+	}
 }
 
 void nfs4_close_state(struct path *path, struct nfs4_state *state, fmode_t fmode)
