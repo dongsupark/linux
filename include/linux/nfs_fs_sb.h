@@ -87,6 +87,9 @@ struct nfs_client {
 	u32			cl_exchange_flags;
 	struct nfs4_session	*cl_session; 	/* sharred session */
 #endif /* CONFIG_NFS_V4_1 */
+#ifdef CONFIG_PNFS
+	struct list_head	cl_lo_inodes;	/* Inodes having layouts */
+#endif /* CONFIG_PNFS */
 };
 
 /*

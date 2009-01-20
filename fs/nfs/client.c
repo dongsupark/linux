@@ -154,6 +154,10 @@ static struct nfs_client *nfs_alloc_client(const struct nfs_client_initdata *cl_
 	if (!IS_ERR(cred))
 		clp->cl_machine_cred = cred;
 
+#if defined(CONFIG_PNFS)
+	INIT_LIST_HEAD(&clp->cl_lo_inodes);
+#endif
+
 	return clp;
 
 error_cleanup:
