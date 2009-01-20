@@ -5212,6 +5212,76 @@ out:
 	return status;
 }
 
+/*
+ * Retrieve the list of Data Server devices from the MDS.
+ */
+static int _nfs4_pnfs_getdevicelist(struct nfs_fh *fh,
+				    struct nfs_server *server,
+				    struct pnfs_devicelist *devlist)
+{
+	struct nfs4_pnfs_getdevicelist_arg arg = {
+		.fh = fh,
+		.layoutclass = server->pnfs_curr_ld->id,
+	};
+	struct nfs4_pnfs_getdevicelist_res res = {
+		.devlist = devlist,
+	};
+	struct rpc_message msg = {
+		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_PNFS_GETDEVICELIST],
+		.rpc_argp = &arg,
+		.rpc_resp = &res,
+	};
+	int status;
+
+	dprintk("--> %s\n", __func__);
+	status = nfs4_call_sync(server, &msg, &arg, &res, 0);
+	dprintk("<-- %s status=%d\n", __func__, status);
+	return status;
+}
+
+int nfs4_pnfs_getdevicelist(struct super_block *sb,
+			    struct nfs_fh *fh,
+			    struct pnfs_devicelist *devlist)
+{
+	struct nfs4_exception exception = { };
+	struct nfs_server *server = NFS_SB(sb);
+	int err;
+
+	do {
+		err = nfs4_handle_exception(server,
+				_nfs4_pnfs_getdevicelist(fh, server, devlist),
+				&exception);
+	} while (exception.retry);
+
+	dprintk("nfs4_pnfs_getdevlist: err=%d, num_devs=%u\n",
+		err, devlist->num_devs);
+
+	return err;
+}
+
+int nfs4_pnfs_getdeviceinfo(struct super_block *sb, struct pnfs_device *pdev)
+{
+	struct nfs_server *server = NFS_SB(sb);
+	struct nfs4_pnfs_getdeviceinfo_arg args = {
+		.pdev = pdev,
+	};
+	struct nfs4_pnfs_getdeviceinfo_res res = {
+		.pdev = pdev,
+	};
+	struct rpc_message msg = {
+		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_PNFS_GETDEVICEINFO],
+		.rpc_argp = &args,
+		.rpc_resp = &res,
+	};
+	int status;
+
+	dprintk("--> %s\n", __func__);
+	status = nfs4_call_sync(server, &msg, &args, &res, 0);
+	dprintk("<-- %s status=%d\n", __func__, status);
+
+	return status;
+}
+
 #endif /* CONFIG_PNFS */
 
 struct nfs4_state_recovery_ops nfs40_reboot_recovery_ops = {

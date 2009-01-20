@@ -17,6 +17,13 @@
 #include <linux/nfs4_pnfs.h>
 #include <linux/pnfs_xdr.h>
 
+/* nfs4proc.c */
+extern int nfs4_pnfs_getdevicelist(struct super_block *sb,
+				   struct nfs_fh *fh,
+				   struct pnfs_devicelist *devlist);
+extern int nfs4_pnfs_getdeviceinfo(struct super_block *sb,
+				   struct pnfs_device *dev);
+
 /* pnfs.c */
 extern const nfs4_stateid zero_stateid;
 

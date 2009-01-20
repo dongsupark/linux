@@ -15,6 +15,11 @@
 #if defined(CONFIG_PNFS)
 
 #define PNFS_LAYOUT_MAXSIZE 4096
+#define NFS4_PNFS_DEVICEID4_SIZE 16
+
+struct pnfs_deviceid {
+	char data[NFS4_PNFS_DEVICEID4_SIZE];
+};
 
 struct nfs4_pnfs_layout {
 	__u32 len;
@@ -113,6 +118,27 @@ struct nfs4_pnfs_layoutreturn {
 	struct nfs4_pnfs_layoutreturn_res res;
 	struct rpc_cred *cred;
 	int rpc_status;
+};
+
+struct nfs4_pnfs_getdevicelist_arg {
+	const struct nfs_fh *fh;
+	u32 layoutclass;
+	struct nfs4_sequence_args seq_args;
+};
+
+struct nfs4_pnfs_getdevicelist_res {
+	struct pnfs_devicelist *devlist;
+	struct nfs4_sequence_res seq_res;
+};
+
+struct nfs4_pnfs_getdeviceinfo_arg {
+	struct pnfs_device *pdev;
+	struct nfs4_sequence_args seq_args;
+};
+
+struct nfs4_pnfs_getdeviceinfo_res {
+	struct pnfs_device *pdev;
+	struct nfs4_sequence_res seq_res;
 };
 
 #endif /* CONFIG_PNFS */
