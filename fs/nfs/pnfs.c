@@ -1151,6 +1151,8 @@ out_unlock:
 /* Callback operations for layout drivers.
  */
 struct pnfs_client_operations pnfs_ops = {
+	.nfs_getdevicelist = nfs4_pnfs_getdevicelist,
+	.nfs_getdeviceinfo = nfs4_pnfs_getdeviceinfo,
 };
 
 EXPORT_SYMBOL(pnfs_unregister_layoutdriver);
