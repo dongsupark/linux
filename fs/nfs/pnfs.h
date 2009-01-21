@@ -53,6 +53,8 @@ void pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent
 void pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx);
 unsigned int pnfs_getiosize(struct nfs_server *server);
 void pnfs_set_ds_iosize(struct nfs_server *server);
+enum pnfs_try_status _pnfs_try_to_commit(struct nfs_write_data *,
+					 const struct rpc_call_ops *, int);
 void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *, struct nfs_open_context *, struct list_head *, size_t *);
 void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *);
 void pnfs_free_fsdata(struct pnfs_fsdata *fsdata);
@@ -109,6 +111,24 @@ pnfs_try_to_write_data(struct nfs_write_data *data,
 	/* FIXME: write_pagelist should probably be mandated */
 	if (PNFS_EXISTS_LDIO_OP(nfss, write_pagelist))
 		return _pnfs_try_to_write_data(data, call_ops, how);
+
+	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline enum pnfs_try_status
+pnfs_try_to_commit(struct nfs_write_data *data,
+		   const struct rpc_call_ops *call_ops,
+		   int how)
+{
+	struct inode *inode = data->inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	/* Note that we check for "write_pagelist" and not for "commit"
+	   since if async writes were done and pages weren't marked as stable
+	   the commit method MUST be defined by the LD */
+	/* FIXME: write_pagelist should probably be mandated */
+	if (PNFS_EXISTS_LDIO_OP(nfss, write_pagelist))
+		return _pnfs_try_to_commit(data, call_ops, how);
 
 	return PNFS_NOT_ATTEMPTED;
 }
@@ -221,6 +241,13 @@ pnfs_try_to_read_data(struct nfs_read_data *data,
 static inline enum pnfs_try_status
 pnfs_try_to_write_data(struct nfs_write_data *data,
 		       const struct rpc_call_ops *call_ops, int how)
+{
+	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline enum pnfs_try_status
+pnfs_try_to_commit(struct nfs_write_data *data,
+		   const struct rpc_call_ops *call_ops, int how)
 {
 	return PNFS_NOT_ATTEMPTED;
 }
