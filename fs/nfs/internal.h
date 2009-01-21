@@ -155,6 +155,10 @@ extern __be32 *nfs4_decode_dirent(__be32 *p, struct nfs_entry *entry, int plus);
 #endif
 
 /* nfs4proc.c */
+#ifdef CONFIG_NFS_V4_1
+extern int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred);
+#endif /* CONFIG_NFS_V4_1 */
+
 #ifdef CONFIG_NFS_V4
 extern struct rpc_procinfo nfs4_procedures[];
 #endif
@@ -257,6 +261,15 @@ static inline void nfs4_sequence_free_slot(const struct nfs_client *clp,
 		nfs41_sequence_free_slot(clp, res);
 #endif /* CONFIG_NFS_V4_1 */
 }
+
+#ifdef CONFIG_NFS_V4_1
+static inline bool exchgid_is_ds_only(struct nfs_client *clp)
+{
+	u32 mask = EXCHGID4_FLAG_USE_PNFS_DS | EXCHGID4_FLAG_USE_PNFS_MDS;
+
+	return (clp->cl_exchange_flags & mask) == EXCHGID4_FLAG_USE_PNFS_DS;
+}
+#endif /* CONFIG_NFS_V4_1 */
 
 /*
  * Determine the device name as a string

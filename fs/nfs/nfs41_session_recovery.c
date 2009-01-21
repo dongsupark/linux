@@ -101,6 +101,7 @@ static int session_reclaimer(void *arg)
 		}
 		memset(rec->session->sess_id.data, 0, NFS4_MAX_SESSIONID_LEN);
 	}
+create:
 	ret = nfs4_proc_create_session(clp, reset);
 	if (ret)
 		goto out_error;
@@ -126,8 +127,20 @@ out_error:
 
 	switch (ret) {
 	case -NFS4ERR_STALE_CLIENTID:
-		set_bit(NFS4CLNT_LEASE_EXPIRED, &rec->session->clp->cl_state);
-		break;
+		if (exchgid_is_ds_only(clp)) {
+			dprintk("%s DS Clientid Reset\n", __func__);
+			ret = nfs4_proc_exchange_id(clp, clp->cl_machine_cred);
+			if (ret) {
+				nfs_put_client(clp);
+				goto out;
+			}
+			goto create;
+		} else {
+			dprintk("%s SET NFS4CLNT_LEASE_EXPIRED\n", __func__);
+			set_bit(NFS4CLNT_LEASE_EXPIRED,
+				&rec->session->clp->cl_state);
+			goto out;
+		}
 	}
 	goto out;
 }

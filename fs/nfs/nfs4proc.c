@@ -409,13 +409,11 @@ static void nfs41_sequence_done(struct nfs_client *clp,
 		 * Update the slot's sequence and client's lease renewal timers
 		 */
 		++slot->seq_nr;
-		if (clp) {
-			timestamp = res->sr_renewal_time;
-			spin_lock(&clp->cl_lock);
-			if (time_before(clp->cl_last_renewal, timestamp))
-				clp->cl_last_renewal = timestamp;
-			spin_unlock(&clp->cl_lock);
-		}
+		timestamp = res->sr_renewal_time;
+		spin_lock(&clp->cl_lock);
+		if (time_before(clp->cl_last_renewal, timestamp))
+			clp->cl_last_renewal = timestamp;
+		spin_unlock(&clp->cl_lock);
 		return;
 
 	case -NFS4ERR_BADSESSION:
@@ -3353,6 +3351,10 @@ nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server,
 		case -NFS4ERR_STALE_CLIENTID:
 		case -NFS4ERR_STALE_STATEID:
 		case -NFS4ERR_EXPIRED:
+#if defined(CONFIG_NFS_V4_1)
+			if (exchgid_is_ds_only(clp))
+				return 0;
+#endif /* CONFIG_NFS_V4_1 */
 			rpc_sleep_on(&clp->cl_rpcwaitq, task, NULL);
 			nfs4_schedule_state_recovery(clp);
 			if (test_bit(NFS4CLNT_MANAGER_RUNNING, &clp->cl_state) == 0)
@@ -3369,8 +3371,9 @@ nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server,
 		case -NFS4ERR_REQ_TOO_BIG:
 		case -NFS4ERR_REP_TOO_BIG:
 		case -NFS4ERR_REP_TOO_BIG_TO_CACHE:
-			dprintk("%s ERROR %d, Reset session\n", __func__,
-				task->tk_status);
+			dprintk("%s ERROR %d, Reset session. Exchangeid "
+				"flags 0x%x\n", __func__, task->tk_status,
+				clp->cl_exchange_flags);
 			nfs41_set_session_reset(clp->cl_session);
 			task->tk_status = 0;
 			return -EAGAIN;
@@ -4260,7 +4263,7 @@ int nfs4_proc_fs_locations(struct inode *dir, const struct qstr *name,
  * NFS4ERR_BADSESSION in the sequence operation, and will therefore
  * be in some phase of session reset.
  */
-static int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
+int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 {
 	nfs4_verifier verifier;
 	struct nfs41_exchange_id_args args = {
@@ -4309,6 +4312,7 @@ static int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 	dprintk("<-- %s status= %d\n", __func__, status);
 	return status;
 }
+EXPORT_SYMBOL(nfs4_proc_exchange_id);
 
 struct nfs4_get_lease_time_data {
 	struct nfs4_get_lease_time_args *args;
@@ -4729,6 +4733,13 @@ int nfs4_proc_create_session(struct nfs_client *clp, int reset)
 	if (reset)
 		/* Lease time is aleady set */
 		goto out;
+#ifdef CONFIG_PNFS
+	/* Data servers set lease time from MDS */
+	if (exchgid_is_ds_only(clp)) {
+		clear_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state);
+		goto out;
+	}
+#endif /* CONFIG_PNFS */
 
 	/* Get the lease time */
 	status = nfs4_proc_get_lease_time(clp, &fsinfo);
