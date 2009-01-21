@@ -40,6 +40,8 @@ void unmount_pnfs_layoutdriver(struct super_block *sb);
 int pnfs_use_read(struct inode *inode, ssize_t count);
 int pnfs_use_ds_io(struct list_head *, struct inode *, int);
 int pnfs_use_write(struct inode *inode, ssize_t count);
+enum pnfs_try_status _pnfs_try_to_read_data(struct nfs_read_data *,
+					    const struct rpc_call_ops *);
 int pnfs_initialize(void);
 void pnfs_uninitialize(void);
 void pnfs_layoutcommit_done(struct pnfs_layoutcommit_data *data);
@@ -66,6 +68,20 @@ static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 	return nfss->pnfs_curr_ld != NULL;
 }
 
+static inline enum pnfs_try_status
+pnfs_try_to_read_data(struct nfs_read_data *data,
+		      const struct rpc_call_ops *call_ops)
+{
+	struct inode *inode = data->inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	/* FIXME: read_pagelist should probably be mandated */
+	if (PNFS_EXISTS_LDIO_OP(nfss, read_pagelist))
+		return _pnfs_try_to_read_data(data, call_ops);
+
+	return PNFS_NOT_ATTEMPTED;
+}
+
 static inline int pnfs_return_layout(struct inode *ino,
 				     struct nfs4_pnfs_layout_segment *lseg,
 				     const nfs4_stateid *stateid, /* optional */
@@ -81,6 +97,11 @@ static inline int pnfs_return_layout(struct inode *ino,
 	return 0;
 }
 
+static inline int pnfs_get_read_status(struct nfs_read_data *data)
+{
+	return data->pdata.pnfs_error;
+}
+
 static inline int pnfs_use_rpc(struct nfs_server *nfss)
 {
 	if (pnfs_enabled_sb(nfss))
@@ -90,6 +111,18 @@ static inline int pnfs_use_rpc(struct nfs_server *nfss)
 }
 
 #else  /* CONFIG_PNFS */
+
+static inline enum pnfs_try_status
+pnfs_try_to_read_data(struct nfs_read_data *data,
+		      const struct rpc_call_ops *call_ops)
+{
+	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline int pnfs_get_read_status(struct nfs_read_data *data)
+{
+	return 0;
+}
 
 static inline int pnfs_use_rpc(struct nfs_server *nfss)
 {

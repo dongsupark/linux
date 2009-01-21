@@ -22,6 +22,7 @@
 #include <linux/module.h>
 
 #include <asm/system.h>
+#include <linux/module.h>
 #include "pnfs.h"
 
 #include "nfs4_fs.h"
@@ -207,6 +208,7 @@ static int nfs_read_rpcsetup(struct nfs_page *req, struct nfs_read_data *data,
 		unsigned int count, unsigned int offset)
 {
 	struct inode *inode = req->wb_context->path.dentry->d_inode;
+	enum pnfs_try_status ret;
 
 	data->req	  = req;
 	data->inode	  = inode;
@@ -223,6 +225,10 @@ static int nfs_read_rpcsetup(struct nfs_page *req, struct nfs_read_data *data,
 	data->res.count   = count;
 	data->res.eof     = 0;
 	nfs_fattr_init(&data->fattr);
+
+	ret = pnfs_try_to_read_data(data, call_ops);
+	if (ret == PNFS_ATTEMPTED)
+		return pnfs_get_read_status(data);
 
 	return nfs_initiate_read(data, NFS_CLIENT(inode), call_ops);
 }
@@ -369,6 +375,10 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 	struct nfs_readargs *argp = &data->args;
 	struct nfs_readres *resp = &data->res;
 
+#ifdef CONFIG_PNFS
+	if (data->pdata.pnfsflags & PNFS_NO_RPC)
+		return;
+#endif /* CONFIG_PNFS */
 	if (resp->eof || resp->count == argp->count)
 		goto out;
 
@@ -436,6 +446,7 @@ void nfs_read_prepare(struct rpc_task *task, void *calldata)
 		return;
 	rpc_call_start(task);
 }
+EXPORT_SYMBOL(nfs_read_prepare);
 #endif /* CONFIG_NFS_V4_1 */
 
 static const struct rpc_call_ops nfs_read_partial_ops = {
