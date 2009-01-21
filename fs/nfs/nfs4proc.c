@@ -4672,6 +4672,7 @@ int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 	dprintk("<-- %s status= %d\n", __func__, status);
 	return status;
 }
+EXPORT_SYMBOL(nfs4_proc_exchange_id);
 
 struct nfs4_get_lease_time_data {
 	struct nfs4_get_lease_time_args *args;
