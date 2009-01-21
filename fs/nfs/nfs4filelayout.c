@@ -106,12 +106,149 @@ filelayout_uninitialize_mountpoint(struct pnfs_mount_type *mountid)
 	return 0;
 }
 
+/* This function is used by the layout driver to calculate the
+ * offset of the file on the dserver based on whether the
+ * layout type is STRIPE_DENSE or STRIPE_SPARSE
+ */
+loff_t
+filelayout_get_dserver_offset(loff_t offset,
+			      struct nfs4_filelayout_segment *layout)
+{
+	if (!layout)
+		return offset;
+
+	switch (layout->stripe_type) {
+	case STRIPE_SPARSE:
+		return offset;
+
+	case STRIPE_DENSE:
+	{
+		u32 stripe_size;
+		u32 stripe_unit;
+		loff_t off;
+		loff_t tmp;
+		u32 stripe_unit_idx;
+
+		stripe_size = layout->stripe_unit * layout->num_fh;
+		/* XXX I do this because do_div seems to take a 32 bit dividend */
+		stripe_unit = layout->stripe_unit;
+		tmp = off = offset;
+
+		do_div(off, stripe_size);
+		stripe_unit_idx = do_div(tmp, stripe_unit);
+
+		return off * stripe_unit + stripe_unit_idx;
+	}
+
+	default:
+		BUG();
+	}
+
+	/* We should never get here... just to stop the gcc warning */
+	return 0;
+}
+
+/* Create a filelayout layout structure and return it.  The pNFS client
+ * will use the pnfs_layout_type type to refer to the layout for this
+ * inode from now on.
+ */
+struct pnfs_layout_type*
+filelayout_alloc_layout(struct pnfs_mount_type *mountid, struct inode *inode)
+{
+	dprintk("NFS_FILELAYOUT: allocating layout\n");
+	return kzalloc(sizeof(struct pnfs_layout_type) +
+		       sizeof(struct nfs4_filelayout), GFP_KERNEL);
+}
+
+/* Free a filelayout layout structure
+ */
+void
+filelayout_free_layout(struct pnfs_layout_type *layoutid)
+{
+	dprintk("NFS_FILELAYOUT: freeing layout\n");
+	kfree(layoutid);
+}
+
+/* Decode layout and store in layoutid.  Overwrite any existing layout
+ * information for this file.
+ */
+static void
+filelayout_set_layout(struct nfs4_filelayout *flo,
+		      struct nfs4_filelayout_segment *fl,
+		      struct nfs4_pnfs_layoutget_res *lgr)
+{
+	int i;
+	uint32_t *p = (uint32_t *)lgr->layout.buf;
+	uint32_t nfl_util;
+
+	dprintk("%s: set_layout_map Begin\n", __func__);
+
+	COPYMEM(&fl->dev_id, NFS4_PNFS_DEVICEID4_SIZE);
+	READ32(nfl_util);
+	if (nfl_util & NFL4_UFLG_COMMIT_THRU_MDS)
+		fl->commit_through_mds = 1;
+	if (nfl_util & NFL4_UFLG_DENSE)
+		fl->stripe_type = STRIPE_DENSE;
+	else
+		fl->stripe_type = STRIPE_SPARSE;
+	fl->stripe_unit = nfl_util & ~NFL4_UFLG_MASK;
+
+	if (!flo->stripe_unit)
+		flo->stripe_unit = fl->stripe_unit;
+	else if (flo->stripe_unit != fl->stripe_unit) {
+		printk(KERN_NOTICE "%s: updating strip_unit from %u to %u\n",
+			__func__, flo->stripe_unit, fl->stripe_unit);
+		flo->stripe_unit = fl->stripe_unit;
+	}
+
+	READ32(fl->first_stripe_index);
+	READ64(fl->pattern_offset);
+	READ32(fl->num_fh);
+
+	dprintk("%s: nfl_util 0x%X num_fh %u fsi %u po %llu dev_id %s\n",
+		__func__, nfl_util, fl->num_fh, fl->first_stripe_index,
+		fl->pattern_offset, deviceid_fmt(&fl->dev_id));
+
+	for (i = 0; i < fl->num_fh; i++) {
+		/* fh */
+		memset(&fl->fh_array[i], 0, sizeof(struct nfs_fh));
+		READ32(fl->fh_array[i].size);
+		COPYMEM(fl->fh_array[i].data, fl->fh_array[i].size);
+		dprintk("DEBUG: %s: fh len %d\n", __func__,
+					fl->fh_array[i].size);
+	}
+}
+
+static struct pnfs_layout_segment *
+filelayout_alloc_lseg(struct pnfs_layout_type *layoutid,
+		      struct nfs4_pnfs_layoutget_res *lgr)
+{
+	struct nfs4_filelayout *flo = PNFS_LD_DATA(layoutid);
+	struct pnfs_layout_segment *lseg;
+
+	lseg = kzalloc(sizeof(struct pnfs_layout_segment) +
+		       sizeof(struct nfs4_filelayout_segment), GFP_KERNEL);
+	if (!lseg)
+		return NULL;
+
+	filelayout_set_layout(flo, LSEG_LD_DATA(lseg), lgr);
+	return lseg;
+}
+
+static void
+filelayout_free_lseg(struct pnfs_layout_segment *lseg)
+{
+	kfree(lseg);
+}
+
 /* Return the stripesize for the specified file.
  */
 ssize_t
 filelayout_get_stripesize(struct pnfs_layout_type *layoutid)
 {
-	return -1;
+	struct nfs4_filelayout *flo = PNFS_LD_DATA(layoutid);
+
+	return flo->stripe_unit;
 }
 
 /*
@@ -160,6 +297,10 @@ filelayout_get_io_threshold(struct pnfs_layout_type *layoutid,
 }
 
 struct layoutdriver_io_operations filelayout_io_operations = {
+	.alloc_layout            = filelayout_alloc_layout,
+	.free_layout             = filelayout_free_layout,
+	.alloc_lseg              = filelayout_alloc_lseg,
+	.free_lseg               = filelayout_free_lseg,
 	.initialize_mountpoint   = filelayout_initialize_mountpoint,
 	.uninitialize_mountpoint = filelayout_uninitialize_mountpoint,
 };
