@@ -15,6 +15,10 @@
 #include <linux/nfs4_pnfs.h>
 #include <linux/pnfs_xdr.h>
 
+#define NFS4_PNFS_DEV_HASH_BITS 5
+#define NFS4_PNFS_DEV_HASH_SIZE (1 << NFS4_PNFS_DEV_HASH_BITS)
+#define NFS4_PNFS_DEV_HASH_MASK (NFS4_PNFS_DEV_HASH_SIZE - 1)
+
 #define NFS4_PNFS_MAX_STRIPE_CNT 4096
 #define NFS4_PNFS_MAX_MULTI_CNT  64 /* 256 fit into a u8 stripe_index */
 #define NFS4_PNFS_MAX_MULTI_DS   2
@@ -43,11 +47,28 @@ struct nfs4_multipath {
 };
 
 struct nfs4_file_layout_dsaddr {
+	struct hlist_node	hash_node;   /* nfs4_pnfs_dev_hlist dev_list */
 	struct pnfs_deviceid	dev_id;
 	u32 			stripe_count;
 	u8			*stripe_indices;
 	u32			multipath_count;
 	struct nfs4_multipath	*multipath_list;
+};
+
+struct nfs4_pnfs_dev_hlist {
+	rwlock_t		dev_lock;
+	struct hlist_head	dev_list[NFS4_PNFS_DEV_HASH_SIZE];
+	struct hlist_head	dev_dslist[NFS4_PNFS_DEV_HASH_SIZE];
+};
+
+/*
+ * Used for I/O, Maps a stripe index to a layout file handle and a
+ * multipath data server.
+ */
+
+struct nfs4_pnfs_dserver {
+	struct nfs_fh        *fh;
+	struct nfs4_multipath *multipath;
 };
 
 struct nfs4_filelayout_segment {
@@ -70,11 +91,26 @@ struct nfs4_filelayout {
 
 struct filelayout_mount_type {
 	struct super_block *fl_sb;
+	struct nfs4_pnfs_dev_hlist *hlist;
 };
 
 extern struct pnfs_client_operations *pnfs_callback_ops;
 
 char *deviceid_fmt(const struct pnfs_deviceid *dev_id);
+int  nfs4_pnfs_devlist_init(struct nfs4_pnfs_dev_hlist *hlist);
+void nfs4_pnfs_devlist_destroy(struct nfs4_pnfs_dev_hlist *hlist);
+
+int nfs4_pnfs_dserver_get(struct pnfs_layout_segment *lseg,
+			  loff_t offset,
+			  size_t count,
+			  struct nfs4_pnfs_dserver *dserver);
+int decode_and_add_devicelist(struct filelayout_mount_type *mt, struct pnfs_devicelist *devlist);
+int process_deviceid_list(struct filelayout_mount_type *mt,
+			  struct nfs_fh *fh,
+			  struct pnfs_devicelist *devlist);
+u32 filelayout_dserver_get_index(loff_t offset,
+				 struct nfs4_file_layout_dsaddr *di,
+				 struct nfs4_filelayout_segment *layout);
 
 #define READ32(x)         (x) = ntohl(*p++)
 #define READ64(x)         do {			\
