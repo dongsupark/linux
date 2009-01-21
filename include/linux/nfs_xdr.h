@@ -964,6 +964,9 @@ struct nfs_write_data {
 #ifdef CONFIG_NFS_V4
 	unsigned long		timestamp;	/* For lease renewal */
 #endif
+#if defined(CONFIG_PNFS)
+	struct pnfs_call_data	pdata;
+#endif /* CONFIG_PNFS */
 	struct page		*page_array[NFS_PAGEVEC_SIZE];
 };
 

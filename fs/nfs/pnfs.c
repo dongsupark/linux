@@ -159,6 +159,31 @@ pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx)
 	spin_unlock(&nfsi->lo_lock);
 }
 
+/* Update last_write_offset for layoutcommit.
+ * TODO: We should only use commited extents, but the current nfs
+ * implementation does not calculate the written range in nfs_commit_done.
+ * We therefore update this field in writeback_done.
+ */
+void
+pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent)
+{
+	loff_t end_pos;
+
+	spin_lock(&nfsi->lo_lock);
+	if (offset < nfsi->pnfs_write_begin_pos)
+		nfsi->pnfs_write_begin_pos = offset;
+	end_pos = offset + extent - 1; /* I'm being inclusive */
+	if (end_pos > nfsi->pnfs_write_end_pos)
+		nfsi->pnfs_write_end_pos = end_pos;
+	dprintk("%s: Wrote %lu@%lu bpos %lu, epos: %lu\n",
+		__func__,
+		(unsigned long) extent,
+		(unsigned long) offset ,
+		(unsigned long) nfsi->pnfs_write_begin_pos,
+		(unsigned long) nfsi->pnfs_write_end_pos);
+	spin_unlock(&nfsi->lo_lock);
+}
+
 /* Unitialize a mountpoint in a layout driver */
 void
 unmount_pnfs_layoutdriver(struct super_block *sb)
@@ -1281,6 +1306,96 @@ pnfs_call_done(struct pnfs_call_data *pdata, struct rpc_task *task, void *data)
 	task->tk_ops = pdata->call_ops;
 }
 
+/* Post-write completion function
+ * Invoked by all layout drivers when write_pagelist is done.
+ *
+ * NOTE: callers set data->pnfsflags PNFS_NO_RPC
+ * so that the NFS cleanup routines perform only the page cache
+ * cleanup.
+ */
+static void
+pnfs_writeback_done(struct nfs_write_data *data)
+{
+	struct pnfs_call_data *pdata = &data->pdata;
+
+	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
+
+	pnfs_call_done(pdata, &data->task, data);
+}
+
+/*
+ * Call the appropriate parallel I/O subsystem write function.
+ * If no I/O device driver exists, or one does match the returned
+ * fstype, then return a positive status for regular NFS processing.
+ *
+ * TODO: Is wdata->how and wdata->args.stable always the same value?
+ * TODO: It seems in NFS, the server may not do a stable write even
+ * though it was requested (and vice-versa?).  To check, it looks
+ * in data->res.verf->committed.  Do we need this ability
+ * for non-file layout drivers?
+ */
+static enum pnfs_try_status
+pnfs_writepages(struct nfs_write_data *wdata, int how)
+{
+	struct nfs_writeargs *args = &wdata->args;
+	struct inode *inode = wdata->inode;
+	int numpages, status;
+	enum pnfs_try_status trypnfs;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	struct nfs_inode *nfsi = NFS_I(inode);
+	struct pnfs_layout_segment *lseg;
+
+	dprintk("%s: Writing ino:%lu %u@%llu\n",
+		__func__,
+		inode->i_ino,
+		args->count,
+		args->offset);
+
+	/* Retrieve and set layout if not allready cached */
+	status = pnfs_update_layout(inode,
+				    args->context,
+				    args->count,
+				    args->offset,
+				    IOMODE_RW,
+				    &lseg);
+	if (status) {
+		dprintk("%s: Updating layout failed (%d), retry with NFS \n",
+			__func__, status);
+		trypnfs = PNFS_NOT_ATTEMPTED;	/* retry with nfs I/O */
+		goto out;
+	}
+
+	/* Determine number of pages
+	 */
+	numpages = nfs_page_array_len(args->pgbase, args->count);
+
+	dprintk("%s: Calling layout driver (how %d) write with %d pages\n",
+		__func__,
+		how,
+		numpages);
+	if (!pnfs_use_rpc(nfss))
+		wdata->pdata.pnfsflags |= PNFS_NO_RPC;
+	wdata->pdata.lseg = lseg;
+	trypnfs = nfss->pnfs_curr_ld->ld_io_ops->write_pagelist(
+							nfsi->current_layout,
+							args->pages,
+							args->pgbase,
+							numpages,
+							(loff_t)args->offset,
+							args->count,
+							how,
+							wdata);
+
+	if (trypnfs == PNFS_NOT_ATTEMPTED) {
+		wdata->pdata.pnfsflags &= ~PNFS_NO_RPC;
+		wdata->pdata.lseg = NULL;
+		put_lseg(lseg);
+	}
+out:
+	dprintk("%s End (trypnfs:%d)\n", __func__, trypnfs);
+	return trypnfs;
+}
+
 /* Post-read completion function.  Invoked by all layout drivers when
  * read_pagelist is done
  */
@@ -1377,6 +1492,27 @@ _pnfs_try_to_read_data(struct nfs_read_data *data,
 		dprintk("%s: Utilizing pNFS I/O\n", __func__);
 		data->pdata.call_ops = call_ops;
 		return pnfs_readpages(data);
+	}
+}
+
+enum pnfs_try_status
+_pnfs_try_to_write_data(struct nfs_write_data *data,
+			const struct rpc_call_ops *call_ops, int how)
+{
+	struct inode *ino = data->inode;
+	struct nfs_server *nfss = NFS_SERVER(ino);
+
+	dprintk("--> %s\n", __func__);
+	/* Only create an rpc request if utilizing NFSv4 I/O */
+	if (!pnfs_use_write(ino, data->args.count) ||
+	    !nfss->pnfs_curr_ld->ld_io_ops->write_pagelist) {
+		dprintk("<-- %s: not using pnfs\n", __func__);
+		return PNFS_NOT_ATTEMPTED;
+	} else {
+		dprintk("%s: Utilizing pNFS I/O\n", __func__);
+		data->pdata.call_ops = call_ops;
+		data->pdata.how = how;
+		return pnfs_writepages(data, how);
 	}
 }
 
@@ -1526,6 +1662,7 @@ struct pnfs_client_operations pnfs_ops = {
 	.nfs_getdevicelist = nfs4_pnfs_getdevicelist,
 	.nfs_getdeviceinfo = nfs4_pnfs_getdeviceinfo,
 	.nfs_readlist_complete = pnfs_read_done,
+	.nfs_writelist_complete = pnfs_writeback_done,
 };
 
 EXPORT_SYMBOL(pnfs_unregister_layoutdriver);
