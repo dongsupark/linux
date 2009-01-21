@@ -40,6 +40,8 @@ void unmount_pnfs_layoutdriver(struct super_block *sb);
 int pnfs_use_read(struct inode *inode, ssize_t count);
 int pnfs_use_ds_io(struct list_head *, struct inode *, int);
 int pnfs_use_write(struct inode *inode, ssize_t count);
+enum pnfs_try_status _pnfs_try_to_write_data(struct nfs_write_data *,
+					     const struct rpc_call_ops *, int);
 enum pnfs_try_status _pnfs_try_to_read_data(struct nfs_read_data *,
 					    const struct rpc_call_ops *);
 int pnfs_initialize(void);
@@ -47,6 +49,7 @@ void pnfs_uninitialize(void);
 void pnfs_layoutcommit_done(struct pnfs_layoutcommit_data *data);
 void pnfs_layoutcommit_free(struct pnfs_layoutcommit_data *data);
 int pnfs_layoutcommit_inode(struct inode *inode, int sync);
+void pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent);
 void pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx);
 unsigned int pnfs_getiosize(struct nfs_server *server);
 void pnfs_set_ds_iosize(struct nfs_server *server);
@@ -83,6 +86,21 @@ pnfs_try_to_read_data(struct nfs_read_data *data,
 	return PNFS_NOT_ATTEMPTED;
 }
 
+static inline enum pnfs_try_status
+pnfs_try_to_write_data(struct nfs_write_data *data,
+		       const struct rpc_call_ops *call_ops,
+		       int how)
+{
+	struct inode *inode = data->inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	/* FIXME: write_pagelist should probably be mandated */
+	if (PNFS_EXISTS_LDIO_OP(nfss, write_pagelist))
+		return _pnfs_try_to_write_data(data, call_ops, how);
+
+	return PNFS_NOT_ATTEMPTED;
+}
+
 static inline int pnfs_return_layout(struct inode *ino,
 				     struct nfs4_pnfs_layout_segment *lseg,
 				     const nfs4_stateid *stateid, /* optional */
@@ -96,6 +114,11 @@ static inline int pnfs_return_layout(struct inode *ino,
 		return _pnfs_return_layout(ino, lseg, stateid, type);
 
 	return 0;
+}
+
+static inline int pnfs_get_write_status(struct nfs_write_data *data)
+{
+	return data->pdata.pnfs_error;
 }
 
 static inline int pnfs_get_read_status(struct nfs_read_data *data)
@@ -118,6 +141,18 @@ pnfs_try_to_read_data(struct nfs_read_data *data,
 		      const struct rpc_call_ops *call_ops)
 {
 	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline enum pnfs_try_status
+pnfs_try_to_write_data(struct nfs_write_data *data,
+		       const struct rpc_call_ops *call_ops, int how)
+{
+	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline int pnfs_get_write_status(struct nfs_write_data *data)
+{
+	return 0;
 }
 
 static inline int pnfs_get_read_status(struct nfs_read_data *data)

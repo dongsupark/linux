@@ -140,6 +140,12 @@ struct layoutdriver_io_operations {
 			  struct page **pages, unsigned int pgbase,
 			  unsigned nr_pages, loff_t offset, size_t count,
 			  struct nfs_read_data *nfs_data);
+	enum pnfs_try_status
+	(*write_pagelist) (struct pnfs_layout_type *layoutid,
+			   struct page **pages, unsigned int pgbase,
+			   unsigned nr_pages, loff_t offset, size_t count,
+			   int sync, struct nfs_write_data *nfs_data);
+
 	/* Layout information. For each inode, alloc_layout is executed once to retrieve an
 	 * inode specific layout structure.  Each subsequent layoutget operation results in
 	 * a set_layout call to set the opaque layout in the layout driver.*/
@@ -233,6 +239,9 @@ struct pnfs_client_operations {
 
 	/* Post read callback. */
 	void (*nfs_readlist_complete) (struct nfs_read_data *nfs_data);
+
+	/* Post write callback. */
+	void (*nfs_writelist_complete) (struct nfs_write_data *nfs_data);
 	void (*nfs_return_layout) (struct inode *);
 };
 
