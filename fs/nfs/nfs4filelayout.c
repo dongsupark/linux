@@ -106,6 +106,21 @@ filelayout_uninitialize_mountpoint(struct pnfs_mount_type *mountid)
 	return 0;
 }
 
+/* Return the stripesize for the specified file.
+ */
+ssize_t
+filelayout_get_stripesize(struct pnfs_layout_type *layoutid)
+{
+	return -1;
+}
+
+ssize_t
+filelayout_get_io_threshold(struct pnfs_layout_type *layoutid,
+			    struct inode *inode)
+{
+	return -1;
+}
+
 struct layoutdriver_io_operations filelayout_io_operations = {
 	.initialize_mountpoint   = filelayout_initialize_mountpoint,
 	.uninitialize_mountpoint = filelayout_uninitialize_mountpoint,
@@ -114,6 +129,9 @@ struct layoutdriver_io_operations filelayout_io_operations = {
 struct layoutdriver_policy_operations filelayout_policy_operations = {
 	.flags                 = PNFS_USE_RPC_CODE |
 	                         PNFS_LAYOUTGET_ON_OPEN,
+	.get_stripesize        = filelayout_get_stripesize,
+	.get_read_threshold    = filelayout_get_io_threshold,
+	.get_write_threshold   = filelayout_get_io_threshold,
 };
 
 struct pnfs_layoutdriver_type filelayout_type = {
