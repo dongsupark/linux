@@ -73,6 +73,11 @@ static int nfs4_do_fsinfo(struct nfs_server *, struct nfs_fh *, struct nfs_fsinf
 static int nfs4_async_handle_error(struct rpc_task *, const struct nfs_server *, struct nfs4_state *);
 static int _nfs4_proc_lookup(struct inode *dir, const struct qstr *name, struct nfs_fh *fhandle, struct nfs_fattr *fattr);
 static int _nfs4_proc_getattr(struct nfs_server *server, struct nfs_fh *fhandle, struct nfs_fattr *fattr);
+static int
+_nfs4_async_handle_error(struct rpc_task *task,
+			 const struct nfs_server *server,
+			 struct nfs_client *clp, struct nfs4_state *state);
+
 
 /* Prevent leaks of NFSv4 errors into userland */
 static int nfs4_map_errors(int err)
@@ -3101,6 +3106,46 @@ static int nfs4_read_done(struct rpc_task *task, struct nfs_read_data *data)
 	return 0;
 }
 
+#ifdef CONFIG_NFS_V4_1
+/*
+ * rpc_call_done callback for a read to the MDS or to a filelayout Data Server
+ */
+static int pnfs4_read_done(struct rpc_task *task, struct nfs_read_data *data)
+{
+	struct nfs_server *mds_svr = NFS_SERVER(data->inode);
+	struct nfs_client *client = mds_svr->nfs_client;
+	int status;
+
+	dprintk("--> %s\n", __func__);
+
+	if (data->pdata.pnfsflags & PNFS_NO_RPC)
+		return 0;
+
+	status = task->tk_status >= 0 ? 0 : task->tk_status;
+
+	nfs41_sequence_done(client, &data->res.seq_res, status);
+
+	/*
+	 * Handle async errors for both data servers and MDS communication.
+	 */
+
+	/* FIXME: pass data->args.context->state to nfs4_async_handle_error
+	   like in nfs4_read_done? */
+	if (_nfs4_async_handle_error(task, mds_svr, client, NULL) == -EAGAIN) {
+		nfs_restart_rpc(task, client);
+		dprintk("<-- %s status= %d\n", __func__, -EAGAIN);
+		return -EAGAIN;
+	}
+
+	if (task->tk_status > 0)
+		renew_lease(mds_svr, data->timestamp);
+
+	dprintk("<-- %s\n", __func__);
+
+	return 0;
+}
+#endif /* CONFIG_NFS_V4_1 */
+
 static void nfs4_proc_read_setup(struct nfs_read_data *data, struct rpc_message *msg)
 {
 	data->timestamp   = jiffies;
@@ -5757,6 +5802,7 @@ pnfs_v4_clientops_init(void)
 	struct nfs_rpc_ops *p = (struct nfs_rpc_ops *)&pnfs_v4_clientops;
 
 	memcpy(p, &nfs_v4_clientops, sizeof(*p));
+	p->read_done		= pnfs4_read_done;
 }
 #endif /* CONFIG_NFS_V4_1 */
 
