@@ -272,6 +272,7 @@ extern void nfs_increment_open_seqid(int status, struct nfs_seqid *seqid);
 extern void nfs_increment_lock_seqid(int status, struct nfs_seqid *seqid);
 extern void nfs_free_seqid(struct nfs_seqid *seqid);
 
+/* write.c */
 extern const nfs4_stateid zero_stateid;
 
 /* nfs4xdr.c */
