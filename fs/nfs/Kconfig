@@ -84,6 +84,15 @@ config NFS_V4_1
 
 	  Unless you're an NFS developer, say N.
 
+config PNFS_FILE_LAYOUT
+	tristate "NFS client support for the pNFS nfs-files layout (DEVELOPER ONLY)"
+	depends on NFS_FS && NFS_V4_1
+	default y
+	help
+	  This option enables support for the pNFS nfs-files layout.
+
+	  Unless you're an NFS developer, say N.
+
 config ROOT_NFS
 	bool "Root file system on NFS"
 	depends on NFS_FS=y && IP_PNP
