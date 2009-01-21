@@ -57,6 +57,8 @@
 
 static int pnfs_initialized;
 
+static enum pnfs_try_status pnfs_commit(struct nfs_write_data *data, int sync);
+
 /* Locking:
  *
  * pnfs_spinlock:
@@ -1651,6 +1653,94 @@ _pnfs_try_to_write_data(struct nfs_write_data *data,
 	}
 }
 
+enum pnfs_try_status
+_pnfs_try_to_commit(struct nfs_write_data *data,
+		    const struct rpc_call_ops *call_ops, int how)
+{
+	struct inode *inode = data->inode;
+
+	if (!pnfs_use_write(inode, -1)) {
+		dprintk("%s: Not using pNFS I/O\n", __func__);
+		return PNFS_NOT_ATTEMPTED;
+	} else {
+		/* data->call_ops and data->how set in nfs_commit_rpcsetup */
+		dprintk("%s: Utilizing pNFS I/O\n", __func__);
+		data->pdata.call_ops = call_ops;
+		data->pdata.how = how;
+		return pnfs_commit(data, how);
+	}
+}
+
+/* pNFS Commit callback function for all layout drivers */
+static void
+pnfs_commit_done(struct nfs_write_data *data)
+{
+	struct pnfs_call_data *pdata = &data->pdata;
+
+	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
+
+	pnfs_call_done(pdata, &data->task, data);
+}
+
+static enum pnfs_try_status
+pnfs_commit(struct nfs_write_data *data, int sync)
+{
+	int result;
+	struct nfs_inode *nfsi = NFS_I(data->inode);
+	struct nfs_server *nfss = NFS_SERVER(data->inode);
+	struct pnfs_layout_segment *lseg;
+	struct nfs_page *first, *last, *p;
+	int npages;
+	enum pnfs_try_status trypnfs;
+
+	dprintk("%s: Begin\n", __func__);
+
+	/* If the layout driver doesn't define its own commit function
+	 * use standard NFSv4 commit
+	 */
+	first = last = nfs_list_entry(data->pages.next);
+	npages = 0;
+	list_for_each_entry(p, &data->pages, wb_list) {
+		last = p;
+		npages++;
+	}
+	/* FIXME: we really ought to keep the layout segment that we used
+	   to write the page around for committing it and never ask for a
+	   new one.  If it was recalled we better commit the data first
+	   before returning it, otherwise the data needs to be rewritten,
+	   either with a new layout or to the MDS */
+	result = pnfs_update_layout(data->inode,
+				    NULL,
+				    ((npages - 1) << PAGE_CACHE_SHIFT) +
+				     first->wb_bytes +
+				     (first != last) ? last->wb_bytes : 0,
+				    first->wb_offset,
+				    IOMODE_RW,
+				    &lseg);
+	/* If no layout have been retrieved,
+	 * use standard NFSv4 commit
+	 */
+	if (result) {
+		dprintk("%s: Updating layout failed (%d), retry with NFS \n",
+			__func__, result);
+		trypnfs = PNFS_NOT_ATTEMPTED;
+		goto out;
+	}
+
+	dprintk("%s: Calling layout driver commit\n", __func__);
+	if (!pnfs_use_rpc(nfss))
+		data->pdata.pnfsflags |= PNFS_NO_RPC;
+	data->pdata.lseg = lseg;
+	trypnfs = nfss->pnfs_curr_ld->ld_io_ops->commit(nfsi->current_layout,
+						       sync, data);
+	if (trypnfs == PNFS_NOT_ATTEMPTED)
+		data->pdata.pnfsflags &= ~PNFS_NO_RPC;
+
+out:
+	dprintk("%s End (trypnfs:%d)\n", __func__, trypnfs);
+	return trypnfs;
+}
+
 /* Called on completion of layoutcommit */
 void
 pnfs_layoutcommit_done(struct pnfs_layoutcommit_data *data)
@@ -1825,6 +1915,7 @@ struct pnfs_client_operations pnfs_ops = {
 	.nfs_getdeviceinfo = nfs4_pnfs_getdeviceinfo,
 	.nfs_readlist_complete = pnfs_read_done,
 	.nfs_writelist_complete = pnfs_writeback_done,
+	.nfs_commit_complete = pnfs_commit_done,
 };
 
 EXPORT_SYMBOL(pnfs_unregister_layoutdriver);

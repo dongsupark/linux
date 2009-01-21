@@ -59,6 +59,7 @@ struct nfs_write_data *nfs_commitdata_alloc(void)
 	}
 	return p;
 }
+EXPORT_SYMBOL(nfs_commitdata_alloc);
 
 void nfs_commit_free(struct nfs_write_data *p)
 {
@@ -66,6 +67,7 @@ void nfs_commit_free(struct nfs_write_data *p)
 		kfree(p->pagevec);
 	mempool_free(p, nfs_commit_mempool);
 }
+EXPORT_SYMBOL(nfs_commit_free);
 
 struct nfs_write_data *nfs_writedata_alloc(unsigned int pagecount)
 {
@@ -1282,6 +1284,7 @@ static int nfs_commit_rpcsetup(struct list_head *head,
 {
 	struct nfs_page *first = nfs_list_entry(head->next);
 	struct inode *inode = first->wb_context->path.dentry->d_inode;
+	enum pnfs_try_status ret;
 
 	/* Set up the RPC argument and reply structs
 	 * NB: take care not to mess about with data->commit et al. */
@@ -1300,6 +1303,12 @@ static int nfs_commit_rpcsetup(struct list_head *head,
 	data->res.fattr   = &data->fattr;
 	data->res.verf    = &data->verf;
 	nfs_fattr_init(&data->fattr);
+
+	data->args.context = first->wb_context;  /* used by commit done */
+
+	ret = pnfs_try_to_commit(data, &nfs_commit_ops, how);
+	if (ret == PNFS_ATTEMPTED)
+		return pnfs_get_write_status(data);
 
 	return nfs_initiate_commit(data, NFS_CLIENT(inode), &nfs_commit_ops,
 				   how);
