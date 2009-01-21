@@ -277,6 +277,15 @@ static inline void nfs4_sequence_free_slot(const struct nfs_client *clp,
 #endif /* CONFIG_NFS_V4_1 */
 }
 
+#ifdef CONFIG_NFS_V4_1
+static inline bool exchgid_is_ds_only(struct nfs_client *clp)
+{
+	u32 mask = EXCHGID4_FLAG_USE_PNFS_DS | EXCHGID4_FLAG_USE_PNFS_MDS;
+
+	return (clp->cl_exchange_flags & mask) == EXCHGID4_FLAG_USE_PNFS_DS;
+}
+#endif /* CONFIG_NFS_V4_1 */
+
 /*
  * Determine the device name as a string
  */
