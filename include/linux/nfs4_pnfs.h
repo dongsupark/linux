@@ -200,6 +200,9 @@ enum layoutdriver_policy_flags {
 	 * same compound as the OPEN operation?
 	 */
 	PNFS_LAYOUTGET_ON_OPEN		= 1 << 2,
+
+	/* Should the pNFS client commit and return the layout upon a setattr */
+	PNFS_LAYOUTRET_ON_SETATTR	= 1 << 3,
 };
 
 struct layoutdriver_policy_operations {
@@ -249,6 +252,14 @@ static inline int
 pnfs_ld_layoutget_on_open(struct pnfs_layoutdriver_type *ld)
 {
 	return ld->ld_policy_ops->flags & PNFS_LAYOUTGET_ON_OPEN;
+}
+
+/* Should the pNFS client commit and return the layout upon a setattr
+ */
+static inline int
+pnfs_ld_layoutret_on_setattr(struct pnfs_layoutdriver_type *ld)
+{
+	return ld->ld_policy_ops->flags & PNFS_LAYOUTRET_ON_SETATTR;
 }
 
 struct pnfs_device {

@@ -2192,6 +2192,29 @@ nfs4_proc_setattr(struct dentry *dentry, struct nfs_fattr *fattr,
 	return status;
 }
 
+#ifdef CONFIG_PNFS
+/*
+ * Return layout before issueing a setattr
+ */
+static int
+pnfs4_proc_setattr(struct dentry *dentry, struct nfs_fattr *fattr,
+		    struct iattr *sattr)
+{
+	struct inode *inode = dentry->d_inode;
+	struct nfs_server *server = NFS_SERVER(inode);
+	struct nfs_inode *nfsi = NFS_I(inode);
+
+	if (pnfs_enabled_sb(server) && nfsi->current_layout) {
+		if (pnfs_ld_layoutret_on_setattr(server->pnfs_curr_ld)) {
+			if (nfsi->layoutcommit_ctx)
+				pnfs_layoutcommit_inode(inode, 0);
+			pnfs_return_layout(inode, NULL, NULL, RECALL_FILE);
+		}
+	}
+	return nfs4_proc_setattr(dentry, fattr, sattr);
+}
+#endif /* CONFIG_PNFS */
+
 static int _nfs4_proc_lookupfh(struct nfs_server *server, const struct nfs_fh *dirfh,
 		const struct qstr *name, struct nfs_fh *fhandle,
 		struct nfs_fattr *fattr)
@@ -5480,6 +5503,7 @@ pnfs_v4_clientops_init(void)
 
 	memcpy(p, &nfs_v4_clientops, sizeof(*p));
 	p->file_ops		= &pnfs_file_operations;
+	p->setattr		= pnfs4_proc_setattr;
 	p->read_done		= pnfs4_read_done;
 	p->write_done		= pnfs4_write_done;
 	p->commit_done		= pnfs4_commit_done;
