@@ -17,3 +17,6 @@ nfs-$(CONFIG_NFS_V4)	+= nfs4proc.o nfs4xdr.o nfs4state.o nfs4renewd.o \
 nfs-$(CONFIG_NFS_V4_1)	+= nfs41_session_recovery.o
 nfs-$(CONFIG_PNFS)	+= pnfs.o
 nfs-$(CONFIG_SYSCTL) += sysctl.o
+
+obj-m += nfslayoutdriver.o
+nfslayoutdriver-objs := nfs4filelayout.o nfs4filelayoutdev.o
