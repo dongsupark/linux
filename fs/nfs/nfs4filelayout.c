@@ -38,7 +38,7 @@
 
 #include <linux/module.h>
 #include <linux/init.h>
-
+#include <linux/vmalloc.h>
 #include <linux/nfs_fs.h>
 #include <linux/nfs_page.h>
 #include <linux/nfs4_pnfs.h>
@@ -104,12 +104,192 @@ filelayout_uninitialize_mountpoint(struct pnfs_mount_type *mountid)
 	return 0;
 }
 
+/* This function is used by the layout driver to calculate the
+ * offset of the file on the dserver based on whether the
+ * layout type is STRIPE_DENSE or STRIPE_SPARSE
+ */
+loff_t
+filelayout_get_dserver_offset(loff_t offset,
+			      struct nfs4_filelayout_segment *layout)
+{
+	if (!layout)
+		return offset;
+
+	switch (layout->stripe_type) {
+	case STRIPE_SPARSE:
+		return offset;
+
+	case STRIPE_DENSE:
+	{
+		u32 stripe_size;
+		u32 stripe_unit;
+		loff_t off;
+		loff_t tmp;
+		u32 stripe_unit_idx;
+
+		stripe_size = layout->stripe_unit * layout->num_fh;
+		/* XXX I do this because do_div seems to take a 32 bit dividend */
+		stripe_unit = layout->stripe_unit;
+		tmp = off = offset;
+
+		do_div(off, stripe_size);
+		stripe_unit_idx = do_div(tmp, stripe_unit);
+
+		return off * stripe_unit + stripe_unit_idx;
+	}
+
+	default:
+		BUG();
+	}
+
+	/* We should never get here... just to stop the gcc warning */
+	return 0;
+}
+
+/* Create a filelayout layout structure and return it.  The pNFS client
+ * will use the pnfs_layout_type type to refer to the layout for this
+ * inode from now on.
+ */
+static void *
+filelayout_alloc_layout(struct pnfs_mount_type *mountid, struct inode *inode)
+{
+	dprintk("NFS_FILELAYOUT: allocating layout\n");
+	return kzalloc(sizeof(struct nfs4_filelayout), GFP_KERNEL);
+}
+
+/* Free a filelayout layout structure
+ */
+static void
+filelayout_free_layout(void *layoutid)
+{
+	dprintk("NFS_FILELAYOUT: freeing layout\n");
+	kfree(layoutid);
+}
+
+static void filelayout_free_lseg(struct pnfs_layout_segment *lseg);
+static void filelayout_free_fh_array(struct nfs4_filelayout_segment *fl);
+
+/* Decode layout and store in layoutid.  Overwrite any existing layout
+ * information for this file.
+ */
+static int
+filelayout_set_layout(struct nfs4_filelayout *flo,
+		      struct nfs4_filelayout_segment *fl,
+		      struct nfs4_pnfs_layoutget_res *lgr)
+{
+	uint32_t *p = (uint32_t *)lgr->layout.buf;
+	uint32_t nfl_util;
+	int i;
+
+	dprintk("%s: set_layout_map Begin\n", __func__);
+
+	memcpy(&fl->dev_id, p, NFS4_PNFS_DEVICEID4_SIZE);
+	p += XDR_QUADLEN(NFS4_PNFS_DEVICEID4_SIZE);
+	nfl_util = be32_to_cpup(p++);
+	if (nfl_util & NFL4_UFLG_COMMIT_THRU_MDS)
+		fl->commit_through_mds = 1;
+	if (nfl_util & NFL4_UFLG_DENSE)
+		fl->stripe_type = STRIPE_DENSE;
+	else
+		fl->stripe_type = STRIPE_SPARSE;
+	fl->stripe_unit = nfl_util & ~NFL4_UFLG_MASK;
+
+	if (!flo->stripe_unit)
+		flo->stripe_unit = fl->stripe_unit;
+	else if (flo->stripe_unit != fl->stripe_unit) {
+		printk(KERN_NOTICE "%s: updating strip_unit from %u to %u\n",
+			__func__, flo->stripe_unit, fl->stripe_unit);
+		flo->stripe_unit = fl->stripe_unit;
+	}
+
+	fl->first_stripe_index = be32_to_cpup(p++);
+	p = xdr_decode_hyper(p, &fl->pattern_offset);
+	fl->num_fh = be32_to_cpup(p++);
+
+	dprintk("%s: nfl_util 0x%X num_fh %u fsi %u po %llu dev_id %s\n",
+		__func__, nfl_util, fl->num_fh, fl->first_stripe_index,
+		fl->pattern_offset, deviceid_fmt(&fl->dev_id));
+
+	if (fl->num_fh * sizeof(struct nfs_fh) > 2*PAGE_SIZE) {
+		fl->fh_array = vmalloc(fl->num_fh * sizeof(struct nfs_fh));
+		if (fl->fh_array)
+			memset(fl->fh_array, 0,
+				fl->num_fh * sizeof(struct nfs_fh));
+	} else {
+		fl->fh_array = kzalloc(fl->num_fh * sizeof(struct nfs_fh),
+					GFP_KERNEL);
+       }
+	if (!fl->fh_array)
+		return -ENOMEM;
+
+	for (i = 0; i < fl->num_fh; i++) {
+		/* fh */
+		fl->fh_array[i].size = be32_to_cpup(p++);
+		if (sizeof(struct nfs_fh) < fl->fh_array[i].size) {
+			printk(KERN_ERR "Too big fh %d received %d\n",
+				i, fl->fh_array[i].size);
+			/* Layout is now invalid, so pretend it does not
+			   exist */
+			filelayout_free_fh_array(fl);
+			fl->num_fh = 0;
+			break;
+		}
+		memcpy(fl->fh_array[i].data, p, fl->fh_array[i].size);
+		p += XDR_QUADLEN(fl->fh_array[i].size);
+		dprintk("DEBUG: %s: fh len %d\n", __func__,
+					fl->fh_array[i].size);
+	}
+
+	return 0;
+}
+
+static struct pnfs_layout_segment *
+filelayout_alloc_lseg(struct pnfs_layout_type *layoutid,
+		      struct nfs4_pnfs_layoutget_res *lgr)
+{
+	struct nfs4_filelayout *flo = PNFS_LD_DATA(layoutid);
+	struct pnfs_layout_segment *lseg;
+	int rc;
+
+	lseg = kzalloc(sizeof(struct pnfs_layout_segment) +
+		       sizeof(struct nfs4_filelayout_segment), GFP_KERNEL);
+	if (!lseg)
+		return NULL;
+
+	rc = filelayout_set_layout(flo, LSEG_LD_DATA(lseg), lgr);
+
+	if (rc != 0) {
+		filelayout_free_lseg(lseg);
+		lseg = NULL;
+	}
+	return lseg;
+}
+
+static void filelayout_free_fh_array(struct nfs4_filelayout_segment *fl)
+{
+	if (fl->num_fh * sizeof(struct nfs_fh) > 2*PAGE_SIZE)
+		vfree(fl->fh_array);
+	else
+		kfree(fl->fh_array);
+
+	fl->fh_array = NULL;
+}
+
+static void
+filelayout_free_lseg(struct pnfs_layout_segment *lseg)
+{
+	filelayout_free_fh_array(LSEG_LD_DATA(lseg));
+	kfree(lseg);
+}
+
 /* Return the stripesize for the specified file.
  */
 ssize_t
 filelayout_get_stripesize(struct pnfs_layout_type *layoutid)
 {
-	return -1;
+	struct nfs4_filelayout *flo = PNFS_LD_DATA(layoutid);
+
+	return flo->stripe_unit;
 }
 
 /*
@@ -158,6 +338,10 @@ filelayout_get_io_threshold(struct pnfs_layout_type *layoutid,
 }
 
 struct layoutdriver_io_operations filelayout_io_operations = {
+	.alloc_layout            = filelayout_alloc_layout,
+	.free_layout             = filelayout_free_layout,
+	.alloc_lseg              = filelayout_alloc_lseg,
+	.free_lseg               = filelayout_free_lseg,
 	.initialize_mountpoint   = filelayout_initialize_mountpoint,
 	.uninitialize_mountpoint = filelayout_uninitialize_mountpoint,
 };
