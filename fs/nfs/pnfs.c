@@ -1264,6 +1264,105 @@ pnfs_call_done(struct pnfs_call_data *pdata, struct rpc_task *task, void *data)
 	task->tk_ops = pdata->call_ops;
 }
 
+/* Post-read completion function.  Invoked by all layout drivers when
+ * read_pagelist is done
+ */
+static void
+pnfs_read_done(struct nfs_read_data *data)
+{
+	struct pnfs_call_data *pdata = &data->pdata;
+
+	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
+
+	pnfs_call_done(pdata, &data->task, data);
+}
+
+/*
+ * Call the appropriate parallel I/O subsystem read function.
+ * If no I/O device driver exists, or one does match the returned
+ * fstype, then return a positive status for regular NFS processing.
+ */
+static enum pnfs_try_status
+pnfs_readpages(struct nfs_read_data *rdata)
+{
+	struct nfs_readargs *args = &rdata->args;
+	struct inode *inode = rdata->inode;
+	int numpages, status, pgcount, temp;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	struct nfs_inode *nfsi = NFS_I(inode);
+	struct pnfs_layout_segment *lseg;
+	enum pnfs_try_status trypnfs;
+
+	dprintk("%s: Reading ino:%lu %u@%llu\n",
+		__func__,
+		inode->i_ino,
+		args->count,
+		args->offset);
+
+	/* Retrieve and set layout if not allready cached */
+	status = pnfs_update_layout(inode,
+				    args->context,
+				    args->count,
+				    args->offset,
+				    IOMODE_READ,
+				    &lseg);
+	if (status) {
+		dprintk("%s: Updating layout failed (%d), retry with NFS \n",
+			__func__, status);
+		trypnfs = PNFS_NOT_ATTEMPTED;
+		goto out;
+	}
+
+	/* Determine number of pages. */
+	pgcount = args->pgbase + args->count;
+	temp = pgcount % PAGE_CACHE_SIZE;
+	numpages = pgcount / PAGE_CACHE_SIZE;
+	if (temp != 0)
+		numpages++;
+
+	dprintk("%s: Calling layout driver read with %d pages\n",
+		__func__, numpages);
+	if (!pnfs_use_rpc(nfss))
+		rdata->pdata.pnfsflags |= PNFS_NO_RPC;
+	rdata->pdata.lseg = lseg;
+	trypnfs = nfss->pnfs_curr_ld->ld_io_ops->read_pagelist(
+							nfsi->current_layout,
+							args->pages,
+							args->pgbase,
+							numpages,
+							(loff_t)args->offset,
+							args->count,
+							rdata);
+	if (trypnfs == PNFS_NOT_ATTEMPTED) {
+		rdata->pdata.pnfsflags &= ~PNFS_NO_RPC;
+		rdata->pdata.lseg = NULL;
+		put_lseg(lseg);
+	}
+ out:
+	dprintk("%s End (trypnfs:%d)\n", __func__, trypnfs);
+	return trypnfs;
+}
+
+enum pnfs_try_status
+_pnfs_try_to_read_data(struct nfs_read_data *data,
+		       const struct rpc_call_ops *call_ops)
+{
+	struct inode *ino = data->inode;
+	struct nfs_server *nfss = NFS_SERVER(ino);
+
+	dprintk("--> %s\n", __func__);
+	/* Only create an rpc request if utilizing NFSv4 I/O */
+	if (!pnfs_use_read(ino, data->args.count) ||
+	    !nfss->pnfs_curr_ld->ld_io_ops->read_pagelist) {
+		dprintk("<-- %s: not using pnfs\n", __func__);
+		return PNFS_NOT_ATTEMPTED;
+	} else {
+		dprintk("%s: Utilizing pNFS I/O\n", __func__);
+		data->pdata.call_ops = call_ops;
+		return pnfs_readpages(data);
+	}
+}
+
 /* Called on completion of layoutcommit */
 void
 pnfs_layoutcommit_done(struct pnfs_layoutcommit_data *data)
@@ -1409,6 +1508,7 @@ out_unlock:
 struct pnfs_client_operations pnfs_ops = {
 	.nfs_getdevicelist = nfs4_pnfs_getdevicelist,
 	.nfs_getdeviceinfo = nfs4_pnfs_getdeviceinfo,
+	.nfs_readlist_complete = pnfs_read_done,
 };
 
 EXPORT_SYMBOL(pnfs_unregister_layoutdriver);
