@@ -41,8 +41,16 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
+#include <linux/time.h>
+#include <linux/kernel.h>
+#include <linux/mm.h>
+#include <linux/string.h>
+#include <linux/stat.h>
+#include <linux/errno.h>
+#include <linux/unistd.h>
 #include <linux/nfs_fs.h>
 #include <linux/nfs_page.h>
+#include <linux/pnfs_xdr.h>
 #include <linux/nfs4_pnfs.h>
 
 #include "nfs4filelayout.h"
@@ -68,10 +76,21 @@ filelayout_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
 {
 	struct filelayout_mount_type *fl_mt;
 	struct pnfs_mount_type *mt;
+	struct pnfs_devicelist *dlist;
+	int status;
+
+	dlist = kmalloc(sizeof(struct pnfs_devicelist), GFP_KERNEL);
+	if (!dlist)
+		goto error_ret;
 
 	fl_mt = kmalloc(sizeof(struct filelayout_mount_type), GFP_KERNEL);
 	if (!fl_mt)
-		goto error_ret;
+		goto cleanup_dlist;
+
+	/* Initialize nfs4 file layout specific device list structure */
+	fl_mt->hlist = kmalloc(sizeof(struct nfs4_pnfs_dev_hlist), GFP_KERNEL);
+	if (!fl_mt->hlist)
+		goto cleanup_fl_mt;
 
 	mt = kmalloc(sizeof(struct pnfs_mount_type), GFP_KERNEL);
 	if (!mt)
@@ -80,12 +99,39 @@ filelayout_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
 	fl_mt->fl_sb = sb;
 	mt->mountid = (void *)fl_mt;
 
+	/* Retrieve device list from server */
+	status = pnfs_callback_ops->nfs_getdevicelist(sb, fh, dlist);
+	if (status)
+		goto cleanup_mt;
+
+	status = nfs4_pnfs_devlist_init(fl_mt->hlist);
+	if (status)
+		goto cleanup_mt;
+
+	/* Retrieve and add all available devices */
+	status = process_deviceid_list(fl_mt, fh, dlist);
+	if (status)
+		goto cleanup_mt;
+
+	kfree(dlist);
+	dprintk("%s: device list has been initialized successfully\n",
+		__func__);
 	return mt;
 
+cleanup_mt: ;
+	kfree(mt);
+
 cleanup_fl_mt: ;
+	kfree(fl_mt->hlist);
 	kfree(fl_mt);
 
+cleanup_dlist: ;
+	kfree(dlist);
+
 error_ret: ;
+	printk(KERN_WARNING "%s: device list could not be initialized\n",
+		__func__);
+
 	return NULL;
 }
 
@@ -99,8 +145,10 @@ filelayout_uninitialize_mountpoint(struct pnfs_mount_type *mountid)
 	if (mountid) {
 		fl_mt = (struct filelayout_mount_type *)mountid->mountid;
 
-		if (fl_mt != NULL)
+		if (fl_mt != NULL) {
+			nfs4_pnfs_devlist_destroy(fl_mt->hlist);
 			kfree(fl_mt);
+		}
 		kfree(mountid);
 	}
 	return 0;

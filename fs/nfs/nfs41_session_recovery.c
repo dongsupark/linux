@@ -223,5 +223,6 @@ int nfs41_recover_session_sync(struct nfs4_session *session)
 	dprintk("<-- %s: status=%d\n", __func__, ret);
 	return ret;
 }
+EXPORT_SYMBOL(nfs41_recover_session_sync);
 
 #endif /* CONFIG_NFS_V4_1 */
