@@ -3144,6 +3144,39 @@ static int pnfs4_read_done(struct rpc_task *task, struct nfs_read_data *data)
 
 	return 0;
 }
+
+/*
+ * rpc_call_done callback for a write to the MDS or to a filelayout Data Server
+ */
+static int pnfs4_write_done(struct rpc_task *task, struct nfs_write_data *data)
+{
+	struct nfs_server *mds_svr = NFS_SERVER(data->inode);
+	struct nfs_client *client = mds_svr->nfs_client;
+	int status = task->tk_status >= 0 ? 0 : task->tk_status;
+
+	if (data->pdata.pnfsflags & PNFS_NO_RPC)
+		return 0;
+
+	nfs41_sequence_done(client, &data->res.seq_res, status);
+
+	/*
+	* Handle async errors for both data servers and MDS communication.
+	*/
+	/* FIXME: pass data->args.context->state to nfs4_async_handle_error
+	   like in nfs4_write_done? */
+	if (_nfs4_async_handle_error(task, mds_svr, client, NULL) == -EAGAIN) {
+		nfs_restart_rpc(task, client);
+		dprintk("<-- %s status= %d\n", __func__, -EAGAIN);
+		return -EAGAIN;
+	}
+
+	if (task->tk_status > 0) {
+		nfs_post_op_update_inode_force_wcc(data->inode,
+						   data->res.fattr);
+		renew_lease(mds_svr, data->timestamp);
+	}
+	return 0;
+}
 #endif /* CONFIG_NFS_V4_1 */
 
 static void nfs4_proc_read_setup(struct nfs_read_data *data, struct rpc_message *msg)
@@ -5803,6 +5836,7 @@ pnfs_v4_clientops_init(void)
 
 	memcpy(p, &nfs_v4_clientops, sizeof(*p));
 	p->read_done		= pnfs4_read_done;
+	p->write_done		= pnfs4_write_done;
 }
 #endif /* CONFIG_NFS_V4_1 */
 
