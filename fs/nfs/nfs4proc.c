@@ -3469,9 +3469,9 @@ _nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server,
 		case -NFS4ERR_CONN_NOT_BOUND_TO_SESSION:
 		case -NFS4ERR_SEQ_FALSE_RETRY:
 		case -NFS4ERR_SEQ_MISORDERED:
-			dprintk("%s ERROR %d, Reset session\n", __func__,
-				task->tk_status);
-			nfs4_schedule_state_recovery(clp);
+			dprintk("%s ERROR %d, Reset session. Exchangeid "
+				"flags 0x%x\n", __func__, task->tk_status,
+				clp->cl_exchange_flags);
 			task->tk_status = 0;
 			return -EAGAIN;
 #endif /* CONFIG_NFS_V4_1 */
@@ -3490,6 +3490,8 @@ _nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server,
 	task->tk_status = nfs4_map_errors(task->tk_status);
 	return 0;
 do_state_recovery:
+	if (is_ds_only_client(clp))
+		return 0;
 	rpc_sleep_on(&clp->cl_rpcwaitq, task, NULL);
 	nfs4_schedule_state_recovery(clp);
 	if (test_bit(NFS4CLNT_MANAGER_RUNNING, &clp->cl_state) == 0)
