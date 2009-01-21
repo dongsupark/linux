@@ -218,6 +218,7 @@ extern int nfs4_setup_sequence(struct nfs_client *clp,
 		int cache_reply, struct rpc_task *task);
 extern void nfs4_destroy_session(struct nfs4_session *session);
 extern struct nfs4_session *nfs4_alloc_session(struct nfs_client *clp);
+extern int nfs4_proc_exchange_id(struct nfs_client *, struct rpc_cred *);
 extern int nfs4_proc_create_session(struct nfs_client *, int reset);
 extern int nfs4_proc_destroy_session(struct nfs4_session *);
 #else /* CONFIG_NFS_v4_1 */
