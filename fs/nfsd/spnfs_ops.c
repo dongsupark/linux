@@ -53,6 +53,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/nfsd/nfsd4_pnfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 
+/* comment out CONFIG_SPNFS_TEST for non-test behaviour */
+#define CONFIG_SPNFS_TEST 1
+
+#ifdef CONFIG_SPNFS_TEST
+#include <linux/nfsd/nfsd.h>
+#include <linux/nfsd/xdr4.h>
+#endif /* CONFIG_SPNFS_TEST */
+
 #define	NFSDDBG_FACILITY		NFSDDBG_PNFS
 
 /*
@@ -206,6 +214,7 @@ spnfs_layoutrecall(struct inode *inode, int type, u64 offset, u64 len)
 	return 0;
 }
 
+
 int
 spnfs_test_layoutrecall(char *path, u64 offset, u64 len)
 {
@@ -274,6 +283,71 @@ spnfs_getdeviceiter(struct super_block *sb, struct pnfs_deviter_arg *iter)
 	return status;
 }
 
+#ifdef CONFIG_SPNFS_TEST
+/*
+ * Setup the rq_res xdr_buf.  The svc_rqst rq_respages[1] page contains the
+ * 1024 encoded stripe indices.
+ *
+ * Skip the devaddr4 length and encode the indicies count (1024) in the
+ * rq_res.head and set the rq_res.head length.
+ *
+ * Set the rq_res page_len to 4096 (for the 1024 stripe indices).
+ * Set the rq_res xdr_buf tail base to rq_respages[0] just after the
+ * rq_res head to hold the rest of the getdeviceinfo return.
+ *
+ * So rq_respages[rq_resused - 1] contains the rq_res.head and rq_res.tail and
+ * rq_respages[rq_resused] contains the rq_res.pages.
+ */
+static int spnfs_test_indices_xdr(struct pnfs_xdr_info *info, void *device)
+{
+	struct pnfs_filelayout_device *fdev = device;
+	struct nfsd4_compoundres *resp = info->resp;
+	struct svc_rqst *rqstp = resp->rqstp;
+	struct xdr_buf *xb = &resp->rqstp->rq_res;
+	ENCODE_HEAD;
+
+	RESERVE_SPACE(8);
+	p++; /* Fill in length later */
+	WRITE32(fdev->fl_stripeindices_length); /* 1024 */
+	ADJUST_ARGS();
+
+	xb->head[0].iov_len = (char *)resp->p - (char *)xb->head[0].iov_base;
+	xb->pages = &rqstp->rq_respages[rqstp->rq_resused];
+	xb->page_base = 0;
+	xb->page_len = PAGE_SIZE; /* page of 1024 encoded indices */
+	xb->tail[0].iov_base = resp->p;
+	resp->end = xb->head[0].iov_base + PAGE_SIZE;
+	xb->tail[0].iov_len = (char *)resp->end - (char *)resp->p;
+	return 0;
+}
+/*
+ * Return a stripeindices of length 1024 to test
+ * the pNFS client multipage getdeviceinfo implementation.
+ *
+ * Encode a page of stripe indices.
+ */
+static void spnfs_set_test_indices(struct pnfs_filelayout_device *fldev,
+				  struct spnfs_device *dev,
+				  struct pnfs_devinfo_arg *info)
+{
+	struct svc_rqst *rqstp = info->xdr.resp->rqstp;
+	__be32 *p;
+	int i, j = 0;
+
+	p = (__be32 *)page_address(rqstp->rq_respages[rqstp->rq_resused]);
+	fldev->fl_stripeindices_length = 1024;
+	/* round-robin the data servers device index into the stripe indicie */
+	for (i = 0; i < 1024; i++) {
+		WRITE32(j);
+		if (j < dev->dscount - 1)
+			j++;
+		else
+			j = 0;
+	}
+	fldev->fl_stripeindices_list = NULL;
+}
+#endif /* CONFIG_SPNFS_TEST */
+
 int
 spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
 {
@@ -311,6 +385,7 @@ spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
 	}
 	fldev->fl_stripeindices_list = NULL;
 	fldev->fl_device_list = NULL;
+	fldev->fl_enc_stripe_indices = NULL;
 
 	/*
 	 * Stripe count is the same as data server count for our purposes
@@ -319,6 +394,10 @@ spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
 	fldev->fl_device_length = dev->dscount;
 
 	/* Set stripe indices */
+#ifdef CONFIG_SPNFS_TEST
+	spnfs_set_test_indices(fldev, dev, info);
+	fldev->fl_enc_stripe_indices = spnfs_test_indices_xdr;
+#else /* CONFIG_SPNFS_TEST */
 	fldev->fl_stripeindices_list =
 		kmalloc(fldev->fl_stripeindices_length * sizeof(u32),
 			GFP_KERNEL);
@@ -328,6 +407,7 @@ spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
 	}
 	for (i = 0; i < fldev->fl_stripeindices_length; i++)
 		fldev->fl_stripeindices_list[i] = i;
+#endif /* CONFIG_SPNFS_TEST */
 
 	/*
 	 * Set the device's data server addresses  No multipath for spnfs,
