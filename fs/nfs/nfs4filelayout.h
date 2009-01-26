@@ -12,6 +12,7 @@
 #ifndef FS_NFS_NFS4FILELAYOUT_H
 #define FS_NFS_NFS4FILELAYOUT_H
 
+#include <linux/kref.h>
 #include <linux/nfs4_pnfs.h>
 #include <linux/pnfs_xdr.h>
 

@@ -64,6 +64,10 @@ MODULE_DESCRIPTION("The NFSv4 file layout driver");
 /* Callback operations to the pNFS client */
 struct pnfs_client_operations *pnfs_callback_ops;
 
+/* Forward declaration */
+ssize_t filelayout_get_stripesize(struct pnfs_layout_type *);
+struct layoutdriver_io_operations filelayout_io_operations;
+
 /* Initialize and return the pnfs_mount_type structure so the
  * pNFS_client can refer to the mount point later on
  */
@@ -171,6 +175,167 @@ filelayout_get_dserver_offset(loff_t offset,
 
 	/* We should never get here... just to stop the gcc warning */
 	return 0;
+}
+
+/* Call ops for the async read/write cases
+ * In the case of dense layouts, the offset needs to be reset to its
+ * original value.
+ */
+static void filelayout_read_call_done(struct rpc_task *task, void *data)
+{
+	struct nfs_read_data *rdata = (struct nfs_read_data *)data;
+
+	if (rdata->fldata.orig_offset) {
+		dprintk("%s new off %llu orig offset %llu\n",
+			__func__, rdata->args.offset, rdata->fldata.orig_offset);
+		rdata->args.offset = rdata->fldata.orig_offset;
+	}
+
+	pnfs_callback_ops->nfs_readlist_complete(rdata);
+}
+
+static void filelayout_write_call_done(struct rpc_task *task, void *data)
+{
+	struct nfs_write_data *wdata = (struct nfs_write_data *)data;
+
+	if (wdata->fldata.orig_offset) {
+		dprintk("%s new off %llu orig offset %llu\n",
+			__func__, wdata->args.offset, wdata->fldata.orig_offset);
+		wdata->args.offset = wdata->fldata.orig_offset;
+	}
+
+	pnfs_callback_ops->nfs_writelist_complete(wdata);
+}
+
+struct rpc_call_ops filelayout_read_call_ops = {
+	.rpc_call_prepare = nfs_read_prepare,
+	.rpc_call_done = filelayout_read_call_done,
+};
+
+struct rpc_call_ops filelayout_write_call_ops = {
+	.rpc_call_prepare = nfs_write_prepare,
+	.rpc_call_done = filelayout_write_call_done,
+};
+
+/* Perform sync or async reads.
+ *
+ * An optimization for the NFS file layout driver
+ * allows the original read/write data structs to be passed in the
+ * last argument.
+ *
+ * TODO: join with write_pagelist?
+ */
+static enum pnfs_try_status
+filelayout_read_pagelist(struct pnfs_layout_type *layoutid,
+			 struct page **pages,
+			 unsigned int pgbase,
+			 unsigned nr_pages,
+			 loff_t offset,
+			 size_t count,
+			 struct nfs_read_data *data)
+{
+	struct inode *inode = PNFS_INODE(layoutid);
+	struct nfs4_filelayout_segment *flseg;
+	struct nfs4_pnfs_dserver dserver;
+	int status;
+
+	dprintk("--> %s ino %lu nr_pages %d pgbase %u req %Zu@%llu\n",
+		__func__, inode->i_ino, nr_pages, pgbase, count, offset);
+
+	flseg = LSEG_LD_DATA(data->pdata.lseg);
+
+	/* Retrieve the correct rpc_client for the byte range */
+	status = nfs4_pnfs_dserver_get(data->pdata.lseg,
+				       offset,
+				       count,
+				       &dserver);
+	if (status) {
+		printk(KERN_ERR "%s: dserver get failed status %d use MDS\n",
+		       __func__, status);
+		return PNFS_NOT_ATTEMPTED;
+	}
+
+	dprintk("%s USE DS:ip %x %s\n", __func__,
+		htonl(dserver.ds->ds_ip_addr), dserver.ds->r_addr);
+
+	/* just try the first data server for the index..*/
+	data->fldata.pnfs_client = dserver.ds->ds_clp->cl_rpcclient;
+	data->fldata.ds_nfs_client = dserver.ds->ds_clp;
+	data->args.fh = dserver.fh;
+
+	/* Now get the file offset on the dserver
+	 * Set the read offset to this offset, and
+	 * save the original offset in orig_offset
+	 * In the case of aync reads, the offset will be reset in the
+	 * call_ops->rpc_call_done() routine.
+	 */
+	data->args.offset = filelayout_get_dserver_offset(offset,
+							  flseg);
+	data->fldata.orig_offset = offset;
+
+	/* Perform an asynchronous read */
+	nfs_initiate_read(data, data->fldata.pnfs_client,
+			  &filelayout_read_call_ops);
+
+	data->pdata.pnfs_error = 0;
+
+	return PNFS_ATTEMPTED;
+}
+
+/* Perform async writes. */
+static enum pnfs_try_status
+filelayout_write_pagelist(struct pnfs_layout_type *layoutid,
+			  struct page **pages,
+			  unsigned int pgbase,
+			  unsigned nr_pages,
+			  loff_t offset,
+			  size_t count,
+			  int sync,
+			  struct nfs_write_data *data)
+{
+	struct inode *inode = PNFS_INODE(layoutid);
+	struct nfs4_filelayout_segment *flseg = LSEG_LD_DATA(data->pdata.lseg);
+	struct nfs4_pnfs_dserver dserver;
+	int status;
+
+	dprintk("--> %s ino %lu nr_pages %d pgbase %u req %Zu@%llu sync %d\n",
+		__func__, inode->i_ino, nr_pages, pgbase, count, offset, sync);
+
+	/* Retrieve the correct rpc_client for the byte range */
+	status = nfs4_pnfs_dserver_get(data->pdata.lseg,
+				       offset,
+				       count,
+				       &dserver);
+
+	if (status) {
+		printk(KERN_ERR "%s: dserver get failed status %d use MDS\n",
+		       __func__, status);
+		return PNFS_NOT_ATTEMPTED;
+	}
+
+	dprintk("%s ino %lu %Zu@%llu DS:%x:%hu %s\n",
+		__func__, inode->i_ino, count, offset,
+		htonl(dserver.ds->ds_ip_addr), ntohs(dserver.ds->ds_port),
+		dserver.ds->r_addr);
+
+	data->fldata.pnfs_client = dserver.ds->ds_clp->cl_rpcclient;
+	data->fldata.ds_nfs_client = dserver.ds->ds_clp;
+	data->args.fh = dserver.fh;
+
+	/* Get the file offset on the dserver. Set the write offset to
+	 * this offset and save the original offset.
+	 */
+	data->args.offset = filelayout_get_dserver_offset(offset, flseg);
+	data->fldata.orig_offset = offset;
+
+	/* Perform an asynchronous write The offset will be reset in the
+	 * call_ops->rpc_call_done() routine
+	 */
+	nfs_initiate_write(data, data->fldata.pnfs_client,
+			   &filelayout_write_call_ops, sync);
+
+	data->pdata.pnfs_error = 0;
+	return PNFS_ATTEMPTED;
 }
 
 /* Create a filelayout layout structure and return it.  The pNFS client
@@ -378,6 +543,175 @@ filelayout_free_lseg(struct pnfs_layout_segment *lseg)
 	kfree(lseg);
 }
 
+/*
+ * Allocate a new nfs_write_data struct and initialize
+ */
+static struct nfs_write_data *
+filelayout_clone_write_data(struct nfs_write_data *old)
+{
+	static struct nfs_write_data *new;
+
+	new = nfs_commitdata_alloc();
+	if (!new)
+		goto out;
+	new->inode       = old->inode;
+	new->cred        = old->cred;
+	new->args.offset = 0;
+	new->args.count  = 0;
+	new->res.count   = 0;
+	new->res.fattr   = &new->fattr;
+	nfs_fattr_init(&new->fattr);
+	new->res.verf    = &new->verf;
+	new->args.context = get_nfs_open_context(old->args.context);
+	new->pdata.lseg = old->pdata.lseg;
+	kref_get(&new->pdata.lseg->kref);
+	new->pdata.call_ops = old->pdata.call_ops;
+	new->pdata.how = old->pdata.how;
+out:
+	return new;
+}
+
+static void filelayout_commit_call_done(struct rpc_task *task, void *data)
+{
+	struct nfs_write_data *wdata = (struct nfs_write_data *)data;
+
+	pnfs_callback_ops->nfs_commit_complete(wdata);
+}
+
+static struct rpc_call_ops filelayout_commit_call_ops = {
+	.rpc_call_prepare = nfs_write_prepare,
+	.rpc_call_done = filelayout_commit_call_done,
+};
+
+/*
+ * Execute a COMMIT op to the MDS or to each data server on which a page
+ * in 'pages' exists.
+ * Invoke the pnfs_commit_complete callback.
+ */
+enum pnfs_try_status
+filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
+		  struct nfs_write_data *data)
+{
+	struct nfs4_filelayout_segment *nfslay;
+	struct nfs_write_data   *dsdata = NULL;
+	struct nfs4_pnfs_dserver dserver;
+	struct nfs4_pnfs_ds *ds;
+	struct nfs_page *req, *reqt;
+	struct list_head *pos, *tmp, head, head2;
+	loff_t file_offset, comp_offset;
+	size_t stripesz, cbytes;
+	int status;
+	struct nfs4_file_layout_dsaddr *dsaddr;
+	u32 idx1, idx2;
+
+	nfslay = LSEG_LD_DATA(data->pdata.lseg);
+
+	dprintk("%s data %p pnfs_client %p nfslay %p sync %d\n",
+		__func__, data, data->fldata.pnfs_client, nfslay, sync);
+
+	data->fldata.commit_through_mds = nfslay->commit_through_mds;
+	if (nfslay->commit_through_mds) {
+		dprintk("%s data %p commit through mds\n", __func__, data);
+		return PNFS_NOT_ATTEMPTED;
+	}
+
+	stripesz = filelayout_get_stripesize(layoutid);
+	dprintk("%s stripesize %Zd\n", __func__, stripesz);
+
+	dsaddr = nfs4_pnfs_device_item_find(FILE_MT(data->inode)->hlist,
+					     &nfslay->dev_id);
+	if (dsaddr == NULL) {
+		data->pdata.pnfs_error = -EIO;
+		goto out;
+	}
+
+	INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head2);
+	list_add(&head, &data->pages);
+	list_del_init(&data->pages);
+
+	/* COMMIT to each Data Server */
+	while (!list_empty(&head)) {
+		cbytes = 0;
+		req = nfs_list_entry(head.next);
+
+		file_offset = (loff_t)req->wb_index << PAGE_CACHE_SHIFT;
+
+		/* Get dserver for the current page */
+		status = nfs4_pnfs_dserver_get(data->pdata.lseg,
+					       file_offset,
+					       req->wb_bytes,
+					       &dserver);
+		if (status) {
+			data->pdata.pnfs_error = -EIO;
+			goto err_rewind;
+		}
+
+		/* Get its index */
+		idx1 = filelayout_dserver_get_index(file_offset, dsaddr,
+						    nfslay);
+
+		/* Gather all pages going to the current data server by
+		 * comparing their indices.
+		 * XXX: This recalculates the indices unecessarily.
+		 *      One idea would be to calc the index for every page
+		 *      and then compare if they are the same. */
+		list_for_each_safe(pos, tmp, &head) {
+			reqt = nfs_list_entry(pos);
+			comp_offset = (loff_t)reqt->wb_index << PAGE_CACHE_SHIFT;
+			idx2 = filelayout_dserver_get_index(comp_offset,
+							    dsaddr, nfslay);
+			if (idx1 == idx2) {
+				nfs_list_remove_request(reqt);
+				nfs_list_add_request(reqt, &head2);
+				cbytes += reqt->wb_bytes;
+			}
+		}
+
+		if (!list_empty(&head)) {
+			dsdata = filelayout_clone_write_data(data);
+			if (!dsdata) {
+				/* return pages back to head */
+				list_splice(&head2, &head);
+				INIT_LIST_HEAD(&head2);
+				data->pdata.pnfs_error = -ENOMEM;
+				goto err_rewind;
+			}
+		} else {
+			dsdata = data;
+		}
+
+		list_add(&dsdata->pages, &head2);
+		list_del_init(&head2);
+
+		ds = dserver.ds;
+		dsdata->fldata.pnfs_client = ds->ds_clp->cl_rpcclient;
+		dsdata->fldata.ds_nfs_client = ds->ds_clp;
+		dsdata->args.fh = dserver.fh;
+
+		dprintk("%s: Initiating commit: %Zu@%llu USE DS:\n",
+			__func__, cbytes, file_offset);
+		print_ds(ds);
+
+		/* Send COMMIT to data server */
+		nfs_initiate_commit(dsdata, dsdata->fldata.pnfs_client,
+				    &filelayout_commit_call_ops, sync);
+	}
+
+out:
+	if (data->pdata.pnfs_error)
+		printk(KERN_ERR "%s: ERROR %d\n", __func__,
+		       data->pdata.pnfs_error);
+
+	/* XXX should we send COMMIT to MDS e.g. not free data and return 1 ? */
+	return PNFS_ATTEMPTED;
+err_rewind:
+	/* put remaining pages back onto the original data->pages */
+	list_add(&data->pages, &head);
+	list_del_init(&head);
+	goto out;
+}
+
 /* Return the stripesize for the specified file.
  */
 ssize_t
@@ -423,6 +757,11 @@ boundary:
 	do_div(p_stripe, pgio->pg_boundary);
 	do_div(r_stripe, pgio->pg_boundary);
 
+#if 0
+	dprintk("%s p %llu r %llu bnd %d bsize %Zu\n", __func__,
+		p_stripe, r_stripe, pgio->pg_boundary, pgio->pg_bsize);
+#endif
+
 	return (p_stripe == r_stripe);
 }
 
@@ -434,6 +773,9 @@ filelayout_get_io_threshold(struct pnfs_layout_type *layoutid,
 }
 
 struct layoutdriver_io_operations filelayout_io_operations = {
+	.commit                  = filelayout_commit,
+	.read_pagelist           = filelayout_read_pagelist,
+	.write_pagelist          = filelayout_write_pagelist,
 	.alloc_layout            = filelayout_alloc_layout,
 	.free_layout             = filelayout_free_layout,
 	.alloc_lseg              = filelayout_alloc_lseg,

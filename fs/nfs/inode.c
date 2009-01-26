@@ -576,6 +576,7 @@ struct nfs_open_context *get_nfs_open_context(struct nfs_open_context *ctx)
 		atomic_inc(&ctx->count);
 	return ctx;
 }
+EXPORT_SYMBOL(get_nfs_open_context);
 
 static void __put_nfs_open_context(struct nfs_open_context *ctx, int is_sync)
 {
@@ -916,6 +917,7 @@ void nfs_fattr_init(struct nfs_fattr *fattr)
 	fattr->time_start = jiffies;
 	fattr->gencount = nfs_inc_attr_generation_counter();
 }
+EXPORT_SYMBOL(nfs_fattr_init);
 
 /**
  * nfs_inode_attrs_need_update - check if the inode attributes need updating
