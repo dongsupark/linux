@@ -796,6 +796,7 @@ nfs4_pnfs_dserver_get(struct pnfs_layout_segment *lseg,
 
 	stripe_idx = filelayout_dserver_get_index(offset, dsaddr, layout);
 
+	/* For debugging, ensure entire requested range is in this dserver */
 	tmp = offset + count - 1;
 	do_div(tmp, layout->stripe_unit);
 	tmp2 = do_div(tmp, dsaddr->stripe_count) + layout->first_stripe_index;
