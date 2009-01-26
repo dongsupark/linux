@@ -981,6 +981,7 @@ void nfs_fattr_init(struct nfs_fattr *fattr)
 	fattr->time_start = jiffies;
 	fattr->gencount = nfs_inc_attr_generation_counter();
 }
+EXPORT_SYMBOL(nfs_fattr_init);
 
 /**
  * nfs_inode_attrs_need_update - check if the inode attributes need updating
