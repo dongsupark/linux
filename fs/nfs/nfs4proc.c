@@ -2993,6 +2993,12 @@ static int pnfs4_read_done(struct rpc_task *task, struct nfs_read_data *data)
 
 	status = task->tk_status >= 0 ? 0 : task->tk_status;
 
+	/* Is this a DS session */
+	if (data->fldata.ds_nfs_client) {
+		dprintk("%s DS read\n", __func__);
+		client = data->fldata.ds_nfs_client;
+	}
+
 	nfs41_sequence_done(client, &data->res.seq_res, status);
 
 	/*
@@ -3007,7 +3013,8 @@ static int pnfs4_read_done(struct rpc_task *task, struct nfs_read_data *data)
 		return -EAGAIN;
 	}
 
-	if (task->tk_status > 0)
+	/* Only renew lease if this was a read call to MDS */
+	if (task->tk_status > 0 && !data->fldata.ds_nfs_client)
 		renew_lease(mds_svr, data->timestamp);
 
 	dprintk("<-- %s\n", __func__);
@@ -3027,6 +3034,12 @@ static int pnfs4_write_done(struct rpc_task *task, struct nfs_write_data *data)
 	if (data->pdata.pnfsflags & PNFS_NO_RPC)
 		return 0;
 
+	/* Is this a DS session */
+	if (data->fldata.ds_nfs_client) {
+		dprintk("%s DS write\n", __func__);
+		client = data->fldata.ds_nfs_client;
+	}
+
 	nfs41_sequence_done(client, &data->res.seq_res, status);
 
 	/*
@@ -3040,10 +3053,23 @@ static int pnfs4_write_done(struct rpc_task *task, struct nfs_write_data *data)
 		return -EAGAIN;
 	}
 
+	/*
+	 * MDS write: renew lease
+	 * DS write: update lastbyte written
+	 */
 	if (task->tk_status > 0) {
-		nfs_post_op_update_inode_force_wcc(data->inode,
-						   data->res.fattr);
-		renew_lease(mds_svr, data->timestamp);
+		if (!data->fldata.ds_nfs_client) {
+			nfs_post_op_update_inode_force_wcc(data->inode,
+							data->res.fattr);
+			renew_lease(mds_svr, data->timestamp);
+		} else {
+			pnfs_update_last_write(NFS_I(data->inode),
+					       data->args.offset,
+					       data->res.count);
+			/* Mark for LAYOUTCOMMIT */
+			pnfs_need_layoutcommit(NFS_I(data->inode),
+					       data->args.context);
+		}
 	}
 	return 0;
 }
