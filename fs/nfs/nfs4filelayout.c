@@ -114,6 +114,44 @@ filelayout_get_stripesize(struct pnfs_layout_type *layoutid)
 	return -1;
 }
 
+/*
+ * filelayout_pg_test(). Called by nfs_can_coalesce_requests()
+ *
+ * For writes which come from the flush daemon, set the bsize on the fly.
+ * reads set the bsize in pnfs_pageio_init_read.
+ *
+ * return 1 :  coalesce page
+ * return 0 :  don't coalesce page
+ */
+int
+filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
+		   struct nfs_page *req)
+{
+	u64 p_stripe, r_stripe;
+
+	if (!pgio->pg_iswrite)
+		goto boundary;
+
+	if (pgio->pg_bsize != NFS_SERVER(pgio->pg_inode)->ds_wsize &&
+	    pgio->pg_count > pgio->pg_threshold)
+		pgio->pg_bsize = NFS_SERVER(pgio->pg_inode)->ds_wsize;
+
+boundary:
+	if (pgio->pg_boundary == 0)
+		return 1;
+	p_stripe = (u64)prev->wb_index << PAGE_CACHE_SHIFT;
+	r_stripe = (u64)req->wb_index << PAGE_CACHE_SHIFT;
+
+#if 0
+	dprintk("%s p %llu r %llu \n", __func__, p_stripe, r_stripe);
+#endif
+
+	do_div(p_stripe, pgio->pg_boundary);
+	do_div(r_stripe, pgio->pg_boundary);
+
+	return (p_stripe == r_stripe);
+}
+
 ssize_t
 filelayout_get_io_threshold(struct pnfs_layout_type *layoutid,
 			    struct inode *inode)
@@ -130,6 +168,7 @@ struct layoutdriver_policy_operations filelayout_policy_operations = {
 	.flags                 = PNFS_USE_RPC_CODE |
 	                         PNFS_LAYOUTGET_ON_OPEN,
 	.get_stripesize        = filelayout_get_stripesize,
+	.pg_test               = filelayout_pg_test,
 	.get_read_threshold    = filelayout_get_io_threshold,
 	.get_write_threshold   = filelayout_get_io_threshold,
 };
