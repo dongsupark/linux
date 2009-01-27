@@ -13,6 +13,7 @@
 #define LINUX_NFS4_PNFS_H
 
 #include <linux/pnfs_xdr.h>
+#include <linux/nfs_page.h>
 
 #define NFS4_PNFS_GETDEVLIST_MAXNUM 16
 
@@ -136,6 +137,9 @@ struct layoutdriver_io_operations {
 
 struct layoutdriver_policy_operations {
 	unsigned flags;
+
+	/* test for nfs page cache coalescing */
+	int (*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
 };
 
 struct pnfs_device {
