@@ -998,6 +998,23 @@ out:
 	return status;
 }
 
+void
+pnfs_set_pg_test(struct inode *inode, struct nfs_pageio_descriptor *pgio)
+{
+	struct pnfs_layout_type *laytype;
+	struct pnfs_layoutdriver_type *ld;
+
+	pgio->pg_test = NULL;
+
+	laytype = NFS_I(inode)->current_layout;
+	ld = NFS_SERVER(inode)->pnfs_curr_ld;
+	if (!pnfs_enabled_sb(NFS_SERVER(inode)) || !laytype)
+		return;
+
+	if (ld->ld_policy_ops)
+		pgio->pg_test = ld->ld_policy_ops->pg_test;
+}
+
 /* Called on completion of layoutcommit */
 void
 pnfs_layoutcommit_done(struct pnfs_layoutcommit_data *data)
