@@ -113,9 +113,9 @@ spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 		if (layoutsegment_size != 0)
 			lgp->seg.length = layoutsegment_size;
 	} else
-		lgp->seg.length = NFS4_LENGTH_EOF;
+		lgp->seg.length = NFS4_MAX_UINT64;
 #else
-	lgp->seg.length = NFS4_LENGTH_EOF;
+	lgp->seg.length = NFS4_MAX_UINT64;
 #endif /* CONFIG_SPNFS_LAYOUTSEGMENTS */
 
 	flp = kmalloc(sizeof(struct pnfs_filelayout_layout), GFP_KERNEL);
@@ -243,7 +243,7 @@ spnfs_test_layoutrecall(char *path, u64 offset, u64 len)
 	}
 
 	if (len == 0)
-		len = NFS4_LENGTH_EOF;
+		len = NFS4_MAX_UINT64;
 
 	rc = spnfs_layoutrecall(inode, type, offset, len);
 
@@ -549,7 +549,7 @@ spnfs_close(struct inode *inode)
 		lr.cbl_seg.layout_type = LAYOUT_NFSV4_FILES;
 		lr.cbl_seg.clientid = 0;
 		lr.cbl_seg.offset = 0;
-		lr.cbl_seg.length = NFS4_LENGTH_EOF;
+		lr.cbl_seg.length = NFS4_MAX_UINT64;
 		lr.cbl_seg.iomode = IOMODE_ANY;
 		lr.cbl_layoutchanged = 0;
 
