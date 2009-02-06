@@ -328,11 +328,62 @@ static struct list_head client_lru;
 static struct list_head close_lru;
 
 #if defined(CONFIG_NFSD_V4_1)
+static DEFINE_SPINLOCK(sessionid_lock);
+#define SESSION_HASH_SIZE	512
+static struct list_head sessionid_hashtbl[SESSION_HASH_SIZE];
+
+static inline int
+hash_sessionid(struct nfs4_sessionid *sessionid)
+{
+	struct nfsd4_sessionid *sid = (struct nfsd4_sessionid *)sessionid;
+
+	return sid->sequence % SESSION_HASH_SIZE;
+}
+
+static inline void
+dump_sessionid(const char *fn, struct nfs4_sessionid *sessionid)
+{
+	u32 *ptr = (u32 *)(&sessionid->data[0]);
+	dprintk("%s: %u:%u:%u:%u\n", fn, ptr[0], ptr[1], ptr[2], ptr[3]);
+}
+
+/* caller must hold sessionid_lock */
+static struct nfsd4_session *
+find_in_sessionid_hashtbl(struct nfs4_sessionid *sessionid)
+{
+	struct nfsd4_session *elem;
+	int idx;
+
+	dump_sessionid(__func__, sessionid);
+	idx = hash_sessionid(sessionid);
+	dprintk("%s: idx is %d\n", __func__, idx);
+	/* Search in the appropriate list */
+	list_for_each_entry(elem, &sessionid_hashtbl[idx], se_hash) {
+		dump_sessionid("list traversal", &elem->se_sessionid);
+		if (!memcmp(elem->se_sessionid.data, sessionid->data,
+			    NFS4_MAX_SESSIONID_LEN)) {
+			return elem;
+		}
+	}
+
+	dprintk("%s: session not found\n", __func__);
+	return NULL;
+}
+
+/* caller must hold sessionid_lock */
 static void
-release_session(struct nfsd4_session *ses)
+unhash_session(struct nfsd4_session *ses)
 {
 	list_del(&ses->se_hash);
 	list_del(&ses->se_perclnt);
+}
+
+static void
+release_session(struct nfsd4_session *ses)
+{
+	spin_lock(&sessionid_lock);
+	unhash_session(ses);
+	spin_unlock(&sessionid_lock);
 	nfsd4_put_session(ses);
 }
 
@@ -3211,6 +3262,10 @@ nfs4_state_init(void)
 		INIT_LIST_HEAD(&unconf_str_hashtbl[i]);
 		INIT_LIST_HEAD(&unconf_id_hashtbl[i]);
 	}
+#if defined(CONFIG_NFSD_V4_1)
+	for (i = 0; i < SESSION_HASH_SIZE; i++)
+		INIT_LIST_HEAD(&sessionid_hashtbl[i]);
+#endif /* CONFIG_NFSD_V4_1 */
 	for (i = 0; i < FILE_HASH_SIZE; i++) {
 		INIT_LIST_HEAD(&file_hashtbl[i]);
 	}
