@@ -86,6 +86,7 @@ static void nfs4_set_recdir(char *recdir);
  * 	unconfstr_hashtbl[], uncofid_hashtbl[].
  */
 static DEFINE_MUTEX(client_mutex);
+static struct thread_info *client_mutex_owner;
 
 static struct kmem_cache *stateowner_slab = NULL;
 static struct kmem_cache *file_slab = NULL;
@@ -96,6 +97,7 @@ void
 nfs4_lock_state(void)
 {
 	mutex_lock(&client_mutex);
+	client_mutex_owner = current_thread_info();
 }
 
 #define BUG_ON_UNLOCKED_STATE() BUG_ON(mutex_trylock(&client_mutex))
@@ -103,7 +105,18 @@ nfs4_lock_state(void)
 void
 nfs4_unlock_state(void)
 {
+	BUG_ON(client_mutex_owner != current_thread_info());
+	client_mutex_owner = NULL;
 	mutex_unlock(&client_mutex);
+}
+
+static int
+nfs4_lock_state_nested(void)
+{
+	if (client_mutex_owner == current_thread_info())
+		return 0;
+	nfs4_lock_state();
+	return 1;
 }
 
 static inline u32
@@ -1307,6 +1320,7 @@ void nfsd_break_deleg_cb(struct file_lock *fl)
 {
 	struct nfs4_delegation *dp=  (struct nfs4_delegation *)fl->fl_owner;
 	struct task_struct *t;
+	int did_lock;
 
 	dprintk("NFSD nfsd_break_deleg_cb: dp %p fl %p\n",dp,fl);
 	if (!dp)
@@ -1341,8 +1355,11 @@ void nfsd_break_deleg_cb(struct file_lock *fl)
 		printk(KERN_INFO "NFSD: Callback thread failed for "
 			"for client (clientid %08x/%08x)\n",
 			clp->cl_clientid.cl_boot, clp->cl_clientid.cl_id);
+		did_lock = nfs4_lock_state_nested();
 		put_nfs4_client(dp->dl_client);
 		nfs4_put_delegation(dp);
+		if (did_lock)
+			nfs4_unlock_state();
 	}
 }
 
