@@ -102,8 +102,12 @@ struct nfs4_callback {
 	struct rpc_clnt *       cb_client;
 };
 
+/* Maximum number of slots per session. 128 is useful for long haul TCP */
+#define NFSD_MAX_SLOTS_PER_SESSION	128
 /* Maximum number of pages per slot cache entry */
 #define NFSD_PAGES_PER_SLOT	1
+/* Maximum number of operations per session compound */
+#define NFSD_MAX_OPS_PER_COMPOUND	16
 
 struct nfsd4_cache_entry {
 	__be32		ce_status;
@@ -191,6 +195,9 @@ struct nfs4_client {
 	struct list_head	cl_sessions;
 	u32			cl_seqid;       /* seqid for create_session */
 	u32			cl_exchange_flags;
+	struct nfs4_sessionid	cl_sessionid;
+
+	struct svc_xprt		*cl_cb_xprt;	/* 4.1 callback transport */
 #endif /* CONFIG_NFSD_V4_1 */
 };
 
