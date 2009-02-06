@@ -48,6 +48,8 @@ struct nfsd4_compound_state {
 	struct svc_fh		current_fh;
 	struct svc_fh		save_fh;
 	struct nfs4_stateowner	*replay_owner;
+	/* For sessions DRC */
+	struct nfsd4_slot	*slot;
 };
 
 struct nfsd4_change_info {
