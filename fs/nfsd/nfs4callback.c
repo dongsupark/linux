@@ -43,6 +43,7 @@
 #include <linux/sunrpc/xdr.h>
 #include <linux/sunrpc/svc.h>
 #include <linux/sunrpc/clnt.h>
+#include <linux/sunrpc/svcsock.h>
 #include <linux/nfsd/nfsd.h>
 #include <linux/nfsd/state.h>
 #include <linux/sunrpc/sched.h>
@@ -52,16 +53,19 @@
 
 #define NFSPROC4_CB_NULL 0
 #define NFSPROC4_CB_COMPOUND 1
+#define NFS4_STATEID_SIZE 16
 
 /* Index of predefined Linux callback client operations */
 
 enum {
-        NFSPROC4_CLNT_CB_NULL = 0,
+	NFSPROC4_CLNT_CB_NULL = 0,
 	NFSPROC4_CLNT_CB_RECALL,
+	NFSPROC4_CLNT_CB_SEQUENCE,
 };
 
 enum nfs_cb_opnum4 {
 	OP_CB_RECALL            = 4,
+	OP_CB_SEQUENCE          = 11,
 };
 
 #define NFS4_MAXTAGLEN		20
@@ -70,15 +74,22 @@ enum nfs_cb_opnum4 {
 #define NFS4_dec_cb_null_sz		0
 #define cb_compound_enc_hdr_sz		4
 #define cb_compound_dec_hdr_sz		(3 + (NFS4_MAXTAGLEN >> 2))
+#define sessionid_sz			(NFS4_MAX_SESSIONID_LEN >> 2)
+#define cb_sequence_enc_sz		(sessionid_sz + 4 +             \
+					1 /* no referring calls list yet */)
+#define cb_sequence_dec_sz		(op_dec_sz + sessionid_sz + 4)
+
 #define op_enc_sz			1
 #define op_dec_sz			2
 #define enc_nfs4_fh_sz			(1 + (NFS4_FHSIZE >> 2))
 #define enc_stateid_sz			(NFS4_STATEID_SIZE >> 2)
 #define NFS4_enc_cb_recall_sz		(cb_compound_enc_hdr_sz +       \
+					cb_sequence_enc_sz +            \
 					1 + enc_stateid_sz +            \
 					enc_nfs4_fh_sz)
 
 #define NFS4_dec_cb_recall_sz		(cb_compound_dec_hdr_sz  +      \
+					cb_sequence_dec_sz +            \
 					op_dec_sz)
 
 /*
@@ -135,13 +146,19 @@ xdr_error:                                      \
 		return -EIO; \
 	} \
 } while (0)
+#define COPYMEM(x, nbytes) do {                \
+	memcpy((x), p, nbytes);                \
+	p += XDR_QUADLEN(nbytes);              \
+} while (0)
 
 struct nfs4_cb_compound_hdr {
-	int		status;
-	u32		ident;
+	/* args */
+	u32		ident;	/* minorversion 0 only */
 	u32		nops;
 	__be32		*nops_p;
 	u32		minorversion;
+	/* res */
+	int		status;
 	u32		taglen;
 	char		*tag;
 };
@@ -402,6 +419,15 @@ static struct rpc_clnt *setup_callback_client(struct nfs4_client *clp)
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(cb->cb_port);
 	addr.sin_addr.s_addr = htonl(cb->cb_addr);
+	if (cb->cb_minorversion) {
+		BUG_ON(cb->cb_minorversion != 1);
+		args.bc_sock = container_of(clp->cl_cb_xprt, struct svc_sock,
+					    sk_xprt);
+	}
+
+	dprintk("%s: program %s 0x%x nrvers %u version %u minorversion %u\n",
+		__func__, args.program->name, args.prognumber,
+		args.program->nrvers, args.version, cb->cb_minorversion);
 
 	/* Create RPC client */
 	client = rpc_create(&args);
@@ -441,6 +467,7 @@ static int do_probe_callback(void *data)
 	put_nfs4_client(clp);
 	return 0;
 out_release_client:
+	dprintk("NFSD: synchronous CB_NULL failed. status=%d\n", status);
 	rpc_shutdown_client(client);
 out_err:
 	dprintk("NFSD: warning: no callback path to client %.*s: error %d\n",
