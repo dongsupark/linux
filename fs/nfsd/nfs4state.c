@@ -98,6 +98,8 @@ nfs4_lock_state(void)
 	mutex_lock(&client_mutex);
 }
 
+#define BUG_ON_UNLOCKED_STATE() BUG_ON(mutex_trylock(&client_mutex))
+
 void
 nfs4_unlock_state(void)
 {
@@ -141,6 +143,7 @@ free_nfs4_file(struct kref *kref)
 static inline void
 put_nfs4_file(struct nfs4_file *fi)
 {
+	BUG_ON_UNLOCKED_STATE();
 	kref_put(&fi->fi_ref, free_nfs4_file);
 }
 
@@ -399,6 +402,8 @@ expire_client(struct nfs4_client *clp)
 
 	dprintk("NFSD: expire_client cl_count %d\n",
 	                    atomic_read(&clp->cl_count));
+
+	BUG_ON_UNLOCKED_STATE();
 
 	INIT_LIST_HEAD(&reaplist);
 	spin_lock(&recall_lock);
@@ -1146,6 +1151,7 @@ find_openstateowner_str(unsigned int hashval, struct nfsd4_open *open)
 {
 	struct nfs4_stateowner *so = NULL;
 
+	BUG_ON_UNLOCKED_STATE();
 	list_for_each_entry(so, &ownerstr_hashtbl[hashval], so_strhash) {
 		if (same_owner_str(so, &open->op_owner, &open->op_clientid))
 			return so;
@@ -1160,6 +1166,7 @@ find_file(struct inode *ino)
 	unsigned int hashval = file_hashval(ino);
 	struct nfs4_file *fp;
 
+	BUG_ON_UNLOCKED_STATE();
 	list_for_each_entry(fp, &file_hashtbl[hashval], fi_hash) {
 		if (fp->fi_inode == ino) {
 			get_nfs4_file(fp);
