@@ -362,7 +362,15 @@ struct nfsd4_create_session {
 };
 
 struct nfsd4_sequence {
-	int	foo;	/* stub */
+	struct nfs4_sessionid	sessionid;		/* request/response */
+	u32			seqid;			/* request/response */
+	u32			slotid;			/* request/response */
+	u32			maxslots;		/* request/response */
+	u32			cachethis;		/* request */
+#if 0
+	u32			target_maxslots;	/* response */
+	u32			status_flags;		/* response */
+#endif /* not yet */
 };
 
 struct nfsd4_destroy_session {
