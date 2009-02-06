@@ -141,6 +141,7 @@ struct nfs4_cb_compound_hdr {
 	u32		ident;
 	u32		nops;
 	__be32		*nops_p;
+	u32		minorversion;
 	u32		taglen;
 	char		*tag;
 };
@@ -209,7 +210,7 @@ encode_cb_compound_hdr(struct xdr_stream *xdr, struct nfs4_cb_compound_hdr *hdr)
 
 	RESERVE_SPACE(16);
 	WRITE32(0);            /* tag length is always 0 */
-	WRITE32(NFS4_MINOR_VERSION);
+	WRITE32(hdr->minorversion);
 	WRITE32(hdr->ident);
 	hdr->nops_p = p;
 	WRITE32(hdr->nops);
@@ -251,8 +252,11 @@ static int
 nfs4_xdr_enc_cb_recall(struct rpc_rqst *req, __be32 *p, struct nfs4_cb_recall *args)
 {
 	struct xdr_stream xdr;
+	struct nfs4_callback *cb =
+		(struct nfs4_callback *)req->rq_task->tk_client->cl_private;
 	struct nfs4_cb_compound_hdr hdr = {
 		.ident = args->cbr_ident,
+		.minorversion = cb->cb_minorversion,
 	};
 
 	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
@@ -424,6 +428,7 @@ static int do_probe_callback(void *data)
 		goto out_release_client;
 
 	cb->cb_client = client;
+	client->cl_private = cb;
 	atomic_set(&cb->cb_set, 1);
 	put_nfs4_client(clp);
 	return 0;
