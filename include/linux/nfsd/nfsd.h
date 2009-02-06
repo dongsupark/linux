@@ -360,6 +360,13 @@ extern struct timeval	nfssvc_boot;
  | FATTR4_WORD1_TIME_DELTA   | FATTR4_WORD1_TIME_METADATA    \
  | FATTR4_WORD1_TIME_MODIFY     | FATTR4_WORD1_TIME_MODIFY_SET | FATTR4_WORD1_MOUNTED_ON_FILEID)
 
+#if defined(CONFIG_NFSD_V4_1)
+
+/* The percent of nr_free_buffer_pages used by the V4.1 server DRC */
+#define NFSD_DRC_SIZE_SHIFT	7
+
+#endif /* CONFIG_NFSD_V4_1 */
+
 /* These will return ERR_INVAL if specified in GETATTR or READDIR. */
 #define NFSD_WRITEONLY_ATTRS_WORD1							    \
 (FATTR4_WORD1_TIME_ACCESS_SET   | FATTR4_WORD1_TIME_MODIFY_SET)
