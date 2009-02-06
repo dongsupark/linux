@@ -608,6 +608,8 @@ free_client(struct nfs4_client *clp)
 {
 	shutdown_callback_client(clp);
 #if defined(CONFIG_NFSD_V4_1)
+	if (clp->cl_cb_xprt)
+		svc_xprt_put(clp->cl_cb_xprt);
 	nfsd4_release_respages(clp->cl_slot.sl_cache_entry.ce_respages,
 			     clp->cl_slot.sl_cache_entry.ce_resused);
 #endif /* CONFIG_NFSD_V4_1 */
@@ -1358,6 +1360,14 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		cr_ses->flags &= ~SESSION4_PERSIST;
 		cr_ses->flags &= ~SESSION4_RDMA;
 
+		if (cr_ses->flags & SESSION4_BACK_CHAN) {
+			unconf->cl_cb_xprt = rqstp->rq_xprt;
+			svc_xprt_get(unconf->cl_cb_xprt);
+			unconf->cl_callback.cb_minorversion = 1;
+			unconf->cl_cb_seq_nr = 0;
+			unconf->cl_callback.cb_prog = cr_ses->callback_prog;
+			nfsd4_probe_callback(unconf);
+		}
 		conf = unconf;
 	} else {
 		status = nfserr_stale_clientid;
