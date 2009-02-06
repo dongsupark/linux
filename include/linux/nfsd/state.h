@@ -167,6 +167,9 @@ struct nfs4_client {
 	struct nfs4_callback	cl_callback;    /* callback info */
 	atomic_t		cl_count;	/* ref count */
 	u32			cl_firststate;	/* recovery dir creation */
+#ifdef CONFIG_NFSD_V4_1
+	struct list_head	cl_sessions;
+#endif /* CONFIG_NFSD_V4_1 */
 };
 
 /* struct nfs4_client_reset
