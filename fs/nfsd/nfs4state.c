@@ -945,6 +945,8 @@ nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp)
 	}
 
 	resp->rqstp->rq_resused = entry->ce_resused;
+	resp->opcnt = entry->ce_opcnt;
+	resp->cstate.iovlen = entry->ce_datav.iov_len + entry->ce_rpchdrlen;
 	status = entry->ce_status;
 
 	return status;
@@ -1165,6 +1167,10 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 	status = check_slot_seqid(seq->seqid, slot);
 	if (status == nfserr_replay_cache) {
 		cstate->slot = slot;
+		/* Return the cached reply status and set cstate->status
+		 * for nfsd4_svc_encode_compoundres processing*/
+		status = nfsd4_replay_cache_entry(resp);
+		cstate->status = nfserr_replay_cache;
 		goto replay_cache;
 	}
 	if (status)
