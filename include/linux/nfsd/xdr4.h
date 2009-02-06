@@ -50,6 +50,8 @@ struct nfsd4_compound_state {
 	struct nfs4_stateowner	*replay_owner;
 	/* For sessions DRC */
 	struct nfsd4_slot	*slot;
+	__be32			*statp;
+	u32			status;
 };
 
 struct nfsd4_change_info {
@@ -490,6 +492,8 @@ extern __be32 nfsd4_setclientid_confirm(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *,
 		struct nfsd4_setclientid_confirm *setclientid_confirm);
 #if defined(CONFIG_NFSD_V4_1)
+extern void nfsd4_set_cache_entry(struct nfsd4_compoundres *resp);
+extern __be32 nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp);
 extern __be32 nfsd4_exchange_id(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *,
 struct nfsd4_exchange_id *);
