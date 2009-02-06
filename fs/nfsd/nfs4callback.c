@@ -255,6 +255,29 @@ encode_cb_recall(struct xdr_stream *xdr, struct nfs4_cb_recall *cb_rec,
 	hdr->nops++;
 }
 
+static void
+encode_cb_sequence(struct xdr_stream *xdr, struct nfsd4_cb_sequence *args,
+		   struct nfs4_cb_compound_hdr *hdr)
+{
+	__be32 *p;
+
+	if (hdr->minorversion == 0)
+		return;
+
+	RESERVE_SPACE(1 + NFS4_MAX_SESSIONID_LEN + 20);
+
+	WRITE32(OP_CB_SEQUENCE);
+#ifdef CONFIG_NFSD_V4_1
+	WRITEMEM(args->cbs_clp->cl_sessionid.data, NFS4_MAX_SESSIONID_LEN);
+	WRITE32(args->cbs_clp->cl_cb_seq_nr);
+#endif /* CONFIG_NFSD_V4_1 */
+	WRITE32(0);		/* slotid, always 0 */
+	WRITE32(0);		/* highest slotid always 0 */
+	WRITE32(0);		/* cachethis always 0 */
+	WRITE32(0); /* FIXME: support referring_call_lists */
+	hdr->nops++;
+}
+
 static int
 nfs4_xdr_enc_cb_null(struct rpc_rqst *req, __be32 *p)
 {
@@ -318,6 +341,69 @@ decode_cb_op_hdr(struct xdr_stream *xdr, enum nfs_opnum4 expected)
 		return -nfs_cb_stat_to_errno(nfserr);
 	return 0;
 }
+
+/*
+ * Our current back channel implmentation supports a single backchannel
+ * with a single slot.
+ */
+static int
+decode_cb_sequence(struct xdr_stream *xdr, struct nfsd4_cb_sequence *res,
+		   struct rpc_rqst *rqstp)
+{
+	struct nfs4_callback *cb =
+		(struct nfs4_callback *)rqstp->rq_task->tk_client->cl_private;
+	struct nfs4_sessionid id;
+	int status;
+	u32 dummy;
+	__be32 *p;
+
+	if (cb->cb_minorversion == 0)
+		return 0;
+
+	status = decode_cb_op_hdr(xdr, OP_CB_SEQUENCE);
+	if (status)
+		return status;
+
+	/*
+	 * If the server returns different values for sessionID, slotID or
+	 * sequence number, the server is looney tunes.
+	 */
+	status = -ESERVERFAULT;
+
+	READ_BUF(NFS4_MAX_SESSIONID_LEN + 16);
+	COPYMEM(id.data, NFS4_MAX_SESSIONID_LEN);
+#ifdef CONFIG_NFSD_V4_1
+	if (memcmp(id.data, res->cbs_clp->cl_sessionid.data,
+		   NFS4_MAX_SESSIONID_LEN)) {
+		dprintk("%s Invalid session id\n", __func__);
+		goto out;
+	}
+	READ32(dummy);
+	if (dummy != res->cbs_clp->cl_cb_seq_nr) {
+		dprintk("%s Invalid sequence number\n", __func__);
+		goto out;
+	}
+#endif /* CONFIG_NFSD_V4_1 */
+	READ32(dummy); 	/* slotid must be 0 */
+	if (dummy != 0) {
+		dprintk("%s Invalid slotid\n", __func__);
+		goto out;
+	}
+	READ32(dummy); 	/* highest slotid must be 0 */
+	if (dummy != 0) {
+		dprintk("%s Invalid highest slotid\n", __func__);
+		goto out;
+	}
+	READ32(dummy); 	/* target highest slotid must be 0 */
+	if (dummy != 0) {
+		dprintk("%s Invalid target highest slotid\n", __func__);
+		goto out;
+	}
+	status = 0;
+out:
+	return status;
+}
+
 
 static int
 nfs4_xdr_dec_cb_null(struct rpc_rqst *req, __be32 *p)
@@ -490,6 +576,38 @@ nfsd4_probe_callback(struct nfs4_client *clp)
 
 	return;
 }
+
+#if defined(CONFIG_NFSD_V4_1)
+/*
+ * FIXME: cb_sequence should support referring call lists, cachethis, and
+ * multiple slots
+ */
+static int
+nfs41_cb_sequence_setup(struct nfs4_client *clp, struct nfsd4_cb_sequence *args)
+{
+	u32 *ptr = (u32 *)clp->cl_sessionid.data;
+
+	dprintk("%s: %u:%u:%u:%u\n", __func__,
+		ptr[0], ptr[1], ptr[2], ptr[3]);
+
+	mutex_lock(&clp->cl_cb_mutex);
+	args->cbs_clp = clp;
+	clp->cl_cb_seq_nr++;
+	return 0;
+}
+
+static void
+nfs41_cb_sequence_done(struct nfs4_client *clp, struct nfsd4_cb_sequence *res)
+{
+	u32 *ptr = (u32 *)clp->cl_sessionid.data;
+
+	dprintk("%s: %u:%u:%u:%u\n", __func__,
+		ptr[0], ptr[1], ptr[2], ptr[3]);
+
+	/* FIXME: support multiple callback slots */
+	mutex_unlock(&clp->cl_cb_mutex);
+}
+#endif /* CONFIG_NFSD_V4_1 */
 
 /*
  * called with dp->dl_count inc'ed.

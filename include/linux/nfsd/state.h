@@ -61,6 +61,10 @@ typedef struct {
 #define si_stateownerid   si_opaque.so_stateownerid
 #define si_fileid         si_opaque.so_fileid
 
+struct nfsd4_cb_sequence {
+	/* args/res */
+	struct nfs4_client	*cbs_clp;
+};
 
 struct nfs4_cb_recall {
 	u32			cbr_ident;
@@ -197,7 +201,8 @@ struct nfs4_client {
 	struct nfsd4_slot	cl_slot;	/* create_session slot */
 	u32			cl_exchange_flags;
 	struct nfs4_sessionid	cl_sessionid;
-
+	/* We currently support a single back channel with a single slot */
+	u32			cl_cb_seq_nr;
 	struct svc_xprt		*cl_cb_xprt;	/* 4.1 callback transport */
 	struct mutex		cl_cb_mutex;
 #endif /* CONFIG_NFSD_V4_1 */
