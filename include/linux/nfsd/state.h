@@ -199,6 +199,7 @@ struct nfs4_client {
 	struct nfs4_sessionid	cl_sessionid;
 
 	struct svc_xprt		*cl_cb_xprt;	/* 4.1 callback transport */
+	struct mutex		cl_cb_mutex;
 #endif /* CONFIG_NFSD_V4_1 */
 };
 
