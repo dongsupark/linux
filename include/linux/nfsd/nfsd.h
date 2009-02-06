@@ -182,7 +182,6 @@ static inline int nfs4_reset_recoverydir(char *recdir) { return 0; }
 void		nfsd_lockd_init(void);
 void		nfsd_lockd_shutdown(void);
 
-
 /*
  * These macros provide pre-xdr'ed values for faster operation.
  */
@@ -249,7 +248,44 @@ void		nfsd_lockd_shutdown(void);
 #define	nfserr_cb_path_down	__constant_htonl(NFSERR_CB_PATH_DOWN)
 #define	nfserr_locked		__constant_htonl(NFSERR_LOCKED)
 #define	nfserr_wrongsec		__constant_htonl(NFSERR_WRONGSEC)
-#define	nfserr_replay_me	__constant_htonl(NFSERR_REPLAY_ME)
+#define nfserr_badiomode		__constant_htonl(NFS4ERR_BADIOMODE)
+#define nfserr_badlayout		__constant_htonl(NFS4ERR_BADLAYOUT)
+#define nfserr_bad_session_digest	__constant_htonl(NFS4ERR_BAD_SESSION_DIGEST)
+#define nfserr_badsession		__constant_htonl(NFS4ERR_BADSESSION)
+#define nfserr_badslot			__constant_htonl(NFS4ERR_BADSLOT)
+#define nfserr_complete_already		__constant_htonl(NFS4ERR_COMPLETE_ALREADY)
+#define nfserr_conn_not_bound_to_session __constant_htonl(NFS4ERR_CONN_NOT_BOUND_TO_SESSION)
+#define nfserr_deleg_already_wanted	__constant_htonl(NFS4ERR_DELEG_ALREADY_WANTED)
+#define nfserr_back_chan_busy		__constant_htonl(NFS4ERR_BACK_CHAN_BUSY)
+#define nfserr_layouttrylater		__constant_htonl(NFS4ERR_LAYOUTTRYLATER)
+#define nfserr_layoutunavailable	__constant_htonl(NFS4ERR_LAYOUTUNAVAILABLE)
+#define nfserr_nomatching_layout	__constant_htonl(NFS4ERR_NOMATCHING_LAYOUT)
+#define nfserr_recallconflict		__constant_htonl(NFS4ERR_RECALLCONFLICT)
+#define nfserr_unknown_layouttype	__constant_htonl(NFS4ERR_UNKNOWN_LAYOUTTYPE)
+#define nfserr_seq_misordered		__constant_htonl(NFS4ERR_SEQ_MISORDERED)
+#define nfserr_sequence_pos		__constant_htonl(NFS4ERR_SEQUENCE_POS)
+#define nfserr_req_too_big		__constant_htonl(NFS4ERR_REQ_TOO_BIG)
+#define nfserr_rep_too_big		__constant_htonl(NFS4ERR_REP_TOO_BIG)
+#define nfserr_rep_too_big_to_cache	__constant_htonl(NFS4ERR_REP_TOO_BIG_TO_CACHE)
+#define nfserr_retry_uncached_rep	__constant_htonl(NFS4ERR_RETRY_UNCACHED_REP)
+#define nfserr_unsafe_compound		__constant_htonl(NFS4ERR_UNSAFE_COMPOUND)
+#define nfserr_too_many_ops		__constant_htonl(NFS4ERR_TOO_MANY_OPS)
+#define nfserr_op_not_in_session	__constant_htonl(NFS4ERR_OP_NOT_IN_SESSION)
+#define nfserr_hash_alg_unsupp		__constant_htonl(NFS4ERR_HASH_ALG_UNSUPP)
+#define nfserr_clientid_busy		__constant_htonl(NFS4ERR_CLIENTID_BUSY)
+#define nfserr_pnfs_io_hole		__constant_htonl(NFS4ERR_PNFS_IO_HOLE)
+#define nfserr_seq_false_retry		__constant_htonl(NFS4ERR_SEQ_FALSE_RETRY)
+#define nfserr_bad_high_slot		__constant_htonl(NFS4ERR_BAD_HIGH_SLOT)
+#define nfserr_deadsession		__constant_htonl(NFS4ERR_DEADSESSION)
+#define nfserr_encr_alg_unsupp		__constant_htonl(NFS4ERR_ENCR_ALG_UNSUPP)
+#define nfserr_pnfs_no_layout		__constant_htonl(NFS4ERR_PNFS_NO_LAYOUT)
+#define nfserr_not_only_op		__constant_htonl(NFS4ERR_NOT_ONLY_OP)
+#define nfserr_wrong_cred		__constant_htonl(NFS4ERR_WRONG_CRED)
+#define nfserr_wrong_type		__constant_htonl(NFS4ERR_WRONG_TYPE)
+#define nfserr_dirdeleg_unavail		__constant_htonl(NFS4ERR_DIRDELEG_UNAVAIL)
+#define nfserr_reject_deleg		__constant_htonl(NFS4ERR_REJECT_DELEG)
+#define nfserr_returnconflict		__constant_htonl(NFS4ERR_RETURNCONFLICT)
+#define nfserr_deleg_revoked		__constant_htonl(NFS4ERR_DELEG_REVOKED)
 
 /* error codes for internal use */
 /* if a request fails due to kmalloc failure, it gets dropped.
@@ -258,6 +294,10 @@ void		nfsd_lockd_shutdown(void);
 #define	nfserr_dropit		__constant_htonl(30000)
 /* end-of-file indicator in readdir */
 #define	nfserr_eof		__constant_htonl(30001)
+/* replay detected */
+#define	nfserr_replay_me	__constant_htonl(11001)
+/* nfs41 replay detected */
+#define	nfserr_replay_cache	__constant_htonl(11002)
 
 /* Check for dir entries '.' and '..' */
 #define isdotent(n, l)	(l < 3 && n[0] == '.' && (l == 1 || n[1] == '.'))
