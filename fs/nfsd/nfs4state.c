@@ -103,6 +103,7 @@ static void release_pnfs_ds_dev_list(struct nfs4_stateid *stp);
 
 /* Currently used for almost all code touching nfsv4 state: */
 static DEFINE_MUTEX(client_mutex);
+struct task_struct *client_mutex_owner;
 
 /*
  * Currently used for the del_recall_lru and file hash table.  In an
@@ -120,11 +121,15 @@ void
 nfs4_lock_state(void)
 {
 	mutex_lock(&client_mutex);
+	client_mutex_owner = current;
 }
+
+#define BUG_ON_UNLOCKED_STATE() BUG_ON(client_mutex_owner != current)
 
 void
 nfs4_unlock_state(void)
 {
+	client_mutex_owner = NULL;
 	mutex_unlock(&client_mutex);
 }
 
@@ -265,6 +270,7 @@ nfs4_close_delegation(struct nfs4_delegation *dp)
 	 * but we want to remove the lease in any case. */
 	if (dp->dl_flock)
 		vfs_setlease(filp, F_UNLCK, &dp->dl_flock);
+	BUG_ON_UNLOCKED_STATE();
 	nfs4_unlock_state();	/* allow nested layout recall/return */
 	nfsd_close(filp);
 	nfs4_lock_state();
@@ -382,6 +388,7 @@ static void release_open_stateid(struct nfs4_stateid *stp)
 {
 	unhash_generic_stateid(stp);
 	release_stateid_lockowners(stp);
+	BUG_ON_UNLOCKED_STATE();
 	nfs4_unlock_state();	/* allow nested layout recall/return */
 	nfsd_close(stp->st_vfs_file);
 	nfs4_lock_state();
@@ -712,6 +719,8 @@ expire_client(struct nfs4_client *clp)
 
 	dprintk("NFSD: expire_client cl_count %d\n",
 	                    atomic_read(&clp->cl_count));
+
+	BUG_ON_UNLOCKED_STATE();
 
 	INIT_LIST_HEAD(&reaplist);
 	spin_lock(&recall_lock);
@@ -1960,6 +1969,7 @@ find_openstateowner_str(unsigned int hashval, struct nfsd4_open *open)
 {
 	struct nfs4_stateowner *so = NULL;
 
+	BUG_ON_UNLOCKED_STATE();
 	list_for_each_entry(so, &ownerstr_hashtbl[hashval], so_strhash) {
 		if (same_owner_str(so, &open->op_owner, &open->op_clientid))
 			return so;
@@ -4356,6 +4366,7 @@ find_get_layout_state(struct nfs4_client *clp, struct nfs4_file *fp)
 {
 	struct nfs4_layout_state *ls;
 
+	BUG_ON_UNLOCKED_STATE();
 	list_for_each_entry(ls, &fp->fi_layout_states, ls_perfile) {
 		if (ls->ls_client == clp) {
 			dprintk("pNFS %s: before GET ls %p ls_ref %d\n",
@@ -5263,6 +5274,7 @@ nomatching_layout(struct super_block *sb, struct nfs4_layoutrecall *clr)
 {
 	struct nfsd4_pnfs_layoutreturn lr;
 
+	BUG_ON_UNLOCKED_STATE();
 	dprintk("%s: clp %p fp %p: "
 		"simulating layout_return\n", __func__,
 		clr->clr_client,
@@ -5326,7 +5338,7 @@ create_layout_recall_list(struct list_head *todolist,
 	int status = 0;
 
 	dprintk("%s: -->\n", __func__);
-
+	BUG_ON_UNLOCKED_STATE();
 	/* If client given by fs, just do single client */
 	if (cbl->cbl_seg.clientid) {
 		clp = find_confirmed_client((clientid_t *)&cbl->cbl_seg.clientid);
