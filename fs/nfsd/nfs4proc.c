@@ -813,29 +813,6 @@ static inline void nfsd4_increment_op_stats(u32 opnum)
 		nfsdstats.nfs4_opcount[opnum]++;
 }
 
-static void cstate_free(struct nfsd4_compound_state *cstate)
-{
-	if (cstate == NULL)
-		return;
-	fh_put(&cstate->current_fh);
-	fh_put(&cstate->save_fh);
-	BUG_ON(cstate->replay_owner);
-	kfree(cstate);
-}
-
-static struct nfsd4_compound_state *cstate_alloc(void)
-{
-	struct nfsd4_compound_state *cstate;
-
-	cstate = kmalloc(sizeof(struct nfsd4_compound_state), GFP_KERNEL);
-	if (cstate == NULL)
-		return NULL;
-	fh_init(&cstate->current_fh, NFS4_FHSIZE);
-	fh_init(&cstate->save_fh, NFS4_FHSIZE);
-	cstate->replay_owner = NULL;
-	return cstate;
-}
-
 typedef __be32(*nfsd4op_func)(struct svc_rqst *, struct nfsd4_compound_state *,
 			      void *);
 
@@ -863,12 +840,13 @@ nfsd4_proc_compound(struct svc_rqst *rqstp,
 {
 	struct nfsd4_op	*op;
 	struct nfsd4_operation *opdesc;
-	struct nfsd4_compound_state *cstate = NULL;
+	struct nfsd4_compound_state *cstate = &resp->cstate;
 	int		slack_bytes;
 	__be32		status;
 
 	resp->xbuf = &rqstp->rq_res;
-	resp->p = rqstp->rq_res.head[0].iov_base + rqstp->rq_res.head[0].iov_len;
+	resp->p = rqstp->rq_res.head[0].iov_base +
+						rqstp->rq_res.head[0].iov_len;
 	resp->tagp = resp->p;
 	/* reserve space for: taglen, tag, and opcnt */
 	resp->p += 2 + XDR_QUADLEN(args->taglen);
@@ -877,6 +855,9 @@ nfsd4_proc_compound(struct svc_rqst *rqstp,
 	resp->tag = args->tag;
 	resp->opcnt = 0;
 	resp->rqstp = rqstp;
+	resp->cstate.replay_owner = NULL;
+	fh_init(&resp->cstate.current_fh, NFS4_FHSIZE);
+	fh_init(&resp->cstate.save_fh, NFS4_FHSIZE);
 	/* Use the deferral mechanism only for NFSv4.0 compounds */
 	rqstp->rq_usedeferral = (args->minorversion == 0);
 
@@ -885,11 +866,6 @@ nfsd4_proc_compound(struct svc_rqst *rqstp,
 	 */
 	status = nfserr_minor_vers_mismatch;
 	if (args->minorversion > NFSD_SUPPORTED_MINOR_VERSION)
-		goto out;
-
-	status = nfserr_resource;
-	cstate = cstate_alloc();
-	if (cstate == NULL)
 		goto out;
 
 	status = nfs_ok;
@@ -968,7 +944,9 @@ encode_op:
 		status = nfserr_jukebox;
 	}
 
-	cstate_free(cstate);
+	fh_put(&resp->cstate.current_fh);
+	fh_put(&resp->cstate.save_fh);
+	BUG_ON(resp->cstate.replay_owner);
 out:
 	nfsd4_release_compoundargs(args);
 	/* Reset deferral mechanism for RPC deferrals */
