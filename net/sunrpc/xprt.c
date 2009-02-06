@@ -1013,6 +1013,27 @@ void xprt_release(struct rpc_task *task)
 	spin_unlock(&xprt->reserve_lock);
 }
 
+/*
+ * The autoclose function for the back channel
+ *
+ * The callback channel should never close the channel,
+ * let the forechannel do that.
+ */
+static void bc_autoclose(struct work_struct *work)
+{
+	return;
+}
+
+
+/*
+ * The autodisconnect routine for the back channel. We never disconnect
+ */
+static void
+bc_init_autodisconnect(unsigned long data)
+{
+	return;
+}
+
 /**
  * xprt_create_transport - create an RPC transport
  * @args: rpc transport creation arguments
@@ -1049,9 +1070,16 @@ found:
 
 	INIT_LIST_HEAD(&xprt->free);
 	INIT_LIST_HEAD(&xprt->recv);
-	INIT_WORK(&xprt->task_cleanup, xprt_autoclose);
-	setup_timer(&xprt->timer, xprt_init_autodisconnect,
-			(unsigned long)xprt);
+	if (args->bc_sock) {
+		INIT_WORK(&xprt->task_cleanup, bc_autoclose);
+		setup_timer(&xprt->timer, bc_init_autodisconnect,
+			    (unsigned long)xprt);
+	} else {
+		INIT_WORK(&xprt->task_cleanup, xprt_autoclose);
+		setup_timer(&xprt->timer, xprt_init_autodisconnect,
+			    (unsigned long)xprt);
+	}
+
 	xprt->last_used = jiffies;
 	xprt->cwnd = RPC_INITCWND;
 	xprt->bind_index = 0;
@@ -1070,6 +1098,13 @@ found:
 
 	dprintk("RPC:       created transport %p with %u slots\n", xprt,
 			xprt->max_reqs);
+
+	/*
+	 * Since we don't want connections for the backchannel, we set
+	 * the xprt status to connected
+	 */
+	if (args->bc_sock)
+		xprt_set_connected(xprt);
 
 	return xprt;
 }

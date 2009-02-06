@@ -174,6 +174,7 @@ struct rpc_xprt {
 	spinlock_t		reserve_lock;	/* lock slot table */
 	u32			xid;		/* Next XID value to use */
 	struct rpc_task *	snd_task;	/* Task blocked in send */
+	struct svc_sock		*bc_sock;	/* NFSv4.1 backchannel */
 	struct list_head	recv;
 
 	struct {
@@ -197,6 +198,7 @@ struct xprt_create {
 	struct sockaddr *	srcaddr;	/* optional local address */
 	struct sockaddr *	dstaddr;	/* remote peer address */
 	size_t			addrlen;
+	struct svc_sock		*bc_sock;	/* NFSv4.1 backchannel */
 };
 
 struct xprt_class {

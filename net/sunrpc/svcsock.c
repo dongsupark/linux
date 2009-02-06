@@ -49,6 +49,7 @@
 #include <linux/sunrpc/msg_prot.h>
 #include <linux/sunrpc/svcsock.h>
 #include <linux/sunrpc/stats.h>
+#include <linux/sunrpc/xprt.h>
 
 #define RPCDBG_FACILITY	RPCDBG_SVCXPRT
 
@@ -791,6 +792,7 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	int		len;
 	struct kvec *vec;
 	int pnum, vlen;
+	struct rpc_rqst *req = NULL;
 
 	dprintk("svc: tcp_recv %p data %d conn %d close %d\n",
 		svsk, test_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags),
@@ -874,12 +876,65 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	len = svsk->sk_reclen;
 	set_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags);
 
+	/*
+	 * We have enough data for the whole tcp record. Let's try and read the
+	 * first 8 bytes to get the xid and the call direction. We can use this
+	 * to figure out if this is a call or a reply to a callback. If
+	 * sk_reclen is < 8 (xid and calldir), then this is a malformed packet.
+	 * In that case, don't bother with the calldir and just read the data.
+	 * It will be rejected in svc_process.
+	 */
+
 	vec = rqstp->rq_vec;
 	vec[0] = rqstp->rq_arg.head[0];
 	vlen = PAGE_SIZE;
+
+	if (len >= 8) {
+		u32 *p;
+		u32 xid;
+		u32 calldir;
+
+		len = svc_recvfrom(rqstp, vec, 1, 8);
+		if (len < 0)
+			goto error;
+
+		p = (u32 *)rqstp->rq_arg.head[0].iov_base;
+		xid = *p++;
+		calldir = *p;
+
+		if (calldir) {
+			/* REPLY */
+			if (svsk->sk_bc_xprt)
+				req = xprt_lookup_rqst(svsk->sk_bc_xprt, xid);
+			if (req) {
+				memcpy(&req->rq_private_buf, &req->rq_rcv_buf,
+					sizeof(struct xdr_buf));
+				/* copy the xid and call direction */
+				memcpy(req->rq_private_buf.head[0].iov_base,
+					rqstp->rq_arg.head[0].iov_base, 8);
+				vec[0] = req->rq_private_buf.head[0];
+			} else
+				printk(KERN_NOTICE
+					"%s: Got unrecognized reply: "
+					"calldir 0x%x sk_bc_xprt %p xid %08x\n",
+					__func__, ntohl(calldir),
+					svsk->sk_bc_xprt, xid);
+		}
+
+		if (!calldir || !req)
+			vec[0] = rqstp->rq_arg.head[0];
+
+		vec[0].iov_base += 8;
+		vec[0].iov_len -= 8;
+		len = svsk->sk_reclen - 8;
+		vlen -= 8;
+	}
+
 	pnum = 1;
 	while (vlen < len) {
-		vec[pnum].iov_base = page_address(rqstp->rq_pages[pnum]);
+		vec[pnum].iov_base = (req) ?
+			page_address(req->rq_private_buf.pages[pnum - 1]) :
+			page_address(rqstp->rq_pages[pnum]);
 		vec[pnum].iov_len = PAGE_SIZE;
 		pnum++;
 		vlen += PAGE_SIZE;
@@ -891,6 +946,16 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	if (len < 0)
 		goto error;
 
+	/*
+	 * Account for the 8 bytes we read earlier
+	 */
+	len += 8;
+
+	if (req) {
+		xprt_complete_rqst(req->rq_task, len);
+		len = 0;
+		goto out;
+	}
 	dprintk("svc: TCP complete record (%d bytes)\n", len);
 	rqstp->rq_arg.len = len;
 	rqstp->rq_arg.page_base = 0;
@@ -904,6 +969,7 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	rqstp->rq_xprt_ctxt   = NULL;
 	rqstp->rq_prot	      = IPPROTO_TCP;
 
+out:
 	/* Reset TCP read info */
 	svsk->sk_reclen = 0;
 	svsk->sk_tcplen = 0;
