@@ -23,7 +23,11 @@
 /*
  * nfsd version
  */
+#if defined(CONFIG_NFSD_V4_1)
+#define NFSD_SUPPORTED_MINOR_VERSION	1
+#else /* CONFIG_NFSD_V4_1 */
 #define NFSD_SUPPORTED_MINOR_VERSION	0
+#endif /* CONFIG_NFSD_V4_1 */
 
 /*
  * Flags for nfsd_permission
