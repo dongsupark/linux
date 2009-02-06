@@ -1016,17 +1016,31 @@ nfsd4_set_cache_entry(struct nfsd4_compoundres *resp)
 	/* Don't cache a failed OP_SEQUENCE. */
 	if (resp->opcnt == 1 && op->opnum == OP_SEQUENCE && resp->cstate.status)
 		return;
+
 	nfsd4_release_respages(entry->ce_respages, entry->ce_resused);
+	entry->ce_opcnt = resp->opcnt;
+	entry->ce_status = resp->cstate.status;
+
+	/*
+	 * Don't need a page to cache just the sequence operation - the slot
+	 * does this for us!
+	 */
+
+	if (nfsd4_no_page_in_cache(resp)) {
+		entry->ce_resused = 0;
+		entry->ce_rpchdrlen = 0;
+		dprintk("%s Just cache SEQUENCE. ce_cachethis %d\n", __func__,
+			resp->cstate.slot->sl_cache_entry.ce_cachethis);
+		return;
+	}
 	entry->ce_resused = rqstp->rq_resused;
 	if (entry->ce_resused > NFSD_PAGES_PER_SLOT + 1)
 		entry->ce_resused = NFSD_PAGES_PER_SLOT + 1;
 	nfsd4_move_pages(entry->ce_respages, rqstp->rq_respages,
 			 entry->ce_resused);
-	entry->ce_status = resp->cstate.status;
 	entry->ce_datav.iov_base = resp->cstate.statp;
 	entry->ce_datav.iov_len = resv->iov_len - ((char *)resp->cstate.statp -
 				(char *)page_address(rqstp->rq_respages[0]));
-	entry->ce_opcnt = resp->opcnt;
 	/* Current request rpc header length*/
 	entry->ce_rpchdrlen = (char *)resp->cstate.statp -
 				(char *)page_address(rqstp->rq_respages[0]);
@@ -1065,13 +1079,28 @@ nfsd41_copy_replay_data(struct nfsd4_compoundres *resp,
  * cached page.  Replace any futher replay pages from the cache.
  */
 __be32
-nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp)
+nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
+			 struct nfsd4_sequence *seq)
 {
 	struct nfsd4_cache_entry *entry = &resp->cstate.slot->sl_cache_entry;
 	__be32 status;
 
 	dprintk("--> %s entry %p\n", __func__, entry);
 
+	/*
+	 * If this is just the sequence operation, we did not keep
+	 * a page in the cache entry because we can just use the
+	 * slot info stored in struct nfsd4_sequence that was checked
+	 * against the slot in nfsd4_sequence().
+	 *
+	 * This occurs when seq->cachethis is FALSE, or when the client
+	 * session inactivity timer fires and a solo sequence operation
+	 * is sent (lease renewal).
+	 */
+	if (seq && nfsd4_no_page_in_cache(resp)) {
+		seq->maxslots = resp->cstate.slot->sl_session->se_fnumslots;
+		return nfs_ok;
+	}
 
 	if (!nfsd41_copy_replay_data(resp, entry)) {
 		/*
@@ -1295,7 +1324,7 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 			cstate->slot = slot;
 			cstate->status = status;
 			/* Return the cached reply status */
-			status = nfsd4_replay_cache_entry(resp);
+			status = nfsd4_replay_cache_entry(resp, NULL);
 			goto out;
 		} else if (cr_ses->seqid != conf->cl_slot.sl_seqid + 1) {
 			status = nfserr_seq_misordered;
@@ -1345,6 +1374,8 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 
 	slot->sl_inuse = true;
 	cstate->slot = slot;
+	/* Ensure a page is used for the cache */
+	slot->sl_cache_entry.ce_cachethis = 1;
 out:
 	nfs4_unlock_state();
 	dprintk("%s returns %d\n", __func__, ntohl(status));
@@ -1389,8 +1420,8 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 	if (status == nfserr_replay_cache) {
 		cstate->slot = slot;
 		/* Return the cached reply status and set cstate->status
-		 * for nfsd4_svc_encode_compoundres processing*/
-		status = nfsd4_replay_cache_entry(resp);
+		 * for nfsd4_svc_encode_compoundres processing */
+		status = nfsd4_replay_cache_entry(resp, seq);
 		cstate->status = nfserr_replay_cache;
 		goto replay_cache;
 	}
@@ -1400,6 +1431,10 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 	/* Success! bump slot seqid */
 	slot->sl_inuse = true;
 	slot->sl_seqid = seq->seqid;
+	slot->sl_cache_entry.ce_cachethis = seq->cachethis;
+	/* Always set the cache entry cachethis for solo sequence */
+	if (nfsd4_is_solo_sequence(resp))
+		slot->sl_cache_entry.ce_cachethis = 1;
 
 	cstate->slot = slot;
 
