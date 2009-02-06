@@ -3206,7 +3206,7 @@ nfs4svc_encode_compoundres(struct svc_rqst *rqstp, __be32 *p, struct nfsd4_compo
 	iov->iov_len = ((char*)resp->p) - (char*)iov->iov_base;
 	BUG_ON(iov->iov_len > PAGE_SIZE);
 #ifdef CONFIG_NFSD_V4_1
-	if (resp->cstate.slot != NULL) {
+	if (nfsd4_has_session(&resp->cstate)) {
 		if (resp->cstate.status == nfserr_replay_cache &&
 				!nfsd4_no_page_in_cache(resp)) {
 			iov->iov_len = resp->cstate.iovlen;

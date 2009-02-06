@@ -335,6 +335,7 @@ struct nfs4_stateid {
 #define WR_STATE	        0x00000020
 #define CLOSE_STATE             0x00000040
 #define DELEG_RET               0x00000080
+#define HAS_SESSION             0x00000100
 
 #define seqid_mutating_err(err)                       \
 	(((err) != nfserr_stale_clientid) &&    \
