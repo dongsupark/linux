@@ -92,6 +92,15 @@ enum nfs_cb_opnum4 {
 					cb_sequence_dec_sz +            \
 					op_dec_sz)
 
+struct nfs4_rpc_args {
+	void                     *args_op;
+	struct nfsd4_cb_sequence *args_seq;
+};
+
+struct nfs4_rpc_res {
+	struct nfsd4_cb_sequence *res_seq;
+};
+
 /*
 * Generic encode routines from fs/nfs/nfs4xdr.c
 */
@@ -577,6 +586,12 @@ nfsd4_probe_callback(struct nfs4_client *clp)
 	return;
 }
 
+static int _nfsd4_cb_sync(struct nfs4_client *clp,
+			  const struct rpc_message *msg, int flags)
+{
+	return rpc_call_sync(clp->cl_callback.cb_client, msg, RPC_TASK_SOFT);
+}
+
 #if defined(CONFIG_NFSD_V4_1)
 /*
  * FIXME: cb_sequence should support referring call lists, cachethis, and
@@ -606,6 +621,41 @@ nfs41_cb_sequence_done(struct nfs4_client *clp, struct nfsd4_cb_sequence *res)
 
 	/* FIXME: support multiple callback slots */
 	mutex_unlock(&clp->cl_cb_mutex);
+}
+
+static int _nfsd41_cb_sync(struct nfs4_client *clp,
+			   struct rpc_message *msg, int flags)
+{
+	struct nfsd4_cb_sequence seq;
+	struct nfs4_rpc_args *args;
+	struct nfs4_rpc_res res;
+	int status;
+
+	args = msg->rpc_argp;
+	args->args_seq = &seq;
+
+	res.res_seq = &seq;
+	msg->rpc_resp = &res;
+
+	nfs41_cb_sequence_setup(clp, &seq);
+	status = _nfsd4_cb_sync(clp, msg, flags);
+	nfs41_cb_sequence_done(clp, &seq);
+
+	return status;
+}
+
+static int nfsd4_cb_sync(struct nfs4_client *clp,
+			 struct rpc_message *msg, int flags)
+{
+	return clp->cl_callback.cb_minorversion ?
+		_nfsd41_cb_sync(clp, msg, flags) :
+		_nfsd4_cb_sync(clp, msg, flags);
+}
+#else  /* CONFIG_NFSD_V4_1 */
+static int nfsd4_cb_sync(struct nfs4_client *clp,
+			 struct rpc_message *msg, int flags)
+{
+	return _nfsd4_cb_sync(clp, msg, flags);
 }
 #endif /* CONFIG_NFSD_V4_1 */
 
