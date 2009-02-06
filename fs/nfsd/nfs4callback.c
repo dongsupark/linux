@@ -296,15 +296,19 @@ nfs4_xdr_enc_cb_null(struct rpc_rqst *req, __be32 *p)
 }
 
 static int
-nfs4_xdr_enc_cb_recall(struct rpc_rqst *req, __be32 *p, struct nfs4_cb_recall *args)
+nfs4_xdr_enc_cb_recall(struct rpc_rqst *req, __be32 *p,
+		       struct nfs4_rpc_args *rpc_args)
 {
 	struct xdr_stream xdr;
+	struct nfs4_cb_recall *args = rpc_args->args_op;
 	struct nfs4_cb_compound_hdr hdr = {
 		.ident = args->cbr_ident,
+		.minorversion = rpc_args->args_seq.cbs_minorversion,
 	};
 
 	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
 	encode_cb_compound_hdr(&xdr, &hdr);
+	encode_cb_sequence(&xdr, &rpc_args->args_seq, &hdr);
 	encode_cb_recall(&xdr, args, &hdr);
 	encode_cb_nops(&hdr);
 	return 0;
@@ -403,7 +407,8 @@ nfs4_xdr_dec_cb_null(struct rpc_rqst *req, __be32 *p)
 }
 
 static int
-nfs4_xdr_dec_cb_recall(struct rpc_rqst *rqstp, __be32 *p)
+nfs4_xdr_dec_cb_recall(struct rpc_rqst *rqstp, __be32 *p,
+		       struct nfs4_rpc_res *rpc_res)
 {
 	struct xdr_stream xdr;
 	struct nfs4_cb_compound_hdr hdr;
@@ -413,6 +418,11 @@ nfs4_xdr_dec_cb_recall(struct rpc_rqst *rqstp, __be32 *p)
 	status = decode_cb_compound_hdr(&xdr, &hdr);
 	if (status)
 		goto out;
+	if (rpc_res && rpc_res->res_seq) {
+		status = decode_cb_sequence(&xdr, rpc_res->res_seq, rqstp);
+		if (status)
+			goto out;
+	}
 	status = decode_cb_op_hdr(&xdr, OP_CB_RECALL);
 out:
 	return status;
@@ -693,19 +703,25 @@ void
 nfsd4_cb_recall(struct nfs4_delegation *dp)
 {
 	struct nfs4_client *clp = dp->dl_client;
-	struct rpc_clnt *clnt = clp->cl_callback.cb_client;
 	struct nfs4_cb_recall *cbr = &dp->dl_recall;
+	struct nfs4_rpc_args args = {
+		.args_op = cbr,
+	};
+	struct nfs4_rpc_res res;
 	struct rpc_message msg = {
 		.rpc_proc = &nfs4_cb_procedures[NFSPROC4_CLNT_CB_RECALL],
-		.rpc_argp = cbr,
+		.rpc_argp = &args,
+		.rpc_resp = &res,
 	};
 	int retries = 1;
 	int status = 0;
 
+	dprintk("%s: dp %p\n", __func__, dp);
+
 	cbr->cbr_trunc = 0; /* XXX need to implement truncate optimization */
 	cbr->cbr_dp = dp;
 
-	status = rpc_call_sync(clnt, &msg, RPC_TASK_SOFT);
+	status = nfsd4_cb_sync(clp, &msg, RPC_TASK_SOFT);
 	while (retries--) {
 		switch (status) {
 			case -EIO:
@@ -720,13 +736,15 @@ nfsd4_cb_recall(struct nfs4_delegation *dp)
 				goto out_put_cred;
 		}
 		ssleep(2);
-		status = rpc_call_sync(clnt, &msg, RPC_TASK_SOFT);
+		status = nfsd4_cb_sync(clp, &msg, RPC_TASK_SOFT);
 	}
 out_put_cred:
 	/*
 	 * Success or failure, now we're either waiting for lease expiration
 	 * or deleg_return.
 	 */
+	dprintk("%s: dp %p dl_flock %p dl_count %d\n",
+		__func__, dp, dp->dl_flock, atomic_read(&dp->dl_count));
 	put_nfs4_client(clp);
 	nfs4_put_delegation(dp);
 	return;
