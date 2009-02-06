@@ -176,6 +176,8 @@ struct nfs4_client {
 	u32			cl_firststate;	/* recovery dir creation */
 #ifdef CONFIG_NFSD_V4_1
 	struct list_head	cl_sessions;
+	u32			cl_seqid;       /* seqid for create_session */
+	u32			cl_exchange_flags;
 #endif /* CONFIG_NFSD_V4_1 */
 };
 
