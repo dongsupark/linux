@@ -108,6 +108,11 @@ static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 	return nfss->pnfs_curr_ld != NULL;
 }
 
+static inline int pnfs_grow_ok(struct pnfs_fsdata *fsdata)
+{
+	return !fsdata || !fsdata->bypass_eof;
+}
+
 static inline enum pnfs_try_status
 pnfs_try_to_read_data(struct nfs_read_data *data,
 		      const struct rpc_call_ops *call_ops)
@@ -287,6 +292,11 @@ static inline int pnfs_use_rpc(struct nfs_server *nfss)
 }
 
 #else  /* CONFIG_NFS_V4_1 */
+
+static inline int pnfs_grow_ok(struct pnfs_fsdata *fsdata)
+{
+	return 1;
+}
 
 static inline enum pnfs_try_status
 pnfs_try_to_read_data(struct nfs_read_data *data,
