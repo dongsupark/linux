@@ -61,6 +61,7 @@ struct pnfs_layout_type {
 
 struct pnfs_fsdata {
 	int ok_to_use_pnfs;
+	int bypass_eof;
 	struct pnfs_layout_segment *lseg;
 	void *private;
 };
