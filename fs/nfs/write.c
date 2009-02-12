@@ -691,7 +691,8 @@ static int nfs_writepage_setup(struct nfs_open_context *ctx, struct page *page,
 		return PTR_ERR(req);
 	nfs_mark_request_dirty(req);
 	/* Update file length */
-	nfs_grow_file(page, offset, count);
+	if (pnfs_grow_ok(lseg, fsdata))
+		nfs_grow_file(page, offset, count);
 	nfs_mark_uptodate(page, req->wb_pgbase, req->wb_bytes);
 	nfs_mark_request_dirty(req);
 	nfs_clear_page_tag_locked(req);
