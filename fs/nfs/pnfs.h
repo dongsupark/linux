@@ -108,6 +108,13 @@ static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 	return nfss->pnfs_curr_ld != NULL;
 }
 
+static inline int pnfs_grow_ok(struct pnfs_layout_segment *lseg,
+			       struct pnfs_fsdata *fsdata)
+{
+	return !fsdata  || ((struct pnfs_layout_segment *)fsdata == lseg) ||
+		!fsdata->bypass_eof;
+}
+
 /* Should the pNFS client commit and return the layout upon a setattr */
 static inline bool
 pnfs_ld_layoutret_on_setattr(struct inode *inode)
@@ -252,6 +259,12 @@ pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 {
 	if (lsegpp)
 		*lsegpp = NULL;
+}
+
+static inline int pnfs_grow_ok(struct pnfs_layout_segment *lseg,
+			       struct pnfs_fsdata *fsdata)
+{
+	return 1;
 }
 
 static inline enum pnfs_try_status

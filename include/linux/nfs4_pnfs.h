@@ -30,6 +30,7 @@ struct pnfs_layoutdriver_type {
 };
 
 struct pnfs_fsdata {
+	int bypass_eof;
 	struct pnfs_layout_segment *lseg;
 	void *private;
 };
