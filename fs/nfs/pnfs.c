@@ -1912,7 +1912,8 @@ pnfs_layoutcommit_setup(struct pnfs_layoutcommit_data *data, int sync)
 	data->args.lseg.iomode = IOMODE_RW;
 	data->args.lseg.offset = nfsi->pnfs_write_begin_pos;
 	data->args.lseg.length = nfsi->pnfs_write_end_pos - nfsi->pnfs_write_begin_pos + 1;
-	data->args.lastbytewritten = nfsi->pnfs_write_end_pos;
+	data->args.lastbytewritten =  min(nfsi->pnfs_write_end_pos,
+					i_size_read(&nfsi->vfs_inode) - 1);
 	data->args.bitmask = nfss->attr_bitmask;
 	data->res.server = nfss;
 
