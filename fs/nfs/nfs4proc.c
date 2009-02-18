@@ -3712,6 +3712,7 @@ struct nfs4_lockdata {
 	unsigned long timestamp;
 	int rpc_status;
 	int cancelled;
+	struct nfs_server *server;
 };
 
 static struct nfs4_lockdata *nfs4_alloc_lockdata(struct file_lock *fl,
@@ -3739,6 +3740,7 @@ static struct nfs4_lockdata *nfs4_alloc_lockdata(struct file_lock *fl,
 	p->res.lock_seqid = p->arg.lock_seqid;
 	p->res.seq_res.sr_slotid = NFS4_MAX_SLOT_TABLE;
 	p->lsp = lsp;
+	p->server = server;
 	atomic_inc(&lsp->ls_count);
 	p->ctx = get_nfs_open_context(ctx);
 	memcpy(&p->fl, fl, sizeof(p->fl));
@@ -3768,6 +3770,9 @@ static void nfs4_lock_prepare(struct rpc_task *task, void *calldata)
 	} else
 		data->arg.new_lock_owner = 0;
 	data->timestamp = jiffies;
+	if (nfs4_setup_sequence(data->server->nfs_client, &data->arg.seq_args,
+				&data->res.seq_res, 1, task))
+		return;
 	rpc_call_start(task);
 	dprintk("%s: done!, ret = %d\n", __func__, data->rpc_status);
 }
@@ -3777,6 +3782,9 @@ static void nfs4_lock_done(struct rpc_task *task, void *calldata)
 	struct nfs4_lockdata *data = calldata;
 
 	dprintk("%s: begin!\n", __func__);
+
+	nfs4_sequence_done_free_slot(data->server, &data->res.seq_res,
+				     task->tk_status);
 
 	data->rpc_status = task->tk_status;
 	if (RPC_ASSASSINATED(task))
