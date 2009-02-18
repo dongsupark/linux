@@ -54,6 +54,7 @@
 #include "delegation.h"
 #include "internal.h"
 #include "iostat.h"
+#include "callback.h"
 
 #define NFSDBG_FACILITY		NFSDBG_PROC
 
@@ -4370,9 +4371,128 @@ void nfs4_destroy_session(struct nfs4_session *session)
 	kfree(session);
 }
 
-int nfs4_proc_create_session(struct nfs4_session *session)
+/*
+ * Initialize the values to be used by the client in CREATE_SESSION
+ * If nfs4_init_session set the fore channel request and response sizes,
+ * use them.
+ *
+ * Set the back channel max_resp_sz_cached to zero to force the client to
+ * always set csa_cachethis to FALSE because the current implementation
+ * of the back channel DRC only supports caching the CB_SEQUENCE operation.
+ */
+static void nfs4_init_channel_attrs(struct nfs41_create_session_args *args)
 {
-	return -1;      /* stub */
+	struct nfs4_session *session = args->client->cl_session;
+	unsigned int mxrqst_sz = session->fc_attrs.max_rqst_sz,
+		     mxresp_sz = session->fc_attrs.max_resp_sz;
+
+	if (mxrqst_sz == 0)
+		mxrqst_sz = NFS_MAX_FILE_IO_SIZE;
+	if (mxresp_sz == 0)
+		mxresp_sz = NFS_MAX_FILE_IO_SIZE;
+	/* Fore channel attributes */
+	args->fc_attrs.headerpadsz = 0;
+	args->fc_attrs.max_rqst_sz = mxrqst_sz;
+	args->fc_attrs.max_resp_sz = mxresp_sz;
+	args->fc_attrs.max_resp_sz_cached = mxresp_sz;
+	args->fc_attrs.max_ops = NFS4_MAX_OPS;
+	args->fc_attrs.max_reqs = session->clp->cl_rpcclient->cl_xprt->max_reqs;
+
+	dprintk("%s: Fore Channel : max_rqst_sz=%u max_resp_sz=%u "
+		"max_resp_sz_cached=%u max_ops=%u max_reqs=%u\n",
+		__func__,
+		args->fc_attrs.max_rqst_sz, args->fc_attrs.max_resp_sz,
+		args->fc_attrs.max_resp_sz_cached, args->fc_attrs.max_ops,
+		args->fc_attrs.max_reqs);
+
+	/* Back channel attributes */
+	args->bc_attrs.headerpadsz = 0;
+	args->bc_attrs.max_rqst_sz = PAGE_SIZE;
+	args->bc_attrs.max_resp_sz = PAGE_SIZE;
+	args->bc_attrs.max_resp_sz_cached = 0;
+	args->bc_attrs.max_ops = NFS4_MAX_BACK_CHANNEL_OPS;
+	args->bc_attrs.max_reqs = 1;
+
+	dprintk("%s: Back Channel : max_rqst_sz=%u max_resp_sz=%u "
+		"max_resp_sz_cached=%u max_ops=%u max_reqs=%u\n",
+		__func__,
+		args->bc_attrs.max_rqst_sz, args->bc_attrs.max_resp_sz,
+		args->bc_attrs.max_resp_sz_cached, args->bc_attrs.max_ops,
+		args->bc_attrs.max_reqs);
+}
+
+static int _nfs4_proc_create_session(struct nfs_client *clp)
+{
+	struct nfs4_session *session = clp->cl_session;
+	struct nfs41_create_session_args args = {
+		.client = clp,
+		.cb_program = NFS4_CALLBACK,
+	};
+
+	struct rpc_message msg = {
+		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_CREATE_SESSION],
+		.rpc_argp = &args,
+	};
+	int status;
+
+	nfs4_init_channel_attrs(&args);
+	args.flags = (SESSION4_PERSIST);
+
+	status = rpc_call_sync(session->clp->cl_rpcclient, &msg, 0);
+
+	/* Set the negotiated values in the session's channel_attrs struct */
+
+	if (!status) {
+		/* Increment the clientid slot sequence id */
+		clp->cl_seqid++;
+	}
+
+	return status;
+}
+
+/*
+ * Issues a CREATE_SESSION operation to the server.
+ * It is the responsibility of the caller to verify the session is
+ * expired before calling this routine.
+ */
+int nfs4_proc_create_session(struct nfs_client *clp)
+{
+	int status;
+	unsigned *ptr;
+	struct nfs_fsinfo fsinfo;
+	struct nfs4_session *session = clp->cl_session;
+
+	dprintk("--> %s clp=%p session=%p\n", __func__, clp, session);
+
+	status = _nfs4_proc_create_session(clp);
+	if (status)
+		goto out;
+
+	/* Init the fore channel */
+	status = nfs4_init_slot_table(session);
+	dprintk("fore channel slot table initialization returned %d\n", status);
+	if (status)
+		goto out;
+
+	ptr = (unsigned *)&session->sess_id.data[0];
+	dprintk("%s client>seqid %d sessionid %u:%u:%u:%u\n", __func__,
+		clp->cl_seqid, ptr[0], ptr[1], ptr[2], ptr[3]);
+
+	/* Get the lease time */
+	status = nfs4_proc_get_lease_time(clp, &fsinfo);
+	if (status == 0) {
+		/* Update lease time and schedule renewal */
+		spin_lock(&clp->cl_lock);
+		clp->cl_lease_time = fsinfo.lease_time * HZ;
+		clp->cl_last_renewal = jiffies;
+		clear_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state);
+		spin_unlock(&clp->cl_lock);
+
+		nfs4_schedule_state_renewal(clp);
+	}
+out:
+	dprintk("<-- %s\n", __func__);
+	return status;
 }
 
 int nfs4_proc_destroy_session(struct nfs4_session *session)
