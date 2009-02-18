@@ -3802,6 +3802,11 @@ int nfs4_proc_fs_locations(struct inode *dir, const struct qstr *name,
 }
 
 #ifdef CONFIG_NFS_V4_1
+static int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
+{
+	return -1;	/* stub */
+}
+
 /*
  * Initialize slot table
  */
@@ -3874,6 +3879,27 @@ void nfs4_destroy_session(struct nfs4_session *session)
 {
 	nfs4_destroy_slot_table(session);
 	kfree(session);
+}
+
+int nfs4_proc_create_session(struct nfs4_session *session)
+{
+	return -1;      /* stub */
+}
+
+int nfs4_proc_destroy_session(struct nfs4_session *session)
+{
+	return -1;      /* stub */
+}
+
+static int nfs4_proc_sequence(struct nfs_client *clp, struct rpc_cred *cred)
+{
+	return -1;      /* stub */
+}
+
+static int nfs41_proc_async_sequence(struct nfs_client *clp,
+				     struct rpc_cred *cred)
+{
+	return -1;      /* stub */
 }
 
 #endif /* CONFIG_NFS_V4_1 */

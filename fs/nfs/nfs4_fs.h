@@ -205,6 +205,8 @@ extern struct nfs4_state_recovery_ops nfs4_nograce_recovery_ops;
 #if defined(CONFIG_NFS_V4_1)
 extern void nfs4_destroy_session(struct nfs4_session *session);
 extern struct nfs4_session *nfs4_alloc_session(struct nfs_client *clp);
+extern int nfs4_proc_create_session(struct nfs4_session *);
+extern int nfs4_proc_destroy_session(struct nfs4_session *);
 #endif /* CONFIG_NFS_V4_1 */
 
 extern const u32 nfs4_fattr_bitmap[2];
