@@ -258,7 +258,30 @@ static int nfs4_handle_exception(struct nfs_server *server, int errorcode, struc
 			ret = nfs4_wait_clnt_recover(clp);
 			if (ret == 0)
 				exception->retry = 1;
+#if !defined(CONFIG_NFS_V4_1)
 			break;
+#else /* !defined(CONFIG_NFS_V4_1) */
+			if (!nfs4_has_session(server->nfs_client))
+				break;
+			/* FALLTHROUGH */
+		case -NFS4ERR_BADSESSION:
+		case -NFS4ERR_BADSLOT:
+		case -NFS4ERR_CONN_NOT_BOUND_TO_SESSION:
+		case -NFS4ERR_BACK_CHAN_BUSY:
+		case -NFS4ERR_SEQ_MISORDERED:
+		case -NFS4ERR_SEQUENCE_POS:
+		case -NFS4ERR_REQ_TOO_BIG:
+		case -NFS4ERR_REP_TOO_BIG:
+		case -NFS4ERR_REP_TOO_BIG_TO_CACHE:
+		case -NFS4ERR_RETRY_UNCACHED_REP:
+		case -NFS4ERR_TOO_MANY_OPS:
+		case -NFS4ERR_OP_NOT_IN_SESSION:
+			dprintk("%s ERROR: %d Reset session\n", __func__,
+				errorcode);
+			nfs41_set_session_reset(clp->cl_session);
+			exception->retry = 1;
+			/* FALLTHROUGH */
+#endif /* !defined(CONFIG_NFS_V4_1) */
 		case -NFS4ERR_FILE_OPEN:
 		case -NFS4ERR_GRACE:
 		case -NFS4ERR_DELAY:
@@ -386,16 +409,12 @@ static void nfs41_sequence_done(struct nfs_client *clp,
 
 	case -NFS4ERR_BADSESSION:
 	case -NFS4ERR_BADSLOT:
-	case -NFS4ERR_BADXDR:
 	case -NFS4ERR_BAD_HIGH_SLOT:
 	case -NFS4ERR_CONN_NOT_BOUND_TO_SESSION:
 	case -NFS4ERR_DEADSESSION:
-	case -NFS4ERR_DELAY:
 	case -NFS4ERR_REP_TOO_BIG:
 	case -NFS4ERR_REP_TOO_BIG_TO_CACHE:
 	case -NFS4ERR_REQ_TOO_BIG:
-	case -NFS4ERR_RETRY_UNCACHED_REP:
-	case -NFS4ERR_SEQUENCE_POS:
 	case -NFS4ERR_SEQ_FALSE_RETRY:
 	case -NFS4ERR_SEQ_MISORDERED:
 	case -NFS4ERR_TOO_MANY_OPS:
@@ -3301,6 +3320,22 @@ nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server, 
 				rpc_wake_up_queued_task(&clp->cl_rpcwaitq, task);
 			task->tk_status = 0;
 			return -EAGAIN;
+#if defined(CONFIG_NFS_V4_1)
+		case -NFS4ERR_BADSESSION:
+		case -NFS4ERR_BADSLOT:
+		case -NFS4ERR_CONN_NOT_BOUND_TO_SESSION:
+		case -NFS4ERR_BACK_CHAN_BUSY:
+		case -NFS4ERR_SEQ_MISORDERED:
+		case -NFS4ERR_SEQUENCE_POS:
+		case -NFS4ERR_REQ_TOO_BIG:
+		case -NFS4ERR_REP_TOO_BIG:
+		case -NFS4ERR_REP_TOO_BIG_TO_CACHE:
+			dprintk("%s ERROR %d, Reset session\n", __func__,
+				task->tk_status);
+			nfs41_set_session_reset(clp->cl_session);
+			task->tk_status = 0;
+			return -EAGAIN;
+#endif /* CONFIG_NFS_V4_1 */
 		case -NFS4ERR_DELAY:
 			nfs_inc_server_stats(server, NFSIOS_DELAY);
 		case -NFS4ERR_GRACE:
@@ -4642,6 +4677,28 @@ void nfs41_sequence_call_done(struct rpc_task *task, void *data)
 	struct nfs_server *server = (struct nfs_server *)data;
 
 	nfs4_sequence_done(server, task->tk_msg.rpc_resp, task->tk_status);
+
+	if (task->tk_status < 0) {
+		switch (task->tk_status) {
+		case -NFS4ERR_BADSLOT:
+		case -NFS4ERR_BADSESSION:
+		case -NFS4ERR_BAD_HIGH_SLOT:
+		case -NFS4ERR_CONN_NOT_BOUND_TO_SESSION:
+		case -NFS4ERR_DEADSESSION:
+		case -NFS4ERR_SEQ_MISORDERED:
+		case -NFS4ERR_SEQ_FALSE_RETRY:
+		case -NFS4ERR_REQ_TOO_BIG:
+		case -NFS4ERR_REP_TOO_BIG:
+		case -NFS4ERR_REP_TOO_BIG_TO_CACHE:
+			dprintk("%s ERROR %d Reset session\n", __func__,
+				task->tk_status);
+
+			if (nfs4_async_handle_error(task, server, NULL) == -EAGAIN) {
+				nfs4_restart_rpc(task, server->nfs_client);
+				return;
+			}
+		}
+	}
 	nfs4_sequence_free_slot(server, task->tk_msg.rpc_resp);
 	dprintk("%s rpc_cred %p\n", __func__, task->tk_msg.rpc_cred);
 
