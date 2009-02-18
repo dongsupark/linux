@@ -48,6 +48,17 @@ static int nfs41_start_session_recovery(struct nfs4_session *session)
 	return ret;
 }
 
+/*
+ * Session reset
+ */
+
+int nfs41_wait_session_reset(struct nfs4_session *session)
+{
+	might_sleep();
+	return wait_on_bit(&session->session_state, NFS41_SESSION_RESET,
+			   nfs4_wait_bit_killable, TASK_KILLABLE);
+}
+
 struct reclaimer_arg {
 	struct nfs4_session *session;
 };
@@ -74,17 +85,50 @@ static int nfs41_wait_session_recover_sync(struct nfs4_session *session)
 
 static int session_reclaimer(void *arg)
 {
-	int ret;
+	int ret, reset;
 	struct reclaimer_arg *rec = (struct reclaimer_arg *)arg;
+	struct nfs_client *clp = rec->session->clp;
 
-	dprintk("--> %s\n", __func__);
+	dprintk("--> %s session %p\n", __func__, rec->session);
 	allow_signal(SIGKILL);
 
-	ret = nfs4_proc_create_session(rec->session);
+	reset = nfs41_test_session_reset(rec->session);
+	if (reset) {
+		dprintk("%s Session Reset\n", __func__);
+		/* Reset is called only when all slots are clear.
+		 *
+		 * Bail on the reset if destroy session op fails or if
+		 * the session ref_count is not 1
+		 *
+		 * Of course since we are resetting the session,
+		 * it's OK if the session is already destroyed
+		 * on the server.
+		 */
+		ret = nfs4_proc_destroy_session(rec->session);
+		switch (ret) {
+		case 0:
+		case -NFS4ERR_BADSESSION:
+		case -NFS4ERR_DEADSESSION:
+			break;
+		default:
+			goto out_error;
+		}
+		memset(rec->session->sess_id.data, 0, NFS4_MAX_SESSIONID_LEN);
+	}
+	ret = nfs4_proc_create_session(clp, reset);
 	if (ret)
 		goto out_error;
 
 out:
+	if (reset) {
+		struct nfs4_slot_table *tbl;
+
+		tbl = &rec->session->fc_slot_table;
+		/* Need to clear reset bit and wake up the next rpc task
+		 * even on error */
+		nfs41_clear_session_reset(rec->session);
+		rpc_wake_up_next(&tbl->slot_tbl_waitq);
+	}
 	nfs41_end_session_recovery(rec->session);
 	kfree(rec);
 	module_put_and_exit(0);
@@ -96,8 +140,6 @@ out_error:
 
 	switch (ret) {
 	case -NFS4ERR_STALE_CLIENTID:
-	case -NFS4ERR_STALE_STATEID:
-	case -NFS4ERR_EXPIRED:
 		set_bit(NFS4CLNT_LEASE_EXPIRED, &rec->session->clp->cl_state);
 		break;
 	}
