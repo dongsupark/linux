@@ -193,6 +193,8 @@ static void nfs4_clear_client_minor_version(struct nfs_client *clp)
 		nfs4_destroy_session(clp->cl_session);
 		clp->cl_session = NULL;
 	}
+
+	clp->cl_call_sync = _nfs4_call_sync;
 #endif /* CONFIG_NFS_V4_1 */
 }
 
@@ -1084,6 +1086,8 @@ error:
  */
 static int nfs4_init_client_minor_version(struct nfs_client *clp)
 {
+	clp->cl_call_sync = _nfs4_call_sync;
+
 #if defined(CONFIG_NFS_V4_1)
 	if (clp->cl_minorversion) {
 		struct nfs4_session *session = NULL;
@@ -1097,6 +1101,7 @@ static int nfs4_init_client_minor_version(struct nfs_client *clp)
 			return -ENOMEM;
 
 		clp->cl_session = session;
+		clp->cl_call_sync = _nfs4_call_sync_session;
 	}
 #endif /* CONFIG_NFS_V4_1 */
 
