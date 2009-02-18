@@ -1095,7 +1095,8 @@ static int nfs4_init_callback(struct nfs_client *clp)
 	int error;
 
 	if (clp->rpc_ops->version == 4) {
-		error = nfs_callback_up();
+		error = nfs_callback_up(clp->cl_minorversion,
+					clp->cl_rpcclient->cl_xprt);
 		if (error < 0) {
 			dprintk("%s: failed to start callback. Error = %d\n",
 				__func__, error);
