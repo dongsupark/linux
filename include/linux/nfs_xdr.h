@@ -134,7 +134,7 @@ struct nfs4_sequence_args {
 };
 
 struct nfs4_sequence_res {
-	/* stub */
+	u8			sr_slotid;	/* slot used to send request */
 };
 
 struct nfs4_get_lease_time_args {

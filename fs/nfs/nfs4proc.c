@@ -350,14 +350,99 @@ out:
 	return ret_id;
 }
 
+static int nfs41_setup_sequence(struct nfs4_session *session,
+				struct nfs4_sequence_args *args,
+				struct nfs4_sequence_res *res,
+				int cache_reply,
+				struct rpc_task *task)
+{
+	/* slot already allocated? */
+	if (res->sr_slotid != NFS4_MAX_SLOT_TABLE)
+		return 0;
+
+	memset(res, 0, sizeof(*res));
+	res->sr_slotid = NFS4_MAX_SLOT_TABLE;
+	return 0;
+}
+
+int nfs4_setup_sequence(struct nfs_client *clp,
+			struct nfs4_sequence_args *args,
+			struct nfs4_sequence_res *res,
+			int cache_reply,
+			struct rpc_task *task)
+{
+	int ret = 0;
+
+	dprintk("--> %s clp %p session %p sr_slotid %d\n",
+		__func__, clp, clp->cl_session, res->sr_slotid);
+
+	if (!nfs4_has_session(clp))
+		goto out;
+	ret = nfs41_setup_sequence(clp->cl_session, args, res,
+				   cache_reply, task);
+	if (ret != -EAGAIN) {
+		/* terminate rpc task */
+		task->tk_status = ret;
+		task->tk_action = NULL;
+	}
+out:
+	dprintk("<-- %s status=%d\n", __func__, ret);
+	return ret;
+}
+
+struct nfs41_call_sync_data {
+	struct nfs_server *server;
+	struct nfs4_sequence_args *seq_args;
+	struct nfs4_sequence_res *seq_res;
+	int cache_reply;
+};
+
+static void nfs41_call_sync_prepare(struct rpc_task *task, void *calldata)
+{
+	struct nfs41_call_sync_data *data = calldata;
+
+	dprintk("--> %s data->server->session %p\n", __func__,
+		data->server->nfs_client->cl_session);
+	if (nfs4_setup_sequence(data->server->nfs_client, data->seq_args,
+				data->seq_res, data->cache_reply, task))
+		return;
+	rpc_call_start(task);
+}
+
+struct rpc_call_ops nfs41_call_sync_ops = {
+	.rpc_call_prepare = nfs41_call_sync_prepare,
+};
+
 int _nfs4_call_sync_session(struct nfs_server *server,
 			    struct rpc_message *msg,
 			    struct nfs4_sequence_args *args,
 			    struct nfs4_sequence_res *res,
 			    int cache_reply)
 {
-	/* in preparation for setting up the sequence op */
-	return rpc_call_sync(server->client, msg, 0);
+	int ret;
+	struct rpc_task *task;
+	struct nfs41_call_sync_data data = {
+		.server = server,
+		.seq_args = args,
+		.seq_res = res,
+		.cache_reply = cache_reply,
+	};
+	struct rpc_task_setup task_setup = {
+		.rpc_client = server->client,
+		.rpc_message = msg,
+		.callback_ops = &nfs41_call_sync_ops,
+		.callback_data = &data
+	};
+
+	res->sr_slotid = NFS4_MAX_SLOT_TABLE;
+	task = rpc_run_task(&task_setup);
+	if (IS_ERR(task))
+		ret = PTR_ERR(task);
+	else {
+		ret = task->tk_status;
+		rpc_put_task(task);
+	}
+	return ret;
 }
 
 #endif /* CONFIG_NFS_V4_1 */
