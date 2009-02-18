@@ -2444,7 +2444,6 @@ static void nfs4_kill_super(struct super_block *sb)
 	dprintk("--> %s\n", __func__);
 	nfs_super_return_all_delegations(sb);
 	kill_anon_super(sb);
-
 	nfs4_renewd_prepare_shutdown(server);
 	nfs_free_server(server);
 	dprintk("<-- %s\n", __func__);
