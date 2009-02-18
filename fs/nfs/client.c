@@ -37,6 +37,7 @@
 #include <linux/in6.h>
 #include <net/ipv6.h>
 #include <linux/nfs_xdr.h>
+#include <linux/nfs41_session_recovery.h>
 
 #include <asm/system.h>
 

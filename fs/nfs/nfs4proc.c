@@ -49,6 +49,7 @@
 #include <linux/namei.h>
 #include <linux/mount.h>
 #include <linux/module.h>
+#include <linux/nfs41_session_recovery.h>
 
 #include "nfs4_fs.h"
 #include "delegation.h"
@@ -234,7 +235,7 @@ static int nfs4_delay(struct rpc_clnt *clnt, long *timeout)
 /* This is the error handling routine for processes that are allowed
  * to sleep.
  */
-static int nfs4_handle_exception(const struct nfs_server *server, int errorcode, struct nfs4_exception *exception)
+static int nfs4_handle_exception(struct nfs_server *server, int errorcode, struct nfs4_exception *exception)
 {
 	struct nfs_client *clp = server->nfs_client;
 	struct nfs4_state *state = exception->state;
@@ -4358,6 +4359,9 @@ struct nfs4_session *nfs4_alloc_session(struct nfs_client *clp)
 	session = kzalloc(sizeof(struct nfs4_session), GFP_ATOMIC);
 	if (!session)
 		return NULL;
+
+	nfs41_set_session_alloc(session);
+
 	tbl = &session->fc_slot_table;
 	spin_lock_init(&tbl->slot_tbl_lock);
 	rpc_init_wait_queue(&tbl->slot_tbl_waitq, "Slot table");
@@ -4443,6 +4447,8 @@ static int _nfs4_proc_create_session(struct nfs_client *clp)
 	/* Set the negotiated values in the session's channel_attrs struct */
 
 	if (!status) {
+		nfs41_set_session_valid(session);       /* Activate session */
+
 		/* Increment the clientid slot sequence id */
 		clp->cl_seqid++;
 	}
@@ -4506,6 +4512,10 @@ int nfs4_proc_destroy_session(struct nfs4_session *session)
 
 	dprintk("--> nfs4_proc_destroy_session\n");
 
+	/* session is still being created */
+	if (nfs41_test_session_alloc(session))
+		return status;
+
 	msg.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_DESTROY_SESSION];
 	msg.rpc_argp = session;
 	msg.rpc_resp = NULL;
@@ -4543,6 +4553,8 @@ static int nfs4_proc_sequence(struct nfs_client *clp, struct rpc_cred *cred)
 
 	server = list_entry(clp->cl_superblocks.next, struct nfs_server,
 			    client_link);
+	if (nfs41_test_session_alloc(clp->cl_session))
+		return -NFS4ERR_STALE_CLIENTID;
 
 	args.sa_cache_this = 0;
 
