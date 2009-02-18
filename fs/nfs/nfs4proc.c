@@ -3708,6 +3708,83 @@ int nfs4_proc_fs_locations(struct inode *dir, const struct qstr *name,
 	return status;
 }
 
+#ifdef CONFIG_NFS_V4_1
+/*
+ * Initialize slot table
+ */
+static int nfs4_init_slot_table(struct nfs4_session *session)
+{
+	struct nfs4_slot_table *tbl = &session->fc_slot_table;
+	int i, max_slots = session->fc_attrs.max_reqs;
+	struct nfs4_slot *slot;
+	int ret = -ENOMEM;
+
+	BUG_ON(max_slots > NFS4_MAX_SLOT_TABLE);
+
+	dprintk("--> %s: max_reqs=%u\n", __func__,
+		session->fc_attrs.max_reqs);
+
+	slot = kzalloc(max_slots * sizeof(struct nfs4_slot), GFP_ATOMIC);
+	if (!slot)
+		goto out;
+	for (i = 0; i < max_slots; ++i)
+		slot[i].seq_nr = 1;
+	ret = 0;
+
+	spin_lock(&tbl->slot_tbl_lock);
+	if (tbl->slots != NULL) {
+		spin_unlock(&tbl->slot_tbl_lock);
+		dprintk("%s: slot table already initialized. tbl=%p slots=%p\n",
+			__func__, tbl, tbl->slots);
+		WARN_ON(1);
+		goto out_free;
+	}
+	tbl->max_slots = max_slots;
+	tbl->slots = slot;
+	tbl->highest_used_slotid = -1;  /* no slot is currently used */
+	spin_unlock(&tbl->slot_tbl_lock);
+	dprintk("%s: tbl=%p slots=%p max_slots=%d\n", __func__,
+		tbl, tbl->slots, tbl->max_slots);
+out:
+	dprintk("<-- %s: return %d\n", __func__, ret);
+	return ret;
+out_free:
+	kfree(slot);
+	goto out;
+}
+/* Destroy the slot table */
+static void nfs4_destroy_slot_table(struct nfs4_session *session)
+{
+	if (session->fc_slot_table.slots == NULL)
+		return;
+	kfree(session->fc_slot_table.slots);
+	session->fc_slot_table.slots = NULL;
+	return;
+}
+
+struct nfs4_session *nfs4_alloc_session(struct nfs_client *clp)
+{
+	struct nfs4_session *session;
+	struct nfs4_slot_table *tbl;
+
+	session = kzalloc(sizeof(struct nfs4_session), GFP_ATOMIC);
+	if (!session)
+		return NULL;
+	tbl = &session->fc_slot_table;
+	spin_lock_init(&tbl->slot_tbl_lock);
+	rpc_init_wait_queue(&tbl->slot_tbl_waitq, "Slot table");
+	session->clp = clp;
+	return session;
+}
+
+void nfs4_destroy_session(struct nfs4_session *session)
+{
+	nfs4_destroy_slot_table(session);
+	kfree(session);
+}
+
+#endif /* CONFIG_NFS_V4_1 */
+
 struct nfs4_state_recovery_ops nfs4_reboot_recovery_ops = {
 	.owner_flag_bit = NFS_OWNER_RECLAIM_REBOOT,
 	.state_flag_bit	= NFS_STATE_RECLAIM_REBOOT,
