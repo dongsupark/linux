@@ -1662,6 +1662,7 @@ static void nfs4_close_done(struct rpc_task *task, void *data)
 	struct nfs4_state *state = calldata->state;
 	struct nfs_server *server = NFS_SERVER(calldata->inode);
 
+	nfs4_sequence_done(server, &calldata->res.seq_res, task->tk_status);
 	if (RPC_ASSASSINATED(task))
 		return;
         /* hmm. we are done with the inode, and in the process of freeing
@@ -1684,6 +1685,7 @@ static void nfs4_close_done(struct rpc_task *task, void *data)
 				return;
 			}
 	}
+	nfs4_sequence_free_slot(server, &calldata->res.seq_res);
 	nfs_refresh_inode(calldata->inode, calldata->res.fattr);
 }
 
@@ -1724,6 +1726,10 @@ static void nfs4_close_prepare(struct rpc_task *task, void *data)
 		calldata->arg.fmode = FMODE_WRITE;
 	}
 	calldata->timestamp = jiffies;
+	if (nfs4_setup_sequence((NFS_SERVER(calldata->inode))->nfs_client,
+				&calldata->arg.seq_args, &calldata->res.seq_res,
+				1, task))
+		return;
 	rpc_call_start(task);
 }
 
@@ -1763,7 +1769,7 @@ int nfs4_do_close(struct path *path, struct nfs4_state *state, int wait)
 	};
 	int status = -ENOMEM;
 
-	calldata = kmalloc(sizeof(*calldata), GFP_KERNEL);
+	calldata = kzalloc(sizeof(*calldata), GFP_KERNEL);
 	if (calldata == NULL)
 		goto out;
 	calldata->inode = state->inode;
