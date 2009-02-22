@@ -455,7 +455,7 @@ static int decode_blk_volume(uint32_t **pp, uint32_t *end,
 		/* Make sure total size only includes addressable areas */
 		tmp_size = vol->bv_vols[0]->bv_size;
 		do_div(tmp_size, (u32)vol->bv_stripe_unit);
-		vol->bv_size = tmp_size * vol->bv_stripe_unit;
+		vol->bv_size = vol->bv_vol_n * tmp_size * vol->bv_stripe_unit;
 		dprintk("%s Set Stripe vol to size %llu\n",
 				__func__, (u64)vol->bv_size);
 		break;
