@@ -129,7 +129,7 @@ struct nfs_server {
 	dev_t			s_dev;		/* superblock dev numbers */
 
 #ifdef CONFIG_NFS_V4
-	u32			attr_bitmask[2];/* V4 bitmask representing the set
+	u32			attr_bitmask[3];/* V4 bitmask representing the set
 						   of attributes supported on this
 						   filesystem */
 	u32			acl_bitmask;	/* V4 bitmask representing the ACEs
