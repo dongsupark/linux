@@ -1211,6 +1211,7 @@ out_new:
 	copy_verf(new, &verf);
 	copy_cred(&new->cl_cred, &rqstp->rq_cred);
 	new->cl_addr = ip_addr;
+	new->cl_flavor = rqstp->rq_flavor;
 	gen_clid(new);
 	gen_confirm(new);
 	add_to_unconfirmed(new, strhashval);
