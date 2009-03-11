@@ -1159,6 +1159,7 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 	struct nfs_writeargs	*argp = &data->args;
 	struct nfs_writeres	*resp = &data->res;
 	struct nfs_server	*server = NFS_SERVER(data->inode);
+	struct nfs_client	*clp = server->nfs_client;
 	int status;
 
 	dprintk("NFS: %5u nfs_writeback_done (status %d)\n",
@@ -1175,6 +1176,13 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 	if (status != 0)
 		return status;
 	nfs_add_stats(data->inode, NFSIOS_SERVERWRITTENBYTES, resp->count);
+#ifdef CONFIG_PNFS
+	/* Is this a DS session */
+	if (data->fldata.ds_nfs_client) {
+		dprintk("%s DS write\n", __func__);
+		clp = data->fldata.ds_nfs_client;
+	}
+#endif /* CONFIG_PNFS */
 
 #if defined(CONFIG_NFS_V3) || defined(CONFIG_NFS_V4)
 	if (resp->verf->committed < argp->stable && task->tk_status >= 0) {
@@ -1191,7 +1199,7 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 		if (time_before(complain, jiffies)) {
 			dprintk("NFS:       faulty NFS server %s:"
 				" (committed = %d) != (stable = %d)\n",
-				server->nfs_client->cl_hostname,
+				clp->cl_hostname,
 				resp->verf->committed, argp->stable);
 			complain = jiffies + 300 * HZ;
 		}
@@ -1217,7 +1225,7 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 				 */
 				argp->stable = NFS_FILE_SYNC;
 			}
-			nfs4_restart_rpc(task, server->nfs_client);
+			nfs4_restart_rpc(task, clp);
 			return -EAGAIN;
 		}
 		if (time_before(complain, jiffies)) {
@@ -1229,7 +1237,7 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 		/* Can't do anything about it except throw an error. */
 		task->tk_status = -EIO;
 	}
-	nfs4_sequence_free_slot(server->nfs_client, &data->res.seq_res);
+	nfs4_sequence_free_slot(clp, &data->res.seq_res);
 	return 0;
 }
 
