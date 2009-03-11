@@ -367,10 +367,15 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 {
 	struct nfs_readargs *argp = &data->args;
 	struct nfs_readres *resp = &data->res;
+	struct nfs_client *clp = NFS_SERVER(data->inode)->nfs_client;
 
 #ifdef CONFIG_PNFS
 	if (data->pdata.pnfsflags & PNFS_NO_RPC)
 		return;
+	if (data->fldata.ds_nfs_client) {
+		dprintk("%s DS read\n", __func__);
+		clp = data->fldata.ds_nfs_client;
+	}
 #endif /* CONFIG_PNFS */
 	if (resp->eof || resp->count == argp->count)
 		goto out;
@@ -385,11 +390,10 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 	argp->offset += resp->count;
 	argp->pgbase += resp->count;
 	argp->count -= resp->count;
-	nfs4_restart_rpc(task, NFS_SERVER(data->inode)->nfs_client);
+	nfs4_restart_rpc(task, clp);
 	return;
 out:
-	nfs4_sequence_free_slot(NFS_SERVER(data->inode)->nfs_client,
-				&data->res.seq_res);
+	nfs4_sequence_free_slot(clp, &data->res.seq_res);
 	return;
 
 }
