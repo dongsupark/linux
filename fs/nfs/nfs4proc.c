@@ -676,7 +676,7 @@ static void nfs4_sequence_done_free_slot(const struct nfs_server *server,
 					 int rpc_status)
 {
 	nfs4_sequence_done(server, res, rpc_status);
-	nfs4_sequence_free_slot(server, res);
+	nfs4_sequence_free_slot(server->nfs_client, res);
 }
 
 void nfs4_restart_rpc(struct rpc_task *task, const struct nfs_client *clp)
@@ -1770,7 +1770,7 @@ static void nfs4_close_done(struct rpc_task *task, void *data)
 				return;
 			}
 	}
-	nfs4_sequence_free_slot(server, &calldata->res.seq_res);
+	nfs4_sequence_free_slot(server->nfs_client, &calldata->res.seq_res);
 	nfs_refresh_inode(calldata->inode, calldata->res.fattr);
 }
 
@@ -2533,7 +2533,7 @@ static int nfs4_proc_unlink_done(struct rpc_task *task, struct inode *dir)
 	nfs4_sequence_done(res->server, &res->seq_res, task->tk_status);
 	if (nfs4_async_handle_error(task, res->server, NULL) == -EAGAIN)
 		return 0;
-	nfs4_sequence_free_slot(res->server, &res->seq_res);
+	nfs4_sequence_free_slot(res->server->nfs_client, &res->seq_res);
 	update_changeattr(dir, &res->cinfo);
 	nfs_post_op_update_inode(dir, &res->dir_attr);
 	return 1;
@@ -3032,7 +3032,8 @@ static int nfs4_commit_done(struct rpc_task *task, struct nfs_write_data *data)
 		nfs4_restart_rpc(task, NFS_SERVER(inode)->nfs_client);
 		return -EAGAIN;
 	}
-	nfs4_sequence_free_slot(NFS_SERVER(inode), &data->res.seq_res);
+	nfs4_sequence_free_slot(NFS_SERVER(inode)->nfs_client,
+				&data->res.seq_res);
 	nfs_refresh_inode(inode, data->res.fattr);
 	return 0;
 }
@@ -3750,7 +3751,8 @@ static void nfs4_locku_done(struct rpc_task *task, void *data)
 				nfs4_restart_rpc(task,
 						calldata->server->nfs_client);
 	}
-	nfs4_sequence_free_slot(calldata->server, &calldata->res.seq_res);
+	nfs4_sequence_free_slot(calldata->server->nfs_client,
+				&calldata->res.seq_res);
 }
 
 static void nfs4_locku_prepare(struct rpc_task *task, void *data)
@@ -4815,7 +4817,7 @@ void nfs41_sequence_call_done(struct rpc_task *task, void *data)
 			}
 		}
 	}
-	nfs4_sequence_free_slot(server, task->tk_msg.rpc_resp);
+	nfs4_sequence_free_slot(server->nfs_client, task->tk_msg.rpc_resp);
 	dprintk("%s rpc_cred %p\n", __func__, task->tk_msg.rpc_cred);
 
 	put_rpccred(task->tk_msg.rpc_cred);

@@ -367,7 +367,8 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 	nfs4_restart_rpc(task, NFS_SERVER(data->inode)->nfs_client);
 	return;
 out:
-	nfs4_sequence_free_slot(NFS_SERVER(data->inode), &data->res.seq_res);
+	nfs4_sequence_free_slot(NFS_SERVER(data->inode)->nfs_client,
+				&data->res.seq_res);
 	return;
 
 }

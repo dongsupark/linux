@@ -239,12 +239,12 @@ extern void nfs41_sequence_free_slot(const struct nfs_client *,
 				     struct nfs4_sequence_res *res);
 #endif /* CONFIG_NFS_V4_1 */
 
-static inline void nfs4_sequence_free_slot(const struct nfs_server *server,
+static inline void nfs4_sequence_free_slot(const struct nfs_client *clp,
 					   struct nfs4_sequence_res *res)
 {
 #ifdef CONFIG_NFS_V4_1
-	if (nfs4_has_session(server->nfs_client))
-		nfs41_sequence_free_slot(server->nfs_client, res);
+	if (nfs4_has_session(clp))
+		nfs41_sequence_free_slot(clp, res);
 #endif /* CONFIG_NFS_V4_1 */
 }
 
