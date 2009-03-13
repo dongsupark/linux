@@ -65,7 +65,9 @@ static void	call_decode(struct rpc_task *task);
 static void	call_bind(struct rpc_task *task);
 static void	call_bind_status(struct rpc_task *task);
 static void	call_transmit(struct rpc_task *task);
+#if defined(CONFIG_NFS_V4_1)
 static void	call_bc_transmit(struct rpc_task *task);
+#endif /* CONFIG_NFS_V4_1 */
 static void	call_status(struct rpc_task *task);
 static void	call_transmit_status(struct rpc_task *task);
 static void	call_refresh(struct rpc_task *task);
@@ -1176,6 +1178,7 @@ call_transmit_status(struct rpc_task *task)
 	rpc_task_force_reencode(task);
 }
 
+#if defined(CONFIG_NFS_V4_1)
 /*
  * 5b.	Send the backchannel RPC reply.  On error, drop the reply.  In
  * addition, disconnect on connectivity errors.
@@ -1186,12 +1189,18 @@ call_bc_transmit(struct rpc_task *task)
 	struct rpc_rqst *req = task->tk_rqstp;
 
 	BUG_ON(task->tk_status != 0);
-	task->tk_action = rpc_exit_task;
-	do {
-		/* Wait for the transport to become available */
-		task->tk_status = xprt_prepare_transmit(task);
-	} while (task->tk_status == -EAGAIN);
+	task->tk_status = xprt_prepare_transmit(task);
+	if (task->tk_status == -EAGAIN) {
+		/*
+		 * Could not reserve the transport. Try again after the
+		 * transport is released.
+		 */
+		task->tk_status = 0;
+		task->tk_action = call_bc_transmit;
+		return;
+	}
 
+	task->tk_action = rpc_exit_task;
 	if (task->tk_status < 0) {
 		printk(KERN_NOTICE "RPC: Could not send backchannel reply "
 			"error: %d\n", task->tk_status);
@@ -1233,6 +1242,7 @@ call_bc_transmit(struct rpc_task *task)
 	}
 	rpc_wake_up_queued_task(&req->rq_xprt->pending, task);
 }
+#endif /* CONFIG_NFS_V4_1 */
 
 /*
  * 6.	Sort out the RPC call status
