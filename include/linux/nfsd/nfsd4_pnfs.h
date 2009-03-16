@@ -176,6 +176,13 @@ struct nfsd4_pnfs_layoutreturn {
 	u32			lrs_present;	/* response */
 };
 
+/*
+ * callbacks provided by the nfsd
+ */
+struct pnfsd_cb_operations {
+	/* Generic callbacks */
+};
+
 struct pnfs_export_operations {
 	/* Returns the supported pnfs_layouttype4. */
 	int (*layout_type) (struct super_block *);
