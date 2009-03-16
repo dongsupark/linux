@@ -170,4 +170,42 @@ extern struct dentry *generic_fh_to_parent(struct super_block *sb,
 	struct fid *fid, int fh_len, int fh_type,
 	struct inode *(*get_inode) (struct super_block *sb, u64 ino, u32 gen));
 
+#if defined(CONFIG_PNFSD)
+#include <linux/module.h>
+
+struct pnfsd_cb_operations;
+
+struct pnfsd_cb_ctl {
+	spinlock_t lock;
+	struct module *module;
+	const struct pnfsd_cb_operations *cb_op;
+};
+
+/* in expfs.c so that file systems can depend on it */
+extern struct pnfsd_cb_ctl pnfsd_cb_ctl;
+
+static inline int
+pnfsd_get_cb_op(struct pnfsd_cb_ctl *ctl)
+{
+	int ret = -ENOENT;
+
+	spin_lock(&pnfsd_cb_ctl.lock);
+	if (!pnfsd_cb_ctl.cb_op)
+		goto out;
+	if (!try_module_get(pnfsd_cb_ctl.module))
+		goto out;
+	ctl->cb_op = pnfsd_cb_ctl.cb_op;
+	ctl->module = pnfsd_cb_ctl.module;
+	ret = 0;
+out:
+	spin_unlock(&pnfsd_cb_ctl.lock);
+	return ret;
+}
+
+static inline void
+pnfsd_put_cb_op(struct pnfsd_cb_ctl *ctl)
+{
+	module_put(ctl->module);
+}
+#endif /* CONFIG_PNFSD */
 #endif /* LINUX_EXPORTFS_H */
