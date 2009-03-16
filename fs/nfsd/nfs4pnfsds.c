@@ -468,7 +468,7 @@ nfsv4_ds_get_state(struct svc_fh *cfh, stateid_t *stidp)
 		goto out_noput;
 
 	sb = ino->i_sb;
-	if (!sb || !sb->s_export_op->get_state)
+	if (!sb || !sb->s_pnfs_op->get_state)
 		goto out_noput;
 
 	/* Uninitialize current state if it exists yet it doesn't match.
@@ -505,7 +505,7 @@ nfsv4_ds_get_state(struct svc_fh *cfh, stateid_t *stidp)
 		/* Validate stateid on mds */
 		dprintk("pNFSD: %s Checking state on MDS\n", __func__);
 		memcpy(&gs.stid, stidp, sizeof(stateid_t));
-		status = sb->s_export_op->get_state(ino, &cfh->fh_handle, &gs);
+		status = sb->s_pnfs_op->get_state(ino, &cfh->fh_handle, &gs);
 		dprintk("pNFSD: %s from MDS status %d\n", __func__, status);
 		ds_lock_state();
 		/* if !status and stateid is valid, update id and mark valid */
@@ -588,7 +588,7 @@ nfs4_ds_get_verifier(stateid_t *stateid, struct super_block *sb, u32 *p)
 {
 	struct pnfs_ds_stateid *dsp = NULL;
 
-	if (!sb->s_export_op->get_verifier)
+	if (!sb->s_pnfs_op->get_verifier)
 		return;
 
 	dprintk("pNFSD: %s --> stid %p\n", __func__, stateid);
@@ -609,7 +609,7 @@ nfs4_ds_get_verifier(stateid_t *stateid, struct super_block *sb, u32 *p)
 	} else {
 		/* must be on MDS */
 		ds_unlock_state();
-		sb->s_export_op->get_verifier(sb, p);
+		sb->s_pnfs_op->get_verifier(sb, p);
 		ds_lock_state();
 		p += 2;
 	}
