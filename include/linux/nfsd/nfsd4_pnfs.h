@@ -208,6 +208,17 @@ struct pnfs_get_state {
 	u32			verifier[2]; /* response */
 };
 
+/*
+ * callbacks provided by the nfsd
+ */
+struct pnfsd_cb_operations {
+	/* Generic callbacks */
+	int (*cb_layout_recall) (struct super_block *, struct inode *,
+				 struct nfsd4_pnfs_cb_layout *);
+	int (*cb_device_notify) (struct super_block *,
+				 struct nfsd4_pnfs_cb_dev_list *);
+};
+
 struct pnfs_export_operations {
 	/* Returns the supported pnfs_layouttype4. */
 	int (*layout_type) (struct super_block *);
