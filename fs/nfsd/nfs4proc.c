@@ -292,7 +292,7 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		struct super_block *sb;
 
 		sb = cstate->current_fh.fh_dentry->d_inode->i_sb;
-		if (sb->s_export_op->propagate_open) {
+		if (sb->s_pnfs_op->propagate_open) {
 			pstatus = nfs4_spnfs_propagate_open(sb,
 				&cstate->current_fh, open);
 			if (pstatus) {

@@ -171,7 +171,8 @@ spnfs_layoutcommit(void)
 }
 
 int
-spnfs_layoutreturn(struct inode *inode, void *pnfs_layout_return_p)
+spnfs_layoutreturn(struct inode *inode,
+		   struct nfsd4_pnfs_layoutreturn *pnfs_layout_return_p)
 {
 	return 0;
 }
@@ -762,7 +763,7 @@ spnfs_commit(void)
  * At this time simply return 0 to indicate success and use the existing state
  */
 int
-spnfs_get_state(struct inode *inode, void *fh, void *state)
+spnfs_get_state(struct inode *inode, struct knfsd_fh *fh, struct pnfs_get_state *arg)
 {
 	return 0;
 }
