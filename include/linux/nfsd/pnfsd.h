@@ -40,17 +40,6 @@
 
 #include <linux/nfsd/nfsd4_pnfs.h>
 
-/* pNFS Metadata to Data server state communication*/
-struct pnfs_get_state {
-	u32			dsid;    /* request */
-	u64			ino;      /* request */
-	stateid_t		stid;     /* request;response */
-	clientid_t		clid;     /* response */
-	u32			access;    /* response */
-	u32			stid_gen;    /* response */
-	u32			verifier[2]; /* response */
-};
-
 struct pnfs_inval_state {
 	struct knfsd_fh		mdsfh; /* needed only by invalidate all */
 	stateid_t		stid;

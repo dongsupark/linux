@@ -42,6 +42,84 @@
 #include <linux/exportfs.h>
 #include <linux/nfsd/nfsfh.h>
 
+typedef struct {
+	uint64_t	pnfs_fsid;	/* fsid */
+	uint64_t	pnfs_devid;	/* deviceid */
+} deviceid_t;
+
+/* XDR stream arguments and results.  Exported file system uses this
+ * struct to encode information and return how many bytes were encoded.
+ */
+struct pnfs_xdr_info {
+	struct nfsd4_compoundres *resp;
+	u32 maxcount;		/* in */
+	u32 bytes_written;	/* out */
+};
+
+/* Used by get_device_info to encode a device (da_addr_body in spec)
+ * Args:
+ * xdr - xdr stream
+ * device - pointer to device to be encoded
+*/
+typedef int (*pnfs_encodedev_t)(struct pnfs_xdr_info *xdr, void *device);
+
+/* Arguments for get_device_info */
+struct pnfs_devinfo_arg {
+	u32 type;			/* request */
+	deviceid_t devid;		/* request */
+	u32 notify_types;		/* request/response */
+	struct pnfs_xdr_info xdr;	/* request/response */
+	pnfs_encodedev_t func;		/* request */
+};
+
+/* Used by get_device_iter to retrieve all available devices.
+ * Args:
+ * type - layout type
+ * cookie/verf - index and verifier of current list item
+ * export_id - Minor part of deviceid_t
+ * eof - end of file?
+ */
+struct pnfs_deviter_arg {
+	u32 type;	/* request */
+	u64 cookie;	/* request/response */
+	u64 verf;	/* request/response */
+	u64 devid;	/* response */
+	u32 eof;	/* response */
+};
+
+struct nfsd4_layout_seg {
+	u64	clientid;
+	u32	layout_type;
+	u32	iomode;
+	u64	offset;
+	u64	length;
+};
+
+/* Used by layout_get to encode layout (loc_body var in spec)
+ * Args:
+ * minlength - min number of accessible bytes given by layout
+ * func - per layout encoding function
+ * export_id - Major part of deviceid_t.  File system uses this
+ * to build the deviceid returned in the layout.
+ * fh - fs can modify the file handle for use on data servers
+ * seg - layout info requested and layout info returned
+ * xdr - xdr info
+ * return_on_close - true if layout to be returned on file close
+ * TODO: use common func with dev?
+ */
+typedef int (*pnfs_encodelayout_t)(struct pnfs_xdr_info *xdr, void *layout);
+
+/* Arguments for layoutget */
+struct pnfs_layoutget_arg {
+	u64			minlength;	/* request */
+	pnfs_encodelayout_t 	func;		/* request */
+	u64			fsid;		/* request */
+	struct knfsd_fh		*fh;		/* request/response */
+	struct nfsd4_layout_seg	seg;		/* request/response */
+	struct pnfs_xdr_info	xdr;		/* request/response */
+	u32			return_on_close;/* response */
+};
+
 /* pNFS structs */
 
 struct nfsd4_pnfs_getdevlist {
@@ -117,6 +195,17 @@ struct nfsd4_pnfs_cb_dev_item {
 struct nfsd4_pnfs_cb_dev_list {
 	u32				cbd_len;  /* request */
 	struct nfsd4_pnfs_cb_dev_item  *cbd_list; /* request */
+};
+
+/* pNFS Metadata to Data server state communication */
+struct pnfs_get_state {
+	u32			dsid;    /* request */
+	u64			ino;      /* request */
+	stateid_t		stid;     /* request;response */
+	clientid_t		clid;     /* response */
+	u32			access;    /* response */
+	u32			stid_gen;    /* response */
+	u32			verifier[2]; /* response */
 };
 
 /*
