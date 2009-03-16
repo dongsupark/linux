@@ -40,6 +40,10 @@
 
 /* pNFS structs */
 
+struct pnfs_export_operations {
+	/* stub */
+};
+
 #endif /* CONFIG_PNFSD */
 
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
