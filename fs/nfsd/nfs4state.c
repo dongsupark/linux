@@ -3273,8 +3273,8 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 		/* temporary hook for spnfs testing purposes */
 		sb = cstate->current_fh.fh_dentry->d_inode->i_sb;
-		if (sb->s_export_op->close)
-			sb->s_export_op->close(cstate->current_fh.fh_dentry->d_inode);
+		if (sb->s_pnfs_op->close)
+			sb->s_pnfs_op->close(cstate->current_fh.fh_dentry->d_inode);
 	}
 #endif /* CONFIG_SPNFS */
 

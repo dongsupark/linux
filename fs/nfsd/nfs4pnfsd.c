@@ -1440,7 +1440,7 @@ int nfs4_spnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
 	struct nfsd4_pnfs_open poa;
 	struct nfsd4_open *openp = NULL;
 
-	if (sb->s_export_op->propagate_open) {
+	if (sb->s_pnfs_op->propagate_open) {
 		openp = (struct nfsd4_open *)p;
 		poa.op_create = openp->op_create;
 		poa.op_createmode = openp->op_createmode;
@@ -1448,7 +1448,7 @@ int nfs4_spnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
 		strncpy(poa.op_fn, openp->op_fname.data, openp->op_fname.len);
 		poa.op_fn[openp->op_fname.len] = '\0';
 
-		status = sb->s_export_op->propagate_open(
+		status = sb->s_pnfs_op->propagate_open(
 			current_fh->fh_dentry->d_inode, &poa);
 		if (status) {
 			printk(KERN_WARNING

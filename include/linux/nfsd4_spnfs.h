@@ -287,6 +287,9 @@ struct spnfs_msg {
 
 #if defined(__KERNEL__) && defined(CONFIG_SPNFS)
 
+#include <linux/nfsd/state.h>
+#include <linux/nfsd/nfsd4_pnfs.h>
+
 /* pipe mgmt structure.  messages flow through here */
 struct spnfs {
 	char			spnfs_path[48];   /* path to pipe */
@@ -300,13 +303,13 @@ struct spnfs {
 int spnfs_layout_type(struct super_block *);
 int spnfs_layoutget(struct inode *, struct pnfs_layoutget_arg *);
 int spnfs_layoutcommit(void);
-int spnfs_layoutreturn(struct inode *, void *);
+int spnfs_layoutreturn(struct inode *, struct nfsd4_pnfs_layoutreturn *);
 int spnfs_getdeviceiter(struct super_block *, struct pnfs_deviter_arg *);
 int spnfs_getdeviceinfo(struct super_block *, struct pnfs_devinfo_arg *);
 int spnfs_setattr(void);
 int spnfs_open(struct inode *, void *);
 int spnfs_close(struct inode *);
-int spnfs_get_state(struct inode *, void *, void *);
+int spnfs_get_state(struct inode *, struct knfsd_fh *, struct pnfs_get_state *);
 int spnfs_remove(unsigned long, unsigned long);
 int spnfs_read(struct inode *, loff_t, unsigned long *, int, struct svc_rqst *);
 int spnfs_write(struct inode *, loff_t, size_t, int, struct svc_rqst *);
