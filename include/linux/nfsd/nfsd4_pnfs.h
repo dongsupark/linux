@@ -271,6 +271,10 @@ struct pnfs_export_operations {
 	/* Call fs on DS only */
 	int (*get_state) (struct inode *, struct knfsd_fh *,
 			  struct pnfs_get_state *);
+
+	/* pNFS: spnfs calls */
+	int (*propagate_open) (struct inode *inode, void *p);
+	int (*close) (struct inode *inode);
 };
 
 /*
