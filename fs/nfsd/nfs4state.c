@@ -4667,7 +4667,7 @@ expire_layout(struct nfs4_layout *lp)
 		lp, clp, fp, fp->fi_inode);
 
 	/* call exported filesystem layout_return */
-	if (!fp->fi_inode->i_sb->s_export_op->layout_return)
+	if (!fp->fi_inode->i_sb->s_pnfs_op->layout_return)
 		return 0;
 
 	/* Remove from all lists to allow
@@ -4683,7 +4683,7 @@ expire_layout(struct nfs4_layout *lp)
 	lr.lr_seg.offset = 0;
 	lr.lr_seg.length = NFS4_MAX_UINT64;
 	nfs4_unlock_state();
-	status = fp->fi_inode->i_sb->s_export_op->layout_return(
+	status = fp->fi_inode->i_sb->s_pnfs_op->layout_return(
 		 fp->fi_inode, &lr);
 	nfs4_lock_state();
 	destroy_layout(lp);
@@ -4930,8 +4930,8 @@ nfs4_pnfs_get_layout(struct svc_fh *current_fh,
 
 	dprintk("NFSD: %s Begin\n", __func__);
 
-	can_merge = sb->s_export_op->can_merge_layouts != NULL &&
-		    sb->s_export_op->can_merge_layouts(args->seg.layout_type);
+	can_merge = sb->s_pnfs_op->can_merge_layouts != NULL &&
+		    sb->s_pnfs_op->can_merge_layouts(args->seg.layout_type);
 
 	nfs4_lock_state();
 	fp = find_alloc_file(ino, current_fh);
@@ -4963,7 +4963,7 @@ nfs4_pnfs_get_layout(struct svc_fh *current_fh,
 		args->seg.iomode, args->seg.offset, args->seg.length);
 
 	nfs4_unlock_state();
-	status = sb->s_export_op->layout_get(ino, args);
+	status = sb->s_pnfs_op->layout_get(ino, args);
 	nfs4_lock_state();
 
 	dprintk("pNFS %s: post-export status %d "
@@ -5167,8 +5167,8 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 	dprintk("NFSD: %s\n", __func__);
 
 	/* call exported filesystem layout_return first */
-	if (sb->s_export_op->layout_return) {
-		status = sb->s_export_op->layout_return(ino, lrp);
+	if (sb->s_pnfs_op->layout_return) {
+		status = sb->s_pnfs_op->layout_return(ino, lrp);
 
 		dprintk("pNFS %s: status %d ino %p return type %d\n",
 			__func__, status, ino, lrp->lr_return_type);
@@ -5364,9 +5364,9 @@ nomatching_layout(struct super_block *sb, struct nfs4_layoutrecall *clr)
 	lr.lr_seg = clr->cb.cbl_seg;
 	lr.lr_reclaim = 0;
 	lr.lr_flags = LR_FLAG_INTERN;
-	if (sb->s_export_op->layout_return) {
+	if (sb->s_pnfs_op->layout_return) {
 		nfs4_unlock_state();
-		sb->s_export_op->layout_return(clr->clr_file ?
+		sb->s_pnfs_op->layout_return(clr->clr_file ?
 			clr->clr_file->fi_inode : NULL, &lr);
 		nfs4_lock_state();
 	}

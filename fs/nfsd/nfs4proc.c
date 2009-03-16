@@ -375,7 +375,7 @@ nfsd4_get_verifier(struct super_block *sb, nfs4_verifier *verf)
 	u32 *p = (u32 *)verf->data;
 
 #if defined(CONFIG_PNFSD)
-	if (sb->s_export_op->get_verifier) {
+	if (sb->s_pnfs_op->get_verifier) {
 		nfs4_ds_get_verifier(NULL, sb, p);
 		return;
 	}
@@ -861,13 +861,13 @@ nfsd4_layout_verify(struct super_block *sb, unsigned int layout_type)
 
 	/* check to see if pNFS  is supported. */
 	status = nfserr_layoutunavailable;
-	if (!sb->s_export_op->layout_type) {
+	if (!sb->s_pnfs_op->layout_type) {
 		printk(KERN_INFO "pNFS %s: Underlying file system "
 		       "does not support pNFS\n", __func__);
 		goto out;
 	}
 
-	type = sb->s_export_op->layout_type(sb);
+	type = sb->s_pnfs_op->layout_type(sb);
 
 	/* check to see if requested layout type is supported. */
 	status = nfserr_unknown_layouttype;
@@ -917,7 +917,7 @@ nfsd4_getdevlist(struct svc_rqst *rqstp,
 
 	/* Do nothing if underlying file system does not support
 	 * getdevicelist */
-	if (!sb->s_export_op->get_device_iter) {
+	if (!sb->s_pnfs_op->get_device_iter) {
 		status = nfserr_notsupp;
 		goto out;
 	}
@@ -960,7 +960,7 @@ nfsd4_layoutget(struct svc_rqst *rqstp,
 
 	/* check to see if pNFS is supported. */
 	status = nfserr_layoutunavailable;
-	if (!sb->s_export_op->layout_get) {
+	if (!sb->s_pnfs_op->layout_get) {
 		printk(KERN_INFO "pNFS %s: Underlying file system "
 		       "does not support layout_get\n", __func__);
 		goto out;
@@ -1050,8 +1050,8 @@ nfsd4_layoutcommit(struct svc_rqst *rqstp,
 	dprintk("%s: Modifying file size\n", __func__);
 	ia.ia_valid = ATTR_SIZE;
 	ia.ia_size = lcp->lc_last_wr + 1;
-	if (sb->s_export_op->layout_commit) {
-		status = sb->s_export_op->layout_commit(ino, lcp);
+	if (sb->s_pnfs_op->layout_commit) {
+		status = sb->s_pnfs_op->layout_commit(ino, lcp);
 		dprintk("%s:layout_commit result %d\n", __func__, status);
 	} else {
 		status = notify_change(current_fh->fh_dentry, &ia);
@@ -1165,7 +1165,7 @@ nfsd4_getdevinfo(struct svc_rqst *rqstp,
 	if (status)
 		goto out;
 
-	if (!sb->s_export_op->get_device_info) {
+	if (!sb->s_pnfs_op->get_device_info) {
 		status = nfserr_notsupp;
 		goto out;
 	}

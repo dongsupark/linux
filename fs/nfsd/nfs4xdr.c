@@ -2363,8 +2363,8 @@ out_acl:
 		if (buflen < 0)		/* length */
 			goto out_resource;
 
-		if (sb && sb->s_export_op->layout_type)
-			type = sb->s_export_op->layout_type(sb);
+		if (sb && sb->s_pnfs_op->layout_type)
+			type = sb->s_pnfs_op->layout_type(sb);
 		if (type) {
 			if ((buflen -= 4) < 0)	/* type */
 				goto out_resource;
@@ -3336,7 +3336,7 @@ nfsd4_encode_devlist_iterator(struct nfsd4_compoundres *resp,
 			iter_arg.type,
 			iter_arg.cookie,
 			iter_arg.verf);
-		nfserr = sb->s_export_op->get_device_iter(sb, &iter_arg);
+		nfserr = sb->s_pnfs_op->get_device_iter(sb, &iter_arg);
 		dprintk("%s: post get_device_iter err: %d, eof: %u\n",
 			__func__,
 			nfserr,
@@ -3500,7 +3500,7 @@ nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, int nfserr,
 	args.xdr.maxcount = maxcount;
 
 	/* Call file system to retrieve and encode device */
-	nfserr = sb->s_export_op->get_device_info(sb, &args);
+	nfserr = sb->s_pnfs_op->get_device_info(sb, &args);
 	if (nfserr) {
 		/* Rewind to the beginning */
 		p = p_in;
