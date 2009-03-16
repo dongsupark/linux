@@ -208,6 +208,38 @@ struct pnfs_get_state {
 	u32			verifier[2]; /* response */
 };
 
+struct pnfs_export_operations {
+	/* Returns the supported pnfs_layouttype4. */
+	int (*layout_type) (struct super_block *);
+
+	/* Retrieve and encode a device onto the xdr stream.
+	 * Args:
+	 * sb - superblock
+	 * arg - layout type, device id, maxcount
+	 * arg.xdr - xdr stream for encoding
+	 * arg.func - Optional function called by file system to encode
+	 * device on xdr stream.
+	 */
+	int (*get_device_info) (struct super_block *, struct pnfs_devinfo_arg *);
+	/* Retrieve all available devices via an iterator */
+	int (*get_device_iter) (struct super_block *, struct pnfs_deviter_arg *);
+
+	/* Retrieve and encode a layout onto the xdr stream.
+	 * Args:
+	 * inode - inode for which to retrieve layout
+	 * arg.xdr - xdr stream for encoding
+	 * arg.func - Optional function called by file system to encode
+	 * layout on xdr stream.
+	 */
+	int (*layout_get) (struct inode *, struct pnfs_layoutget_arg *);
+	/* Commit changes to layout */
+	int (*layout_commit) (struct inode *, struct nfsd4_pnfs_layoutcommit *);
+	/* Returns the layout */
+	int (*layout_return) (struct inode *, struct nfsd4_pnfs_layoutreturn *);
+	/* Can layout segments be merged for this layout type? */
+	int (*can_merge_layouts) (u32 layout_type);
+};
+
 /*
  * fh_fsid_type is overloaded to indicate whether a filehandle was one supplied
  * to a DS by LAYOUTGET.  nfs4_preprocess_stateid_op() uses this to decide how
