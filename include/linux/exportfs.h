@@ -159,47 +159,11 @@ struct export_operations {
 			struct dentry *child);
 	struct dentry * (*get_parent)(struct dentry *child);
 #if defined(CONFIG_PNFSD)
-	/* pNFS operations */
-		/* pNFS: returns the verifier */
-	void (*get_verifier) (struct super_block *sb, u32 *p);
-		/* pNFS: Returns the supported pnfs_layouttype4. */
-	int (*layout_type)(struct super_block *sb);
-	/* Retrieve and encode a device onto the xdr stream.
-	 * Args:
-	 * sb - superblock
-	 * arg - layout type, device id, maxcount
-	 * arg.xdr - xdr stream for encoding
-	 * arg.func - Optional function called by file system to encode
-	 * device on xdr stream.
-	 */
-	int (*get_device_info) (struct super_block *sb,
-				struct pnfs_devinfo_arg *arg);
-	/* Retrieve all available devices via an iterator */
-	int (*get_device_iter) (struct super_block *sb,
-				struct pnfs_deviter_arg *arg);
-		/* can layout segments be merged for this layout type? */
-	int (*can_merge_layouts)(u32 layout_type);
-	/* Retrieve and encode a layout onto the xdr stream.
-	 * Args:
-	 * inode - inode for which to retrieve layout
-	 * arg.xdr - xdr stream for encoding
-	 * arg.func - Optional function called by file system to encode
-	 * layout on xdr stream.
-	 */
-	int (*layout_get) (struct inode *inode,
-			   struct pnfs_layoutget_arg *arg);
-		/* pNFS: commit changes to layout */
-	int (*layout_commit) (struct inode *inode, void *p);
-		/* pNFS: returns the layout */
-	int (*layout_return) (struct inode *inode, void *p);
-
 		/* callback from fs on MDS only */
 	int (*cb_get_state) (struct super_block *sb, void *state);
 	int (*cb_layout_recall) (struct super_block *sb, struct inode *inode, void *p);
 	int (*cb_device_notify) (struct super_block *sb, void *p);
 		/* call fs on DS only */
-	int (*get_state) (struct inode *inode, void *fh, void *state);
-		/* callback from fs on DS only */
 	int (*cb_change_state) (void *p);
 #endif /* CONFIG_PNFSD */
 };
