@@ -217,6 +217,13 @@ struct pnfsd_cb_operations {
 				 struct nfsd4_pnfs_cb_layout *);
 	int (*cb_device_notify) (struct super_block *,
 				 struct nfsd4_pnfs_cb_dev_list *);
+
+	/* pNFS Files layout specific callbacks */
+
+	/* Callback from fs on MDS only */
+	int (*cb_get_state) (struct super_block *, struct pnfs_get_state *);
+	/* Callback from fs on DS only */
+	int (*cb_change_state) (struct pnfs_get_state *);
 };
 
 struct pnfs_export_operations {
