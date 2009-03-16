@@ -370,6 +370,22 @@ static struct pnfsd_cb_operations pnfsd_cb_op = {
 	.cb_get_state = nfs4_pnfs_cb_get_state,
 	.cb_change_state = nfs4_pnfs_cb_change_state,
 };
+
+#if defined(CONFIG_SPNFS)
+static struct pnfs_export_operations spnfs_export_ops = {
+	.layout_type = spnfs_layout_type,
+	.get_device_info = spnfs_getdeviceinfo,
+	.get_device_iter = spnfs_getdeviceiter,
+	.layout_get = spnfs_layoutget,
+	.layout_return = spnfs_layoutreturn,
+	.propagate_open = spnfs_open,
+	.close = spnfs_close,
+};
+
+static struct pnfs_export_operations spnfs_ds_export_ops = {
+	.get_state = spnfs_get_state,
+};
+#endif /* CONFIG_SPNFS */
 #endif /* CONFIG_PNFSD */
 
 static struct svc_export *svc_export_update(struct svc_export *new,
@@ -407,45 +423,24 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 	}
 
 #if defined(CONFIG_SPNFS)
-	/*
-	 * spnfs_enabled() indicates we're an MDS.
-	 * XXX Better to check an export time option as well.
-	 */
-	if (spnfs_enabled()) {
-		dprintk("set spnfs export structure...\n");
-		if (!inode->i_sb->s_export_op->layout_type)
-			inode->i_sb->s_export_op->layout_type =
-				spnfs_layout_type;
-		if (!inode->i_sb->s_export_op->get_device_iter)
-			inode->i_sb->s_export_op->get_device_iter =
-				spnfs_getdeviceiter;
-		if (!inode->i_sb->s_export_op->get_device_info)
-			inode->i_sb->s_export_op->get_device_info =
-				spnfs_getdeviceinfo;
-		if (!inode->i_sb->s_export_op->propagate_open)
-			inode->i_sb->s_export_op->propagate_open =
-				spnfs_open;
-		if (!inode->i_sb->s_export_op->close)
-			inode->i_sb->s_export_op->close =
-				spnfs_close;
-		if (!inode->i_sb->s_export_op->layout_get)
-			inode->i_sb->s_export_op->layout_get =
-				spnfs_layoutget;
-		if (!inode->i_sb->s_export_op->layout_return)
-			inode->i_sb->s_export_op->layout_return =
-				spnfs_layoutreturn;
-	} else
-		dprintk("%s spnfs not in use\n", __FUNCTION__);
-	/*
-	 * get_state is needed if we're a DS using spnfs.
-	 * Currently it doesn't hurt to define it even if we're not
-	 * using pNFS or we're an MDS.  Although it's way ugly to set it
-	 * here unnecessarily - could lead to error in the future.
-	 *
-	 * XXX Better to check an export time option instead.
-	 */
-	if (!inode->i_sb->s_export_op->get_state)
-		inode->i_sb->s_export_op->get_state = spnfs_get_state;
+	if (!inode->i_sb->s_pnfs_op) {
+		/*
+		 * spnfs_enabled() indicates we're an MDS.
+		 * XXX Better to check an export time option as well.
+		 */
+		if (spnfs_enabled()) {
+			dprintk("set spnfs export structure...\n");
+			inode->i_sb->s_pnfs_op = &spnfs_export_ops;
+		} else {
+			dprintk("%s spnfs not in use\n", __FUNCTION__);
+
+			/*
+			 * get_state is needed if we're a DS using spnfs.
+			 * XXX Better to check an export time option instead.
+			 */
+			inode->i_sb->s_pnfs_op = &spnfs_ds_export_ops;
+		}
+	}
 #endif /* CONFIG_SPNFS */
 
 	return 0;
