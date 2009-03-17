@@ -89,12 +89,6 @@ struct fid {
 	};
 };
 
-#if defined(CONFIG_PNFSD)
-struct pnfs_devinfo_arg;
-struct pnfs_deviter_arg;
-struct pnfs_layoutget_arg;
-#endif
-
 /**
  * struct export_operations - for nfsd to communicate with file systems
  * @encode_fh:      encode a file handle fragment from a dentry
@@ -158,14 +152,6 @@ struct export_operations {
 	int (*get_name)(struct dentry *parent, char *name,
 			struct dentry *child);
 	struct dentry * (*get_parent)(struct dentry *child);
-#if defined(CONFIG_PNFSD)
-		/* callback from fs on MDS only */
-	int (*cb_get_state) (struct super_block *sb, void *state);
-	int (*cb_layout_recall) (struct super_block *sb, struct inode *inode, void *p);
-	int (*cb_device_notify) (struct super_block *sb, void *p);
-		/* call fs on DS only */
-	int (*cb_change_state) (void *p);
-#endif /* CONFIG_PNFSD */
 };
 
 extern int exportfs_encode_fh(struct dentry *dentry, struct fid *fid,
