@@ -360,43 +360,6 @@ static void svc_export_request(struct cache_detail *cd,
 }
 
 #if defined(CONFIG_PNFSD)
-static int cb_get_state(struct super_block *sb, void *p)
-{
-	struct pnfs_get_state *os = (struct pnfs_get_state *)p;
-
-	dprintk("cb_get_state os %p\n", os);
-
-	return nfs4_pnfs_cb_get_state(sb, os);
-}
-
-static int cb_change_state(void *p)
-{
-	struct pnfs_get_state *os = (struct pnfs_get_state *)p;
-
-	dprintk("cb_change_state os %p\n", os);
-
-	return nfs4_pnfs_cb_change_state(os);
-}
-
-static int cb_layout_recall(struct super_block *sb, struct inode *inode,
-			    void *p)
-{
-	struct nfsd4_pnfs_cb_layout *lr = p;
-
-	dprintk("cb_layout_recall lr %p\n", lr);
-
-	return nfsd_layout_recall_cb(sb, inode, lr);
-}
-
-static int cb_device_notify(struct super_block *sb, void *p)
-{
-	struct nfsd4_pnfs_cb_dev_list *nd = p;
-
-	dprintk("NFSD %s: nd %p\n", __func__, nd);
-
-	return nfsd_device_notify_cb(sb, nd);
-}
-
 static struct pnfsd_cb_operations pnfsd_cb_op = {
 	.cb_layout_recall = nfsd_layout_recall_cb,
 	.cb_device_notify = nfsd_device_notify_cb,
@@ -439,18 +402,6 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 		dprintk("exp_export: export of invalid fs type.\n");
 		return -EINVAL;
 	}
-
-#if defined(CONFIG_PNFSD)
-	dprintk("set cb_get_state %p\n", cb_get_state);
-	if (!inode->i_sb->s_export_op->cb_get_state)
-		inode->i_sb->s_export_op->cb_get_state = cb_get_state;
-	if (!inode->i_sb->s_export_op->cb_change_state)
-		inode->i_sb->s_export_op->cb_change_state = cb_change_state;
-	if (!inode->i_sb->s_export_op->cb_layout_recall)
-		inode->i_sb->s_export_op->cb_layout_recall = cb_layout_recall;
-	if (!inode->i_sb->s_export_op->cb_device_notify)
-		inode->i_sb->s_export_op->cb_device_notify = cb_device_notify;
-#endif /* CONFIG_PNFSD */
 
 	return 0;
 
