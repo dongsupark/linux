@@ -50,6 +50,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/nfsd4_spnfs.h>
 #include <linux/nfsd/debug.h>
 #include <linux/nfsd/state.h>
+#include <linux/nfsd/pnfsd.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 
@@ -209,7 +210,7 @@ spnfs_layoutrecall(struct inode *inode, int type, u64 offset, u64 len)
 	lr.cbl_seg.iomode = IOMODE_ANY;
 	lr.cbl_layoutchanged = 0;
 
-	sb->s_export_op->cb_layout_recall(sb, inode, &lr);
+	nfsd_layout_recall_cb(sb, inode, &lr);
 
 	return 0;
 }
@@ -553,7 +554,7 @@ spnfs_close(struct inode *inode)
 		lr.cbl_seg.iomode = IOMODE_ANY;
 		lr.cbl_layoutchanged = 0;
 
-		sb->s_export_op->cb_layout_recall(sb, inode, &lr);
+		nfsd_layout_recall_cb(sb, inode, &lr);
 	}
 
 	return 0;
