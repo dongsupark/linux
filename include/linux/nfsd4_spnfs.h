@@ -285,7 +285,7 @@ struct spnfs_msg {
 	union spnfs_msg_res	im_res;
 };
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) && defined(CONFIG_SPNFS)
 
 /* pipe mgmt structure.  messages flow through here */
 struct spnfs {
@@ -321,6 +321,6 @@ int spnfs_enabled(void);
 int nfs4_spnfs_propagate_open(struct super_block *, struct svc_fh *, void *);
 int spnfs_init_proc(void);
 
-#endif /* __KERNEL__ */
+#endif /* __KERNEL__ && CONFIG_SPNFS */
 
 #endif /* NFS_SPNFS_H */
