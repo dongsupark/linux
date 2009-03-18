@@ -201,10 +201,6 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	   struct nfsd4_open *open)
 {
 	__be32 status;
-#if defined(CONFIG_SPNFS)
-	__be32 pstatus;
-	struct super_block *sb;
-#endif
 
 	dprintk("NFSD: nfsd4_open filename %.*s op_stateowner %p\n",
 		(int)open->op_fname.len, open->op_fname.data,
@@ -297,6 +293,9 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	status = nfsd4_process_open2(rqstp, &cstate->current_fh, open);
 #if defined(CONFIG_SPNFS)
 	if (!status) {
+		__be32 pstatus;
+		struct super_block *sb;
+
 		sb = cstate->current_fh.fh_dentry->d_inode->i_sb;
 		if (sb->s_export_op->propagate_open) {
 			pstatus = nfs4_spnfs_propagate_open(sb,

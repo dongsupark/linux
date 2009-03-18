@@ -3325,7 +3325,6 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	__be32 status;
 	struct nfs4_stateid *stp;
 	int flags = OPEN_STATE | CLOSE_STATE;
-	struct super_block *sb;
 
 	dprintk("NFSD: nfsd4_close on file %.*s\n", 
 			(int)cstate->current_fh.fh_dentry->d_name.len,
@@ -3334,10 +3333,14 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	if (nfsd4_has_session(cstate))
 		flags |= HAS_SESSION;
 #if defined(CONFIG_SPNFS)
-	/* temportary hook for spnfs testing purposes */
-	sb = cstate->current_fh.fh_dentry->d_inode->i_sb;
-	if (sb->s_export_op->close)
-		sb->s_export_op->close(cstate->current_fh.fh_dentry->d_inode);
+	{
+		struct super_block *sb;
+
+		/* temporary hook for spnfs testing purposes */
+		sb = cstate->current_fh.fh_dentry->d_inode->i_sb;
+		if (sb->s_export_op->close)
+			sb->s_export_op->close(cstate->current_fh.fh_dentry->d_inode);
+	}
 #endif /* CONFIG_SPNFS */
 
 	nfs4_lock_state();
