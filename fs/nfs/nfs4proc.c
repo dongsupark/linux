@@ -552,8 +552,6 @@ int nfs4_setup_sequence(struct nfs_client *clp,
 
 	if (!nfs4_has_session(clp))
 		goto out;
-	if (nfs41_test_session_alloc(clp->cl_session))
-		ret = nfs41_recover_session_sync(clp->cl_session);
 	if (!ret)
 		ret = nfs41_setup_sequence(clp->cl_session, args, res,
 					   cache_reply, task);
@@ -4648,8 +4646,6 @@ static int _nfs4_proc_create_session(struct nfs_client *clp)
 	/* Set the negotiated values in the session's channel_attrs struct */
 
 	if (!status) {
-		nfs41_set_session_valid(session);       /* Activate session */
-
 		/* Increment the clientid slot sequence id */
 		clp->cl_seqid++;
 	}
@@ -4761,9 +4757,6 @@ static int nfs4_proc_sequence(struct nfs_client *clp, struct rpc_cred *cred)
 
 	server = list_entry(clp->cl_superblocks.next, struct nfs_server,
 			    client_link);
-	if (nfs41_test_session_alloc(clp->cl_session))
-		return -NFS4ERR_STALE_CLIENTID;
-
 	args.sa_cache_this = 0;
 
 	status = _nfs4_call_sync_session(server, &msg, &args, &res, 0);

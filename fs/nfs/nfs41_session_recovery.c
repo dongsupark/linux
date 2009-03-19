@@ -26,20 +26,6 @@
 
 #define NFSDBG_FACILITY		NFSDBG_PROC
 
-/*
- * Set the session state == valid. Returns previous value of the session state
- */
-int nfs41_set_session_valid(struct nfs4_session *session)
-{
-	int ret;
-	smp_mb__before_clear_bit();
-	ret = test_and_clear_bit(NFS41_SESSION_ALLOC,
-				&session->session_state);
-	smp_mb__after_clear_bit();
-
-	return ret;
-}
-
 static int nfs41_start_session_recovery(struct nfs4_session *session)
 {
 	int ret;
