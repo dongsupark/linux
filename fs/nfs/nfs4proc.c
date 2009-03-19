@@ -1485,9 +1485,8 @@ static int _nfs4_proc_open(struct nfs4_opendata *data)
 	return 0;
 }
 
-static int nfs4_recover_expired_lease(struct nfs_server *server)
+int nfs4_recover_expired_lease(struct nfs_client *clp)
 {
-	struct nfs_client *clp = server->nfs_client;
 	int ret;
 
 	for (;;) {
@@ -1501,6 +1500,7 @@ static int nfs4_recover_expired_lease(struct nfs_server *server)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(nfs4_recover_expired_lease);
 
 /*
  * OPEN_EXPIRED:
@@ -1583,7 +1583,7 @@ static int _nfs4_do_open(struct inode *dir, struct path *path, fmode_t fmode, in
 		dprintk("nfs4_do_open: nfs4_get_state_owner failed!\n");
 		goto out_err;
 	}
-	status = nfs4_recover_expired_lease(server);
+	status = nfs4_recover_expired_lease(server->nfs_client);
 	if (status != 0)
 		goto err_put_state_owner;
 	if (path->dentry->d_inode != NULL)
@@ -2076,7 +2076,7 @@ static int _nfs4_lookup_root(struct nfs_server *server, struct nfs_fh *fhandle,
 	int status;
 
 	nfs_fattr_init(info->fattr);
-	status = nfs4_recover_expired_lease(server);
+	status = nfs4_recover_expired_lease(server->nfs_client);
 	if (!status)
 		status = nfs4_check_client_ready(server->nfs_client);
 	if (!status)
