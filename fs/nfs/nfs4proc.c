@@ -2058,6 +2058,8 @@ static int _nfs4_lookup_root(struct nfs_server *server, struct nfs_fh *fhandle,
 	nfs_fattr_init(info->fattr);
 	status = nfs4_recover_expired_lease(server);
 	if (!status)
+		status = nfs4_check_client_ready(server->nfs_client);
+	if (!status)
 		status = nfs4_call_sync(server, &msg, &args, &res, 0);
 	return status;
 }
