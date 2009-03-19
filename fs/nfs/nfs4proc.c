@@ -4720,8 +4720,8 @@ int nfs4_proc_destroy_session(struct nfs4_session *session)
 
 	dprintk("--> nfs4_proc_destroy_session\n");
 
-	/* session is still being created */
-	if (nfs41_test_session_alloc(session))
+	/* session is still being setup */
+	if (session->clp->cl_cons_state != NFS_CS_READY)
 		return status;
 
 	msg.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_DESTROY_SESSION];
