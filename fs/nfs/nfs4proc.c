@@ -1455,9 +1455,8 @@ static int _nfs4_proc_open(struct nfs4_opendata *data)
 	return 0;
 }
 
-static int nfs4_recover_expired_lease(struct nfs_server *server)
+int nfs4_recover_expired_lease(struct nfs_client *clp)
 {
-	struct nfs_client *clp = server->nfs_client;
 	unsigned int loop;
 	int ret;
 
@@ -1479,6 +1478,7 @@ static int nfs4_recover_expired_lease(struct nfs_server *server)
 	}
 	return ret;
 }
+EXPORT_SYMBOL(nfs4_recover_expired_lease);
 
 /*
  * OPEN_EXPIRED:
@@ -1561,7 +1561,7 @@ static int _nfs4_do_open(struct inode *dir, struct path *path, fmode_t fmode, in
 		dprintk("nfs4_do_open: nfs4_get_state_owner failed!\n");
 		goto out_err;
 	}
-	status = nfs4_recover_expired_lease(server);
+	status = nfs4_recover_expired_lease(server->nfs_client);
 	if (status != 0)
 		goto err_put_state_owner;
 	if (path->dentry->d_inode != NULL)
@@ -4994,7 +4994,7 @@ int nfs4_init_session(struct nfs_server *server)
 
 	clp->cl_session->fc_attrs.max_rqst_sz = server->wsize;
 	clp->cl_session->fc_attrs.max_resp_sz = server->rsize;
-	ret = nfs4_recover_expired_lease(server);
+	ret = nfs4_recover_expired_lease(server->nfs_client);
 	if (!ret)
 		ret = nfs4_check_client_ready(clp);
 	return ret;
