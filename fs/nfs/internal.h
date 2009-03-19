@@ -163,6 +163,7 @@ extern struct rpc_procinfo nfs3_procedures[];
 extern __be32 *nfs3_decode_dirent(__be32 *, struct nfs_entry *, int);
 
 /* nfs4proc.c */
+extern int nfs4_recover_expired_lease(struct nfs_client *clp);
 static inline void nfs4_restart_rpc(struct rpc_task *task,
 				    const struct nfs_client *clp)
 {
