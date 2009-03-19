@@ -219,7 +219,6 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 	struct sockaddr_in	sin;
 	struct rpc_clnt 	*mds_clnt = mds_srv->client;
 	struct nfs_client 	*clp;
-	struct rpc_cred		*cred = NULL;
 	char			ip_addr[16];
 	int			addrlen;
 	int err = 0;
@@ -271,19 +270,10 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 	spin_unlock(&mds_srv->nfs_client->cl_lock);
 	clp->cl_last_renewal = jiffies;
 
-	/* Set exchange id and create session flags
-	 *
-	 * XXX Need to find the proper credential...
-	 */
+	/* Set exchange id and create session flags and setup session */
 	dprintk("%s EXCHANGE_ID for clp %p\n", __func__, clp);
 	clp->cl_exchange_flags = EXCHGID4_FLAG_USE_PNFS_DS;
-
-	err = nfs4_proc_exchange_id(clp, cred);
-	if (err)
-		goto out_put;
-
-	dprintk("%s CREATE_SESSION for clp %p\n", __func__, clp);
-	err = nfs41_recover_session_sync(clp->cl_session);
+	err = nfs4_recover_expired_lease(clp);
 	if (err)
 		goto out_put;
 	ds->ds_clp = clp;
