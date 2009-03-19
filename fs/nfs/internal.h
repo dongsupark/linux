@@ -205,6 +205,8 @@ extern struct rpc_procinfo nfs4_procedures[];
 extern void pnfs_v4_clientops_init(void);
 #endif /* CONFIG_PNFS */
 
+extern int nfs4_recover_expired_lease(struct nfs_client *clp);
+
 /* proc.c */
 void nfs_close_context(struct nfs_open_context *ctx, int is_sync);
 
