@@ -274,6 +274,8 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 	dprintk("%s EXCHANGE_ID for clp %p\n", __func__, clp);
 	clp->cl_exchange_flags = EXCHGID4_FLAG_USE_PNFS_DS;
 	err = nfs4_recover_expired_lease(clp);
+	if (!err)
+		nfs4_check_client_ready(clp);
 	if (err)
 		goto out_put;
 	ds->ds_clp = clp;

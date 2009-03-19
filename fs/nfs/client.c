@@ -561,6 +561,7 @@ int nfs4_check_client_ready(struct nfs_client *clp)
 		return -EPROTONOSUPPORT;
 	return 0;
 }
+EXPORT_SYMBOL(nfs4_check_client_ready);
 
 /*
  * Session has been established, and the client marked ready.
