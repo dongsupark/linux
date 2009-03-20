@@ -566,7 +566,7 @@ out:
 }
 
 struct nfs41_call_sync_data {
-	struct nfs_server *server;
+	struct nfs_client *clp;
 	struct nfs4_sequence_args *seq_args;
 	struct nfs4_sequence_res *seq_res;
 	int cache_reply;
@@ -576,9 +576,9 @@ static void nfs41_call_sync_prepare(struct rpc_task *task, void *calldata)
 {
 	struct nfs41_call_sync_data *data = calldata;
 
-	dprintk("--> %s data->server->session %p\n", __func__,
-		data->server->nfs_client->cl_session);
-	if (nfs4_setup_sequence(data->server->nfs_client, data->seq_args,
+	dprintk("--> %s data->clp->cl_session %p\n", __func__,
+		data->clp->cl_session);
+	if (nfs4_setup_sequence(data->clp, data->seq_args,
 				data->seq_res, data->cache_reply, task))
 		return;
 	rpc_call_start(task);
@@ -587,10 +587,9 @@ static void nfs41_call_sync_prepare(struct rpc_task *task, void *calldata)
 static void nfs41_call_sync_done(struct rpc_task *task, void *calldata)
 {
 	struct nfs41_call_sync_data *data = calldata;
-	struct nfs_server *server = data->server;
 
-	nfs41_sequence_done(server->nfs_client, data->seq_res, task->tk_status);
-	nfs41_sequence_free_slot(server->nfs_client, data->seq_res);
+	nfs41_sequence_done(data->clp, data->seq_res, task->tk_status);
+	nfs41_sequence_free_slot(data->clp, data->seq_res);
 }
 
 struct rpc_call_ops nfs41_call_sync_ops = {
@@ -607,7 +606,7 @@ int _nfs4_call_sync_session(struct nfs_server *server,
 	int ret;
 	struct rpc_task *task;
 	struct nfs41_call_sync_data data = {
-		.server = server,
+		.clp = server->nfs_client,
 		.seq_args = args,
 		.seq_res = res,
 		.cache_reply = cache_reply,
