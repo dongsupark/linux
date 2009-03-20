@@ -69,6 +69,12 @@ static int nfs4_do_fsinfo(struct nfs_server *, struct nfs_fh *, struct nfs_fsinf
 static int nfs4_async_handle_error(struct rpc_task *, const struct nfs_server *, struct nfs4_state *);
 static int _nfs4_proc_lookup(struct inode *dir, const struct qstr *name, struct nfs_fh *fhandle, struct nfs_fattr *fattr);
 static int _nfs4_proc_getattr(struct nfs_server *server, struct nfs_fh *fhandle, struct nfs_fattr *fattr);
+static int nfs4_call_sync_sequence(struct nfs_client *clp,
+				   struct rpc_clnt *clnt,
+				   struct rpc_message *msg,
+				   struct nfs4_sequence_args *args,
+				   struct nfs4_sequence_res *res,
+				   int cache_reply);
 
 /* Prevent leaks of NFSv4 errors into userland */
 static int nfs4_map_errors(int err)
@@ -4761,11 +4767,13 @@ int nfs4_proc_destroy_session(struct nfs4_session *session)
 	return status;
 }
 
+/*
+ * Renew the cl_session lease.
+ */
 static int nfs4_proc_sequence(struct nfs_client *clp, struct rpc_cred *cred)
 {
 	struct nfs4_sequence_args args;
 	struct nfs4_sequence_res res;
-	struct nfs_server *server;
 
 	struct rpc_message msg = {
 		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_SEQUENCE],
@@ -4773,20 +4781,11 @@ static int nfs4_proc_sequence(struct nfs_client *clp, struct rpc_cred *cred)
 		.rpc_resp = &res,
 		.rpc_cred = cred,
 	};
-	int status;
 
-	/*
-	 * We need to renew the lease on the server. For this, we use any
-	 * session we have on the server to send the SEQUENCE op
-	 */
-	BUG_ON(list_empty(&clp->cl_superblocks));
-
-	server = list_entry(clp->cl_superblocks.next, struct nfs_server,
-			    client_link);
 	args.sa_cache_this = 0;
 
-	status = _nfs4_call_sync_session(server, &msg, &args, &res, 0);
-	return status;
+	return nfs4_call_sync_sequence(clp, clp->cl_rpcclient, &msg, &args,
+				       &res, 0);
 }
 
 void nfs41_sequence_call_done(struct rpc_task *task, void *data)
