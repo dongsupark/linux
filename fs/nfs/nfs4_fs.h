@@ -248,7 +248,7 @@ extern void nfs4_renew_state(struct work_struct *);
 struct rpc_cred *nfs4_get_setclientid_cred(struct nfs_client *clp);
 struct rpc_cred *nfs4_get_renew_cred_locked(struct nfs_client *clp);
 #if defined(CONFIG_NFS_V4_1)
-struct rpc_cred *nfs41_get_state_renewal_cred_locked(struct nfs_client *clp);
+struct rpc_cred *nfs4_get_machine_cred_locked(struct nfs_client *clp);
 struct rpc_cred *nfs4_get_exchange_id_cred(struct nfs_client *clp);
 #endif /* CONFIG_NFS_V4_1 */
 

@@ -71,7 +71,7 @@ int nfs4_init_clientid(struct nfs_client *clp, struct rpc_cred *cred)
 	return status;
 }
 
-static struct rpc_cred *nfs4_get_machine_cred_locked(struct nfs_client *clp)
+struct rpc_cred *nfs4_get_machine_cred_locked(struct nfs_client *clp)
 {
 	struct rpc_cred *cred = NULL;
 
@@ -109,15 +109,6 @@ struct rpc_cred *nfs4_get_renew_cred_locked(struct nfs_client *clp)
 }
 
 #if defined(CONFIG_NFS_V4_1)
-struct rpc_cred *nfs41_get_state_renewal_cred_locked(struct nfs_client *clp)
-{
-	struct rpc_cred *cred;
-
-	cred = clp->cl_ex_cred;
-	if (cred)
-		get_rpccred(cred);
-	return cred;
-}
 
 struct rpc_cred *nfs4_get_exchange_id_cred(struct nfs_client *clp)
 {
