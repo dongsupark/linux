@@ -597,22 +597,23 @@ struct rpc_call_ops nfs41_call_sync_ops = {
 	.rpc_call_done = nfs41_call_sync_done,
 };
 
-int _nfs4_call_sync_session(struct nfs_server *server,
-			    struct rpc_message *msg,
-			    struct nfs4_sequence_args *args,
-			    struct nfs4_sequence_res *res,
-			    int cache_reply)
+static int nfs4_call_sync_sequence(struct nfs_client *clp,
+				   struct rpc_clnt *clnt,
+				   struct rpc_message *msg,
+				   struct nfs4_sequence_args *args,
+				   struct nfs4_sequence_res *res,
+				   int cache_reply)
 {
 	int ret;
 	struct rpc_task *task;
 	struct nfs41_call_sync_data data = {
-		.clp = server->nfs_client,
+		.clp = clp,
 		.seq_args = args,
 		.seq_res = res,
 		.cache_reply = cache_reply,
 	};
 	struct rpc_task_setup task_setup = {
-		.rpc_client = server->client,
+		.rpc_client = clnt,
 		.rpc_message = msg,
 		.callback_ops = &nfs41_call_sync_ops,
 		.callback_data = &data
@@ -627,6 +628,16 @@ int _nfs4_call_sync_session(struct nfs_server *server,
 		rpc_put_task(task);
 	}
 	return ret;
+}
+
+int _nfs4_call_sync_session(struct nfs_server *server,
+			    struct rpc_message *msg,
+			    struct nfs4_sequence_args *args,
+			    struct nfs4_sequence_res *res,
+			    int cache_reply)
+{
+	return nfs4_call_sync_sequence(server->nfs_client, server->client,
+				       msg, args, res, cache_reply);
 }
 
 #endif /* CONFIG_NFS_V4_1 */
