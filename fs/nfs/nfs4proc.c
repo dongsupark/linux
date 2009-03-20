@@ -4244,7 +4244,6 @@ static int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 		.client = clp,
 	};
 	int status;
-	int loop = 0;
 	struct rpc_message msg = {
 		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_EXCHANGE_ID],
 		.rpc_argp = &args,
@@ -4277,14 +4276,7 @@ static int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 		if (signalled())
 			break;
 
-		/* Andy Adamson <andros at netapp.com>: Waiting a lease period
-		 * allows the server to throw away a clientid previously
-		 * established by this client. Of course, it doesn't help when
-		 * the conflicting clientid was established by another client.
-		 */
-		if (loop++ & 1)
-			ssleep(clp->cl_lease_time + 1);
-		else if (++clp->cl_id_uniquifier == 0)
+		if (++clp->cl_id_uniquifier == 0)
 			break;
 	}
 
