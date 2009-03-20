@@ -538,7 +538,7 @@ found_client:
 /*
  * Mark a server as ready or failed
  */
-static void nfs_mark_client_ready(struct nfs_client *clp, int state)
+void nfs_mark_client_ready(struct nfs_client *clp, int state)
 {
 	clp->cl_cons_state = state;
 	wake_up_all(&nfs_client_active_wq);
@@ -1181,7 +1181,8 @@ static int nfs4_init_client(struct nfs_client *clp,
 	if (error < 0)
 		goto error;
 
-	nfs_mark_client_ready(clp, NFS_CS_READY);
+	if (!nfs4_has_session(clp))
+		nfs_mark_client_ready(clp, NFS_CS_READY);
 	return 0;
 
 error:

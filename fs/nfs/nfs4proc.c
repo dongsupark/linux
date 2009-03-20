@@ -4549,7 +4549,7 @@ struct nfs4_session *nfs4_alloc_session(struct nfs_client *clp)
 	if (!session)
 		return NULL;
 
-	nfs41_set_session_alloc(session);
+	set_bit(NFS4CLNT_SESSION_SETUP, &clp->cl_state);
 
 	tbl = &session->fc_slot_table;
 	spin_lock_init(&tbl->slot_tbl_lock);
