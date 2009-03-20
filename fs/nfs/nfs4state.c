@@ -1149,6 +1149,14 @@ static void nfs4_state_manager(struct nfs_client *clp)
 		/* Setup the session */
 		if (nfs4_has_session(clp) &&
 		   test_and_clear_bit(NFS4CLNT_SESSION_SETUP, &clp->cl_state)) {
+			/*
+			 * The create session reply races with the server back
+			 * channel probe. Mark the client NFS_CS_SESSION_SETUP
+			 * so that the client back channel can find the
+			 * nfs_client struct
+			 */
+			clp->cl_cons_state = NFS_CS_SESSION_SETUP;
+
 			status = nfs4_proc_create_session(clp, 0);
 			switch (status) {
 			case 0:

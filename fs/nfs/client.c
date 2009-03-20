@@ -382,7 +382,8 @@ struct nfs_client *nfs_find_client(const struct sockaddr *addr, u32 nfsversion)
 		struct sockaddr *clap = (struct sockaddr *)&clp->cl_addr;
 
 		/* Don't match clients that failed to initialise properly */
-		if (clp->cl_cons_state != NFS_CS_READY)
+		if (!(clp->cl_cons_state == NFS_CS_READY ||
+		      clp->cl_cons_state == NFS_CS_SESSION_SETUP))
 			continue;
 
 		/* Different NFS versions cannot share the same nfs_client */
@@ -517,7 +518,7 @@ found_client:
 		nfs_free_client(new);
 
 	error = wait_event_killable(nfs_client_active_wq,
-				clp->cl_cons_state != NFS_CS_INITING);
+				clp->cl_cons_state < NFS_CS_INITING);
 	if (error < 0) {
 		nfs_put_client(clp);
 		return ERR_PTR(-ERESTARTSYS);
