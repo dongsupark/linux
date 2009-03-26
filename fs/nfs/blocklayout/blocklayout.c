@@ -994,7 +994,7 @@ bl_write_begin(struct pnfs_layout_segment *lseg, struct page *page, loff_t pos,
 	/* The following code assumes blocksize >= PAGE_CACHE_SIZE */
 	if (bl->bl_blocksize < (PAGE_CACHE_SIZE >> 9)) {
 		dprintk("%s Can't handle blocksize %llu\n", __func__,
-			bl->bl_blocksize);
+			(u64)bl->bl_blocksize);
 		fsdata->ok_to_use_pnfs = 0;
 		return 0;
 	}
