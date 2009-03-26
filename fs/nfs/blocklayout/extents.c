@@ -750,7 +750,8 @@ encode_pnfs_block_layoutupdate4(struct pnfs_block_layout *bl,
 	dprintk("%s enter\n", __func__);
 	start = arg->lseg.offset >> 9;
 	end = start + (arg->lseg.length >> 9);
-	dprintk("%s set start=%llu, end=%llu\n", __func__, start, end);
+	dprintk("%s set start=%llu, end=%llu\n",
+		__func__, (u64)start, (u64)end);
 
 	/* BUG - creation of bl_commit is buggy - need to wait for
 	 * entire block to be marked WRITTEN before it can be added.
