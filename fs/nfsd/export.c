@@ -423,23 +423,21 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 	}
 
 #if defined(CONFIG_SPNFS)
-	if (!inode->i_sb->s_pnfs_op) {
-		/*
-		 * spnfs_enabled() indicates we're an MDS.
-		 * XXX Better to check an export time option as well.
-		 */
-		if (spnfs_enabled()) {
-			dprintk("set spnfs export structure...\n");
-			inode->i_sb->s_pnfs_op = &spnfs_export_ops;
-		} else {
-			dprintk("%s spnfs not in use\n", __FUNCTION__);
+	/*
+	 * spnfs_enabled() indicates we're an MDS.
+	 * XXX Better to check an export time option as well.
+	 */
+	if (spnfs_enabled()) {
+		dprintk("set spnfs export structure...\n");
+		inode->i_sb->s_pnfs_op = &spnfs_export_ops;
+	} else {
+		dprintk("%s spnfs not in use\n", __func__);
 
-			/*
-			 * get_state is needed if we're a DS using spnfs.
-			 * XXX Better to check an export time option instead.
-			 */
-			inode->i_sb->s_pnfs_op = &spnfs_ds_export_ops;
-		}
+		/*
+		 * get_state is needed if we're a DS using spnfs.
+		 * XXX Better to check an export time option instead.
+		 */
+		inode->i_sb->s_pnfs_op = &spnfs_ds_export_ops;
 	}
 #endif /* CONFIG_SPNFS */
 
