@@ -201,7 +201,7 @@ static void set_needs_init(sector_t *array, sector_t offset)
 		return;
 	} else {
 		sector_t *save = p;
-		dprintk("%s Adding %llu\n", __func__, offset);
+		dprintk("%s Adding %llu\n", __func__, (u64)offset);
 		while (*p != ~0)
 			p++;
 		p++;
@@ -281,7 +281,7 @@ int mark_initialized_sectors(struct pnfs_inval_markings *marks,
 		__func__, (u64)offset, (u64)length);
 	s = max((sector_t) 3,
 		2 * (marks->im_block_size / (PAGE_CACHE_SECTORS)));
-	dprintk("%s set max=%llu\n", __func__, s);
+	dprintk("%s set max=%llu\n", __func__, (u64)s);
 	if (pages) {
 		array = kmalloc(s * sizeof(sector_t), GFP_KERNEL);
 		if (!array)
