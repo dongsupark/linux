@@ -897,6 +897,18 @@ nfsd4_enc_no_page_replay(struct nfsd4_compoundargs *args,
 	return op->status;
 }
 
+static bool nfs41_op_ordering_ok(struct nfsd4_compoundargs *args)
+{
+#if defined(CONFIG_NFSD_V4_1)
+	if (args->minorversion && args->opcnt > 0) {
+		struct nfsd4_op *op = &args->ops[0];
+		return (op->status == nfserr_op_illegal) ||
+		       (nfsd4_ops[op->opnum].op_flags & ALLOWED_AS_FIRST_OP);
+	}
+#endif /* CONFIG_NFSD_V4_1 */
+	return true;
+}
+
 /*
  * COMPOUND call.
  */
@@ -936,9 +948,8 @@ nfsd4_proc_compound(struct svc_rqst *rqstp,
 	if (args->minorversion > NFSD_SUPPORTED_MINOR_VERSION)
 		goto out;
 
-	op = &args->ops[0];
-	if (args->opcnt > 0 && op->status != nfserr_op_illegal &&
-	    !(nfsd4_ops[op->opnum].op_flags & ALLOWED_AS_FIRST_OP)) {
+	if (!nfs41_op_ordering_ok(args)) {
+		op = &args->ops[0];
 		op->status = nfserr_sequence_pos;
 		goto encode_op;
 	}
