@@ -1070,6 +1070,11 @@ found:
 
 	INIT_LIST_HEAD(&xprt->free);
 	INIT_LIST_HEAD(&xprt->recv);
+#if defined(CONFIG_NFS_V4_1)
+	spin_lock_init(&xprt->bc_pa_lock);
+	INIT_LIST_HEAD(&xprt->bc_pa_list);
+#endif /* CONFIG_NFS_V4_1 */
+
 	if (args->bc_sock) {
 		INIT_WORK(&xprt->task_cleanup, bc_autoclose);
 		setup_timer(&xprt->timer, bc_init_autodisconnect,
