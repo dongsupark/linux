@@ -1391,13 +1391,14 @@ rpc_verify_header(struct rpc_task *task)
 	}
 	if ((len -= 3) < 0)
 		goto out_overflow;
-	p += 1;	/* skip XID */
 
-	if ((n = ntohl(*p++)) != RPC_REPLY) {
-		dprintk("RPC: %5u %s: not an RPC reply: %x\n",
-				task->tk_pid, __func__, n);
-		goto out_garbage;
-	}
+	/*
+	 * Skip the XID and call direction.
+	 * The underlying transport has read the XID and RPC call direction
+	 * to determine this is an RPC reply.
+	 */
+	p += 2;
+
 	if ((n = ntohl(*p++)) != RPC_MSG_ACCEPTED) {
 		if (--len < 0)
 			goto out_overflow;
