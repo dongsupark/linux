@@ -117,7 +117,7 @@ struct svc_program		nfsd_program = {
 
 };
 
-u32 nfsd_supported_minorversion;
+u32 nfsd_supported_minorversion = NFSD_SUPPORTED_MINOR_VERSION;
 
 int nfsd_vers(int vers, enum vers_op change)
 {
