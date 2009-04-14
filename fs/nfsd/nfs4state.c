@@ -458,8 +458,8 @@ static int set_forechannel_maxreqs(struct nfsd4_channel_attrs *fchan)
  * fchan holds the client values on input, and the server values on output
  */
 static int init_forechannel_attrs(struct svc_rqst *rqstp,
-				    struct nfsd4_session *session,
-				    struct nfsd4_channel_attrs *fchan)
+				  struct nfsd4_channel_attrs *session_fchan,
+				  struct nfsd4_channel_attrs *fchan)
 {
 	int status = 0;
 	__u32   maxcount = svc_max_payload(rqstp);
@@ -469,19 +469,19 @@ static int init_forechannel_attrs(struct svc_rqst *rqstp,
 	/* Use the client's max request and max response size if possible */
 	if (fchan->maxreq_sz > maxcount)
 		fchan->maxreq_sz = maxcount;
-	session->se_fmaxreq_sz = fchan->maxreq_sz;
+	session_fchan->maxreq_sz = fchan->maxreq_sz;
 
 	if (fchan->maxresp_sz > maxcount)
 		fchan->maxresp_sz = maxcount;
-	session->se_fmaxresp_sz = fchan->maxresp_sz;
+	session_fchan->maxresp_sz = fchan->maxresp_sz;
 
-	session->se_fmaxresp_cached = NFSD_MAX_RESPONSE_CACHED;
-	fchan->maxresp_cached = session->se_fmaxresp_cached;
+	session_fchan->maxresp_cached = NFSD_MAX_RESPONSE_CACHED;
+	fchan->maxresp_cached = session_fchan->maxresp_cached;
 
 	/* Use the client's maxops if possible */
 	if (fchan->maxops > NFSD_MAX_OPS_PER_COMPOUND)
 		fchan->maxops = NFSD_MAX_OPS_PER_COMPOUND;
-	session->se_fmaxops = fchan->maxops;
+	session_fchan->maxops = fchan->maxops;
 
 	/* try to use the client requested number of slots */
 	if (fchan->maxreqs > NFSD_MAX_SLOTS_PER_SESSION)
@@ -493,7 +493,7 @@ static int init_forechannel_attrs(struct svc_rqst *rqstp,
 	 */
 	status = set_forechannel_maxreqs(fchan);
 
-	session->se_fnumslots = fchan->maxreqs;
+	session_fchan->maxreqs = fchan->maxreqs;
 	return status;
 }
 
@@ -507,12 +507,14 @@ alloc_init_session(struct svc_rqst *rqstp, struct nfs4_client *clp,
 	memset(&tmp, 0, sizeof(tmp));
 
 	/* FIXME: For now, we just accept the client back channel attributes. */
-	status = init_forechannel_attrs(rqstp, &tmp, &cses->fore_channel);
+	tmp.se_bchannel = cses->back_channel;
+	status = init_forechannel_attrs(rqstp, &tmp.se_fchannel,
+					&cses->fore_channel);
 	if (status)
 		goto out;
 
 	/* allocate struct nfsd4_session and slot table in one piece */
-	slotsize = tmp.se_fnumslots * sizeof(struct nfsd4_slot);
+	slotsize = tmp.se_fchannel.maxreqs * sizeof(struct nfsd4_slot);
 	new = kzalloc(sizeof(*new) + slotsize, GFP_KERNEL);
 	if (!new)
 		goto out;
@@ -584,7 +586,7 @@ free_session(struct kref *kref)
 
 	ses = container_of(kref, struct nfsd4_session, se_ref);
 	spin_lock(&nfsd_drc_lock);
-	nfsd_drc_mem_used -= ses->se_fnumslots * NFSD_SLOT_CACHE_SIZE;
+	nfsd_drc_mem_used -= ses->se_fchannel.maxreqs * NFSD_SLOT_CACHE_SIZE;
 	spin_unlock(&nfsd_drc_lock);
 	kfree(ses);
 }
@@ -1070,7 +1072,7 @@ nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
 	dprintk("--> %s datalen %d\n", __func__, slot->sl_datalen);
 
 	/* Target max slot and flags will be set once they are implemented */
-	seq->maxslots = resp->cstate.session->se_fnumslots;
+	seq->maxslots = resp->cstate.session->se_fchannel.maxreqs;
 
 	/* Either returns 0 or nfserr_retry_uncached */
 	status = nfsd4_enc_sequence_replay(resp->rqstp->rq_argp, resp);
@@ -1389,7 +1391,7 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 		goto out;
 
 	status = nfserr_badslot;
-	if (seq->slotid >= session->se_fnumslots)
+	if (seq->slotid >= session->se_fchannel.maxreqs)
 		goto out;
 
 	slot = &session->se_slots[seq->slotid];
