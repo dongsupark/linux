@@ -192,7 +192,7 @@ pnfsd_get_cb_op(struct pnfsd_cb_ctl *ctl)
 	spin_lock(&pnfsd_cb_ctl.lock);
 	if (!pnfsd_cb_ctl.cb_op)
 		goto out;
-	if (try_module_get(pnfsd_cb_ctl.module))
+	if (!try_module_get(pnfsd_cb_ctl.module))
 		goto out;
 	ctl->cb_op = pnfsd_cb_ctl.cb_op;
 	ctl->module = pnfsd_cb_ctl.module;
