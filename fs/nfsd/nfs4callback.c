@@ -401,16 +401,8 @@ decode_cb_sequence(struct xdr_stream *xdr, struct nfsd4_cb_sequence *res,
 		dprintk("%s Invalid slotid\n", __func__);
 		goto out;
 	}
-	READ32(dummy); 	/* highest slotid must be 0 */
-	if (dummy != 0) {
-		dprintk("%s Invalid highest slotid\n", __func__);
-		goto out;
-	}
-	READ32(dummy); 	/* target highest slotid must be 0 */
-	if (dummy != 0) {
-		dprintk("%s Invalid target highest slotid\n", __func__);
-		goto out;
-	}
+	READ32(dummy); 	/* highest slotid */
+	READ32(dummy); 	/* target highest slotid */
 	status = 0;
 out:
 	return status;
