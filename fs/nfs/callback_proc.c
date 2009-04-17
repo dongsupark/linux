@@ -216,10 +216,8 @@ unsigned nfs4_callback_sequence(struct cb_sequenceargs *args,
 	       sizeof(res->csr_sessionid));
 	res->csr_sequenceid = args->csa_sequenceid;
 	res->csr_slotid = args->csa_slotid;
-	res->csr_highestslotid = NFS41_BC_MAX_CALLBACKS;
-	if (res->csr_highestslotid > args->csa_highestslotid)
-		res->csr_highestslotid = args->csa_highestslotid;
-	res->csr_target_highestslotid = NFS41_BC_MAX_CALLBACKS;
+	res->csr_highestslotid = NFS41_BC_MAX_CALLBACKS - 1;
+	res->csr_target_highestslotid = NFS41_BC_MAX_CALLBACKS - 1;
 
 out_putclient:
 	nfs_put_client(clp);
