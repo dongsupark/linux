@@ -27,6 +27,16 @@
 
 #define NFSDBG_FACILITY NFSDBG_CALLBACK
 
+#define READMEM(x, nbytes) do {			\
+	x = (char *)p;				\
+	p += XDR_QUADLEN(nbytes);		\
+} while (0)
+
+#define COPYMEM(x, nbytes) do {			\
+	memcpy((x), p, nbytes);			\
+	p += XDR_QUADLEN(nbytes);		\
+} while (0)
+
 typedef __be32 (*callback_process_op_t)(void *, void *);
 typedef __be32 (*callback_decode_arg_t)(struct svc_rqst *, struct xdr_stream *, void *);
 typedef __be32 (*callback_encode_res_t)(struct svc_rqst *, struct xdr_stream *, void *);
