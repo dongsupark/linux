@@ -1086,8 +1086,8 @@ nfsd4_store_cache_entry(struct nfsd4_compoundres *resp)
 		entry->ce_resused = 0;
 		entry->ce_rpchdrlen = 0;
 		slot->sl_datalen = 0;
-		dprintk("%s Just cache SEQUENCE. ce_cachethis %d\n", __func__,
-			resp->cstate.slot->sl_cache_entry.ce_cachethis);
+		dprintk("%s Just cache SEQUENCE. cachethis %d\n", __func__,
+			resp->cstate.slot->sl_cachethis);
 		return;
 	}
 	slot->sl_datalen = (char *)resp->p - (char *)resp->cstate.datap;
@@ -1521,10 +1521,10 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 	/* Success! bump slot seqid */
 	slot->sl_inuse = true;
 	slot->sl_seqid = seq->seqid;
-	slot->sl_cache_entry.ce_cachethis = seq->cachethis;
-	/* Always set the cache entry cachethis for solo sequence */
+	slot->sl_cachethis = seq->cachethis;
+	/* Always set the slot cachethis for solo sequence */
 	if (nfsd4_is_solo_sequence(resp))
-		slot->sl_cache_entry.ce_cachethis = 1;
+		slot->sl_cachethis = 1;
 
 	cstate->slot = slot;
 	cstate->session = session;

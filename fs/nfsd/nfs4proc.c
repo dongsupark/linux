@@ -870,8 +870,8 @@ nfsd4_enc_uncached_replay(struct nfsd4_compoundargs *args,
 {
 	struct nfsd4_op *op;
 
-	dprintk("--> %s resp->opcnt %d ce_cachethis %u \n", __func__,
-		resp->opcnt, resp->cstate.slot->sl_cache_entry.ce_cachethis);
+	dprintk("--> %s resp->opcnt %d cachethis %u \n", __func__,
+		resp->opcnt, resp->cstate.slot->sl_cachethis);
 
 	/* Encode the replayed sequence operation */
 	BUG_ON(resp->opcnt != 1);
@@ -879,7 +879,7 @@ nfsd4_enc_uncached_replay(struct nfsd4_compoundargs *args,
 	nfsd4_encode_operation(resp, op);
 
 	/*return nfserr_retry_uncached_rep in next operation. */
-	if (resp->cstate.slot->sl_cache_entry.ce_cachethis == 0) {
+	if (resp->cstate.slot->sl_cachethis == 0) {
 		op = &args->ops[resp->opcnt++];
 		op->status = nfserr_retry_uncached_rep;
 		nfsd4_encode_operation(resp, op);

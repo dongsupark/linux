@@ -493,7 +493,7 @@ static inline bool nfsd4_is_solo_sequence(struct nfsd4_compoundres *resp)
 
 static inline bool nfsd4_not_cached(struct nfsd4_compoundres *resp)
 {
-	return !resp->cstate.slot->sl_cache_entry.ce_cachethis ||
+	return !resp->cstate.slot->sl_cachethis ||
 			nfsd4_is_solo_sequence(resp);
 }
 
