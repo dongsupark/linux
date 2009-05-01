@@ -925,9 +925,6 @@ struct server_scope {
 struct nfs41_exchange_id_res {
 	struct nfs_client		*client;
 	u32				flags;
-	struct server_owner		server_owner;
-	struct server_scope		server_scope;
-	struct nfs_impl_id4		impl_id;
 };
 
 struct nfs41_create_session_args {

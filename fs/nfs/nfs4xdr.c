@@ -4185,7 +4185,8 @@ static int decode_exchange_id(struct xdr_stream *xdr,
 			      struct nfs41_exchange_id_res *res)
 {
 	__be32 *p;
-	int status, dummy;
+	uint32_t dummy;
+	int status;
 	struct nfs_client *clp = res->client;
 
 	status = decode_op_hdr(xdr, OP_EXCHANGE_ID);
@@ -4203,22 +4204,19 @@ static int decode_exchange_id(struct xdr_stream *xdr,
 	if (dummy != SP4_NONE)
 		return -EIO;
 
-	/* minor_id */
+	/* Throw away minor_id */
 	READ_BUF(8);
-	READ64(res->server_owner.minor_id);
 
-	/* Major id */
+	/* Throw away Major id */
 	READ_BUF(4);
-	READ32(res->server_owner.major_id_sz);
-	READ_BUF(res->server_owner.major_id_sz);
-	COPYMEM(res->server_owner.major_id, res->server_owner.major_id_sz);
+	READ32(dummy);
+	READ_BUF(dummy);
 
-	/* server_scope */
+	/* Throw away server_scope */
 	READ_BUF(4);
-	READ32(res->server_scope.server_scope_sz);
-	READ_BUF(res->server_scope.server_scope_sz);
-	COPYMEM(res->server_scope.server_scope,
-		res->server_scope.server_scope_sz);
+	READ32(dummy);
+	READ_BUF(dummy);
+
 	/* Throw away Implementation id array */
 	READ_BUF(4);
 	READ32(dummy);
