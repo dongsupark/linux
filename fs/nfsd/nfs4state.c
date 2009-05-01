@@ -416,7 +416,7 @@ gen_sessionid(struct nfsd4_session *ses)
 
 /*
  * Give the client the number of slots it requests bound by
- * NFSD_MAX_SLOTS_PER_SESSION and by sv_drc_max_pages.
+ * NFSD_MAX_SLOTS_PER_SESSION and by nfsd_drc_max_mem.
  *
  * If we run out of reserved DRC memory we should (up to a point) re-negotiate
  * active sessions and reduce their slot usage to make rooom for new
@@ -433,11 +433,11 @@ static int set_forechannel_maxreqs(struct nfsd4_channel_attrs *fchan)
 
 	mem = fchan->maxreqs * NFSD_SLOT_CACHE_SIZE;
 
-	spin_lock(&nfsd_serv->sv_lock);
-	if (mem + nfsd_serv->sv_drc_mem_used > nfsd_serv->sv_drc_max_mem)
-		mem = nfsd_serv->sv_drc_max_mem - nfsd_serv->sv_drc_mem_used;
-	nfsd_serv->sv_drc_mem_used += mem;
-	spin_unlock(&nfsd_serv->sv_lock);
+	spin_lock(&nfsd_drc_lock);
+	if (mem + nfsd_drc_mem_used > nfsd_drc_max_mem)
+		mem = nfsd_drc_max_mem - nfsd_drc_mem_used;
+	nfsd_drc_mem_used += mem;
+	spin_unlock(&nfsd_drc_lock);
 
 	if (mem < NFSD_SLOT_CACHE_SIZE) {
 		fchan->maxreqs = 0;
@@ -586,6 +586,9 @@ free_session(struct kref *kref)
 		struct nfsd4_cache_entry *e = &ses->se_slots[i].sl_cache_entry;
 		nfsd4_release_respages(e->ce_respages, e->ce_resused);
 	}
+	spin_lock(&nfsd_drc_lock);
+	nfsd_drc_mem_used -= ses->se_fnumslots * NFSD_SLOT_CACHE_SIZE;
+	spin_unlock(&nfsd_drc_lock);
 	kfree(ses);
 }
 

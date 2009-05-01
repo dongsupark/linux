@@ -94,8 +94,6 @@ struct svc_serv {
 	struct module *		sv_module;	/* optional module to count when
 						 * adding threads */
 	svc_thread_fn		sv_function;	/* main function for threads */
-	unsigned int		sv_drc_max_mem; /* Total pages for DRC */
-	unsigned int		sv_drc_mem_used;/* DRC pages used */
 };
 
 /*

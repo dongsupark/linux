@@ -56,6 +56,11 @@ extern struct svc_version	nfsd_version2, nfsd_version3,
 extern u32			nfsd_supported_minorversion;
 extern struct mutex		nfsd_mutex;
 extern struct svc_serv		*nfsd_serv;
+extern spinlock_t		nfsd_drc_lock;
+extern unsigned int		nfsd_drc_max_mem;
+extern unsigned int		nfsd_drc_mem_used;
+
+
 
 extern struct seq_operations nfs_exports_op;
 
