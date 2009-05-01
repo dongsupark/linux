@@ -51,7 +51,6 @@ struct nfsd4_compound_state {
 	/* For sessions DRC */
 	struct nfsd4_session	*session;
 	struct nfsd4_slot	*slot;
-	__be32			*statp;
 	__be32			*datap;
 	u32			minorversion;
 	u32			status;
