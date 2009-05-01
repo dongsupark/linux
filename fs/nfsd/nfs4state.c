@@ -1034,19 +1034,6 @@ nfsd4_release_respages(struct page **respages, short resused)
 	}
 }
 
-static void
-nfsd4_copy_pages(struct page **topages, struct page **frompages, short count)
-{
-	int i;
-
-	for (i = 0; i < count; i++) {
-		topages[i] = frompages[i];
-		if (!topages[i])
-			continue;
-		get_page(topages[i]);
-	}
-}
-
 /*
  * Cache the reply pages up to NFSD_PAGES_PER_SLOT + 1, clearing the previous
  * pages. We add a page to NFSD_PAGES_PER_SLOT for the case where the total
@@ -1096,8 +1083,6 @@ nfsd4_store_cache_entry(struct nfsd4_compoundres *resp)
 	entry->ce_resused = rqstp->rq_resused;
 	if (entry->ce_resused > NFSD_PAGES_PER_SLOT + 1)
 		entry->ce_resused = NFSD_PAGES_PER_SLOT + 1;
-	nfsd4_copy_pages(entry->ce_respages, rqstp->rq_respages,
-			 entry->ce_resused);
 	entry->ce_datav.iov_base = resp->cstate.statp;
 	entry->ce_datav.iov_len = resv->iov_len - ((char *)resp->cstate.statp -
 				(char *)page_address(rqstp->rq_respages[0]));
@@ -1170,17 +1155,11 @@ nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
 		 * cached header. Release all the allocated result pages.
 		 */
 		svc_free_res_pages(resp->rqstp);
-		nfsd4_copy_pages(resp->rqstp->rq_respages, entry->ce_respages,
-			entry->ce_resused);
 	} else {
 		/* Release all but the first allocated result page */
 
 		resp->rqstp->rq_resused--;
 		svc_free_res_pages(resp->rqstp);
-
-		nfsd4_copy_pages(&resp->rqstp->rq_respages[1],
-				 &entry->ce_respages[1],
-				 entry->ce_resused - 1);
 	}
 
 	resp->rqstp->rq_resused = entry->ce_resused;
