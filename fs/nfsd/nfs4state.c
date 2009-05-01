@@ -1340,7 +1340,6 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		     struct nfsd4_create_session *cr_ses)
 {
 	u32 ip_addr = svc_addr_in(rqstp)->sin_addr.s_addr;
-	struct nfsd4_compoundres *resp = rqstp->rq_resp;
 	struct nfs4_client *conf, *unconf;
 	struct nfsd4_slot *slot = NULL;
 	int status = 0;
@@ -1356,11 +1355,6 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		if (status == nfserr_replay_cache) {
 			dprintk("Got a create_session replay! seqid= %d\n",
 				slot->sl_seqid);
-			cstate->slot = slot;
-			cstate->status = status;
-			/* Return the cached reply status */
-			status = nfsd4_replay_cache_entry(resp, NULL);
-			goto out;
 		} else if (cr_ses->seqid != conf->cl_slot.sl_seqid + 1) {
 			status = nfserr_seq_misordered;
 			dprintk("Sequence misordered!\n");
@@ -1409,7 +1403,6 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 	cr_ses->seqid = slot->sl_seqid;
 
 	slot->sl_inuse = true;
-	cstate->slot = slot;
 	/* Ensure a page is used for the cache */
 	slot->sl_cache_entry.ce_cachethis = 1;
 out:
