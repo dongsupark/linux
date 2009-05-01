@@ -3125,6 +3125,7 @@ nfsd4_encode_sequence(struct nfsd4_compoundres *resp, int nfserr,
 	WRITE32(0);
 
 	ADJUST_ARGS();
+	resp->cstate.datap = p;	/* DRC cache data pointer */
 	return 0;
 }
 

@@ -1060,6 +1060,7 @@ nfsd4_copy_pages(struct page **topages, struct page **frompages, short count)
 void
 nfsd4_store_cache_entry(struct nfsd4_compoundres *resp)
 {
+	struct nfsd4_slot *slot = resp->cstate.slot;
 	struct nfsd4_cache_entry *entry = &resp->cstate.slot->sl_cache_entry;
 	struct svc_rqst *rqstp = resp->rqstp;
 	struct nfsd4_compoundargs *args = rqstp->rq_argp;
@@ -1084,10 +1085,14 @@ nfsd4_store_cache_entry(struct nfsd4_compoundres *resp)
 	if (nfsd4_not_cached(resp)) {
 		entry->ce_resused = 0;
 		entry->ce_rpchdrlen = 0;
+		slot->sl_datalen = 0;
 		dprintk("%s Just cache SEQUENCE. ce_cachethis %d\n", __func__,
 			resp->cstate.slot->sl_cache_entry.ce_cachethis);
 		return;
 	}
+	slot->sl_datalen = (char *)resp->p - (char *)resp->cstate.datap;
+	memcpy(slot->sl_data, resp->cstate.datap, slot->sl_datalen);
+
 	entry->ce_resused = rqstp->rq_resused;
 	if (entry->ce_resused > NFSD_PAGES_PER_SLOT + 1)
 		entry->ce_resused = NFSD_PAGES_PER_SLOT + 1;
@@ -1135,6 +1140,7 @@ __be32
 nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
 			 struct nfsd4_sequence *seq)
 {
+	struct nfsd4_slot *slot = resp->cstate.slot;
 	struct nfsd4_cache_entry *entry = &resp->cstate.slot->sl_cache_entry;
 	__be32 status;
 
@@ -1154,6 +1160,9 @@ nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
 		seq->maxslots = resp->cstate.session->se_fnumslots;
 		return nfs_ok;
 	}
+
+	/* The sequence operation has been encoded, cstate->datap set. */
+	memcpy(resp->cstate.datap, slot->sl_data, slot->sl_datalen);
 
 	if (!nfsd41_copy_replay_data(resp, entry)) {
 		/*
