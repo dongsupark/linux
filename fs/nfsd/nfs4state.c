@@ -1375,7 +1375,7 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		if (!same_creds(&unconf->cl_cred, &rqstp->rq_cred) ||
 		    (ip_addr != unconf->cl_addr)) {
 			status = nfserr_clid_inuse;
-			goto out;
+			goto out_cache;
 		}
 
 		slot = &unconf->cl_slot;
@@ -1408,7 +1408,9 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 	memcpy(cr_ses->sessionid.data, conf->cl_sessionid.data,
 	       NFS4_MAX_SESSIONID_LEN);
 	cr_ses->seqid = slot->sl_seqid;
-
+out_cache:
+	/* cache solo and embedded create sessions under the state lock */
+	nfsd4_cache_create_session(cr_ses, slot, status);
 out:
 	nfs4_unlock_state();
 	dprintk("%s returns %d\n", __func__, ntohl(status));
