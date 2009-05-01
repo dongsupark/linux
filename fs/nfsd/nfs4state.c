@@ -648,8 +648,6 @@ static inline void
 free_client(struct nfs4_client *clp)
 {
 	shutdown_callback_client(clp);
-	nfsd4_release_respages(clp->cl_slot.sl_cache_entry.ce_respages,
-			     clp->cl_slot.sl_cache_entry.ce_resused);
 	if (clp->cl_cred.cr_group_info)
 		put_group_info(clp->cl_cred.cr_group_info);
 	kfree(clp->cl_principal);
@@ -721,6 +719,18 @@ static struct nfs4_client *create_client(struct xdr_netobj name, char *recdir)
 	INIT_LIST_HEAD(&clp->cl_delegations);
 	INIT_LIST_HEAD(&clp->cl_sessions);
 	INIT_LIST_HEAD(&clp->cl_lru);
+	return clp;
+}
+
+static struct nfs4_client *create_client_session(struct xdr_netobj name,
+						  char *recdir)
+{
+	struct nfs4_client *clp;
+
+	clp = create_client(name, recdir);
+	if (clp)
+		/* the slot sl_seqid is 0 */
+		clp->cl_slot.sl_datalen = CS_MAX_ENC_SZ;
 	return clp;
 }
 
@@ -1277,7 +1287,7 @@ nfsd4_exchange_id(struct svc_rqst *rqstp,
 
 out_new:
 	/* Normal case */
-	new = create_client(exid->clname, dname);
+	new = create_client_session(exid->clname, dname);
 	if (new == NULL) {
 		status = nfserr_resource;
 		goto out;
@@ -1293,7 +1303,6 @@ out_copy:
 	exid->clientid.cl_boot = new->cl_clientid.cl_boot;
 	exid->clientid.cl_id = new->cl_clientid.cl_id;
 
-	new->cl_slot.sl_seqid = 0;
 	exid->seqid = 1;
 	nfsd4_set_ex_flags(new, exid);
 
@@ -1341,7 +1350,7 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 {
 	u32 ip_addr = svc_addr_in(rqstp)->sin_addr.s_addr;
 	struct nfs4_client *conf, *unconf;
-	struct nfsd4_slot *slot = NULL;
+	struct nfsd4_clid_slot *slot = NULL;
 	int status = 0;
 
 	nfs4_lock_state();
@@ -1350,8 +1359,7 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 
 	if (conf) {
 		slot = &conf->cl_slot;
-		status = check_slot_seqid(cr_ses->seqid, slot->sl_seqid,
-					  slot->sl_inuse);
+		status = check_slot_seqid(cr_ses->seqid, slot->sl_seqid, 0);
 		if (status == nfserr_replay_cache) {
 			dprintk("Got a create_session replay! seqid= %d\n",
 				slot->sl_seqid);
@@ -1371,8 +1379,7 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		}
 
 		slot = &unconf->cl_slot;
-		status = check_slot_seqid(cr_ses->seqid, slot->sl_seqid,
-					  slot->sl_inuse);
+		status = check_slot_seqid(cr_ses->seqid, slot->sl_seqid, 0);
 		if (status) {
 			/* an unconfirmed replay returns misordered */
 			status = nfserr_seq_misordered;
@@ -1402,9 +1409,6 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 	       NFS4_MAX_SESSIONID_LEN);
 	cr_ses->seqid = slot->sl_seqid;
 
-	slot->sl_inuse = true;
-	/* Ensure a page is used for the cache */
-	slot->sl_cache_entry.ce_cachethis = 1;
 out:
 	nfs4_unlock_state();
 	dprintk("%s returns %d\n", __func__, ntohl(status));

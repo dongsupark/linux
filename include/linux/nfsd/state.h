@@ -122,6 +122,20 @@ struct nfsd4_slot {
 	struct nfsd4_cache_entry	sl_cache_entry;
 };
 
+/*
+* maximum encoded size of create session response
+* 16 - sessionid, 8 - sequence # and flags,
+* 32 - fore channel attrs, 32 - back channel attrs
+*/
+#define CS_MAX_ENC_SZ  88
+
+struct nfsd4_clid_slot {
+	u32		sl_seqid;
+	__be32		sl_status;
+	u32		sl_datalen;
+	char		sl_data[CS_MAX_ENC_SZ];
+};
+
 struct nfsd4_session {
 	struct kref		se_ref;
 	struct list_head	se_hash;	/* hash by sessionid */
@@ -191,7 +205,7 @@ struct nfs4_client {
 
 	/* for nfs41 */
 	struct list_head	cl_sessions;
-	struct nfsd4_slot	cl_slot;	/* create_session slot */
+	struct nfsd4_clid_slot	cl_slot;	/* create_session slot */
 	u32			cl_exchange_flags;
 	struct nfs4_sessionid	cl_sessionid;
 };
