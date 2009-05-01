@@ -996,7 +996,7 @@ nfsd4_proc_compound(struct svc_rqst *rqstp,
 			BUG_ON(op->status == nfs_ok);
 
 encode_op:
-		/* Only from SEQUENCE or CREATE_SESSION */
+		/* Only from SEQUENCE */
 		if (resp->cstate.status == nfserr_replay_cache) {
 			dprintk("%s NFS4.1 replay from cache\n", __func__);
 			if (nfsd4_not_cached(resp))
@@ -1005,7 +1005,12 @@ encode_op:
 				status = op->status;
 			goto out;
 		}
-		if (op->status == nfserr_replay_me) {
+		/* Only from CREATE_SESSION */
+		if (resp->cstate.status == nfserr_replay_clientid_cache) {
+			dprintk("%s NFS4.1 replay from clientid cache\n",
+				__func__);
+			status = op->status;
+		} else if (op->status == nfserr_replay_me) {
 			op->replay = &cstate->replay_owner->so_replay;
 			nfsd4_encode_replay(resp, op);
 			status = op->status = op->replay->rp_status;

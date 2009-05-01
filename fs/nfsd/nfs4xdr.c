@@ -3078,6 +3078,23 @@ nfsd4_cache_create_session(struct nfsd4_create_session *cr_ses,
 	slot->sl_datalen = (char *)resp->p - (char *)p;
 }
 
+__be32
+nfsd4_replay_create_session(struct nfsd4_compoundres *resp,
+			    struct nfsd4_clid_slot *slot)
+{
+	__be32 *p;
+
+	RESERVE_SPACE(8);
+	WRITE32(OP_CREATE_SESSION);
+	*p++ = slot->sl_status; /* already in network byte order */
+	ADJUST_ARGS();
+
+	memcpy(resp->p, slot->sl_data, slot->sl_datalen);
+	p += XDR_QUADLEN(slot->sl_datalen);
+	ADJUST_ARGS();
+	return slot->sl_status;
+}
+
 static __be32
 nfsd4_encode_destroy_session(struct nfsd4_compoundres *resp, int nfserr,
 			     struct nfsd4_destroy_session *destroy_session)

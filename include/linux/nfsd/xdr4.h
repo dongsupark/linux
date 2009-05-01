@@ -530,6 +530,8 @@ extern __be32 nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
 		struct nfsd4_sequence *seq);
 extern void nfsd4_cache_create_session(struct nfsd4_create_session *cr_ses,
 		struct nfsd4_clid_slot *slot, int nfserr);
+extern __be32 nfsd4_replay_create_session(struct nfsd4_compoundres *resp,
+		struct nfsd4_clid_slot *slot);
 extern __be32 nfsd4_exchange_id(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *,
 struct nfsd4_exchange_id *);
