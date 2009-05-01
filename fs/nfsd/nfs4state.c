@@ -1425,13 +1425,12 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 	cstate->slot = slot;
 	cstate->session = session;
 
-replay_cache:
-	/* Renew the clientid on success and on replay.
-	 * Hold a session reference until done processing the compound:
-	 * nfsd4_put_session called only if the cstate slot is set.
-	 */
-	renew_client(session->se_client);
+	/* Hold a session reference until done caching the response */
 	nfsd4_get_session(session);
+
+replay_cache:
+	/* Renew the clientid on success and on replay */
+	renew_client(session->se_client);
 out:
 	spin_unlock(&sessionid_lock);
 	dprintk("%s: return %d\n", __func__, ntohl(status));
