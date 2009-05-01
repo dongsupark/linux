@@ -121,6 +121,7 @@ struct nfsd4_slot {
 	bool				sl_inuse;
 	u32				sl_seqid;
 	int				sl_cachethis;
+	int				sl_opcnt;
 	u32				sl_datalen;
 	char				sl_data[NFSD_SLOT_CACHE_SIZE];
 	struct nfsd4_cache_entry	sl_cache_entry;
