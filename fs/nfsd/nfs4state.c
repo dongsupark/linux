@@ -1372,18 +1372,18 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		}
 		conf->cl_slot.sl_seqid++;
 	} else if (unconf) {
-		if (!same_creds(&unconf->cl_cred, &rqstp->rq_cred) ||
-		    (ip_addr != unconf->cl_addr)) {
-			status = nfserr_clid_inuse;
-			goto out_cache;
-		}
-
 		slot = &unconf->cl_slot;
 		status = check_slot_seqid(cr_ses->seqid, slot->sl_seqid, 0);
 		if (status) {
 			/* an unconfirmed replay returns misordered */
 			status = nfserr_seq_misordered;
 			goto out;
+		}
+
+		if (!same_creds(&unconf->cl_cred, &rqstp->rq_cred) ||
+		    (ip_addr != unconf->cl_addr)) {
+			status = nfserr_clid_inuse;
+			goto out_cache;
 		}
 
 		slot->sl_seqid++; /* from 0 to 1 */
