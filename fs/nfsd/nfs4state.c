@@ -1014,7 +1014,7 @@ nfsd4_store_cache_entry(struct nfsd4_compoundres *resp)
 	struct nfsd4_compoundargs *args = rqstp->rq_argp;
 	struct nfsd4_op *op = &args->ops[resp->opcnt];
 
-	dprintk("--> %s\n", __func__);
+	dprintk("--> %s cachethis %d\n", __func__, slot->sl_cachethis);
 
 	/* Don't cache a failed OP_SEQUENCE. */
 	if (resp->opcnt == 1 && op->opnum == OP_SEQUENCE && resp->cstate.status)
@@ -1027,8 +1027,6 @@ nfsd4_store_cache_entry(struct nfsd4_compoundres *resp)
 	/* Don't cache the sequence operation, use the slot values on replay */
 	if (nfsd4_not_cached(resp)) {
 		slot->sl_datalen = 0;
-		dprintk("%s Just cache SEQUENCE. cachethis %d\n", __func__,
-			resp->cstate.slot->sl_cachethis);
 		return;
 	}
 	slot->sl_datalen = (char *)resp->p - (char *)resp->cstate.datap;
