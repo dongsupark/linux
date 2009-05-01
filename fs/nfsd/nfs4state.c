@@ -418,33 +418,34 @@ gen_sessionid(struct nfsd4_session *ses)
  * Give the client the number of slots it requests bound by
  * NFSD_MAX_SLOTS_PER_SESSION and by sv_drc_max_pages.
  *
- * If we run out of pages (sv_drc_pages_used == sv_drc_max_pages) we
- * should (up to a point) re-negotiate active sessions and reduce their
- * slot usage to make rooom for new connections. For now we just fail the
- * create session.
+ * If we run out of reserved DRC memory we should (up to a point) re-negotiate
+ * active sessions and reduce their slot usage to make rooom for new
+ * connections. For now we just fail the create session.
  */
 static int set_forechannel_maxreqs(struct nfsd4_channel_attrs *fchan)
 {
-	int status = 0, np = fchan->maxreqs * NFSD_PAGES_PER_SLOT;
+	int mem;
 
 	if (fchan->maxreqs < 1)
 		return nfserr_inval;
 	else if (fchan->maxreqs > NFSD_MAX_SLOTS_PER_SESSION)
 		fchan->maxreqs = NFSD_MAX_SLOTS_PER_SESSION;
 
+	mem = fchan->maxreqs * NFSD_SLOT_CACHE_SIZE;
+
 	spin_lock(&nfsd_serv->sv_lock);
-	if (np + nfsd_serv->sv_drc_pages_used > nfsd_serv->sv_drc_max_pages)
-		np = nfsd_serv->sv_drc_max_pages - nfsd_serv->sv_drc_pages_used;
-	nfsd_serv->sv_drc_pages_used += np;
+	if (mem + nfsd_serv->sv_drc_mem_used > nfsd_serv->sv_drc_max_mem)
+		mem = nfsd_serv->sv_drc_max_mem - nfsd_serv->sv_drc_mem_used;
+	nfsd_serv->sv_drc_mem_used += mem;
 	spin_unlock(&nfsd_serv->sv_lock);
 
-	if (np <= 0) {
-		status = nfserr_resource;
+	if (mem < NFSD_SLOT_CACHE_SIZE) {
 		fchan->maxreqs = 0;
-	} else
-		fchan->maxreqs = np / NFSD_PAGES_PER_SLOT;
-
-	return status;
+		return nfserr_resource;
+	} else {
+		fchan->maxreqs = mem / NFSD_SLOT_CACHE_SIZE;
+		return 0;
+	}
 }
 
 /*

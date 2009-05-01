@@ -103,6 +103,7 @@ struct nfs4_callback {
 #define NFSD_MAX_SLOTS_PER_SESSION	128
 /* Maximum number of pages per slot cache entry */
 #define NFSD_PAGES_PER_SLOT	1
+#define NFSD_SLOT_CACHE_SIZE		512
 /* Maximum number of operations per session compound */
 #define NFSD_MAX_OPS_PER_COMPOUND	16
 
