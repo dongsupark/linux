@@ -222,7 +222,19 @@ extern int nfs4_proc_exchange_id(struct nfs_client *, struct rpc_cred *);
 extern int nfs4_proc_create_session(struct nfs_client *, int reset);
 extern int nfs4_proc_destroy_session(struct nfs4_session *);
 extern int nfs4_init_session(struct nfs_server *server);
+
+static inline bool exchgid_is_ds_only(struct nfs_client *clp)
+{
+	u32 mask = EXCHGID4_FLAG_USE_PNFS_DS | EXCHGID4_FLAG_USE_PNFS_MDS;
+
+	return (clp->cl_exchange_flags & mask) == EXCHGID4_FLAG_USE_PNFS_DS;
+}
 #else /* CONFIG_NFS_v4_1 */
+static inline bool exchgid_is_ds_only(struct nfs_client *clp)
+{
+	return 0;
+}
+
 static inline int nfs4_setup_sequence(struct nfs_client *clp,
 		struct nfs4_sequence_args *args, struct nfs4_sequence_res *res,
 		int cache_reply, struct rpc_task *task)
