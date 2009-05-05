@@ -1566,7 +1566,7 @@ static void encode_create_session(struct xdr_stream *xdr,
 				  struct nfs41_create_session_args *args,
 				  struct compound_hdr *hdr)
 {
-	uint32_t *p;
+	__be32 *p;
 	char machine_name[NFS4_MAX_MACHINE_NAME_LEN];
 	uint32_t len;
 	struct nfs_client *clp = args->client;
@@ -4228,7 +4228,7 @@ static int decode_exchange_id(struct xdr_stream *xdr,
 static int decode_create_session(struct xdr_stream *xdr,
 				 struct nfs41_create_session_res *res)
 {
-	uint32_t *p;
+	__be32 *p;
 	int status;
 	u32 nr_attrs;
 	struct nfs_client *clp = res->client;
