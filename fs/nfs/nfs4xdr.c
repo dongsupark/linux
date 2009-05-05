@@ -1546,7 +1546,7 @@ static void encode_exchange_id(struct xdr_stream *xdr,
 			       struct nfs41_exchange_id_args *args,
 			       struct compound_hdr *hdr)
 {
-	uint32_t *p;
+	__be32 *p;
 
 	RESERVE_SPACE(4 + sizeof(args->verifier->data));
 	WRITE32(OP_EXCHANGE_ID);
@@ -4184,7 +4184,7 @@ static int decode_delegreturn(struct xdr_stream *xdr)
 static int decode_exchange_id(struct xdr_stream *xdr,
 			      struct nfs41_exchange_id_res *res)
 {
-	uint32_t *p;
+	__be32 *p;
 	int status, dummy;
 	struct nfs_client *clp = res->client;
 
