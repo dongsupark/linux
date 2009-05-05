@@ -263,7 +263,10 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 
 	clp = tmp.nfs_client;
 
-	/* Set DS lease equal to the MDS lease. */
+	/*
+	 * Set DS lease equal to the MDS lease, renewal is scheduled in
+	 * create_session
+	 */
 	spin_lock(&mds_srv->nfs_client->cl_lock);
 	clp->cl_lease_time = mds_srv->nfs_client->cl_lease_time;
 	spin_unlock(&mds_srv->nfs_client->cl_lock);

@@ -4916,9 +4916,10 @@ int nfs4_proc_create_session(struct nfs_client *clp, int reset)
 		/* Lease time is aleady set */
 		goto out;
 
-	/* Data servers set lease time from MDS */
+	/* Data servers have already set lease time from MDS */
 	if (exchgid_is_ds_only(clp)) {
 		clear_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state);
+		nfs4_schedule_state_renewal(clp);
 		goto out;
 	}
 
