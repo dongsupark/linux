@@ -3506,10 +3506,8 @@ _nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server,
 		case -NFS4ERR_STALE_CLIENTID:
 		case -NFS4ERR_STALE_STATEID:
 		case -NFS4ERR_EXPIRED:
-#if defined(CONFIG_NFS_V4_1)
 			if (exchgid_is_ds_only(clp))
 				return 0;
-#endif /* CONFIG_NFS_V4_1 */
 			rpc_sleep_on(&clp->cl_rpcwaitq, task, NULL);
 			nfs4_schedule_state_recovery(clp);
 			if (test_bit(NFS4CLNT_MANAGER_RUNNING, &clp->cl_state) == 0)
@@ -4917,13 +4915,12 @@ int nfs4_proc_create_session(struct nfs_client *clp, int reset)
 	if (reset)
 		/* Lease time is aleady set */
 		goto out;
-#ifdef CONFIG_PNFS
+
 	/* Data servers set lease time from MDS */
 	if (exchgid_is_ds_only(clp)) {
 		clear_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state);
 		goto out;
 	}
-#endif /* CONFIG_PNFS */
 
 	/* Get the lease time */
 	status = nfs4_proc_get_lease_time(clp, &fsinfo);
