@@ -1628,7 +1628,7 @@ static void encode_destroy_session(struct xdr_stream *xdr,
 				   struct nfs4_session *session,
 				   struct compound_hdr *hdr)
 {
-	uint32_t *p;
+	__be32 *p;
 	RESERVE_SPACE(4 + NFS4_MAX_SESSIONID_LEN);
 	WRITE32(OP_DESTROY_SESSION);
 	WRITEMEM(session->sess_id.data, NFS4_MAX_SESSIONID_LEN);
