@@ -4222,7 +4222,7 @@ static int decode_exchange_id(struct xdr_stream *xdr,
 	/* Throw away Implementation id array */
 	READ_BUF(4);
 	READ32(dummy);
-	p += XDR_QUADLEN(dummy);
+	READ_BUF(dummy);
 
 	return 0;
 }
