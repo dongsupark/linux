@@ -69,7 +69,7 @@ nfs4_renew_state(struct work_struct *work)
 	ops = nfs4_state_renewal_ops[clp->cl_minorversion];
 	dprintk("%s: start\n", __func__);
 	/* Are there any active superblocks? */
-	if (list_empty(&clp->cl_superblocks))
+	if (list_empty(&clp->cl_superblocks) && !exchgid_is_ds_only(clp))
 		goto out;
 	spin_lock(&clp->cl_lock);
 	lease = clp->cl_lease_time;
