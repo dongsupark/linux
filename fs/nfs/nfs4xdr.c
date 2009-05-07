@@ -4225,12 +4225,35 @@ static int decode_exchange_id(struct xdr_stream *xdr,
 	return 0;
 }
 
+static int decode_chan_attrs(struct xdr_stream *xdr,
+			     struct nfs4_channel_attrs *attrs)
+{
+	__be32 *p;
+	u32 nr_attrs;
+
+	READ_BUF(28);
+	READ32(attrs->headerpadsz);
+	READ32(attrs->max_rqst_sz);
+	READ32(attrs->max_resp_sz);
+	READ32(attrs->max_resp_sz_cached);
+	READ32(attrs->max_ops);
+	READ32(attrs->max_reqs);
+	READ32(nr_attrs);
+	if (unlikely(nr_attrs > 1)) {
+		printk(KERN_WARNING "%s: Invalid rdma channel attrs count %u\n",
+			__func__, nr_attrs);
+		return -EINVAL;
+	}
+	if (nr_attrs == 1)
+		READ_BUF(4); /* skip rdma_attrs */
+	return 0;
+}
+
 static int decode_create_session(struct xdr_stream *xdr,
 				 struct nfs41_create_session_res *res)
 {
 	__be32 *p;
 	int status;
-	u32 nr_attrs;
 	struct nfs_client *clp = res->client;
 	struct nfs4_session *session = clp->cl_session;
 
@@ -4249,37 +4272,10 @@ static int decode_create_session(struct xdr_stream *xdr,
 	READ32(session->flags);
 
 	/* Channel attributes */
-	/* fore channel */
-	READ_BUF(24);
-	READ32(session->fc_attrs.headerpadsz);
-	READ32(session->fc_attrs.max_rqst_sz);
-	READ32(session->fc_attrs.max_resp_sz);
-	READ32(session->fc_attrs.max_resp_sz_cached);
-	READ32(session->fc_attrs.max_ops);
-	READ32(session->fc_attrs.max_reqs);
-	READ_BUF(4);
-	READ32(nr_attrs);
-	if (nr_attrs == 1) {
-		READ_BUF(4);
-		p++; /* skip rdma_attrs */
-	}
-
-	/* back channel */
-	READ_BUF(24);
-	READ32(session->bc_attrs.headerpadsz);
-	READ32(session->bc_attrs.max_rqst_sz);
-	READ32(session->bc_attrs.max_resp_sz);
-	READ32(session->bc_attrs.max_resp_sz_cached);
-	READ32(session->bc_attrs.max_ops);
-	READ32(session->bc_attrs.max_reqs);
-	READ_BUF(4);
-	READ32(nr_attrs);
-	if (nr_attrs == 1) {
-		READ_BUF(4);
-		p++; /* skip rdma_attrs */
-	}
-
-	return 0;
+	status = decode_chan_attrs(xdr, &session->fc_attrs);
+	if (!status)
+		status = decode_chan_attrs(xdr, &session->bc_attrs);
+	return status;
 }
 
 static int decode_destroy_session(struct xdr_stream *xdr, void *dummy)
