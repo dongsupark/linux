@@ -142,12 +142,14 @@ pnfs_osd_xdr_decode_layout(struct pnfs_osd_layout *layout, u32 *p)
 	struct pnfs_osd_opaque_cred *cred;
 
 	p = pnfs_osd_xdr_decode_data_map(p, &layout->olo_map);
+	READ32(layout->olo_comps_index);
 	READ32(layout->olo_num_comps);
 	layout->olo_comps = (struct pnfs_osd_object_cred *)(layout + 1);
 	comp = layout->olo_comps;
 	cred = (struct pnfs_osd_opaque_cred *)(comp + layout->olo_num_comps);
-	dprintk("%s: layout=%p num_comps=%u comps=%p\n", __func__,
-	       layout, layout->olo_num_comps, layout->olo_comps);
+	dprintk("%s: layout=%p comps_index=%u num_comps=%u comps=%p\n",
+		__func__, layout, layout->olo_comps_index,
+		layout->olo_num_comps, layout->olo_comps);
 	for (i = 0; i < layout->olo_num_comps; i++) {
 		p = pnfs_osd_xdr_decode_object_cred(p, comp, &cred);
 		dprintk("%s: comp[%d]=%p cap_key_len=%u cap_len=%u\n", __func__,

@@ -228,7 +228,7 @@ pnfs_osd_layout_xdr_sz(u32 *p)
 	u32 *start = p;
 	u32 n;
 
-	p += pnfs_osd_data_map_xdr_sz(p);
+	p += pnfs_osd_data_map_xdr_sz(p) + 1;
 	READ32(n);
 	while ((int)(n--) > 0)
 		p += pnfs_osd_object_cred_xdr_sz(p);
@@ -241,7 +241,7 @@ pnfs_osd_layout_incore_sz(u32 *p)
 	u32 n;
 	size_t sz;
 
-	p += pnfs_osd_data_map_xdr_sz(p);
+	p += pnfs_osd_data_map_xdr_sz(p) + 1;
 	READ32(n);
 	sz = sizeof(struct pnfs_osd_layout);
 	while ((int)(n--) > 0) {
