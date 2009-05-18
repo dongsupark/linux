@@ -87,8 +87,8 @@ panfs_shim_conv_raid5(struct pnfs_osd_layout *layout,
 			goto err;
 
 		hdr->type = PAN_AGG_GRP_RAID5_LEFT;
-		hdr->hdr.grp_raid5_left.num_comps = layout->olo_num_comps;
-		if (hdr->hdr.grp_raid5_left.num_comps != layout->olo_num_comps)
+		hdr->hdr.grp_raid5_left.num_comps = lo_map->odm_num_comps;
+		if (hdr->hdr.grp_raid5_left.num_comps != lo_map->odm_num_comps)
 			goto err;
 		hdr->hdr.grp_raid5_left.stripe_unit = lo_map->odm_stripe_unit;
 		hdr->hdr.grp_raid5_left.rg_width = lo_map->odm_group_width;
@@ -99,8 +99,8 @@ panfs_shim_conv_raid5(struct pnfs_osd_layout *layout,
 			PAN_AGG_GRP_RAID5_LEFT_POLICY_ROUND_ROBIN;
 	} else {
 		hdr->type = PAN_AGG_RAID5_LEFT;
-		hdr->hdr.raid5_left.num_comps = layout->olo_num_comps;
-		if (hdr->hdr.raid5_left.num_comps != layout->olo_num_comps)
+		hdr->hdr.raid5_left.num_comps = lo_map->odm_num_comps;
+		if (hdr->hdr.raid5_left.num_comps != lo_map->odm_num_comps)
 			goto err;
 		hdr->hdr.raid5_left.stripe_unit2 =
 		hdr->hdr.raid5_left.stripe_unit1 =
@@ -126,16 +126,23 @@ panfs_shim_conv_pnfs_osd_data_map(
 	if (!layout->olo_num_comps)
 		goto err;
 
-	/* FIXME: need to handle maps describing only parity stripes */
-	if (lo_map->odm_num_comps != layout->olo_num_comps)
-		goto err;
-
 	switch (lo_map->odm_raid_algorithm) {
 	case PNFS_OSD_RAID_0:
+		if (layout->olo_num_comps != lo_map->odm_num_comps ||
+		    layout->olo_comps_index)
+			goto err;
 		status = panfs_shim_conv_raid01(layout, lo_map, hdr);
 		break;
 
 	case PNFS_OSD_RAID_5:
+		if (!lo_map->odm_group_width) {
+			if (layout->olo_num_comps != lo_map->odm_num_comps ||
+			    layout->olo_comps_index)
+				goto err;
+		} else if ((layout->olo_num_comps != lo_map->odm_num_comps &&
+			    layout->olo_num_comps > lo_map->odm_group_width) ||
+			   (layout->olo_comps_index % lo_map->odm_group_width))
+				goto err;
 		status = panfs_shim_conv_raid5(layout, lo_map, hdr);
 		break;
 
@@ -160,7 +167,7 @@ panfs_shim_conv_layout(
 	struct pnfs_layout_segment *lseg,
 	struct pnfs_osd_layout *layout)
 {
-	int i;
+	int i, total_comps;
 	int status;
 	struct pnfs_osd_object_cred *lo_comp;
 	pan_size_t alloc_sz, local_sz;
@@ -170,7 +177,13 @@ panfs_shim_conv_layout(
 	pan_sm_sec_t *pan_sec;
 
 	status = -EINVAL;
-	alloc_sz = layout->olo_num_comps *
+	if (layout->olo_num_comps < layout->olo_map.odm_group_width) {
+		total_comps = layout->olo_comps_index + layout->olo_num_comps;
+	} else {
+		/* allocate full map, otherwise SAM gets confused */
+		total_comps = layout->olo_map.odm_num_comps;
+	}
+	alloc_sz = total_comps *
 		   (sizeof(pan_agg_comp_obj_t) + sizeof(pan_sm_sec_t));
 	for (i = 0; i < layout->olo_num_comps; i++) {
 		void *p = layout->olo_comps[i].oc_cap->cred;
@@ -199,17 +212,17 @@ panfs_shim_conv_layout(
 	if (status)
 		goto err;
 
-	mcs->full_map.components.size = layout->olo_num_comps;
+	mcs->full_map.components.size = total_comps;
 	mcs->full_map.components.data = (pan_agg_comp_obj_t *)buf;
-	buf += layout->olo_num_comps * sizeof(pan_agg_comp_obj_t);
+	buf += total_comps * sizeof(pan_agg_comp_obj_t);
 
-	mcs->secs.size = layout->olo_num_comps;
+	mcs->secs.size = total_comps;
 	mcs->secs.data = (pan_sm_sec_t *)buf;
-	buf += layout->olo_num_comps * sizeof(pan_sm_sec_t);
+	buf += total_comps * sizeof(pan_sm_sec_t);
 
 	lo_comp = layout->olo_comps;
-	pan_comp = mcs->full_map.components.data;
-	pan_sec = mcs->secs.data;
+	pan_comp = mcs->full_map.components.data + layout->olo_comps_index;
+	pan_sec = mcs->secs.data + layout->olo_comps_index;
 	for (i = 0; i < layout->olo_num_comps; i++) {
 		void *p;
 		pan_stor_obj_id_t *obj_id = &mcs->full_map.map_hdr.obj_id;
@@ -268,7 +281,7 @@ panfs_shim_conv_layout(
 			goto err;
 		}
 
-		p = layout->olo_comps[i].oc_cap->cred;
+		p = lo_comp->oc_cap->cred;
 		panfs_export_ops->sm_sec_t_unmarshall(
 			(pan_sm_sec_otw_t *)&p,
 			pan_sec,
