@@ -121,6 +121,15 @@ pnfs_osd_xdr_decode_data_map(u32 *p, struct pnfs_osd_data_map *data_map)
 	READ32(data_map->odm_group_depth);
 	READ32(data_map->odm_mirror_cnt);
 	READ32(data_map->odm_raid_algorithm);
+	dprintk("%s: odm_num_comps=%u odm_stripe_unit=%llu odm_group_width=%u "
+		"odm_group_depth=%u odm_mirror_cnt=%u odm_raid_algorithm=%u\n",
+		__func__,
+		data_map->odm_num_comps,
+		(unsigned long long)data_map->odm_stripe_unit,
+		data_map->odm_group_width,
+		data_map->odm_group_depth,
+		data_map->odm_mirror_cnt,
+		data_map->odm_raid_algorithm);
 	return p;
 }
 
@@ -128,6 +137,7 @@ struct pnfs_osd_layout *
 pnfs_osd_xdr_decode_layout(struct pnfs_osd_layout *layout, u32 *p)
 {
 	int i;
+	u32 *start = p;
 	struct pnfs_osd_object_cred *comp;
 	struct pnfs_osd_opaque_cred *cred;
 
@@ -145,7 +155,7 @@ pnfs_osd_xdr_decode_layout(struct pnfs_osd_layout *layout, u32 *p)
 			comp->oc_cap->cred_len);
 		comp++;
 	}
-	dprintk("%s: end=%p count=%Zd\n", __func__,
-	       cred, (char *)cred - (char *)layout);
+	dprintk("%s: xdr_size=%Zd end=%p in_core_size=%Zd\n", __func__,
+	       (char *)p - (char *)start, cred, (char *)cred - (char *)layout);
 	return layout;
 }
