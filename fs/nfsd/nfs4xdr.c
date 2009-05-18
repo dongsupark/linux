@@ -3617,10 +3617,8 @@ nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
 
 	/* Retrieve, encode, and merge layout; process stateid */
 	nfserr = nfs4_pnfs_get_layout(lgp->lg_fhp, &args, &lgp->lg_sid);
-	if (nfserr) {
-		printk(KERN_ERR "%s: export ERROR %d\n", __func__, nfserr);
-		return nfserrno(nfserr);
-	}
+	if (nfserr)
+		return nfserr;
 
 	/* Ensure file system returned enough bytes for the client
 	 * to access.
