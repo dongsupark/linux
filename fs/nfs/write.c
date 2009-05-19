@@ -1162,8 +1162,8 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 	struct nfs_client	*clp = server->nfs_client;
 	int status;
 
-	dprintk("NFS: %5u nfs_writeback_done (status %d)\n",
-		task->tk_pid, task->tk_status);
+	dprintk("NFS: %5u nfs_writeback_done (status %d count %u)\n",
+		task->tk_pid, task->tk_status, resp->count);
 
 	/*
 	 * ->write_done will attempt to use post-op attributes to detect
@@ -1209,6 +1209,9 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 	if (task->tk_status >= 0 && resp->count < argp->count) {
 		static unsigned long    complain;
 
+		dprintk("NFS:       short write:"
+			" (resp->count %u) < (argp->count = %u)\n",
+			resp->count, argp->count);
 		nfs_inc_stats(data->inode, NFSIOS_SHORTWRITE);
 
 		/* Has the server at least made some progress? */
