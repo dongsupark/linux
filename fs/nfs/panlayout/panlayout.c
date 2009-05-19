@@ -264,9 +264,10 @@ panlayout_read_pagelist(struct pnfs_layout_type *pnfs_layout_type,
 	BUG_ON(offset < lseg->range.offset);
 	lseg_end_offset = end_offset(lseg->range.offset, lseg->range.length);
 	BUG_ON(offset >= lseg_end_offset);
-
-	if (offset + count > lseg_end_offset)
-		count = lseg_end_offset - offset;
+	if (offset + count > lseg_end_offset) {
+		count = lseg->range.length - (offset - lseg->range.offset);
+		dprintk("%s: truncated count %Zd\n", __func__, count);
+	}
 
 	state = panlayout_alloc_io_state();
 	if (unlikely(!state)) {
@@ -332,13 +333,17 @@ panlayout_write_pagelist(struct pnfs_layout_type *pnfs_layout_type,
 	ssize_t status = 0;
 	u64 lseg_end_offset;
 
-	dprintk("%s: Begin inode %p offset %llu count %d\n",
-		__func__, inode, offset, (int)count);
+	dprintk("%s: Begin inode %p offset %llu count %Zd\n",
+		__func__, inode, offset, count);
 
 	lseg = wdata->pdata.lseg;
 	BUG_ON(offset < lseg->range.offset);
 	lseg_end_offset = end_offset(lseg->range.offset, lseg->range.length);
-	BUG_ON(offset + count > lseg_end_offset);
+	BUG_ON(offset >= lseg_end_offset);
+	if (offset + count > lseg_end_offset) {
+		count = lseg->range.length - (offset - lseg->range.offset);
+		dprintk("%s: truncated count %Zd\n", __func__, count);
+	}
 
 	state = panlayout_alloc_io_state();
 	if (unlikely(!state)) {
