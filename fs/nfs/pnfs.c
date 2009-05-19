@@ -812,9 +812,16 @@ static inline int
 has_matching_lseg(struct pnfs_layout_segment *lseg,
 		  struct nfs4_pnfs_layout_segment *range)
 {
-	return (range->iomode == IOMODE_READ ||
-		lseg->range.iomode == IOMODE_RW) &&
-	       lo_seg_contained(&lseg->range, range);
+	struct nfs4_pnfs_layout_segment range1;
+
+	if ((range->iomode != IOMODE_READ && lseg->range.iomode != IOMODE_RW) ||
+	    !lo_seg_intersecting(&lseg->range, range))
+		return 0;
+
+	/* range1 covers only the first byte in the range */
+	range1 = *range;
+	range1.length = 1;
+	return lo_seg_contained(&lseg->range, &range1);
 }
 
 /*
