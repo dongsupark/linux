@@ -663,18 +663,19 @@ cmp_layout(struct nfs4_pnfs_layout_segment *l1,
 {
 	s64 d;
 
-	/* lower offset < higher offset */
+	/* higher offset > lower offset */
 	d = l1->offset - l2->offset;
 	if (d)
 		return d;
 
-	/* read < read/write */
-	d = (l1->iomode == IOMODE_RW) - (l2->iomode == IOMODE_RW);
+	/* longer length > shorter length */
+	d = l1->length - l2->length;
 	if (d)
 		return d;
 
-	/* longer length < shorter length */
-	return l2->length - l1->length;
+	/* read > read/write */
+	return (int)(l1->iomode == IOMODE_READ) -
+	       (int)(l2->iomode == IOMODE_READ);
 }
 
 static void
