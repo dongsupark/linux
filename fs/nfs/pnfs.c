@@ -1211,10 +1211,13 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 }
 
 void
-pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode,
+		       size_t *wsize)
 {
+	struct nfs_server *server = NFS_SERVER(inode);
+
 	pgio->pg_iswrite = 1;
-	if (!pnfs_enabled_sb(NFS_SERVER(inode))) {
+	if (!pnfs_enabled_sb(server)) {
 		pgio->pg_threshold = 0;
 		pgio->pg_boundary = 0;
 		pgio->pg_test = NULL;
@@ -1223,6 +1226,7 @@ pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
 	pgio->pg_threshold = pnfs_getthreshold(inode, 1);
 	pgio->pg_boundary = pnfs_getboundary(inode);
 	pnfs_set_pg_test(inode, pgio);
+	*wsize = server->ds_wsize;
 }
 
 /* Retrieve I/O parameters for O_DIRECT.
