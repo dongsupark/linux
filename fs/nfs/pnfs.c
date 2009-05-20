@@ -1385,20 +1385,23 @@ pnfs_set_ds_iosize(struct nfs_server *server)
 	}
 }
 
-static void
+static int
 pnfs_call_done(struct pnfs_call_data *pdata, struct rpc_task *task, void *data)
 {
 	put_lseg(pdata->lseg);
 	pdata->call_ops->rpc_call_done(task, data);
+	if (pdata->pnfs_error == -EAGAIN)
+		return -EAGAIN;
 	if (pdata->pnfsflags & PNFS_NO_RPC) {
 		pdata->call_ops->rpc_release(data);
-		return;
+	} else {
+		/*
+		 * just restore original rpc call ops
+		 * rpc_release will be called later by the rpc scheduling layer.
+		 */
+		task->tk_ops = pdata->call_ops;
 	}
-	/*
-	 * just restore original rpc call ops
-	 * rpc_release will be called later by the rpc scheduling layer.
-	 */
-	task->tk_ops = pdata->call_ops;
+	return 0;
 }
 
 /* Post-write completion function
@@ -1427,7 +1430,11 @@ pnfs_writeback_done(struct nfs_write_data *data)
 		pnfs_need_layoutcommit(nfsi, data->args.context);
 	}
 
-	pnfs_call_done(pdata, &data->task, data);
+	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
+		dprintk("%s: retrying\n", __func__);
+		pnfs_initiate_write(data, NFS_CLIENT(data->inode),
+				    pdata->call_ops, pdata->how);
+	}
 }
 
 /*
@@ -1548,7 +1555,11 @@ pnfs_read_done(struct nfs_read_data *data)
 
 	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
 
-	pnfs_call_done(pdata, &data->task, data);
+	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
+		dprintk("%s: retrying\n", __func__);
+		pnfs_initiate_read(data, NFS_CLIENT(data->inode),
+				   pdata->call_ops);
+	}
 }
 
 /*
@@ -1633,6 +1644,7 @@ _pnfs_try_to_read_data(struct nfs_read_data *data,
 	} else {
 		dprintk("%s: Utilizing pNFS I/O\n", __func__);
 		data->pdata.call_ops = call_ops;
+		data->pdata.pnfs_error = 0;
 		return pnfs_readpages(data);
 	}
 }
@@ -1719,6 +1731,7 @@ _pnfs_try_to_write_data(struct nfs_write_data *data,
 	} else {
 		dprintk("%s: Utilizing pNFS I/O\n", __func__);
 		data->pdata.call_ops = call_ops;
+		data->pdata.pnfs_error = 0;
 		data->pdata.how = how;
 		return pnfs_writepages(data, how);
 	}
@@ -1737,6 +1750,7 @@ _pnfs_try_to_commit(struct nfs_write_data *data,
 		/* data->call_ops and data->how set in nfs_commit_rpcsetup */
 		dprintk("%s: Utilizing pNFS I/O\n", __func__);
 		data->pdata.call_ops = call_ops;
+		data->pdata.pnfs_error = 0;
 		data->pdata.how = how;
 		return pnfs_commit(data, how);
 	}
@@ -1750,7 +1764,11 @@ pnfs_commit_done(struct nfs_write_data *data)
 
 	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
 
-	pnfs_call_done(pdata, &data->task, data);
+	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
+		dprintk("%s: retrying\n", __func__);
+		pnfs_initiate_commit(data, NFS_CLIENT(data->inode),
+				     pdata->call_ops, pdata->how);
+	}
 }
 
 static enum pnfs_try_status
