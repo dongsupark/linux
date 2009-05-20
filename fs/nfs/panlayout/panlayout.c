@@ -495,6 +495,7 @@ panlayout_get_stripesize(struct pnfs_layout_type *pnfslay)
 			if (n == 0)
 				n = lo->olo_num_comps;
 			n -= 1;
+			n *= 8;	/* FIXME: until we have 2-D coalescing */
 			break;
 
 		case PNFS_OSD_RAID_PQ:
