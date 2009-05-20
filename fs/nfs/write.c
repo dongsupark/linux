@@ -852,6 +852,17 @@ int nfs_initiate_write(struct nfs_write_data *data,
 }
 EXPORT_SYMBOL(nfs_initiate_write);
 
+int pnfs_initiate_write(struct nfs_write_data *data,
+			struct rpc_clnt *clnt,
+			const struct rpc_call_ops *call_ops,
+			int how)
+{
+	if (pnfs_try_to_write_data(data, call_ops, how) == PNFS_ATTEMPTED)
+		return pnfs_get_write_status(data);
+
+	return nfs_initiate_write(data, clnt, call_ops, how);
+}
+
 /*
  * Set up the argument/result storage required for the RPC call.
  */
@@ -862,7 +873,6 @@ static int nfs_write_rpcsetup(struct nfs_page *req,
 		int how)
 {
 	struct inode *inode = req->wb_context->path.dentry->d_inode;
-	enum pnfs_try_status ret;
 
 	/* Set up the RPC argument and reply structs
 	 * NB: take care not to mess about with data->commit et al. */
@@ -889,11 +899,7 @@ static int nfs_write_rpcsetup(struct nfs_page *req,
 	data->res.verf    = &data->verf;
 	nfs_fattr_init(&data->fattr);
 
-	ret = pnfs_try_to_write_data(data, call_ops, how);
-	if (ret == PNFS_ATTEMPTED)
-		return pnfs_get_write_status(data);
-
-	return nfs_initiate_write(data, NFS_CLIENT(inode), call_ops, how);
+	return pnfs_initiate_write(data, NFS_CLIENT(inode), call_ops, how);
 }
 
 /* If a nfs_flush_* function fails, it should remove reqs from @head and
@@ -1251,6 +1257,9 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 				argp->stable = NFS_FILE_SYNC;
 			}
 			nfs4_restart_rpc(task, clp);
+#ifdef CONFIG_PNFS
+			data->pdata.pnfs_error = -EAGAIN;
+#endif /* CONFIG_PNFS */
 			return -EAGAIN;
 		}
 		if (time_before(complain, jiffies)) {
@@ -1314,6 +1323,18 @@ int nfs_initiate_commit(struct nfs_write_data *data,
 }
 EXPORT_SYMBOL(nfs_initiate_commit);
 
+
+int pnfs_initiate_commit(struct nfs_write_data *data,
+			 struct rpc_clnt *clnt,
+			 const struct rpc_call_ops *call_ops,
+			 int how)
+{
+	if (pnfs_try_to_commit(data, &nfs_commit_ops, how) == PNFS_ATTEMPTED)
+		return pnfs_get_write_status(data);
+
+	return nfs_initiate_commit(data, clnt, &nfs_commit_ops, how);
+}
+
 /*
  * Set up the argument/result storage required for the RPC call.
  */
@@ -1323,7 +1344,6 @@ static int nfs_commit_rpcsetup(struct list_head *head,
 {
 	struct nfs_page *first = nfs_list_entry(head->next);
 	struct inode *inode = first->wb_context->path.dentry->d_inode;
-	enum pnfs_try_status ret;
 
 	/* Set up the RPC argument and reply structs
 	 * NB: take care not to mess about with data->commit et al. */
@@ -1345,12 +1365,8 @@ static int nfs_commit_rpcsetup(struct list_head *head,
 
 	data->args.context = first->wb_context;  /* used by commit done */
 
-	ret = pnfs_try_to_commit(data, &nfs_commit_ops, how);
-	if (ret == PNFS_ATTEMPTED)
-		return pnfs_get_write_status(data);
-
-	return nfs_initiate_commit(data, NFS_CLIENT(inode), &nfs_commit_ops,
-				   how);
+	return pnfs_initiate_commit(data, NFS_CLIENT(inode), &nfs_commit_ops,
+				    how);
 }
 
 /*
