@@ -200,6 +200,15 @@ int nfs_initiate_read(struct nfs_read_data *data, struct rpc_clnt *clnt,
 }
 EXPORT_SYMBOL(nfs_initiate_read);
 
+int pnfs_initiate_read(struct nfs_read_data *data, struct rpc_clnt *clnt,
+		       const struct rpc_call_ops *call_ops)
+{
+	if (pnfs_try_to_read_data(data, call_ops) == PNFS_ATTEMPTED)
+		return pnfs_get_read_status(data);
+
+	return nfs_initiate_read(data, clnt, call_ops);
+}
+
 /*
  * Set up the NFS read request struct
  */
@@ -208,7 +217,6 @@ static int nfs_read_rpcsetup(struct nfs_page *req, struct nfs_read_data *data,
 		unsigned int count, unsigned int offset)
 {
 	struct inode *inode = req->wb_context->path.dentry->d_inode;
-	enum pnfs_try_status ret;
 
 	data->req	  = req;
 	data->inode	  = inode;
@@ -226,11 +234,7 @@ static int nfs_read_rpcsetup(struct nfs_page *req, struct nfs_read_data *data,
 	data->res.eof     = 0;
 	nfs_fattr_init(&data->fattr);
 
-	ret = pnfs_try_to_read_data(data, call_ops);
-	if (ret == PNFS_ATTEMPTED)
-		return pnfs_get_read_status(data);
-
-	return nfs_initiate_read(data, NFS_CLIENT(inode), call_ops);
+	return pnfs_initiate_read(data, NFS_CLIENT(inode), call_ops);
 }
 
 static void
@@ -377,8 +381,6 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 	struct nfs_client *clp = NFS_SERVER(data->inode)->nfs_client;
 
 #ifdef CONFIG_PNFS
-	if (data->pdata.pnfsflags & PNFS_NO_RPC)
-		return;
 	if (data->fldata.ds_nfs_client) {
 		dprintk("%s DS read\n", __func__);
 		clp = data->fldata.ds_nfs_client;
@@ -398,6 +400,9 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 	argp->pgbase += resp->count;
 	argp->count -= resp->count;
 	nfs4_restart_rpc(task, clp);
+#ifdef CONFIG_PNFS
+	data->pdata.pnfs_error = -EAGAIN;
+#endif /* CONFIG_PNFS */
 	return;
 out:
 	nfs4_sequence_free_slot(clp, &data->res.seq_res);

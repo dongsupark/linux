@@ -250,6 +250,8 @@ extern int nfs4_path_walk(struct nfs_server *server,
 /* read.c */
 extern int nfs_initiate_read(struct nfs_read_data *data, struct rpc_clnt *clnt,
 			     const struct rpc_call_ops *call_ops);
+extern int pnfs_initiate_read(struct nfs_read_data *data, struct rpc_clnt *clnt,
+			     const struct rpc_call_ops *call_ops);
 extern void nfs_read_prepare(struct rpc_task *task, void *calldata);
 
 /* write.c */
@@ -257,7 +259,15 @@ extern int nfs_initiate_write(struct nfs_write_data *data,
 			      struct rpc_clnt *clnt,
 			      const struct rpc_call_ops *call_ops,
 			      int how);
+extern int pnfs_initiate_write(struct nfs_write_data *data,
+			      struct rpc_clnt *clnt,
+			      const struct rpc_call_ops *call_ops,
+			      int how);
 extern int nfs_initiate_commit(struct nfs_write_data *data,
+			       struct rpc_clnt *clnt,
+			       const struct rpc_call_ops *call_ops,
+			       int how);
+extern int pnfs_initiate_commit(struct nfs_write_data *data,
 			       struct rpc_clnt *clnt,
 			       const struct rpc_call_ops *call_ops,
 			       int how);
