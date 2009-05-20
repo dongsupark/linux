@@ -352,8 +352,9 @@ panfs_shim_free_io_state(struct panlayout_io_state *pl_state)
 	kfree(pl_state);
 }
 
-static pan_sg_entry_t *
+static int
 panfs_shim_pages_to_sg(
+	struct panfs_shim_io_state *state,
 	struct page **pages,
 	unsigned int pgbase,
 	unsigned nr_pages,
@@ -367,9 +368,20 @@ panfs_shim_pages_to_sg(
 		__func__, pgbase, nr_pages, (int)count, pages[0],
 		(unsigned)pages[0]->flags, (__u64)pages[0]->index);
 
+	if (pgbase > PAGE_SIZE) {
+		n = pgbase >> PAGE_SHIFT;
+		pgbase &= ~PAGE_MASK;
+		pages += n;
+		nr_pages -= n;
+	}
+	if (nr_pages > ((pgbase + count + PAGE_SIZE - 1) >> PAGE_SHIFT))
+		nr_pages = (pgbase + count + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	sg = kmalloc(nr_pages * sizeof(*sg), GFP_KERNEL);
 	if (sg == NULL)
-		return NULL;
+		return -ENOMEM;
+
+	dprintk("%s sg_list %p pages %p pgbase %u nr_pages %u\n",
+		__func__, sg, pages, pgbase, nr_pages);
 
 	for (i = 0; i < nr_pages; i++) {
 		sg[i].buffer = (char *)kmap(pages[i]) + pgbase;
@@ -389,7 +401,10 @@ panfs_shim_pages_to_sg(
 	}
 	BUG_ON(count);
 
-	return sg;
+	state->sg_list = sg;
+	state->pages = pages;
+	state->nr_pages = nr_pages;
+	return 0;
 }
 
 /*
@@ -442,14 +457,9 @@ panfs_shim_read_pagelist(
 
 	dprintk("%s: Begin\n", __func__);
 
-	BUG_ON(pgbase != offset % PAGE_SIZE);
-	state->sg_list = panfs_shim_pages_to_sg(pages, pgbase, nr_pages, count);
-	if (unlikely(!state->sg_list)) {
-		status = -ENOMEM;
+	status = panfs_shim_pages_to_sg(state, pages, pgbase, nr_pages, count);
+	if (unlikely(status))
 		goto err;
-	}
-	state->pages = pages;
-	state->nr_pages = nr_pages;
 
 	state->obj_sec.min_security = 0;
 	state->obj_sec.map_ccaps = mcs;
@@ -529,12 +539,9 @@ panfs_shim_write_pagelist(
 
 	dprintk("%s: Begin\n", __func__);
 
-	BUG_ON(pgbase != offset % PAGE_SIZE);
-	state->sg_list = panfs_shim_pages_to_sg(pages, pgbase, nr_pages, count);
-	if (unlikely(!state->sg_list)) {
-		status = -ENOMEM;
+	status = panfs_shim_pages_to_sg(state, pages, pgbase, nr_pages, count);
+	if (unlikely(status))
 		goto err;
-	}
 	state->pages = pages;
 	state->nr_pages = nr_pages;
 
