@@ -1389,8 +1389,9 @@ static int
 pnfs_call_done(struct pnfs_call_data *pdata, struct rpc_task *task, void *data)
 {
 	put_lseg(pdata->lseg);
+	pdata->lseg = NULL;
 	pdata->call_ops->rpc_call_done(task, data);
-	if (pdata->pnfs_error == -EAGAIN)
+	if (pdata->pnfs_error == -EAGAIN || task->tk_status == -EAGAIN)
 		return -EAGAIN;
 	if (pdata->pnfsflags & PNFS_NO_RPC) {
 		pdata->call_ops->rpc_release(data);
@@ -1431,7 +1432,13 @@ pnfs_writeback_done(struct nfs_write_data *data)
 	}
 
 	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
+		struct nfs4_pnfs_layout_segment range = {
+			.iomode = IOMODE_RW,
+			.offset = data->args.offset,
+			.length = data->args.count,
+		};
 		dprintk("%s: retrying\n", __func__);
+		_pnfs_return_layout(data->inode, &range, NULL, RECALL_FILE);
 		pnfs_initiate_write(data, NFS_CLIENT(data->inode),
 				    pdata->call_ops, pdata->how);
 	}
@@ -1556,7 +1563,13 @@ pnfs_read_done(struct nfs_read_data *data)
 	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
 
 	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
+		struct nfs4_pnfs_layout_segment range = {
+			.iomode = IOMODE_ANY,
+			.offset = data->args.offset,
+			.length = data->args.count,
+		};
 		dprintk("%s: retrying\n", __func__);
+		_pnfs_return_layout(data->inode, &range, NULL, RECALL_FILE);
 		pnfs_initiate_read(data, NFS_CLIENT(data->inode),
 				   pdata->call_ops);
 	}
@@ -1765,7 +1778,13 @@ pnfs_commit_done(struct nfs_write_data *data)
 	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
 
 	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
+		struct nfs4_pnfs_layout_segment range = {
+			.iomode = IOMODE_RW,
+			.offset = data->args.offset,
+			.length = data->args.count,
+		};
 		dprintk("%s: retrying\n", __func__);
+		_pnfs_return_layout(data->inode, &range, NULL, RECALL_FILE);
 		pnfs_initiate_commit(data, NFS_CLIENT(data->inode),
 				     pdata->call_ops, pdata->how);
 	}
