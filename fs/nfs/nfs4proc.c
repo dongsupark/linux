@@ -5199,7 +5199,7 @@ static int pnfs4_proc_layoutget(struct nfs4_pnfs_layoutget *lgp)
 	}
 	rpc_put_task(task);
 out:
-	dprintk("<-- %s\n", __func__);
+	dprintk("<-- %s status=%d\n", __func__, status);
 	return status;
 }
 
