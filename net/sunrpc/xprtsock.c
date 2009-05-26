@@ -1158,13 +1158,8 @@ static inline int xs_tcp_read_callback(struct rpc_xprt *xprt,
 
 	req = xprt_alloc_bc_request(xprt);
 	if (req == NULL) {
-		/*
-		 * Schedule an autoclose RPC call
-		 */
 		printk(KERN_WARNING "Callback slot table overflowed\n");
-		set_bit(XPRT_CLOSE_WAIT, &xprt->state);
-		if (test_and_set_bit(XPRT_LOCKED, &xprt->state) == 0)
-			queue_work(rpciod_workqueue, &xprt->task_cleanup);
+		xprt_force_disconnect(xprt);
 		return -1;
 	}
 
