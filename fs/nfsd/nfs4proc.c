@@ -973,12 +973,6 @@ encode_op:
 			dprintk("%s NFS4.1 replay from cache\n", __func__);
 			status = op->status;
 			goto out;
-		}
-		/* Only from CREATE_SESSION */
-		if (resp->cstate.status == nfserr_replay_clientid_cache) {
-			dprintk("%s NFS4.1 replay from clientid cache\n",
-				__func__);
-			status = op->status;
 		} else if (op->status == nfserr_replay_me) {
 			op->replay = &cstate->replay_owner->so_replay;
 			nfsd4_encode_replay(resp, op);

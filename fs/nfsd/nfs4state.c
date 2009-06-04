@@ -1264,6 +1264,13 @@ nfsd4_cache_create_session(struct nfsd4_create_session *cr_ses,
 	memcpy(&slot->sl_cr_ses, cr_ses, sizeof(*cr_ses));
 }
 
+static __be32
+nfsd4_replay_create_session(struct nfsd4_create_session *cr_ses,
+			    struct nfsd4_clid_slot *slot)
+{
+	memcpy(cr_ses, &slot->sl_cr_ses, sizeof(*cr_ses));
+	return slot->sl_status;
+}
 
 __be32
 nfsd4_create_session(struct svc_rqst *rqstp,
@@ -1271,7 +1278,6 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		     struct nfsd4_create_session *cr_ses)
 {
 	u32 ip_addr = svc_addr_in(rqstp)->sin_addr.s_addr;
-	struct nfsd4_compoundres *resp = rqstp->rq_resp;
 	struct nfs4_client *conf, *unconf;
 	struct nfsd4_clid_slot *slot = NULL;
 	int status = 0;
@@ -1286,9 +1292,8 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		if (status == nfserr_replay_cache) {
 			dprintk("Got a create_session replay! seqid= %d\n",
 				slot->sl_seqid);
-			cstate->status = nfserr_replay_clientid_cache;
 			/* Return the cached reply status */
-			status = nfsd4_replay_create_session(resp, slot);
+			status = nfsd4_replay_create_session(cr_ses, slot);
 			goto out;
 		} else if (cr_ses->seqid != conf->cl_slot.sl_seqid + 1) {
 			status = nfserr_seq_misordered;
