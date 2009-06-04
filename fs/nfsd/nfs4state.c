@@ -734,18 +734,6 @@ static struct nfs4_client *create_client(struct xdr_netobj name, char *recdir)
 	return clp;
 }
 
-static struct nfs4_client *create_client_session(struct xdr_netobj name,
-						  char *recdir)
-{
-	struct nfs4_client *clp;
-
-	clp = create_client(name, recdir);
-	if (clp)
-		/* the slot sl_seqid is 0 */
-		clp->cl_slot.sl_datalen = CS_MAX_ENC_SZ;
-	return clp;
-}
-
 static void copy_verf(struct nfs4_client *target, nfs4_verifier *source)
 {
 	memcpy(target->cl_verifier.data, source->data,
@@ -1206,7 +1194,7 @@ nfsd4_exchange_id(struct svc_rqst *rqstp,
 
 out_new:
 	/* Normal case */
-	new = create_client_session(exid->clname, dname);
+	new = create_client(exid->clname, dname);
 	if (new == NULL) {
 		status = nfserr_resource;
 		goto out;

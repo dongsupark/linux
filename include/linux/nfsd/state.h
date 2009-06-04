@@ -119,20 +119,6 @@ struct nfsd4_slot {
 	char	sl_data[NFSD_SLOT_CACHE_SIZE];
 };
 
-/*
-* maximum encoded size of create session response
-* 16 - sessionid, 8 - sequence # and flags,
-* 32 - fore channel attrs, 32 - back channel attrs
-*/
-#define CS_MAX_ENC_SZ  88
-
-struct nfsd4_clid_slot {
-	u32		sl_seqid;
-	__be32		sl_status;
-	u32		sl_datalen;
-	char		sl_data[CS_MAX_ENC_SZ];
-};
-
 struct nfsd4_channel_attrs {
 	u32		headerpadsz;
 	u32		maxreq_sz;
@@ -142,6 +128,25 @@ struct nfsd4_channel_attrs {
 	u32		maxreqs;
 	u32		nr_rdma_attrs;
 	u32		rdma_attrs;
+};
+
+struct nfsd4_create_session {
+	clientid_t			clientid;
+	struct nfs4_sessionid		sessionid;
+	u32				seqid;
+	u32				flags;
+	struct nfsd4_channel_attrs	fore_channel;
+	struct nfsd4_channel_attrs	back_channel;
+	u32				callback_prog;
+	u32				uid;
+	u32				gid;
+};
+
+/* The single slot clientid cache structure */
+struct nfsd4_clid_slot {
+	u32				sl_seqid;
+	__be32				sl_status;
+	struct nfsd4_create_session	sl_cr_ses;
 };
 
 struct nfsd4_session {
