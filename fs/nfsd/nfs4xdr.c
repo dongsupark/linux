@@ -3060,24 +3060,6 @@ nfsd4_encode_create_session(struct nfsd4_compoundres *resp, int nfserr,
 	return 0;
 }
 
-/*
- * Encode the create_session result into the create session single DRC
- * slot cache. Do this for solo or embedded create session operations.
- */
-void
-nfsd4_cache_create_session(struct nfsd4_create_session *cr_ses,
-			   struct nfsd4_clid_slot *slot, int nfserr)
-{
-	__be32 *p = (__be32 *)slot->sl_data;
-	struct nfsd4_compoundres tmp = {
-		.p = p,
-		.end = p + XDR_QUADLEN(CS_MAX_ENC_SZ),
-	}, *resp = &tmp;
-
-	slot->sl_status = nfsd4_encode_create_session(resp, nfserr, cr_ses);
-	slot->sl_datalen = (char *)resp->p - (char *)p;
-}
-
 __be32
 nfsd4_replay_create_session(struct nfsd4_compoundres *resp,
 			    struct nfsd4_clid_slot *slot)
