@@ -370,6 +370,11 @@ static inline int xprt_test_and_set_binding(struct rpc_xprt *xprt)
 	return test_and_set_bit(XPRT_BINDING, &xprt->state);
 }
 
+static inline int xprt_server_backchannel(struct rpc_xprt *xprt)
+{
+	return xprt->bc_sock != NULL;
+}
+
 #endif /* __KERNEL__*/
 
 #endif /* _LINUX_SUNRPC_XPRT_H */
