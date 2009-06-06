@@ -2463,6 +2463,7 @@ static struct rpc_xprt *xs_setup_tcp(struct xprt_create *args)
 	xprt->prot = IPPROTO_TCP;
 	xprt->tsh_size = sizeof(rpc_fraghdr) / sizeof(u32);
 	xprt->max_payload = RPC_MAX_FRAGMENT_SIZE;
+	xprt->timeout = &xs_tcp_default_timeout;
 
 	if (args->bc_sock) {
 		/* backchannel */
@@ -2483,7 +2484,21 @@ static struct rpc_xprt *xs_setup_tcp(struct xprt_create *args)
 
 		xprt->ops = &bc_tcp_ops;
 
-		goto next;
+		switch (addr->sa_family) {
+		case AF_INET:
+			xs_format_ipv4_peer_addresses(xprt, "tcp",
+						      RPCBIND_NETID_TCP);
+			break;
+		case AF_INET6:
+			xs_format_ipv6_peer_addresses(xprt, "tcp",
+						      RPCBIND_NETID_TCP6);
+			break;
+		default:
+			kfree(xprt);
+			return ERR_PTR(-EAFNOSUPPORT);
+		}
+
+		goto out;
 	}
 
 	switch (addr->sa_family) {
@@ -2492,14 +2507,22 @@ static struct rpc_xprt *xs_setup_tcp(struct xprt_create *args)
 			xprt_set_bound(xprt);
 
 		INIT_DELAYED_WORK(&transport->connect_worker, xs_tcp_connect_worker4);
+		xs_format_ipv4_peer_addresses(xprt, "tcp",
+					      RPCBIND_NETID_TCP);
 		break;
 	case AF_INET6:
 		if (((struct sockaddr_in6 *)addr)->sin6_port != htons(0))
 			xprt_set_bound(xprt);
 
 		INIT_DELAYED_WORK(&transport->connect_worker, xs_tcp_connect_worker6);
+		xs_format_ipv6_peer_addresses(xprt, "tcp",
+					      RPCBIND_NETID_TCP);
 		break;
+	default:
+		kfree(xprt);
+		return ERR_PTR(-EAFNOSUPPORT);
 	}
+
 	xprt->bind_timeout = XS_BIND_TO;
 	xprt->connect_timeout = XS_TCP_CONN_TO;
 	xprt->reestablish_timeout = XS_TCP_INIT_REEST_TO;
@@ -2507,21 +2530,7 @@ static struct rpc_xprt *xs_setup_tcp(struct xprt_create *args)
 
 	xprt->ops = &xs_tcp_ops;
 
-next:
-	xprt->timeout = &xs_tcp_default_timeout;
-
-	switch (addr->sa_family) {
-	case AF_INET:
-		xs_format_ipv4_peer_addresses(xprt, "tcp", RPCBIND_NETID_TCP);
-		break;
-	case AF_INET6:
-		xs_format_ipv6_peer_addresses(xprt, "tcp", RPCBIND_NETID_TCP6);
-		break;
-	default:
-		kfree(xprt);
-		return ERR_PTR(-EAFNOSUPPORT);
-	}
-
+out:
 	dprintk("RPC:       set up transport to address %s\n",
 			xprt->address_strings[RPC_DISPLAY_ALL]);
 
