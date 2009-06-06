@@ -2130,26 +2130,6 @@ static void xs_tcp_print_stats(struct rpc_xprt *xprt, struct seq_file *seq)
 			xprt->stat.bklog_u);
 }
 
-/*
- * The set_port routine of the rpc_xprt_ops. This is related to the portmapper
- * and should never be called
- */
-
-static void bc_set_port(struct rpc_xprt *xprt, unsigned short port)
-{
-	BUG();
-}
-
-/*
- * The connect routine for the backchannel rpc_xprt ops
- * Again, should never be called!
- */
-
-static void bc_connect(struct rpc_task *task)
-{
-	BUG();
-}
-
 struct rpc_buffer {
 	size_t	len;
 	char	data[];
@@ -2321,8 +2301,6 @@ static struct rpc_xprt_ops xs_tcp_ops = {
 static struct rpc_xprt_ops bc_tcp_ops = {
 	.reserve_xprt		= xprt_reserve_xprt,
 	.release_xprt		= xprt_release_xprt,
-	.set_port		= bc_set_port,
-	.connect		= bc_connect,
 	.buf_alloc		= bc_malloc,
 	.buf_free		= bc_free,
 	.send_request		= bc_send_request,
