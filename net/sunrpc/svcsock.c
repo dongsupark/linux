@@ -878,6 +878,57 @@ static int svc_tcp_recv_record(struct svc_sock *svsk, struct svc_rqst *rqstp)
 	return -EAGAIN;
 }
 
+static int svc_process_calldir(struct svc_sock *svsk, struct svc_rqst *rqstp,
+			       struct rpc_rqst **reqpp, struct kvec *vec)
+{
+	struct rpc_rqst *req = NULL;
+	u32 *p;
+	u32 xid;
+	u32 calldir;
+	int len;
+
+	len = svc_recvfrom(rqstp, vec, 1, 8);
+	if (len < 0)
+		goto error;
+
+	p = (u32 *)rqstp->rq_arg.head[0].iov_base;
+	xid = *p++;
+	calldir = *p;
+
+	if (calldir == 0) {
+		/* REQUEST is the most common case */
+		vec[0] = rqstp->rq_arg.head[0];
+	} else {
+		/* REPLY */
+		if (svsk->sk_bc_xprt)
+			req = xprt_lookup_rqst(svsk->sk_bc_xprt, xid);
+
+		if (!req) {
+			printk(KERN_NOTICE
+				"%s: Got unrecognized reply: "
+				"calldir 0x%x sk_bc_xprt %p xid %08x\n",
+				__func__, ntohl(calldir),
+				svsk->sk_bc_xprt, xid);
+			vec[0] = rqstp->rq_arg.head[0];
+			goto out;
+		}
+
+		memcpy(&req->rq_private_buf, &req->rq_rcv_buf,
+		       sizeof(struct xdr_buf));
+		/* copy the xid and call direction */
+		memcpy(req->rq_private_buf.head[0].iov_base,
+		       rqstp->rq_arg.head[0].iov_base, 8);
+		vec[0] = req->rq_private_buf.head[0];
+	}
+ out:
+	vec[0].iov_base += 8;
+	vec[0].iov_len -= 8;
+	len = svsk->sk_reclen - 8;
+ error:
+	*reqpp = req;
+	return len;
+}
+
 /*
  * Receive data from a TCP socket.
  */
@@ -889,6 +940,7 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	int		len;
 	struct kvec *vec;
 	int pnum, vlen;
+	struct rpc_rqst *req = NULL;
 
 	dprintk("svc: tcp_recv %p data %d conn %d close %d\n",
 		svsk, test_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags),
@@ -911,49 +963,10 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	 * In that case, don't bother with the calldir and just read the data.
 	 * It will be rejected in svc_process.
 	 */
-
-	vec = rqstp->rq_vec;
-	vec[0] = rqstp->rq_arg.head[0];
-	vlen = PAGE_SIZE;
-
 	if (len >= 8) {
-		u32 *p;
-		u32 xid;
-		u32 calldir;
-
-		len = svc_recvfrom(rqstp, vec, 1, 8);
+		len = svc_process_calldir(svsk, rqstp, &req, vec);
 		if (len < 0)
-			goto error;
-
-		p = (u32 *)rqstp->rq_arg.head[0].iov_base;
-		xid = *p++;
-		calldir = *p;
-
-		if (calldir) {
-			/* REPLY */
-			if (svsk->sk_bc_xprt)
-				req = xprt_lookup_rqst(svsk->sk_bc_xprt, xid);
-			if (req) {
-				memcpy(&req->rq_private_buf, &req->rq_rcv_buf,
-					sizeof(struct xdr_buf));
-				/* copy the xid and call direction */
-				memcpy(req->rq_private_buf.head[0].iov_base,
-					rqstp->rq_arg.head[0].iov_base, 8);
-				vec[0] = req->rq_private_buf.head[0];
-			} else
-				printk(KERN_NOTICE
-					"%s: Got unrecognized reply: "
-					"calldir 0x%x sk_bc_xprt %p xid %08x\n",
-					__func__, ntohl(calldir),
-					svsk->sk_bc_xprt, xid);
-		}
-
-		if (!calldir || !req)
-			vec[0] = rqstp->rq_arg.head[0];
-
-		vec[0].iov_base += 8;
-		vec[0].iov_len -= 8;
-		len = svsk->sk_reclen - 8;
+			goto err_again;
 		vlen -= 8;
 	}
 
