@@ -44,6 +44,7 @@
 #include <net/udp.h>
 #include <net/tcp.h>
 
+#include "sunrpc.h"
 /*
  * xprtsock tunables
  */
@@ -2195,92 +2196,30 @@ void bc_free(void *buffer)
  */
 static int bc_sendto(struct rpc_rqst *req)
 {
-	int total_len;
 	int len;
-	int size;
-	int result;
 	struct xdr_buf *xbufp = &req->rq_snd_buf;
-	struct page **pages = xbufp->pages;
-	unsigned int flags = MSG_MORE;
-	unsigned int pglen = xbufp->page_len;
-	size_t base = xbufp->page_base;
 	struct rpc_xprt *xprt = req->rq_xprt;
 	struct sock_xprt *transport =
 				container_of(xprt, struct sock_xprt, xprt);
 	struct socket *sock = transport->sock;
-
-	total_len = xbufp->len;
+	unsigned long headoff;
+	unsigned long tailoff;
 
 	/*
 	 * Set up the rpc header and record marker stuff
 	 */
 	xs_encode_tcp_record_marker(xbufp);
 
-	/*
-	 * The RPC message is divided into 3 pieces:
-	 * - The header: This is what most of the smaller RPC messages consist
-	 *   of. Often the whole message is in this.
-	 *
-	 *   - xdr->pages: This is a list of pages that contain data, for
-	 *   example in a write request or while using rpcsec gss
-	 *
-	 *   - The tail: This is the rest of the rpc message
-	 *
-	 *  First we send the header, then the pages and then finally the tail.
-	 *  The code borrows heavily from svc_sendto.
-	 */
+	tailoff = (unsigned long)xbufp->tail[0].iov_base & ~PAGE_MASK;
+	headoff = (unsigned long)xbufp->head[0].iov_base & ~PAGE_MASK;
+	len = svc_send_common(sock, xbufp,
+			      virt_to_page(xbufp->head[0].iov_base), headoff,
+			      xbufp->tail[0].iov_base, tailoff);
 
-	/*
-	 * Send the head
-	 */
-	if (total_len == xbufp->head[0].iov_len)
-		flags = 0;
-
-	len = sock->ops->sendpage(sock, virt_to_page(xbufp->head[0].iov_base),
-			(unsigned long)xbufp->head[0].iov_base & ~PAGE_MASK,
-			xbufp->head[0].iov_len, flags);
-
-	if (len != xbufp->head[0].iov_len)
-		goto out;
-
-	/*
-	 * send page data
-	 *
-	 * Check the amount of data to be sent. If it is less than the
-	 * remaining page, then send it else send the current page
-	 */
-
-	size = PAGE_SIZE - base < pglen ? PAGE_SIZE - base : pglen;
-	while (pglen > 0) {
-		if (total_len == size)
-			flags = 0;
-		result = sock->ops->sendpage(sock, *pages, base, size, flags);
-		if (result > 0)
-			len += result;
-		if (result != size)
-			goto out;
-		total_len -= size;
-		pglen -= size;
-		size = PAGE_SIZE < pglen ? PAGE_SIZE : pglen;
-		base = 0;
-		pages++;
-	}
-	/*
-	 * send tail
-	 */
-	if (xbufp->tail[0].iov_len) {
-		result = sock->ops->sendpage(sock,
-			xbufp->tail[0].iov_base,
-			(unsigned long)xbufp->tail[0].iov_base & ~PAGE_MASK,
-			xbufp->tail[0].iov_len,
-			0);
-
-		if (result > 0)
-			len += result;
-	}
-out:
-	if (len != xbufp->len)
+	if (len != xbufp->len) {
 		printk(KERN_NOTICE "Error sending entire callback!\n");
+		len = -EAGAIN;
+	}
 
 	return len;
 }
@@ -2314,8 +2253,10 @@ static int bc_send_request(struct rpc_task *task)
 		len = bc_sendto(req);
 	mutex_unlock(&xprt->xpt_mutex);
 
-	return 0;
+	if (len > 0)
+		len = 0;
 
+	return len;
 }
 
 /*

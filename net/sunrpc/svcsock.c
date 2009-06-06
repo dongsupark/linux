@@ -154,49 +154,27 @@ static void svc_set_cmsg_data(struct svc_rqst *rqstp, struct cmsghdr *cmh)
 }
 
 /*
- * Generic sendto routine
+ * send routine intended to be shared by the fore- and back-channel
  */
-static int svc_sendto(struct svc_rqst *rqstp, struct xdr_buf *xdr)
+int svc_send_common(struct socket *sock, struct xdr_buf *xdr,
+		    struct page *headpage, unsigned long headoffset,
+		    struct page *tailpage, unsigned long tailoffset)
 {
-	struct svc_sock	*svsk =
-		container_of(rqstp->rq_xprt, struct svc_sock, sk_xprt);
-	struct socket	*sock = svsk->sk_sock;
-	int		slen;
-	union {
-		struct cmsghdr	hdr;
-		long		all[SVC_PKTINFO_SPACE / sizeof(long)];
-	} buffer;
-	struct cmsghdr *cmh = &buffer.hdr;
-	int		len = 0;
 	int		result;
 	int		size;
 	struct page	**ppage = xdr->pages;
 	size_t		base = xdr->page_base;
 	unsigned int	pglen = xdr->page_len;
 	unsigned int	flags = MSG_MORE;
-	RPC_IFDEBUG(char buf[RPC_MAX_ADDRBUFLEN]);
+	int		slen;
+	int		len = 0;
 
 	slen = xdr->len;
-
-	if (rqstp->rq_prot == IPPROTO_UDP) {
-		struct msghdr msg = {
-			.msg_name	= &rqstp->rq_addr,
-			.msg_namelen	= rqstp->rq_addrlen,
-			.msg_control	= cmh,
-			.msg_controllen	= sizeof(buffer),
-			.msg_flags	= MSG_MORE,
-		};
-
-		svc_set_cmsg_data(rqstp, cmh);
-
-		if (sock_sendmsg(sock, &msg, 0) < 0)
-			goto out;
-	}
 
 	/* send head */
 	if (slen == xdr->head[0].iov_len)
 		flags = 0;
-	len = kernel_sendpage(sock, rqstp->rq_respages[0], 0,
+	len = kernel_sendpage(sock, headpage, headoffset,
 				  xdr->head[0].iov_len, flags);
 	if (len != xdr->head[0].iov_len)
 		goto out;
@@ -220,16 +198,58 @@ static int svc_sendto(struct svc_rqst *rqstp, struct xdr_buf *xdr)
 		base = 0;
 		ppage++;
 	}
+
 	/* send tail */
 	if (xdr->tail[0].iov_len) {
-		result = kernel_sendpage(sock, rqstp->rq_respages[0],
-					     ((unsigned long)xdr->tail[0].iov_base)
-						& (PAGE_SIZE-1),
-					     xdr->tail[0].iov_len, 0);
-
+		result = kernel_sendpage(sock, tailpage, tailoffset,
+				   xdr->tail[0].iov_len, 0);
 		if (result > 0)
 			len += result;
 	}
+
+out:
+	return len;
+}
+
+
+/*
+ * Generic sendto routine
+ */
+static int svc_sendto(struct svc_rqst *rqstp, struct xdr_buf *xdr)
+{
+	struct svc_sock	*svsk =
+		container_of(rqstp->rq_xprt, struct svc_sock, sk_xprt);
+	struct socket	*sock = svsk->sk_sock;
+	union {
+		struct cmsghdr	hdr;
+		long		all[SVC_PKTINFO_SPACE / sizeof(long)];
+	} buffer;
+	struct cmsghdr *cmh = &buffer.hdr;
+	int		len = 0;
+	unsigned long tailoff;
+	unsigned long headoff;
+	RPC_IFDEBUG(char buf[RPC_MAX_ADDRBUFLEN]);
+
+	if (rqstp->rq_prot == IPPROTO_UDP) {
+		struct msghdr msg = {
+			.msg_name	= &rqstp->rq_addr,
+			.msg_namelen	= rqstp->rq_addrlen,
+			.msg_control	= cmh,
+			.msg_controllen	= sizeof(buffer),
+			.msg_flags	= MSG_MORE,
+		};
+
+		svc_set_cmsg_data(rqstp, cmh);
+
+		if (sock_sendmsg(sock, &msg, 0) < 0)
+			goto out;
+	}
+
+	tailoff = ((unsigned long)xdr->tail[0].iov_base) & (PAGE_SIZE-1);
+	headoff = 0;
+	len = svc_send_common(sock, xdr, rqstp->rq_respages[0], headoff,
+			       rqstp->rq_respages[0], tailoff);
+
 out:
 	dprintk("svc: socket %p sendto([%p %Zu... ], %d) = %d (addr %s)\n",
 		svsk, xdr->head[0].iov_base, xdr->head[0].iov_len,

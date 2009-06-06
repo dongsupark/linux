@@ -1,8 +1,8 @@
 /******************************************************************************
 
-(c) 2008 Network Appliance, Inc.  All Rights Reserved.
+(c) 2008 NetApp.  All Rights Reserved.
 
-Network Appliance provides this source code under the GPL v2 License.
+NetApp provides this source code under the GPL v2 License.
 The GPL v2 license is available at
 http://opensource.org/licenses/gpl-license.php.
 
@@ -30,6 +30,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define rpc_reply_expected(task) \
 	(((task)->tk_msg.rpc_proc != NULL) && \
 	((task)->tk_msg.rpc_proc->p_decode != NULL))
+
+int svc_send_common(struct socket *sock, struct xdr_buf *xdr,
+		struct page *headpage, unsigned long headoffset,
+		struct page *tailpage, unsigned long tailoffset);
 
 #endif /* _NET_SUNRPC_SUNRPC_H */
 
