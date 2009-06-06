@@ -762,27 +762,6 @@ expire_client(struct nfs4_client *clp)
 	put_nfs4_client(clp);
 }
 
-static struct nfs4_client *create_client(struct xdr_netobj name, char *recdir)
-{
-	struct nfs4_client *clp;
-
-	clp = alloc_client(name);
-	if (clp == NULL)
-		return NULL;
-	memcpy(clp->cl_recdir, recdir, HEXDIR_LEN);
-	atomic_set(&clp->cl_count, 1);
-	atomic_set(&clp->cl_cb_conn.cb_set, 0);
-	INIT_LIST_HEAD(&clp->cl_idhash);
-	INIT_LIST_HEAD(&clp->cl_strhash);
-	INIT_LIST_HEAD(&clp->cl_openowners);
-	INIT_LIST_HEAD(&clp->cl_delegations);
-	INIT_LIST_HEAD(&clp->cl_sessions);
-	INIT_LIST_HEAD(&clp->cl_lru);
-	clear_bit(0, &clp->cl_cb_slot_busy);
-	rpc_init_wait_queue(&clp->cl_cb_waitq, "Backchannel slot table");
-	return clp;
-}
-
 static void copy_verf(struct nfs4_client *target, nfs4_verifier *source)
 {
 	memcpy(target->cl_verifier.data, source->data,
@@ -843,6 +822,46 @@ static void gen_confirm(struct nfs4_client *clp)
 	p = (u32 *)clp->cl_confirm.data;
 	*p++ = get_seconds();
 	*p++ = i++;
+}
+
+static struct nfs4_client *create_client(struct xdr_netobj name, char *recdir,
+		struct svc_rqst *rqstp, nfs4_verifier *verf)
+{
+	struct nfs4_client *clp;
+	u32 ip_addr = svc_addr_in(rqstp)->sin_addr.s_addr;
+	char *princ;
+
+	clp = alloc_client(name);
+	if (clp == NULL)
+		return NULL;
+
+	princ = svc_gss_principal(rqstp);
+	if (princ) {
+		clp->cl_principal = kstrdup(princ, GFP_KERNEL);
+		if (clp->cl_principal == NULL) {
+			free_client(clp);
+			return NULL;
+		}
+	}
+
+	memcpy(clp->cl_recdir, recdir, HEXDIR_LEN);
+	atomic_set(&clp->cl_count, 1);
+	atomic_set(&clp->cl_cb_conn.cb_set, 0);
+	INIT_LIST_HEAD(&clp->cl_idhash);
+	INIT_LIST_HEAD(&clp->cl_strhash);
+	INIT_LIST_HEAD(&clp->cl_openowners);
+	INIT_LIST_HEAD(&clp->cl_delegations);
+	INIT_LIST_HEAD(&clp->cl_sessions);
+	INIT_LIST_HEAD(&clp->cl_lru);
+	clear_bit(0, &clp->cl_cb_slot_busy);
+	rpc_init_wait_queue(&clp->cl_cb_waitq, "Backchannel slot table");
+	copy_verf(clp, verf);
+	clp->cl_addr = ip_addr;
+	clp->cl_flavor = rqstp->rq_flavor;
+	copy_cred(&clp->cl_cred, &rqstp->rq_cred);
+	gen_confirm(clp);
+
+	return clp;
 }
 
 static int check_name(struct xdr_netobj name)
@@ -1243,17 +1262,13 @@ nfsd4_exchange_id(struct svc_rqst *rqstp,
 
 out_new:
 	/* Normal case */
-	new = create_client(exid->clname, dname);
+	new = create_client(exid->clname, dname, rqstp, &verf);
 	if (new == NULL) {
 		status = nfserr_serverfault;
 		goto out;
 	}
 
-	copy_verf(new, &verf);
-	copy_cred(&new->cl_cred, &rqstp->rq_cred);
-	new->cl_addr = ip_addr;
 	gen_clid(new);
-	gen_confirm(new);
 	add_to_unconfirmed(new, strhashval);
 out_copy:
 	exid->clientid.cl_boot = new->cl_clientid.cl_boot;
@@ -1514,7 +1529,6 @@ __be32
 nfsd4_setclientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		  struct nfsd4_setclientid *setclid)
 {
-	struct sockaddr_in	*sin = svc_addr_in(rqstp);
 	struct xdr_netobj 	clname = { 
 		.len = setclid->se_namelen,
 		.data = setclid->se_name,
@@ -1523,7 +1537,6 @@ nfsd4_setclientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	unsigned int 		strhashval;
 	struct nfs4_client	*conf, *unconf, *new;
 	__be32 			status;
-	char			*princ;
 	char                    dname[HEXDIR_LEN];
 	
 	if (!check_name(clname))
@@ -1565,7 +1578,7 @@ nfsd4_setclientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		 */
 		if (unconf)
 			expire_client(unconf);
-		new = create_client(clname, dname);
+		new = create_client(clname, dname, rqstp, &clverifier);
 		if (new == NULL)
 			goto out;
 		gen_clid(new);
@@ -1582,7 +1595,7 @@ nfsd4_setclientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 			 */
 			expire_client(unconf);
 		}
-		new = create_client(clname, dname);
+		new = create_client(clname, dname, rqstp, &clverifier);
 		if (new == NULL)
 			goto out;
 		copy_clid(new, conf);
@@ -1592,7 +1605,7 @@ nfsd4_setclientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		 * probable client reboot; state will be removed if
 		 * confirmed.
 		 */
-		new = create_client(clname, dname);
+		new = create_client(clname, dname, rqstp, &clverifier);
 		if (new == NULL)
 			goto out;
 		gen_clid(new);
@@ -1603,24 +1616,11 @@ nfsd4_setclientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		 * confirmed.
 		 */
 		expire_client(unconf);
-		new = create_client(clname, dname);
+		new = create_client(clname, dname, rqstp, &clverifier);
 		if (new == NULL)
 			goto out;
 		gen_clid(new);
 	}
-	copy_verf(new, &clverifier);
-	new->cl_addr = sin->sin_addr.s_addr;
-	new->cl_flavor = rqstp->rq_flavor;
-	princ = svc_gss_principal(rqstp);
-	if (princ) {
-		new->cl_principal = kstrdup(princ, GFP_KERNEL);
-		if (new->cl_principal == NULL) {
-			free_client(new);
-			goto out;
-		}
-	}
-	copy_cred(&new->cl_cred, &rqstp->rq_cred);
-	gen_confirm(new);
 	gen_callback(new, setclid);
 	add_to_unconfirmed(new, strhashval);
 	setclid->se_clientid.cl_boot = new->cl_clientid.cl_boot;
