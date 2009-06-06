@@ -181,6 +181,7 @@ struct rpc_xprt {
 	spinlock_t		reserve_lock;	/* lock slot table */
 	u32			xid;		/* Next XID value to use */
 	struct rpc_task *	snd_task;	/* Task blocked in send */
+	struct svc_xprt		*bc_xprt;	/* NFSv4.1 backchannel */
 #if defined(CONFIG_NFS_V4_1)
 	struct svc_serv		*bc_serv;       /* The RPC service which will */
 						/* process the callback */
@@ -233,6 +234,7 @@ struct xprt_create {
 	struct sockaddr *	srcaddr;	/* optional local address */
 	struct sockaddr *	dstaddr;	/* remote peer address */
 	size_t			addrlen;
+	struct svc_xprt		*bc_xprt;	/* NFSv4.1 backchannel */
 };
 
 struct xprt_class {
@@ -366,6 +368,11 @@ static inline void xprt_clear_binding(struct rpc_xprt *xprt)
 static inline int xprt_test_and_set_binding(struct rpc_xprt *xprt)
 {
 	return test_and_set_bit(XPRT_BINDING, &xprt->state);
+}
+
+static inline int xprt_server_backchannel(struct rpc_xprt *xprt)
+{
+	return xprt->bc_xprt != NULL;
 }
 
 #endif /* __KERNEL__*/

@@ -599,6 +599,9 @@ static void xprt_autoclose(struct work_struct *work)
 	struct rpc_xprt *xprt =
 		container_of(work, struct rpc_xprt, task_cleanup);
 
+	if (xprt_server_backchannel(xprt))
+		return;
+
 	xprt->ops->close(xprt);
 	clear_bit(XPRT_CLOSE_WAIT, &xprt->state);
 	xprt_release_write(xprt, NULL);
@@ -668,6 +671,9 @@ static void
 xprt_init_autodisconnect(unsigned long data)
 {
 	struct rpc_xprt *xprt = (struct rpc_xprt *)data;
+
+	if (xprt_server_backchannel(xprt))
+		return;
 
 	spin_lock(&xprt->transport_lock);
 	if (!list_empty(&xprt->recv) || xprt->shutdown)
@@ -1083,7 +1089,8 @@ found:
 
 	INIT_WORK(&xprt->task_cleanup, xprt_autoclose);
 	setup_timer(&xprt->timer, xprt_init_autodisconnect,
-			(unsigned long)xprt);
+		    (unsigned long)xprt);
+
 	xprt->last_used = jiffies;
 	xprt->cwnd = RPC_INITCWND;
 	xprt->bind_index = 0;
@@ -1102,6 +1109,13 @@ found:
 
 	dprintk("RPC:       created transport %p with %u slots\n", xprt,
 			xprt->max_reqs);
+
+	/*
+	 * Since we don't want connections for the backchannel, we set
+	 * the xprt status to connected
+	 */
+	if (args->bc_xprt)
+		xprt_set_connected(xprt);
 
 	return xprt;
 }
