@@ -782,22 +782,15 @@ failed:
 }
 
 /*
- * Receive data from a TCP socket.
+ * Receive data.
+ * If we haven't gotten the record length yet, get the next four bytes.
+ * Otherwise try to gobble up as much as possible up to the complete
+ * record length.
  */
-static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
+static int svc_tcp_recv_record(struct svc_sock *svsk, struct svc_rqst *rqstp)
 {
-	struct svc_sock	*svsk =
-		container_of(rqstp->rq_xprt, struct svc_sock, sk_xprt);
 	struct svc_serv	*serv = svsk->sk_xprt.xpt_server;
-	int		len;
-	struct kvec *vec;
-	int pnum, vlen;
-	struct rpc_rqst *req = NULL;
-
-	dprintk("svc: tcp_recv %p data %d conn %d close %d\n",
-		svsk, test_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags),
-		test_bit(XPT_CONN, &svsk->sk_xprt.xpt_flags),
-		test_bit(XPT_CLOSE, &svsk->sk_xprt.xpt_flags));
+	int len;
 
 	if (test_and_clear_bit(XPT_CHNGBUF, &svsk->sk_xprt.xpt_flags))
 		/* sndbuf needs to have room for one request
@@ -818,10 +811,6 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 
 	clear_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags);
 
-	/* Receive data. If we haven't got the record length yet, get
-	 * the next four bytes. Otherwise try to gobble up as much as
-	 * possible up to the complete record length.
-	 */
 	if (svsk->sk_tcplen < sizeof(rpc_fraghdr)) {
 		int		want = sizeof(rpc_fraghdr) - svsk->sk_tcplen;
 		struct kvec	iov;
@@ -836,7 +825,7 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 			dprintk("svc: short recvfrom while reading record "
 				"length (%d of %d)\n", len, want);
 			svc_xprt_received(&svsk->sk_xprt);
-			return -EAGAIN; /* record header not complete */
+			goto err_again; /* record header not complete */
 		}
 
 		svsk->sk_reclen = ntohl(svsk->sk_reclen);
@@ -871,10 +860,48 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 		dprintk("svc: incomplete TCP record (%d of %d)\n",
 			len, svsk->sk_reclen);
 		svc_xprt_received(&svsk->sk_xprt);
-		return -EAGAIN;	/* record not complete */
+		goto err_again;	/* record not complete */
 	}
 	len = svsk->sk_reclen;
 	set_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags);
+
+	return len;
+ error:
+	if (len == -EAGAIN) {
+		dprintk("RPC: TCP recv_record got EAGAIN\n");
+		svc_xprt_received(&svsk->sk_xprt);
+	}
+	return len;
+ err_delete:
+	set_bit(XPT_CLOSE, &svsk->sk_xprt.xpt_flags);
+ err_again:
+	return -EAGAIN;
+}
+
+/*
+ * Receive data from a TCP socket.
+ */
+static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
+{
+	struct svc_sock	*svsk =
+		container_of(rqstp->rq_xprt, struct svc_sock, sk_xprt);
+	struct svc_serv	*serv = svsk->sk_xprt.xpt_server;
+	int		len;
+	struct kvec *vec;
+	int pnum, vlen;
+
+	dprintk("svc: tcp_recv %p data %d conn %d close %d\n",
+		svsk, test_bit(XPT_DATA, &svsk->sk_xprt.xpt_flags),
+		test_bit(XPT_CONN, &svsk->sk_xprt.xpt_flags),
+		test_bit(XPT_CLOSE, &svsk->sk_xprt.xpt_flags));
+
+	len = svc_tcp_recv_record(svsk, rqstp);
+	if (len < 0)
+		goto error;
+
+	vec = rqstp->rq_vec;
+	vec[0] = rqstp->rq_arg.head[0];
+	vlen = PAGE_SIZE;
 
 	/*
 	 * We have enough data for the whole tcp record. Let's try and read the
@@ -944,7 +971,7 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	/* Now receive data */
 	len = svc_recvfrom(rqstp, vec, pnum, len);
 	if (len < 0)
-		goto error;
+		goto err_again;
 
 	/*
 	 * Account for the 8 bytes we read earlier
@@ -981,21 +1008,19 @@ out:
 
 	return len;
 
- err_delete:
-	set_bit(XPT_CLOSE, &svsk->sk_xprt.xpt_flags);
-	return -EAGAIN;
-
- error:
+err_again:
 	if (len == -EAGAIN) {
 		dprintk("RPC: TCP recvfrom got EAGAIN\n");
 		svc_xprt_received(&svsk->sk_xprt);
-	} else {
+		return len;
+	}
+error:
+	if (len != -EAGAIN) {
 		printk(KERN_NOTICE "%s: recvfrom returned errno %d\n",
 		       svsk->sk_xprt.xpt_server->sv_name, -len);
-		goto err_delete;
+		set_bit(XPT_CLOSE, &svsk->sk_xprt.xpt_flags);
 	}
-
-	return len;
+	return -EAGAIN;
 }
 
 /*
