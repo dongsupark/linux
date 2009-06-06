@@ -2195,7 +2195,7 @@ void bc_free(void *buffer)
 		return;
 
 	buf = container_of(buffer, struct rpc_buffer, data);
-	free_pages((unsigned long)buf, get_order(buf->len));
+	free_page((unsigned long)buf);
 }
 
 /*
