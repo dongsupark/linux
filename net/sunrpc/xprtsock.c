@@ -2130,15 +2130,6 @@ static void xs_tcp_print_stats(struct rpc_xprt *xprt, struct seq_file *seq)
 }
 
 /*
- * The connect worker for the backchannel
- * This should never be called as we should never need to connect
- */
-static void bc_connect_worker(struct work_struct *work)
-{
-	BUG();
-}
-
-/*
  * The set_port routine of the rpc_xprt_ops. This is related to the portmapper
  * and should never be called
  */
@@ -2535,8 +2526,6 @@ static struct rpc_xprt *xs_setup_tcp(struct xprt_create *args)
 	if (args->bc_sock) {
 		/* backchannel */
 		xprt_set_bound(xprt);
-		INIT_DELAYED_WORK(&transport->connect_worker,
-				  bc_connect_worker);
 		xprt->bind_timeout = 0;
 		xprt->connect_timeout = 0;
 		xprt->reestablish_timeout = 0;
