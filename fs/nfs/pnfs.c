@@ -515,12 +515,12 @@ get_layout(struct inode *ino,
 	if (lgp == NULL)
 		return -ENOMEM;
 	lgp->lo = lo;
-	lgp->args.lseg.iomode = range->iomode;
-	lgp->args.lseg.offset = range->offset;
-	lgp->args.lseg.length = range->length;
-	lgp->args.type = server->pnfs_curr_ld->id;
 	lgp->args.minlength = PAGE_CACHE_SIZE;
 	lgp->args.maxcount = PNFS_LAYOUT_MAXSIZE;
+	lgp->args.lseg.iomode = range->iomode;
+	lgp->args.lseg.offset = range->offset;
+	lgp->args.lseg.length = max(range->length, lgp->args.minlength);
+	lgp->args.type = server->pnfs_curr_ld->id;
 	lgp->args.inode = ino;
 	lgp->args.ctx = ctx;
 	lgp->lsegpp = lsegpp;
