@@ -550,21 +550,22 @@ nfs4_preprocess_pnfs_ds_stateid(struct svc_fh *cfh, stateid_t *stateid)
 		get_ds_stateid(dsp);
 		dprintk("pNFSD: %s Found " STATEID_FMT "\n", __func__,
 			STATEID_VAL(&dsp->ds_stid));
-	}
 
-	dprintk("NFSD: %s: dsp %p fh_size %u:%u "
-		"fh [%08x:%08x:%08x:%08x]:[%08x:%08x:%08x:%08x] "
-		"gen %x:%x\n",
-		__func__, dsp, cfh->fh_handle.fh_size, dsp->ds_fh.fh_size,
-		((unsigned*)&cfh->fh_handle.fh_base)[0],
-		((unsigned*)&cfh->fh_handle.fh_base)[1],
-		((unsigned*)&cfh->fh_handle.fh_base)[2],
-		((unsigned*)&cfh->fh_handle.fh_base)[3],
-		((unsigned*)&dsp->ds_fh.fh_base)[0],
-		((unsigned*)&dsp->ds_fh.fh_base)[1],
-		((unsigned*)&dsp->ds_fh.fh_base)[2],
-		((unsigned*)&dsp->ds_fh.fh_base)[3],
-		stateid->si_generation, dsp->ds_stid.si_generation);
+		dprintk("NFSD: %s: dsp %p fh_size %u:%u "
+			"fh [%08x:%08x:%08x:%08x]:[%08x:%08x:%08x:%08x] "
+			"gen %x:%x\n",
+			__func__, dsp,
+			cfh->fh_handle.fh_size, dsp->ds_fh.fh_size,
+			((unsigned *)&cfh->fh_handle.fh_base)[0],
+			((unsigned *)&cfh->fh_handle.fh_base)[1],
+			((unsigned *)&cfh->fh_handle.fh_base)[2],
+			((unsigned *)&cfh->fh_handle.fh_base)[3],
+			((unsigned *)&dsp->ds_fh.fh_base)[0],
+			((unsigned *)&dsp->ds_fh.fh_base)[1],
+			((unsigned *)&dsp->ds_fh.fh_base)[2],
+			((unsigned *)&dsp->ds_fh.fh_base)[3],
+			stateid->si_generation, dsp->ds_stid.si_generation);
+	}
 
 	if (!dsp ||
 	    (cfh->fh_handle.fh_size != dsp->ds_fh.fh_size) ||
