@@ -363,6 +363,8 @@ static void svc_export_request(struct cache_detail *cd,
 }
 
 #if defined(CONFIG_PNFSD)
+static struct pnfs_export_operations pnfsd_default_ops;
+
 static struct pnfsd_cb_operations pnfsd_cb_op = {
 	.cb_layout_recall = nfsd_layout_recall_cb,
 	.cb_device_notify = nfsd_device_notify_cb,
@@ -446,6 +448,9 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 		inode->i_sb->s_pnfs_op = &spnfs_ds_export_ops;
 	}
 #endif /* CONFIG_SPNFS */
+
+	if (!inode->i_sb->s_pnfs_op)
+		inode->i_sb->s_pnfs_op = &pnfsd_default_ops;
 
 	return 0;
 
