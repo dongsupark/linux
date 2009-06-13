@@ -5014,6 +5014,7 @@ pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
 		layouts_found++;
 		trim_layout(&lp->lo_seg, &lrp->lr_seg);
 		if (!lp->lo_seg.length) {
+			lrp->lrs_present = 0;
 			dequeue_layout(lp);
 			destroy_layout(lp);
 		}
