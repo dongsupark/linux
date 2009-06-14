@@ -5250,6 +5250,7 @@ cl_has_file_layout(struct nfs4_client *clp, struct nfs4_file *lrfile,
 			WARN_ON(1);
 			break;
 		}
+		update_stateid(&ls->ls_stateid);
 		memcpy(lsid, &ls->ls_stateid, sizeof(stateid_t));
 		put_layout_state(ls);
 		return 1;
