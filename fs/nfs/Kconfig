@@ -108,6 +108,8 @@ config PNFS_PANLAYOUT
 config PNFS_BLOCK
 	tristate "Provide a pNFS block client (EXPERIMENTAL)"
 	depends on NFS_FS && PNFS
+	select MD
+	select BLK_DEV_DM
 	help
 	  Say M or y here if you want your pNfs client to support the block protocol
 
