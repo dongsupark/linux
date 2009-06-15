@@ -687,9 +687,6 @@ filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
 	}
 
 out:
-	/* Release original commit data since it is not used */
-	nfs_commit_free(data);
-
 	if (data->pdata.pnfs_error)
 		printk(KERN_ERR "%s: ERROR %d\n", __func__,
 		       data->pdata.pnfs_error);
