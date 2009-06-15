@@ -34,6 +34,7 @@
 
 #include <linux/buffer_head.h> /* various write calls */
 #include <linux/bio.h> /* struct bio */
+#include <linux/vmalloc.h>
 #include "blocklayout.h"
 
 #define NFSDBG_FACILITY         NFSDBG_PNFS_LD
