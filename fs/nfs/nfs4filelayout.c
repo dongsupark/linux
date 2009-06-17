@@ -40,11 +40,11 @@
 
 #include <linux/module.h>
 #include <linux/init.h>
-
 #include <linux/time.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/string.h>
+#include <linux/vmalloc.h>
 #include <linux/stat.h>
 #include <linux/errno.h>
 #include <linux/unistd.h>
@@ -459,18 +459,19 @@ out:
 }
 
 static void filelayout_free_lseg(struct pnfs_layout_segment *lseg);
+static void filelayout_free_fh_array(struct nfs4_filelayout_segment *fl);
 
 /* Decode layout and store in layoutid.  Overwrite any existing layout
  * information for this file.
  */
-static void
+static int
 filelayout_set_layout(struct nfs4_filelayout *flo,
 		      struct nfs4_filelayout_segment *fl,
 		      struct nfs4_pnfs_layoutget_res *lgr)
 {
-	int i;
 	uint32_t *p = (uint32_t *)lgr->layout.buf;
 	uint32_t nfl_util;
+	int i;
 
 	dprintk("%s: set_layout_map Begin\n", __func__);
 
@@ -500,14 +501,36 @@ filelayout_set_layout(struct nfs4_filelayout *flo,
 		__func__, nfl_util, fl->num_fh, fl->first_stripe_index,
 		fl->pattern_offset, deviceid_fmt(&fl->dev_id));
 
+	if (fl->num_fh * sizeof(struct nfs_fh) > 2*PAGE_SIZE) {
+		fl->fh_array = vmalloc(fl->num_fh * sizeof(struct nfs_fh));
+		if (!fl->fh_array)
+			memset(fl->fh_array, 0,
+				fl->num_fh * sizeof(struct nfs_fh));
+	} else {
+		fl->fh_array = kzalloc(fl->num_fh * sizeof(struct nfs_fh),
+					GFP_KERNEL);
+       }
+	if (!fl->fh_array)
+		return -ENOMEM;
+
 	for (i = 0; i < fl->num_fh; i++) {
 		/* fh */
-		memset(&fl->fh_array[i], 0, sizeof(struct nfs_fh));
 		READ32(fl->fh_array[i].size);
+		if (sizeof(struct nfs_fh) < fl->fh_array[i].size) {
+			printk(KERN_ERR "Too big fh %d received %d\n",
+				i, fl->fh_array[i].size);
+			/* Layout is now invalid, so pretend it does not
+			   exist */
+			filelayout_free_fh_array(fl);
+			fl->num_fh = 0;
+			break;
+		}
 		COPYMEM(fl->fh_array[i].data, fl->fh_array[i].size);
 		dprintk("DEBUG: %s: fh len %d\n", __func__,
 					fl->fh_array[i].size);
 	}
+
+	return 0;
 }
 
 static struct pnfs_layout_segment *
@@ -516,23 +539,36 @@ filelayout_alloc_lseg(struct pnfs_layout_type *layoutid,
 {
 	struct nfs4_filelayout *flo = PNFS_LD_DATA(layoutid);
 	struct pnfs_layout_segment *lseg;
+	int rc;
 
 	lseg = kzalloc(sizeof(struct pnfs_layout_segment) +
 		       sizeof(struct nfs4_filelayout_segment), GFP_KERNEL);
 	if (!lseg)
 		return NULL;
 
-	filelayout_set_layout(flo, LSEG_LD_DATA(lseg), lgr);
-	if (filelayout_check_layout(layoutid, lseg)) {
+	rc = filelayout_set_layout(flo, LSEG_LD_DATA(lseg), lgr);
+
+	if (rc != 0 || filelayout_check_layout(layoutid, lseg)) {
 		filelayout_free_lseg(lseg);
 		lseg = NULL;
 	}
 	return lseg;
 }
 
+static void filelayout_free_fh_array(struct nfs4_filelayout_segment *fl)
+{
+	if (fl->num_fh * sizeof(struct nfs_fh) > 2*PAGE_SIZE)
+		vfree(fl->fh_array);
+	else
+		kfree(fl->fh_array);
+
+	fl->fh_array = NULL;
+}
+
 static void
 filelayout_free_lseg(struct pnfs_layout_segment *lseg)
 {
+	filelayout_free_fh_array(LSEG_LD_DATA(lseg));
 	kfree(lseg);
 }
 
