@@ -377,6 +377,7 @@ destroy_lseg(struct kref *kref)
 		container_of(kref, struct pnfs_layout_segment, kref);
 
 	dprintk("--> %s\n", __func__);
+	iput(lseg->layout->inode);
 	PNFS_LD_IO_OPS(lseg->layout)->free_lseg(lseg);
 }
 
@@ -1023,6 +1024,8 @@ pnfs_layout_process(struct nfs4_pnfs_layoutget *lgp)
 	int status = 0;
 
 	/* Inject layout blob into I/O device driver */
+	if (!igrab(lo->inode))
+		return -EIO;
 	lseg = PNFS_LD_IO_OPS(lo)->alloc_lseg(lo, res);
 	if (!lseg || IS_ERR(lseg)) {
 		if (!lseg)
@@ -1031,6 +1034,7 @@ pnfs_layout_process(struct nfs4_pnfs_layoutget *lgp)
 			status = PTR_ERR(lseg);
 		printk(KERN_ERR "%s: Could not allocate layout: error %d\n",
 		       __func__, status);
+		iput(lo->inode);
 		goto out;
 	}
 
