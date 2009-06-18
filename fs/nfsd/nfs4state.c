@@ -1515,10 +1515,12 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 		 * for nfsd4_svc_encode_compoundres processing */
 		status = nfsd4_replay_cache_entry(resp, seq);
 		cstate->status = nfserr_replay_cache;
-		goto replay_cache;
-	}
-	if (status)
 		goto out;
+	}
+	if (status) {
+		spin_unlock(&sessionid_lock);
+		goto err;
+	}
 
 	/* Success! bump slot seqid */
 	slot->sl_inuse = true;
@@ -1534,11 +1536,13 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 	/* Hold a session reference until done caching the response */
 	nfsd4_get_session(session);
 
-replay_cache:
-	/* Renew the clientid on success and on replay */
-	renew_client(session->se_client);
 out:
 	spin_unlock(&sessionid_lock);
+	/* Renew the clientid on success and on replay */
+	nfs4_lock_state();
+	renew_client(session->se_client);
+	nfs4_unlock_state();
+err:
 	dprintk("%s: return %d\n", __func__, ntohl(status));
 	return status;
 }
