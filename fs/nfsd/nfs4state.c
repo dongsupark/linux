@@ -1497,12 +1497,16 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 	spin_lock(&sessionid_lock);
 	status = nfserr_badsession;
 	session = find_in_sessionid_hashtbl(&seq->sessionid);
-	if (!session)
-		goto out;
+	if (!session) {
+		spin_unlock(&sessionid_lock);
+		goto err;
+	}
 
 	status = nfserr_badslot;
-	if (seq->slotid >= session->se_fchannel.maxreqs)
-		goto out;
+	if (seq->slotid >= session->se_fchannel.maxreqs) {
+		spin_unlock(&sessionid_lock);
+		goto err;
+	}
 
 	slot = &session->se_slots[seq->slotid];
 	dprintk("%s: slotid %d\n", __func__, seq->slotid);
