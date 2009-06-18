@@ -220,6 +220,8 @@ struct rpc_rqst *xprt_alloc_bc_request(struct rpc_xprt *xprt)
 {
 	struct rpc_rqst *req;
 
+	BUG_ON(!in_softirq());
+
 	dprintk("RPC:       allocate a backchannel request\n");
 	spin_lock(&xprt->bc_pa_lock);
 	if (!list_empty(&xprt->bc_pa_list)) {
