@@ -824,6 +824,7 @@ err_dput:
 }
 EXPORT_SYMBOL_GPL(rpc_mkpipe);
 
+#ifdef CONFIG_SPNFS
 struct dentry *
 rpc_mkpipe_compat(char *path, void *private, struct rpc_pipe_ops *ops,
 		  int flags)
@@ -861,6 +862,7 @@ err_dput:
 	goto out;
 }
 EXPORT_SYMBOL(rpc_mkpipe_compat);
+#endif /* CONFIG_SPNFS */
 
 /**
  * rpc_unlink - remove a pipe
