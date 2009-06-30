@@ -1221,6 +1221,7 @@ static void nfs4_set_lease_expired(struct nfs_client *clp, int status)
 			return;
 		}
 	}
+	clp->cl_lease_time = status;
 	set_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state);
 }
 
@@ -1232,6 +1233,7 @@ static void nfs4_state_manager(struct nfs_client *clp)
 	for(;;) {
 		if (test_and_clear_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state)) {
 			/* We're going to have to re-establish a clientid */
+			clp->cl_lease_time = 0;
 			status = nfs4_reclaim_lease(clp);
 			if (status) {
 				nfs4_set_lease_expired(clp, status);

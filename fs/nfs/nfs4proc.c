@@ -1443,13 +1443,21 @@ int nfs4_recover_expired_lease(struct nfs_client *clp)
 	for (;;) {
 		ret = nfs4_wait_clnt_recover(clp);
 		if (ret != 0)
-			return ret;
-		if (!test_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state) &&
-		    !test_bit(NFS4CLNT_CHECK_LEASE,&clp->cl_state))
 			break;
+		/* Is lease recovery done? */
+		if (!test_bit(NFS4CLNT_CHECK_LEASE,&clp->cl_state) &&
+		    !test_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state))
+			break;
+		if (test_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state) &&
+		    clp->cl_lease_time) {
+			/* fetch the lease reclaim error */
+			ret = (int)clp->cl_lease_time;
+			break;
+		}
 		nfs4_schedule_state_recovery(clp);
 	}
-	return 0;
+	dprintk("%s: error=%d\n", __func__, ret);
+	return ret;
 }
 EXPORT_SYMBOL(nfs4_recover_expired_lease);
 

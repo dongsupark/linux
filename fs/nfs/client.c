@@ -147,6 +147,7 @@ static struct nfs_client *nfs_alloc_client(const struct nfs_client_initdata *cl_
 	clp->cl_boot_time = CURRENT_TIME;
 	clp->cl_state = 1 << NFS4CLNT_LEASE_EXPIRED;
 	clp->cl_minorversion = cl_init->minorversion;
+	clp->cl_lease_time = 0;
 #endif
 	cred = rpc_lookup_machine_cred();
 	if (!IS_ERR(cred))
