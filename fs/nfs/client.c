@@ -149,6 +149,7 @@ static struct nfs_client *nfs_alloc_client(const struct nfs_client_initdata *cl_
 	clp->cl_boot_time = CURRENT_TIME;
 	clp->cl_state = 1 << NFS4CLNT_LEASE_EXPIRED;
 	clp->cl_minorversion = cl_init->minorversion;
+	clp->cl_lease_time = 0;
 #endif
 	cred = rpc_lookup_machine_cred();
 	if (!IS_ERR(cred))
@@ -535,16 +536,11 @@ void nfs_mark_client_ready(struct nfs_client *clp, int state)
 /*
  * With sessions, the client is not marked ready until after a
  * successful EXCHANGE_ID and CREATE_SESSION.
- *
- * Map errors cl_cons_state errors to EPROTONOSUPPORT to indicate
- * other versions of NFS can be tried.
  */
 int nfs4_check_client_ready(struct nfs_client *clp)
 {
-	if (!nfs4_has_session(clp))
-		return 0;
-	if (clp->cl_cons_state < NFS_CS_READY)
-		return -EPROTONOSUPPORT;
+	if (clp->cl_cons_state < 0)
+		return clp->cl_cons_state;
 	return 0;
 }
 
