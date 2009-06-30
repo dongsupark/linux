@@ -1458,6 +1458,12 @@ static int nfs4_recover_expired_lease(struct nfs_server *server)
 		if (!test_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state) &&
 		    !test_bit(NFS4CLNT_CHECK_LEASE,&clp->cl_state))
 			break;
+		if (test_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state) &&
+		    clp->cl_lease_time) {
+			/* fetch the lease reclaim error */
+			ret = (int)clp->cl_lease_time;
+			break;
+		}
 		nfs4_schedule_state_recovery(clp);
 		ret = -EIO;
 	}
