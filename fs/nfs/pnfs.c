@@ -624,6 +624,15 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 		arg.length = ~0;
 	}
 	if (type == RECALL_FILE) {
+		if (nfsi->layoutcommit_ctx) {
+			status = pnfs_layoutcommit_inode(ino, 1);
+			if (status) {
+				dprintk("%s: layoutcommit failed, status=%d. "
+					"Returning layout anyway\n",
+					__func__, status);
+				status = 0;
+			}
+		}
 		lo = get_lock_current_layout(nfsi);
 		if (lo == NULL) {
 			status = -EIO;
@@ -1956,6 +1965,8 @@ pnfs_layoutcommit_inode(struct inode *inode, int sync)
 	int status = 0;
 
 	dprintk("%s Begin (sync:%d)\n", __func__, sync);
+
+	BUG_ON(!nfsi->current_layout);
 
 	data = pnfs_layoutcommit_alloc();
 	if (!data)

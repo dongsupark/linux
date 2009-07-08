@@ -2213,13 +2213,9 @@ pnfs4_proc_setattr(struct dentry *dentry, struct nfs_fattr *fattr,
 	struct nfs_server *server = NFS_SERVER(inode);
 	struct nfs_inode *nfsi = NFS_I(inode);
 
-	if (pnfs_enabled_sb(server) && nfsi->current_layout) {
-		if (pnfs_ld_layoutret_on_setattr(server->pnfs_curr_ld)) {
-			if (nfsi->layoutcommit_ctx)
-				pnfs_layoutcommit_inode(inode, 0);
-			pnfs_return_layout(inode, NULL, NULL, RECALL_FILE);
-		}
-	}
+	if (pnfs_enabled_sb(server) && nfsi->current_layout &&
+	    pnfs_ld_layoutret_on_setattr(server->pnfs_curr_ld))
+		pnfs_return_layout(inode, NULL, NULL, RECALL_FILE);
 	return nfs4_proc_setattr(dentry, fattr, sattr);
 }
 #endif /* CONFIG_PNFS */
