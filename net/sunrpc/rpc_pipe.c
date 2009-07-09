@@ -848,7 +848,7 @@ rpc_mkpipe_compat(char *path, void *private, struct rpc_pipe_ops *ops,
 	rpci->private = private;
 	rpci->flags = flags;
 	rpci->ops = ops;
-	inode_dir_notify(dir, DN_CREATE);
+	fsnotify_create(dir, dentry);
 	dget(dentry);
 out:
 	mutex_unlock(&dir->i_mutex);
