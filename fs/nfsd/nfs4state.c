@@ -5496,6 +5496,8 @@ int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 	sync_layout_recall(sb, &todolist);
 err:
 	nfs4_unlock_state();
+	if (lrfile)
+		put_nfs4_file(lrfile);
 	return status;
 }
 
