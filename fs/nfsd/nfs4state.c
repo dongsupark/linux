@@ -5573,6 +5573,8 @@ int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 	/* XXX: spin off thread? */
 	sync_layout_recall(sb, &todolist);
 err:
+	if (lrfile)
+		put_nfs4_file(lrfile);
 	nfs4_unlock_state();
 	return status;
 }
