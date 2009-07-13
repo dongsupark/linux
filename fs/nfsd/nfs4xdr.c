@@ -3622,7 +3622,8 @@ nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
 	maxcount -= leadcount;
 	if (maxcount < 0) {
 		printk(KERN_ERR "%s: buffer too small\n", __func__);
-		return nfserr_toosmall;
+		nfserr = nfserr_toosmall;
+		goto err;
 	}
 
 	/* Set the file layout encoding function.  Once other layout
@@ -3644,13 +3645,15 @@ nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
 	/* Retrieve, encode, and merge layout; process stateid */
 	nfserr = nfs4_pnfs_get_layout(lgp->lg_fhp, &args, &lgp->lg_sid);
 	if (nfserr)
-		return nfserr;
+		goto err;
 
 	/* Ensure file system returned enough bytes for the client
 	 * to access.
 	 */
-	if (args.seg.length < lgp->lg_minlength)
-		return nfserr_badlayout;
+	if (args.seg.length < lgp->lg_minlength) {
+		nfserr = nfserr_badlayout;
+		goto err;
+	}
 
 	/* The file system should never write 0 bytes without
 	 * returning an error
@@ -3679,6 +3682,9 @@ nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
 	ADJUST_ARGS();
 
 	return nfs_ok;
+err:
+	resp->p = p_start;
+	return nfserr;
 }
 
 /* LAYOUTCOMMIT: minorversion1-19.txt
