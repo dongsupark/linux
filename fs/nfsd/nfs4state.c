@@ -5471,7 +5471,6 @@ int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 	BUG_ON(cbl->cbl_seg.iomode != IOMODE_READ &&
 	       cbl->cbl_seg.iomode != IOMODE_RW &&
 	       cbl->cbl_seg.iomode != IOMODE_ANY);
-	BUG_ON(!inode && cbl->cbl_recall_type == RECALL_FILE);
 
 	if (nfsd_serv == NULL)
 		return -ENOENT;
