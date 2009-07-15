@@ -591,8 +591,9 @@ filelayout_clone_write_data(struct nfs_write_data *old)
 	new->res.fattr   = &new->fattr;
 	nfs_fattr_init(&new->fattr);
 	new->res.verf    = &new->verf;
-	new->args.context = old->args.context;
+	new->args.context = get_nfs_open_context(old->args.context);
 	new->pdata.lseg = old->pdata.lseg;
+	kref_get(&new->pdata.lseg->kref);
 	new->pdata.call_ops = old->pdata.call_ops;
 	new->pdata.how = old->pdata.how;
 out:
