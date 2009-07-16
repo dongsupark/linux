@@ -626,10 +626,10 @@ filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
 	struct nfs4_pnfs_dserver dserver;
 	struct nfs4_pnfs_ds *ds;
 	struct nfs_page *req, *reqt;
-	struct list_head *pos, *tmp, *head = &data->pages;
+	struct list_head *pos, *tmp, head, head2;
 	loff_t file_offset, comp_offset;
 	size_t stripesz, cbytes;
-	int status, count = 0;
+	int status;
 	struct nfs4_file_layout_dsaddr *dsaddr;
 	u32 idx1, idx2;
 
@@ -654,9 +654,14 @@ filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
 		goto out;
 	}
 
+	INIT_LIST_HEAD(&head);
+	list_add(&head, &data->pages);
+	list_del_init(&data->pages);
+
 	/* COMMIT to each Data Server */
-	while (!list_empty(head)) {
-		req = nfs_list_entry(head->next);
+	while (!list_empty(&head)) {
+		cbytes = 0;
+		req = nfs_list_entry(head.next);
 
 		file_offset = (loff_t)req->wb_index << PAGE_CACHE_SHIFT;
 
@@ -674,44 +679,48 @@ filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
 		idx1 = filelayout_dserver_get_index(file_offset, dsaddr,
 						    nfslay);
 
-		dsdata = filelayout_clone_write_data(data);
-		if (!dsdata) {
-			data->pdata.pnfs_error = -ENOMEM;
-			goto out;
-		}
-		if (count != 0) {
-			/* The open context and layout segment have
-			 * have been referenced for the call to the first
-			 * data server. Do the same for any remaining data
-			 * servers.
-			 */
-			atomic_inc(&dsdata->args.context->count);
-			kref_get(&data->pdata.lseg->kref);
-		}
-
-		/* Just try the first multipath data server */
-		ds = dserver.multipath->ds_list[0];
-		dsdata->fldata.pnfs_client = ds->ds_clp->cl_rpcclient;
-		dsdata->fldata.ds_nfs_client = ds->ds_clp;
-		dsdata->args.fh = dserver.fh;
-		cbytes = req->wb_bytes;
-
 		/* Gather all pages going to the current data server by
 		 * comparing their indices.
 		 * XXX: This recalculates the indices unecessarily.
 		 *      One idea would be to calc the index for every page
 		 *      and then compare if they are the same. */
-		list_for_each_safe(pos, tmp, head) {
+		list_for_each_safe(pos, tmp, &head) {
 			reqt = nfs_list_entry(pos);
 			comp_offset = (loff_t)reqt->wb_index << PAGE_CACHE_SHIFT;
 			idx2 = filelayout_dserver_get_index(comp_offset,
 							    dsaddr, nfslay);
 			if (idx1 == idx2) {
 				nfs_list_remove_request(reqt);
-				nfs_list_add_request(reqt, &dsdata->pages);
+				nfs_list_add_request(reqt, &head2);
 				cbytes += reqt->wb_bytes;
 			}
 		}
+
+		if (!list_empty(&head)) {
+			dsdata = filelayout_clone_write_data(data);
+			if (!dsdata) {
+				/* putting the pages back onto
+				 * the original data->pages */
+				list_add(&data->pages, &head);
+				list_del_init(&head);
+				list_splice(&head2, &data->pages);
+				INIT_LIST_HEAD(&head2);
+
+				data->pdata.pnfs_error = -ENOMEM;
+				goto out;
+			}
+		} else {
+			dsdata = data;
+		}
+
+		list_add(&dsdata->pages, &head2);
+		list_del_init(&head2);
+
+		/* Just try the first multipath data server */
+		ds = dserver.multipath->ds_list[0];
+		dsdata->fldata.pnfs_client = ds->ds_clp->cl_rpcclient;
+		dsdata->fldata.ds_nfs_client = ds->ds_clp;
+		dsdata->args.fh = dserver.fh;
 
 		dprintk("%s: Initiating commit: %Zu@%llu USE DS:\n",
 			__func__, cbytes, file_offset);
@@ -720,7 +729,6 @@ filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
 		/* Send COMMIT to data server */
 		nfs_initiate_commit(dsdata, dsdata->fldata.pnfs_client,
 				    &filelayout_commit_call_ops, sync);
-		count++;
 	}
 
 out:
