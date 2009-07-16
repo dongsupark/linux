@@ -655,6 +655,7 @@ filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
 	}
 
 	INIT_LIST_HEAD(&head);
+	INIT_LIST_HEAD(&head2);
 	list_add(&head, &data->pages);
 	list_del_init(&data->pages);
 
@@ -672,7 +673,7 @@ filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
 					       &dserver);
 		if (status) {
 			data->pdata.pnfs_error = -EIO;
-			goto out;
+			goto err_rewind;
 		}
 
 		/* Get its index */
@@ -699,15 +700,11 @@ filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
 		if (!list_empty(&head)) {
 			dsdata = filelayout_clone_write_data(data);
 			if (!dsdata) {
-				/* putting the pages back onto
-				 * the original data->pages */
-				list_add(&data->pages, &head);
-				list_del_init(&head);
-				list_splice(&head2, &data->pages);
+				/* return pages back to head */
+				list_splice(&head2, &head);
 				INIT_LIST_HEAD(&head2);
-
 				data->pdata.pnfs_error = -ENOMEM;
-				goto out;
+				goto err_rewind;
 			}
 		} else {
 			dsdata = data;
@@ -738,6 +735,11 @@ out:
 
 	/* XXX should we send COMMIT to MDS e.g. not free data and return 1 ? */
 	return PNFS_ATTEMPTED;
+err_rewind:
+	/* put remaining pages back onto the original data->pages */
+	list_add(&data->pages, &head);
+	list_del_init(&head);
+	goto out;
 }
 
 /* Return the stripesize for the specified file.
