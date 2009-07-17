@@ -18,6 +18,8 @@
 
 #include <linux/nfs_page.h>
 #include <linux/pnfs_xdr.h>
+#include <linux/nfs_iostat.h>
+#include "iostat.h"
 
 /* nfs4proc.c */
 extern int nfs4_pnfs_getdevicelist(struct super_block *sb,
@@ -103,12 +105,17 @@ pnfs_try_to_read_data(struct nfs_read_data *data,
 {
 	struct inode *inode = data->inode;
 	struct nfs_server *nfss = NFS_SERVER(inode);
+	enum pnfs_try_status ret;
 
 	/* FIXME: read_pagelist should probably be mandated */
 	if (PNFS_EXISTS_LDIO_OP(nfss, read_pagelist))
-		return _pnfs_try_to_read_data(data, call_ops);
+		ret = _pnfs_try_to_read_data(data, call_ops);
+	else
+		ret = PNFS_NOT_ATTEMPTED;
 
-	return PNFS_NOT_ATTEMPTED;
+	if (ret == PNFS_ATTEMPTED)
+		nfs_inc_stats(inode, NFSIOS_PNFS_READ);
+	return ret;
 }
 
 static inline enum pnfs_try_status
@@ -118,12 +125,17 @@ pnfs_try_to_write_data(struct nfs_write_data *data,
 {
 	struct inode *inode = data->inode;
 	struct nfs_server *nfss = NFS_SERVER(inode);
+	enum pnfs_try_status ret;
 
 	/* FIXME: write_pagelist should probably be mandated */
 	if (PNFS_EXISTS_LDIO_OP(nfss, write_pagelist))
-		return _pnfs_try_to_write_data(data, call_ops, how);
+		ret = _pnfs_try_to_write_data(data, call_ops, how);
+	else
+		ret = PNFS_NOT_ATTEMPTED;
 
-	return PNFS_NOT_ATTEMPTED;
+	if (ret == PNFS_ATTEMPTED)
+		nfs_inc_stats(inode, NFSIOS_PNFS_WRITE);
+	return ret;
 }
 
 static inline enum pnfs_try_status
@@ -133,15 +145,20 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 {
 	struct inode *inode = data->inode;
 	struct nfs_server *nfss = NFS_SERVER(inode);
+	enum pnfs_try_status ret;
 
 	/* Note that we check for "write_pagelist" and not for "commit"
 	   since if async writes were done and pages weren't marked as stable
 	   the commit method MUST be defined by the LD */
 	/* FIXME: write_pagelist should probably be mandated */
 	if (PNFS_EXISTS_LDIO_OP(nfss, write_pagelist))
-		return _pnfs_try_to_commit(data, call_ops, how);
+		ret = _pnfs_try_to_commit(data, call_ops, how);
+	else
+		ret = PNFS_NOT_ATTEMPTED;
 
-	return PNFS_NOT_ATTEMPTED;
+	if (ret == PNFS_ATTEMPTED)
+		nfs_inc_stats(inode, NFSIOS_PNFS_COMMIT);
+	return ret;
 }
 
 static inline int pnfs_write_begin(struct file *filp, struct page *page,
