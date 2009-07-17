@@ -652,6 +652,44 @@ static int nfs_show_options(struct seq_file *m, struct vfsmount *mnt)
 
 	return 0;
 }
+#ifdef CONFIG_NFS_V4_1
+void show_sessions(struct seq_file *m, struct nfs_server *server)
+{
+	if (nfs4_has_session(server->nfs_client))
+		seq_printf(m, ",sessions");
+}
+#else
+void show_sessions(struct seq_file *m, struct nfs_server *server) {}
+#endif
+
+#ifdef CONFIG_NFS_V4_1
+char *layout_name(u32 layouttype)
+{
+	switch (layouttype) {
+	case LAYOUT_NFSV4_FILES:
+		return "files";
+	case LAYOUT_OSD2_OBJECTS:
+		return "objects";
+	case LAYOUT_BLOCK_VOLUME:
+		return "blocks";
+	default:
+		return NULL;
+	}
+}
+
+void show_pnfs(struct seq_file *m, struct nfs_server *server)
+{
+	char *name = layout_name(server->pnfs_fs_ltype);
+
+	seq_printf(m, ",pnfs=");
+	if (name)
+		seq_printf(m, "%s", name);
+	else
+		seq_printf(m, "unknown(%d)", server->pnfs_fs_ltype);
+}
+#else  /* CONFIG_NFS_V4_1 */
+void show_pnfs(struct seq_file *m, struct nfs_server *server) {}
+#endif /* CONFIG_NFS_V4_1 */
 
 /*
  * Present statistical information for this VFS mountpoint
@@ -690,6 +728,8 @@ static int nfs_show_stats(struct seq_file *m, struct vfsmount *mnt)
 		seq_printf(m, "bm0=0x%x", nfss->attr_bitmask[0]);
 		seq_printf(m, ",bm1=0x%x", nfss->attr_bitmask[1]);
 		seq_printf(m, ",acl=0x%x", nfss->acl_bitmask);
+		show_sessions(m, nfss);
+		show_pnfs(m, nfss);
 	}
 #endif
 
