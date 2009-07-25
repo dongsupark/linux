@@ -5203,6 +5203,7 @@ static int pnfs4_sync_layoutcommit(struct pnfs_layoutcommit_data *data)
 
 	data->status = err;
 	pnfs_layoutcommit_done(data);
+	pnfs_layoutcommit_free(data);
 	return err;
 }
 
