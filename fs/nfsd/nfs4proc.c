@@ -35,6 +35,7 @@
 #include <linux/file.h>
 #include <linux/slab.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
+#include <linux/nfsd/nfsd4_block.h>
 
 #include "idmap.h"
 #include "cache.h"
@@ -903,9 +904,16 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 	nfsd4_get_verifier(cstate->current_fh.fh_dentry->d_inode->i_sb,
 			   &write->wr_verifier);
+	if (pnfs_block_enabled(cstate->current_fh.fh_dentry->d_inode, 0)) {
+		status = bl_layoutrecall(cstate->current_fh.fh_dentry->d_inode,
+				RETURN_FILE, write->wr_offset, write->wr_buflen);
+		if (status)
+			goto out_put;
+	}
 	status =  nfsd_write(rqstp, &cstate->current_fh, filp,
 			     write->wr_offset, rqstp->rq_vec, write->wr_vlen,
 			     &cnt, &write->wr_how_written);
+out_put:
 	if (filp)
 		fput(filp);
 

@@ -13,3 +13,4 @@ nfsd-$(CONFIG_NFSD_V4)	+= nfs4proc.o nfs4xdr.o nfs4state.o nfs4idmap.o \
 			   nfs4acl.o nfs4callback.o nfs4recover.o
 nfsd-$(CONFIG_PNFSD)	+= nfs4pnfsd.o nfs4pnfsdlm.o nfs4pnfsds.o
 nfsd-$(CONFIG_PNFSD_LOCAL_EXPORT) += pnfsd_lexp.o
+nfsd-$(CONFIG_PNFSD_BLOCK) += bl_com.o bl_ops.o

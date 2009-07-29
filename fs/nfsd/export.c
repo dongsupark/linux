@@ -16,6 +16,7 @@
 #include <linux/module.h>
 #include <linux/exportfs.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
+#include <linux/nfsd/nfsd4_block.h>
 #include <net/ipv6.h>
 
 #include "nfsd.h"
@@ -354,6 +355,16 @@ static struct pnfsd_cb_operations pnfsd_cb_op = {
 	.cb_get_state = nfs4_pnfs_cb_get_state,
 	.cb_change_state = nfs4_pnfs_cb_change_state,
 };
+
+#if defined(CONFIG_PNFSD_BLOCK)
+static struct pnfs_export_operations bl_export_ops = {
+	.layout_type = bl_layout_type,
+	.get_device_info = bl_getdeviceinfo,
+	.get_device_iter = bl_getdeviceiter,
+	.layout_get = bl_layoutget,
+	.layout_return = bl_layoutreturn,
+};
+#endif /* CONFIG_PNFSD_BLOCK */
 #endif /* CONFIG_PNFSD */
 
 static struct svc_export *svc_export_update(struct svc_export *new,
@@ -367,7 +378,15 @@ static int pnfsd_check_export(struct inode *inode, int *flags)
 #if defined(CONFIG_PNFSD_LOCAL_EXPORT)
 	if (!inode->i_sb->s_pnfs_op)
 		pnfsd_lexp_init(inode);
+	return 0;
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
+
+	if (pnfs_block_enabled(inode, *flags)) {
+		dprintk("set pnfs block export structure... \n");
+		inode->i_sb->s_pnfs_op = &bl_export_ops;
+
+		return 0;
+	}
 
 #endif /* CONFIG_PNFSD */
 
