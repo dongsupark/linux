@@ -18,6 +18,9 @@
 #include <linux/nfsd/nfsd4_pnfs.h>
 #if defined(CONFIG_SPNFS)
 #include <linux/nfsd4_spnfs.h>
+#if defined(CONFIG_SPNFS_BLOCK)
+#include <linux/nfsd4_block.h>
+#endif
 #endif
 #include <net/ipv6.h>
 
@@ -370,6 +373,16 @@ static struct pnfs_export_operations spnfs_export_ops = {
 static struct pnfs_export_operations spnfs_ds_export_ops = {
 	.get_state = spnfs_get_state,
 };
+
+#if defined(CONFIG_SPNFS_BLOCK)
+static struct pnfs_export_operations bl_export_ops = {
+	.layout_type = bl_layout_type,
+	.get_device_info = bl_getdeviceinfo,
+	.get_device_iter = bl_getdeviceiter,
+	.layout_get = bl_layoutget,
+	.layout_return = bl_layoutreturn,
+};
+#endif /* CONFIG_SPNFS_BLOCK */
 #endif /* CONFIG_SPNFS */
 #endif /* CONFIG_PNFSD */
 
@@ -388,6 +401,12 @@ static int pnfsd_check_export(struct inode *inode, int *flags)
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
 
 #if defined(CONFIG_SPNFS)
+#if defined(CONFIG_SPNFS_BLOCK)
+	if (pnfs_block_enabled(inode, *flags)) {
+		dprintk("set pnfs block export structure... \n");
+		inode->i_sb->s_pnfs_op = &bl_export_ops;
+	} else
+#endif /* CONFIG_SPNFS_BLOCK */
 	/*
 	 * spnfs_enabled() indicates we're an MDS.
 	 * XXX Better to check an export time option as well.
