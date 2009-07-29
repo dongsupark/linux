@@ -36,6 +36,7 @@
 #include <linux/slab.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 #include <linux/nfsd4_spnfs.h>
+#include <linux/nfsd4_block.h>
 
 #include "idmap.h"
 #include "cache.h"
@@ -921,6 +922,18 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	nfsd4_get_verifier(cstate->current_fh.fh_dentry->d_inode->i_sb,
 			   &write->wr_verifier);
 #if defined(CONFIG_SPNFS)
+#if defined(CONFIG_SPNFS_BLOCK)
+	if (pnfs_block_enabled(cstate->current_fh.fh_dentry->d_inode, 0)) {
+                status = bl_layoutrecall(cstate->current_fh.fh_dentry->d_inode,
+		    RETURN_FILE, write->wr_offset, write->wr_buflen);
+                if (!status) {
+                        status =  nfsd_write(rqstp, &cstate->current_fh, filp,
+			     write->wr_offset, rqstp->rq_vec, write->wr_vlen,
+			     &cnt, &write->wr_how_written);
+                }
+        } else
+#endif
+		
 	if (spnfs_enabled()) {
 		status = spnfs_write(cstate->current_fh.fh_dentry->d_inode,
 			write->wr_offset, write->wr_buflen, write->wr_vlen,
