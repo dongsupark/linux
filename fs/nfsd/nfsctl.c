@@ -1501,6 +1501,9 @@ static int create_proc_exports_entry(void)
 }
 #endif
 
+#if defined(CONFIG_SPNFS_BLOCK)
+int nfsd_bl_init(void);
+#endif
 static int __init init_nfsd(void)
 {
 	int retval;
@@ -1527,6 +1530,9 @@ static int __init init_nfsd(void)
 	retval = spnfs_init_proc();
 	if (retval != 0)
 		goto out_free_idmap;
+#if defined(CONFIG_SPNFS_BLOCK)
+	nfsd_bl_init();
+#endif /* CONFIG_SPNFS_BLOCK */
 #endif /* CONFIG_PROC_FS && CONFIG_SPNFS */
 
 	retval = register_filesystem(&nfsd_fs_type);
