@@ -122,3 +122,11 @@ config PNFSD_LEXP_LAYOUT_SEGMENT_SIZE
 	  Set simulated layout segment size.
 
 	  If unsure, say N.
+config PNFSD_BLOCK
+	bool "Provide Block Layout server support (EXPERIMENTAL)"
+	depends on PNFSD
+	select EXPORTFS_BLOCK_LAYOUT
+	help
+	  Say Y here if you want pNFS block layout support
+
+	  If unsure, say N.

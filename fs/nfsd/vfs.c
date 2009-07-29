@@ -37,6 +37,7 @@
 #include "acl.h"
 #include "idmap.h"
 #include "pnfsd.h"
+#include <linux/nfsd/nfsd4_block.h>
 #endif /* CONFIG_NFSD_V4 */
 
 #include "nfsd.h"
@@ -384,6 +385,12 @@ _nfsd_setattr(struct svc_rqst *rqstp, struct svc_fh *fhp, struct iattr *iap,
 			if (is_inode_pnfsd_lexp(inode))
 				pnfsd_lexp_recall_layout(inode, with_nfs4_state_lock);
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
+#if defined(CONFIG_SPNFS_BLOCK)
+			if (pnfs_block_enabled(inode, 0)) {
+				err = bl_layoutrecall(inode, RETURN_FILE,
+				    iap->ia_size, inode->i_size - iap->ia_size);
+			}
+#endif /* CONFIG_SPNFS_BLOCK */
 		}
 
 		host_err = get_write_access(inode);
