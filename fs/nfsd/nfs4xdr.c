@@ -49,6 +49,7 @@
 #include <linux/exportfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 #include <linux/nfsd4_spnfs.h>
+#include <linux/nfsd4_block.h>
 
 #include "idmap.h"
 #include "acl.h"
