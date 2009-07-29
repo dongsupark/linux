@@ -40,6 +40,9 @@
 #include <linux/security.h>
 #include <linux/nfsd4_spnfs.h>
 #endif /* CONFIG_NFSD_V4 */
+#if defined(CONFIG_SPNFS_BLOCK)
+#include <linux/nfsd4_block.h>
+#endif
 
 #include "nfsd.h"
 #include "vfs.h"
@@ -375,6 +378,12 @@ nfsd_setattr(struct svc_rqst *rqstp, struct svc_fh *fhp, struct iattr *iap,
 					NFSD_MAY_TRUNC|NFSD_MAY_OWNER_OVERRIDE);
 			if (err)
 				goto out;
+#if defined(CONFIG_SPNFS_BLOCK)
+			if (pnfs_block_enabled(inode, 0)) {
+				err = bl_layoutrecall(inode, RECALL_FILE,
+				    iap->ia_size, inode->i_size - iap->ia_size);
+			}
+#endif /* CONFIG_SPNFS_BLOCK */
 		}
 
 		/*

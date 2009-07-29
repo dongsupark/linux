@@ -50,6 +50,7 @@
 #include <linux/exportfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 #include <linux/nfsd4_spnfs.h>
+#include <linux/nfsd4_block.h>
 
 #include "xdr4.h"
 #include "vfs.h"
