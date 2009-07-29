@@ -48,6 +48,7 @@
 #include <linux/sunrpc/svcauth_gss.h>
 #include <linux/exportfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
+#include <linux/nfsd/nfsd4_block.h>
 
 #include "idmap.h"
 #include "acl.h"

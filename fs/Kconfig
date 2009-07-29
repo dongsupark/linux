@@ -64,6 +64,13 @@ config EXPORTFS_OSD_LAYOUT
 	  Must be automatically selected by supporting osd
 	  filesystems.
 
+config EXPORTFS_BLOCK_LAYOUT
+	bool
+	depends on PNFSD && EXPORTFS
+	help
+	  Exportfs support for the NFSv4.1 blocks layout type.
+	  Must be automatically selected by supporting filesystems.
+
 config FILE_LOCKING
 	bool "Enable POSIX file locking API" if EXPERT
 	default y
