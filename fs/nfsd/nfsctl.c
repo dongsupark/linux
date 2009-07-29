@@ -15,6 +15,7 @@
 #include <linux/sunrpc/gss_krb5_enctypes.h>
 #include <linux/module.h>
 #include <linux/nfsd/nfs4pnfsdlm.h>
+#include <linux/nfsd/nfsd4_block.h>
 
 #include "idmap.h"
 #include "nfsd.h"
@@ -1221,6 +1222,8 @@ static int __init init_nfsd(void)
 	retval = create_proc_exports_entry();
 	if (retval)
 		goto out_free_idmap;
+	nfsd_bl_init();
+
 	retval = register_filesystem(&nfsd_fs_type);
 	if (retval)
 		goto out_free_all;
