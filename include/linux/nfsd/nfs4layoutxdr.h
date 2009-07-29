@@ -73,4 +73,60 @@ enum stripetype4 {
 	STRIPE_DENSE = 2
 };
 
+enum pnfs_block_extent_state4 {
+        PNFS_BLOCK_READWRITE_DATA       = 0,
+        PNFS_BLOCK_READ_DATA            = 1,
+        PNFS_BLOCK_INVALID_DATA         = 2,
+        PNFS_BLOCK_NONE_DATA            = 3
+};
+
+enum pnfs_block_volume_type4 {
+        PNFS_BLOCK_VOLUME_SIMPLE = 0,
+        PNFS_BLOCK_VOLUME_SLICE = 1,
+        PNFS_BLOCK_VOLUME_CONCAT = 2,
+        PNFS_BLOCK_VOLUME_STRIPE = 3,
+};
+typedef enum pnfs_block_volume_type4 pnfs_block_volume_type4;
+
+enum bl_cache_state {
+	BLOCK_LAYOUT_NEW	= 0,
+	BLOCK_LAYOUT_CACHE	= 1,
+	BLOCK_LAYOUT_UPDATE	= 2,
+};
+
+typedef struct pnfs_blocklayout_layout {
+        struct list_head                bll_list;
+        struct nfsd4_pnfs_deviceid      bll_vol_id;
+        u64                             bll_foff;	// file offset
+        u64                             bll_len;
+        u64                             bll_soff;	// storage offset
+	int				bll_recalled;
+        enum pnfs_block_extent_state4   bll_es;
+	enum bl_cache_state		bll_cache_state;
+} pnfs_blocklayout_layout_t;
+
+typedef struct pnfs_blocklayout_devinfo {
+        struct list_head                bld_list;
+        pnfs_block_volume_type4         bld_type;
+        struct nfsd4_pnfs_deviceid      bld_devid;
+        int                             bld_index_loc;
+        union {
+                struct {
+                        u64             bld_offset;
+                        u32             bld_sig_len,
+                                        *bld_sig;
+                } simple;
+                struct {
+                        u64             bld_start,
+                                        bld_len;
+                        u32             bld_index;      /* Index of Simple Volume */
+                } slice;
+                struct {
+                        u32             bld_stripes;
+                        u64             bld_chunk_size;
+                        u32             *bld_stripe_indexs;
+                } stripe;
+        } u;
+} pnfs_blocklayout_devinfo_t;
+
 #endif /* NFSD_NFS4LAYOUTXDR_H */
