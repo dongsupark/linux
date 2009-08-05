@@ -57,6 +57,9 @@
 
 static int pnfs_initialized;
 
+static void pnfs_free_layout(struct pnfs_layout_type *lo,
+			     struct nfs4_pnfs_layout_segment *range);
+
 /* Locking:
  *
  * pnfs_spinlock:
@@ -327,11 +330,14 @@ put_unlock_current_layout(struct pnfs_layout_type *lo)
 }
 
 void
-pnfs_layout_release(struct pnfs_layout_type *lo)
+pnfs_layout_release(struct pnfs_layout_type *lo,
+		    struct nfs4_pnfs_layout_segment *range)
 {
 	struct nfs_inode *nfsi = PNFS_NFS_INODE(lo);
 
 	spin_lock(&nfsi->lo_lock);
+	if (range)
+		pnfs_free_layout(lo, range);
 	put_unlock_current_layout(lo);
 }
 
@@ -632,7 +638,12 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 			status = -EIO;
 			goto out;
 		}
-		pnfs_free_layout(lo, &arg);
+
+		/* FIXME: We need a barrier here.
+		 * Synchronize with outstanding I/Os and
+		 * mark the returned segments as begin returned.
+		 * Conflicting layout gets should then wait on them */
+
 		/* unlock w/o put rebalanced by eventual call to
 		 * pnfs_layout_release
 		 */
