@@ -5014,7 +5014,7 @@ static void nfs4_pnfs_layoutget_release(void *calldata)
 	struct nfs4_pnfs_layoutget *lgp = calldata;
 
 	dprintk("--> %s\n", __func__);
-	pnfs_layout_release(lgp->lo);
+	pnfs_layout_release(lgp->lo, NULL);
 	if (lgp->res.layout.buf != NULL)
 		free_page((unsigned long) lgp->res.layout.buf);
 	kfree(calldata);
@@ -5237,7 +5237,7 @@ static void nfs4_pnfs_layoutreturn_release(void *calldata)
 		lrp->args.return_type, lrp->lo);
 
 	if (lrp->args.return_type == RECALL_FILE)
-		pnfs_layout_release(lrp->lo);
+		pnfs_layout_release(lrp->lo, &lrp->args.lseg);
 	kfree(calldata);
 	dprintk("<-- %s\n", __func__);
 }
