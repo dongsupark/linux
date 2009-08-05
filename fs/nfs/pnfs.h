@@ -43,7 +43,8 @@ int pnfs_layoutcommit_inode(struct inode *inode, int sync);
 void pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx);
 void pnfs_get_layout_done(struct nfs4_pnfs_layoutget *, int rpc_status);
 int pnfs_layout_process(struct nfs4_pnfs_layoutget *lgp);
-void pnfs_layout_release(struct pnfs_layout_type *);
+void pnfs_layout_release(struct pnfs_layout_type *,
+			 struct nfs4_pnfs_layout_segment *range);
 void pnfs_set_layout_stateid(struct pnfs_layout_type *lo,
 			     const nfs4_stateid *stateid);
 
