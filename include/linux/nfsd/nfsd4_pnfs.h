@@ -34,4 +34,18 @@
 #ifndef _LINUX_NFSD_NFSD4_PNFS_H
 #define _LINUX_NFSD_NFSD4_PNFS_H
 
+/*
+ * pNFS export operations vector.
+ *
+ * The filesystem must implement the following methods:
+ *   layout_type
+ *   get_device_info
+ *   layout_get
+ *
+ * All other methods are optional and can be set to NULL if not implemented.
+ */
+struct pnfs_export_operations {
+	/* stub */
+};
+
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
