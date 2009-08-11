@@ -123,7 +123,7 @@ opaque_hashval(const void *ptr, int nbytes)
 
 static struct list_head del_recall_lru;
 
-static inline void
+inline void
 put_nfs4_file(struct nfs4_file *fi)
 {
 	if (atomic_dec_and_lock(&fi->fi_ref, &recall_lock)) {
@@ -134,7 +134,7 @@ put_nfs4_file(struct nfs4_file *fi)
 	}
 }
 
-static inline void
+inline void
 get_nfs4_file(struct nfs4_file *fi)
 {
 	atomic_inc(&fi->fi_ref);
@@ -851,6 +851,9 @@ static struct nfs4_client *create_client(struct xdr_netobj name, char *recdir,
 	INIT_LIST_HEAD(&clp->cl_strhash);
 	INIT_LIST_HEAD(&clp->cl_openowners);
 	INIT_LIST_HEAD(&clp->cl_delegations);
+#if defined(CONFIG_PNFSD)
+	INIT_LIST_HEAD(&clp->cl_layouts);
+#endif /* CONFIG_PNFSD */
 	INIT_LIST_HEAD(&clp->cl_sessions);
 	INIT_LIST_HEAD(&clp->cl_lru);
 	clear_bit(0, &clp->cl_cb_slot_busy);
@@ -901,7 +904,7 @@ move_to_confirmed(struct nfs4_client *clp)
 	renew_client(clp);
 }
 
-static struct nfs4_client *
+struct nfs4_client *
 find_confirmed_client(clientid_t *clid)
 {
 	struct nfs4_client *clp;
@@ -1737,8 +1740,8 @@ out:
 }
 
 /* OPEN Share state helper functions */
-static inline struct nfs4_file *
-alloc_init_file(struct inode *ino)
+inline struct nfs4_file *
+alloc_init_file(struct inode *ino, struct svc_fh *current_fh)
 {
 	struct nfs4_file *fp;
 	unsigned int hashval = file_hashval(ino);
@@ -1749,18 +1752,29 @@ alloc_init_file(struct inode *ino)
 		INIT_LIST_HEAD(&fp->fi_hash);
 		INIT_LIST_HEAD(&fp->fi_stateids);
 		INIT_LIST_HEAD(&fp->fi_delegations);
+#if defined(CONFIG_PNFSD)
+		INIT_LIST_HEAD(&fp->fi_layouts);
+#endif /* CONFIG_PNFSD */
 		spin_lock(&recall_lock);
 		list_add(&fp->fi_hash, &file_hashtbl[hashval]);
 		spin_unlock(&recall_lock);
 		fp->fi_inode = igrab(ino);
 		fp->fi_id = current_fileid++;
 		fp->fi_had_conflict = false;
+#if defined(CONFIG_PNFSD)
+		fp->fi_fsid.major = current_fh->fh_export->ex_fsid;
+		fp->fi_fsid.minor = 0;
+		fp->fi_fhlen = current_fh->fh_handle.fh_size;
+		BUG_ON(fp->fi_fhlen > sizeof(fp->fi_fhval));
+		memcpy(fp->fi_fhval, &current_fh->fh_handle.fh_base,
+		       fp->fi_fhlen);
+#endif /* CONFIG_PNFSD */
 		return fp;
 	}
 	return NULL;
 }
 
-static void
+void
 nfsd4_free_slab(struct kmem_cache **slab)
 {
 	if (*slab == NULL)
@@ -1776,6 +1790,7 @@ nfsd4_free_slabs(void)
 	nfsd4_free_slab(&file_slab);
 	nfsd4_free_slab(&stateid_slab);
 	nfsd4_free_slab(&deleg_slab);
+	nfsd4_free_pnfs_slabs();
 }
 
 static int
@@ -1796,6 +1811,8 @@ nfsd4_init_slabs(void)
 	deleg_slab = kmem_cache_create("nfsd4_delegations",
 			sizeof(struct nfs4_delegation), 0, 0, NULL);
 	if (deleg_slab == NULL)
+		goto out_nomem;
+	if (nfsd4_init_pnfs_slabs())
 		goto out_nomem;
 	return 0;
 out_nomem:
@@ -1919,7 +1936,7 @@ find_openstateowner_str(unsigned int hashval, struct nfsd4_open *open)
 }
 
 /* search file_hashtbl[] for file */
-static struct nfs4_file *
+struct nfs4_file *
 find_file(struct inode *ino)
 {
 	unsigned int hashval = file_hashval(ino);
@@ -2494,7 +2511,7 @@ nfsd4_process_open2(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nf
 		if (open->op_claim_type == NFS4_OPEN_CLAIM_DELEGATE_CUR)
 			goto out;
 		status = nfserr_resource;
-		fp = alloc_init_file(ino);
+		fp = alloc_init_file(ino, current_fh);
 		if (fp == NULL)
 			goto out;
 	}
@@ -3244,26 +3261,6 @@ out:
 #define LOCK_HASH_BITS              8
 #define LOCK_HASH_SIZE             (1 << LOCK_HASH_BITS)
 #define LOCK_HASH_MASK             (LOCK_HASH_SIZE - 1)
-
-static inline u64
-end_offset(u64 start, u64 len)
-{
-	u64 end;
-
-	end = start + len;
-	return end >= start ? end: NFS4_MAX_UINT64;
-}
-
-/* last octet in a range */
-static inline u64
-last_byte_offset(u64 start, u64 len)
-{
-	u64 end;
-
-	BUG_ON(!len);
-	end = start + len;
-	return end > start ? end - 1: NFS4_MAX_UINT64;
-}
 
 #define lockownerid_hashval(id) \
         ((id) & LOCK_HASH_MASK)

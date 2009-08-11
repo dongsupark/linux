@@ -85,6 +85,39 @@ struct pnfs_deviter_arg {
 	u32 eof;	/* response */
 };
 
+struct nfsd4_layout_seg {
+	u64	clientid;
+	u32	layout_type;
+	u32	iomode;
+	u64	offset;
+	u64	length;
+};
+
+/* Used by layout_get to encode layout (loc_body var in spec)
+ * Args:
+ * minlength - min number of accessible bytes given by layout
+ * func - per layout encoding function
+ * export_id - Major part of deviceid_t.  File system uses this
+ * to build the deviceid returned in the layout.
+ * fh - fs can modify the file handle for use on data servers
+ * seg - layout info requested and layout info returned
+ * xdr - xdr info
+ * return_on_close - true if layout to be returned on file close
+ * TODO: use common func with dev?
+ */
+typedef int (*pnfs_encodelayout_t)(struct pnfs_xdr_info *xdr, void *layout);
+
+/* Arguments for layoutget */
+struct pnfs_layoutget_arg {
+	u64			minlength;	/* request */
+	pnfs_encodelayout_t 	func;		/* request */
+	u64			fsid;		/* request */
+	struct knfsd_fh		*fh;		/* request/response */
+	struct nfsd4_layout_seg	seg;		/* request/response */
+	struct pnfs_xdr_info	xdr;		/* request/response */
+	u32			return_on_close;/* response */
+};
+
 /* pNFS structs */
 
 struct nfsd4_pnfs_getdevlist {
@@ -101,6 +134,15 @@ struct nfsd4_pnfs_getdevinfo {
 	deviceid_t	gd_devid;	/* request */
 	u32		gd_maxcount;	/* request */
 	u32		gd_notify_types; /* request */
+};
+
+struct nfsd4_pnfs_layoutget {
+	struct nfsd4_layout_seg	lg_seg;		/* request */
+	u32			lg_signal;	/* request */
+	u64			lg_minlength;	/* request */
+	u32			lg_maxcount;	/* request */
+	struct svc_fh		*lg_fhp;	/* response */
+	stateid_t		lg_sid;		/* request/response */
 };
 
 #endif /* CONFIG_PNFSD */

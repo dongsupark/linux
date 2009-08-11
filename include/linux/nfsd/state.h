@@ -233,7 +233,31 @@ struct nfs4_client {
 	struct svc_xprt		*cl_cb_xprt;	/* 4.1 callback transport */
 	struct rpc_wait_queue	cl_cb_waitq;	/* backchannel callers may */
 						/* wait here for slots */
+#if defined(CONFIG_PNFSD)
+	struct list_head	cl_layouts;	/* outstanding layouts */
+#endif /* CONFIG_PNFSD */
 };
+
+struct nfs4_fsid {
+	u64	major;
+	u64	minor;
+};
+
+#if defined(CONFIG_PNFSD)
+
+#include <linux/nfsd/nfsd4_pnfs.h>
+
+/* outstanding layout */
+struct nfs4_layout {
+	struct list_head	lo_perfile;	/* hash by f_id */
+	struct list_head	lo_perclnt;	/* hash by clientid */
+	struct list_head	lo_recall_lru; /* when in recall */
+	struct nfs4_file	*lo_file;	/* backpointer */
+	struct nfs4_client	*lo_client;
+	struct nfsd4_layout_seg lo_seg;
+};
+
+#endif /* CONFIG_PNFSD */
 
 /* struct nfs4_client_reset
  * one per old client. Populates reset_str_hashtbl. Filled from conf_id_hashtbl
@@ -321,10 +345,19 @@ struct nfs4_file {
 	struct list_head        fi_hash;    /* hash by "struct inode *" */
 	struct list_head        fi_stateids;
 	struct list_head	fi_delegations;
+#if defined(CONFIG_PNFSD)
+	struct list_head	fi_layouts;
+#endif /* CONFIG_PNFSD */
 	struct inode		*fi_inode;
 	u32                     fi_id;      /* used with stateowner->so_id 
 					     * for stateid_hashtbl hash */
 	bool			fi_had_conflict;
+#if defined(CONFIG_PNFSD)
+	/* used by layoutget / layoutrecall */
+	struct nfs4_fsid	fi_fsid;
+	u32			fi_fhlen;
+	u8			fi_fhval[NFS4_FHSIZE];
+#endif /* CONFIG_PNFSD */
 };
 
 /*
@@ -395,6 +428,19 @@ extern int nfs4_has_reclaimed_state(const char *name, bool use_exchange_id);
 extern void nfsd4_recdir_purge_old(void);
 extern int nfsd4_create_clid_dir(struct nfs4_client *clp);
 extern void nfsd4_remove_clid_dir(struct nfs4_client *clp);
+#if defined(CONFIG_PNFSD)
+extern void nfsd4_free_pnfs_slabs(void);
+extern void nfsd4_free_slab(struct kmem_cache **slab);
+extern int nfsd4_init_pnfs_slabs(void);
+extern struct nfs4_file * find_file(struct inode *ino);
+extern struct nfs4_file * alloc_init_file(struct inode *ino, struct svc_fh *current_fh);
+extern void put_nfs4_file(struct nfs4_file *fi);
+extern void get_nfs4_file(struct nfs4_file *fi);
+extern struct nfs4_client * find_confirmed_client(clientid_t *clid);
+#else /* CONFIG_PNFSD */
+static inline void nfsd4_free_pnfs_slabs(void) {}
+static inline int nfsd4_init_pnfs_slabs(void) { return 0; }
+#endif /* CONFIG_PNFSD */
 
 static inline void
 nfs4_put_stateowner(struct nfs4_stateowner *so)
@@ -406,6 +452,26 @@ static inline void
 nfs4_get_stateowner(struct nfs4_stateowner *so)
 {
 	kref_get(&so->so_ref);
+}
+
+static inline u64
+end_offset(u64 start, u64 len)
+{
+	u64 end;
+
+	end = start + len;
+	return end >= start ? end: NFS4_MAX_UINT64;
+}
+
+/* last octet in a range */
+static inline u64
+last_byte_offset(u64 start, u64 len)
+{
+	u64 end;
+
+	BUG_ON(!len);
+	end = start + len;
+	return end > start ? end - 1: NFS4_MAX_UINT64;
 }
 
 #endif   /* NFSD4_STATE_H */

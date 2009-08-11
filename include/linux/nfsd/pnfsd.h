@@ -41,6 +41,8 @@
 #include <linux/nfsd/state.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 
+int nfs4_pnfs_get_layout(struct svc_fh *, struct pnfs_layoutget_arg *);
+
 #endif /* CONFIG_PNFSD */
 
 #endif /* LINUX_NFSD_PNFSD_H */

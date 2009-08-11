@@ -969,6 +969,12 @@ int nfsd4_pnfs_fl_getdevinfo(struct pnfs_devinfo_arg *arg)
 	return 0;
 }
 
+int nfsd4_pnfs_fl_layoutget(struct inode *inode, struct pnfs_layoutget_arg *arg)
+{
+	/* stub */
+	return 0;
+}
+
 static __be32
 nfsd4_getdevlist(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *cstate,
@@ -996,6 +1002,54 @@ nfsd4_getdevlist(struct svc_rqst *rqstp,
 
 	/* Set up arguments so device can be retrieved at encode time */
 	gdlp->gd_fhp = &cstate->current_fh;
+out:
+	return status;
+}
+
+/*
+ * NOTE: to implement CB_LAYOUTRECALL, need to associate layouts with clientid
+ */
+static __be32
+nfsd4_layoutget(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_layoutget *lgp)
+{
+	int status;
+	struct svc_fh *current_fh = &cstate->current_fh;
+
+	status = fh_verify(rqstp, current_fh, 0, NFSD_MAY_NOP);
+	if (status) {
+		printk("pNFS %s: verify filehandle failed\n", __func__);
+		goto out;
+	}
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(current_fh->fh_export,
+				   lgp->lg_seg.layout_type);
+	if (status)
+		goto out;
+
+	status = nfserr_inval;
+	if (lgp->lg_seg.iomode != IOMODE_READ &&
+	    lgp->lg_seg.iomode != IOMODE_RW &&
+	    lgp->lg_seg.iomode != IOMODE_ANY) {
+		dprintk("pNFS %s: invalid iomode %d\n", __func__,
+			lgp->lg_seg.iomode);
+		goto out;
+	}
+
+	status = nfserr_badiomode;
+	if (lgp->lg_seg.iomode == IOMODE_ANY) {
+		dprintk("pNFS %s: IOMODE_ANY is not allowed\n", __func__);
+		goto out;
+	}
+
+	/* Set up arguments so layout can be retrieved at encode time */
+	lgp->lg_fhp = current_fh;
+	copy_clientid((clientid_t *)&lgp->lg_seg.clientid, cstate->session);
+	status = nfs_ok;
 out:
 	return status;
 }
@@ -1402,6 +1456,10 @@ static struct nfsd4_operation nfsd4_ops[] = {
 		.op_func = (nfsd4op_func)nfsd4_getdevinfo,
 		.op_flags = ALLOWED_WITHOUT_FH,
 		.op_name = "OP_GETDEVICEINFO",
+	},
+	[OP_LAYOUTGET] = {
+		.op_func = (nfsd4op_func)nfsd4_layoutget,
+		.op_name = "OP_LAYOUTGET",
 	},
 #endif /* CONFIG_PNFSD */
 };

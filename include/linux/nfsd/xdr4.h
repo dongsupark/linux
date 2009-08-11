@@ -426,6 +426,7 @@ struct nfsd4_op {
 #if defined(CONFIG_PNFSD)
 		struct nfsd4_pnfs_getdevlist	pnfs_getdevlist;
 		struct nfsd4_pnfs_getdevinfo	pnfs_getdevinfo;
+		struct nfsd4_pnfs_layoutget	pnfs_layoutget;
 #endif /* CONFIG_PNFSD */
 	} u;
 	struct nfs4_replay *			replay;
@@ -563,6 +564,8 @@ extern __be32 nfsd4_renew(struct svc_rqst *rqstp,
 extern void nfsd4_devlist_free(struct nfsd4_pnfs_getdevlist *gdlp);
 
 extern int nfsd4_pnfs_fl_getdevinfo(struct pnfs_devinfo_arg *arg);
+extern int nfsd4_pnfs_fl_layoutget(struct inode *inode,
+		struct pnfs_layoutget_arg *arg);
 extern int filelayout_encode_devaddr(u32 *p, u32 *end, int, void *dev_addr);
 extern int filelayout_encode_devinfo(struct pnfs_xdr_info *resp, void *device);
 extern void filelayout_free_devaddr(void *devaddr);
