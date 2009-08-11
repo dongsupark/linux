@@ -139,13 +139,13 @@ EXPORT_SYMBOL(filelayout_encode_devinfo);
  * Use linux error codes (not nfs) since these values are being
  * returned to the file system.
  */
-u32
+enum nfsstat4
 filelayout_encode_layout(struct exp_xdr_stream *xdr,
 			 const struct pnfs_filelayout_layout *flp)
 {
 	u32 len = 0, nfl_util, fhlen, i;
 	u32 *layoutlen_p;
-	u32 nfserr;
+	enum nfsstat4 nfserr;
 	__be32 *p;
 
 	dprintk("%s: device_id %llx:%llx fsi %u, numfh %u\n",
@@ -209,7 +209,7 @@ filelayout_encode_layout(struct exp_xdr_stream *xdr,
 	len = (char *)p - (char *)layoutlen_p;
 	exp_xdr_encode_u32(layoutlen_p, len - 4);
 
-	nfserr = NFS_OK;
+	nfserr = NFS4_OK;
 out:
 	dprintk("%s: End err %u xdrlen %d\n",
 		__func__, nfserr, len);
