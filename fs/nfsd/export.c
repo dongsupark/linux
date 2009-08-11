@@ -574,6 +574,8 @@ static int svc_export_parse(struct cache_detail *cd, char *mesg, int mlen)
 					if (exp.ex_uuid == NULL)
 						err = -ENOMEM;
 				}
+			} else if (strcmp(buf, "pnfs") == 0) {
+				exp.ex_pnfs = 1;
 			} else if (strcmp(buf, "secinfo") == 0)
 				err = secinfo_parse(&mesg, buf, &exp);
 			else
@@ -646,6 +648,8 @@ static int svc_export_show(struct seq_file *m,
 				seq_printf(m, "%02x", exp->ex_uuid[i]);
 			}
 		}
+		if (exp->ex_pnfs)
+			seq_puts(m, ",pnfs");
 		show_secinfo(m, exp);
 	}
 	seq_puts(m, ")\n");
@@ -672,6 +676,7 @@ static void svc_export_init(struct cache_head *cnew, struct cache_head *citem)
 	new->ex_fslocs.locations = NULL;
 	new->ex_fslocs.locations_count = 0;
 	new->ex_fslocs.migrated = 0;
+	new->ex_pnfs = 0;
 }
 
 static void export_update(struct cache_head *cnew, struct cache_head *citem)
@@ -684,6 +689,7 @@ static void export_update(struct cache_head *cnew, struct cache_head *citem)
 	new->ex_anon_uid = item->ex_anon_uid;
 	new->ex_anon_gid = item->ex_anon_gid;
 	new->ex_fsid = item->ex_fsid;
+	new->ex_pnfs = item->ex_pnfs;
 	new->ex_uuid = item->ex_uuid;
 	item->ex_uuid = NULL;
 	new->ex_fslocs.locations = item->ex_fslocs.locations;
