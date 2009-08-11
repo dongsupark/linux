@@ -51,6 +51,7 @@ enum {
 	NFSPROC4_CLNT_CB_RECALL,
 	NFSPROC4_CLNT_CB_SEQUENCE,
 	NFSPROC4_CLNT_CB_LAYOUT,
+	NFSPROC4_CLNT_CB_DEVICE,
 };
 
 #define NFS4_MAXTAGLEN		20
@@ -81,6 +82,12 @@ enum {
 					1 + 3 +                         \
 					enc_nfs4_fh_sz + 4)
 #define NFS4_dec_cb_layout_sz		(cb_compound_dec_hdr_sz  +      \
+					cb_sequence_dec_sz +            \
+					op_dec_sz)
+#define NFS4_enc_cb_device_sz		(cb_compound_enc_hdr_sz +       \
+					cb_sequence_enc_sz +            \
+					1 + 6)
+#define NFS4_dec_cb_device_sz		(cb_compound_dec_hdr_sz  +      \
 					cb_sequence_dec_sz +            \
 					op_dec_sz)
 
@@ -452,6 +459,68 @@ static void encode_cb_layout4args(struct xdr_stream *xdr,
 	}
 	hdr->nops++;
 }
+
+/*
+ * CB_NOTIFY_DEVICEID4args
+ *
+ *     typedef opaque notifylist4<>;
+ *
+ *     struct notify4 {
+ *             bitmap4         notify_mask;
+ *             notifylist4     notify_vals;
+ *     };
+ *
+ *     struct CB_NOTIFY_DEVICEID4args {
+ *             notify4 cnda_changes<>;
+ *     };
+ */
+static void encode_cb_device4args(struct xdr_stream *xdr,
+				  const struct nfs4_notify_device *nd,
+				  struct nfs4_cb_compound_hdr *hdr)
+{
+	u32 *p;
+	int i;
+	int len					= nd->nd_list->cbd_len;
+	struct nfsd4_pnfs_cb_dev_item *cbd	= nd->nd_list->cbd_list;
+
+	dprintk("NFSD %s: --> num %d\n", __func__, len);
+
+	BUG_ON(hdr->minorversion == 0);
+
+	p = xdr_reserve_space(xdr, 2 * 4);
+	*p++ = cpu_to_be32(OP_CB_NOTIFY_DEVICEID);
+	/* notify4 cnda_changes<>; */
+	*p = cpu_to_be32(len);
+	for (i = 0; i < len; i++) {
+		dprintk("%s: nt %d lt %d devid x%llx-x%llx im %d i %d\n",
+			__func__, cbd[i].cbd_notify_type,
+			cbd[i].cbd_layout_type,
+			cbd[i].cbd_devid.sbid,
+			cbd[i].cbd_devid.devid,
+			cbd[i].cbd_immediate, i);
+
+		BUG_ON(cbd[i].cbd_notify_type != NOTIFY_DEVICEID4_CHANGE &&
+		       cbd[i].cbd_notify_type != NOTIFY_DEVICEID4_DELETE);
+		p = xdr_reserve_space(xdr, 4 * 4 + 2 * 8);
+		/* bitmap4         notify_mask; */
+		*p++ = cpu_to_be32(1);
+		*p++ = cpu_to_be32(cbd[i].cbd_notify_type);
+		/* opaque     notify_vals<>; */
+		if (cbd[i].cbd_notify_type == NOTIFY_DEVICEID4_CHANGE)
+			*p++ = cpu_to_be32(24);
+		else
+			*p++ = cpu_to_be32(20);
+		*p++ = cpu_to_be32(cbd[i].cbd_layout_type);
+		p = xdr_encode_hyper(p, cbd[i].cbd_devid.sbid);
+		xdr_encode_hyper(p, cbd[i].cbd_devid.devid);
+
+		if (cbd[i].cbd_notify_type == NOTIFY_DEVICEID4_CHANGE) {
+			p = xdr_reserve_space(xdr, 4);
+			*p = cpu_to_be32(cbd[i].cbd_immediate);
+		}
+	}
+	hdr->nops++;
+}
 #endif /* CONFIG_PNFSD */
 
 /*
@@ -634,6 +703,22 @@ static void nfs4_xdr_enc_cb_layout(struct rpc_rqst *req,
 	encode_cb_layout4args(xdr, args, &hdr);
 	encode_cb_nops(&hdr);
 }
+
+static void nfs4_xdr_enc_cb_device(struct rpc_rqst *req,
+				   struct xdr_stream *xdr,
+				   const struct nfsd4_callback *cb)
+{
+	struct nfs4_notify_device *args =  cb->cb_op;
+	struct nfs4_cb_compound_hdr hdr = {
+		.ident = 0,
+		.minorversion = cb->cb_minorversion,
+	};
+
+	encode_cb_compound4args(xdr, &hdr);
+	encode_cb_sequence4args(xdr, cb, &hdr);
+	encode_cb_device4args(xdr, args, &hdr);
+	encode_cb_nops(&hdr);
+}
 #endif /* CONFIG_PNFSD */
 
 /*
@@ -706,6 +791,31 @@ static int nfs4_xdr_dec_cb_layout(struct rpc_rqst *rqstp,
 out:
 	return status;
 }
+
+static int nfs4_xdr_dec_cb_device(struct rpc_rqst *rqstp,
+				  struct xdr_stream *xdr,
+				  struct nfsd4_callback *cb)
+{
+	struct nfs4_cb_compound_hdr hdr;
+	enum nfsstat4 nfserr;
+	int status;
+
+	status = decode_cb_compound4res(xdr, &hdr);
+	if (unlikely(status))
+		goto out;
+	if (cb) {
+		status = decode_cb_sequence4res(xdr, cb);
+		if (unlikely(status))
+			goto out;
+	}
+	status = decode_cb_op_status(xdr, OP_CB_NOTIFY_DEVICEID, &nfserr);
+	if (unlikely(status))
+		goto out;
+	if (unlikely(nfserr != NFS4_OK))
+		status = nfs_cb_stat_to_errno(nfserr);
+out:
+	return status;
+}
 #endif /* CONFIG_PNFSD */
 
 /*
@@ -727,6 +837,7 @@ static struct rpc_procinfo nfs4_cb_procedures[] = {
 	PROC(CB_RECALL,	COMPOUND,	cb_recall,	cb_recall),
 #if defined(CONFIG_PNFSD)
 	PROC(CB_LAYOUT,	COMPOUND,	cb_layout,	cb_layout),
+	PROC(CB_DEVICE,	COMPOUND,	cb_device,	cb_device),
 #endif
 };
 
@@ -1295,6 +1406,68 @@ nfsd4_cb_layout(struct nfs4_layoutrecall *clr)
 	cb->cb_msg.rpc_cred = callback_cred;
 
 	cb->cb_ops = &nfsd4_cb_layout_ops;
+	run_nfsd4_cb(cb);
+}
+
+static void nfsd4_cb_device_prepare(struct rpc_task *task, void *calldata)
+{
+	struct nfsd4_callback *cb = calldata;
+	struct nfs4_notify_device *cbnd = container_of(cb, struct nfs4_notify_device, nd_recall);
+
+	nfsd4_cb_prepare_sequence(task, cb, cbnd->nd_client);
+}
+
+static void nfsd4_cb_device_done(struct rpc_task *task, void *calldata)
+{
+	struct nfsd4_callback *cb = calldata;
+	struct nfs4_notify_device *cbnd = container_of(cb, struct nfs4_notify_device, nd_recall);
+	struct nfs4_client *clp = cbnd->nd_client;
+
+	nfsd4_cb_done_sequence(task, clp);
+
+	dprintk("%s: clp %p cb_client %p: status %d\n",
+	       __func__,
+	       clp,
+	       clp->cl_cb_client,
+	       task->tk_status);
+
+	if (task->tk_status == -EIO) {
+		/* Network partition? */
+		nfsd4_mark_cb_down(clp, task->tk_status);
+	}
+	cb->cb_done = true;
+}
+
+static void nfsd4_cb_device_release(void *calldata)
+{
+	struct nfsd4_callback *cb = calldata;
+	struct nfs4_notify_device *cbnd = container_of(cb, struct nfs4_notify_device, nd_recall);
+
+	kfree(cbnd);
+}
+
+static const struct rpc_call_ops nfsd4_cb_device_ops = {
+	.rpc_call_prepare = nfsd4_cb_device_prepare,
+	.rpc_call_done = nfsd4_cb_device_done,
+	.rpc_release = nfsd4_cb_device_release,
+};
+
+/*
+ * Called with state lock.
+ */
+void
+nfsd4_cb_notify_device(struct nfs4_notify_device *cbnd)
+{
+	struct nfsd4_callback *cb = &cbnd->nd_recall;
+
+	cb->cb_op = cbnd;
+	cb->cb_clp = cbnd->nd_client;
+	cb->cb_msg.rpc_proc = &nfs4_cb_procedures[NFSPROC4_CLNT_CB_DEVICE];
+	cb->cb_msg.rpc_argp = cb;
+	cb->cb_msg.rpc_resp = cb;
+	cb->cb_msg.rpc_cred = callback_cred;
+
+	cb->cb_ops = &nfsd4_cb_device_ops;
 	run_nfsd4_cb(cb);
 }
 #endif /* CONFIG_PNFSD */
