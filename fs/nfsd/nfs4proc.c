@@ -40,6 +40,7 @@
 #include "xdr4.h"
 #include "vfs.h"
 #include "current_stateid.h"
+#include "pnfsd.h"
 
 #define NFSDDBG_FACILITY		NFSDDBG_PROC
 
@@ -994,6 +995,44 @@ nfsd4_verify(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	status = _nfsd4_verify(rqstp, cstate, verify);
 	return status == nfserr_same ? nfs_ok : status;
 }
+
+#if defined(CONFIG_PNFSD)
+static __be32
+nfsd4_layout_verify(struct super_block *sb, struct svc_export *exp,
+		    unsigned int layout_type)
+{
+	int status, type;
+
+	/* check to see if pNFS  is supported. */
+	status = nfserr_layoutunavailable;
+	if (exp && exp->ex_pnfs == 0) {
+		dprintk("%s: Underlying file system "
+			"is not exported over pNFS\n", __func__);
+		goto out;
+	}
+	if (!sb->s_pnfs_op || !sb->s_pnfs_op->layout_type) {
+		dprintk("%s: Underlying file system "
+			"does not support pNFS\n", __func__);
+		goto out;
+	}
+
+	type = sb->s_pnfs_op->layout_type(sb);
+
+	/* check to see if requested layout type is supported. */
+	status = nfserr_unknown_layouttype;
+	if (!type)
+		dprintk("BUG: %s: layout_type 0 is reserved and must not be "
+			"used by filesystem\n", __func__);
+	else if (type != layout_type)
+		dprintk("%s: requested layout type %d "
+		       "does not match supported type %d\n",
+			__func__, layout_type, type);
+	else
+		status = nfs_ok;
+out:
+	return status;
+}
+#endif /* CONFIG_PNFSD */
 
 /*
  * NULL call.
