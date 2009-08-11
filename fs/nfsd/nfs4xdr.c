@@ -1491,6 +1491,51 @@ nfsd4_decode_layoutget(struct nfsd4_compoundargs *argp,
 
 	DECODE_TAIL;
 }
+
+static __be32
+nfsd4_decode_layoutcommit(struct nfsd4_compoundargs *argp,
+			  struct nfsd4_pnfs_layoutcommit *lcp)
+{
+	DECODE_HEAD;
+	u32 timechange;
+
+	READ_BUF(20);
+	READ64(lcp->args.lc_seg.offset);
+	READ64(lcp->args.lc_seg.length);
+	READ32(lcp->args.lc_reclaim);
+	nfsd4_decode_stateid(argp, &lcp->lc_sid);
+	READ_BUF(4);
+	READ32(lcp->args.lc_newoffset);
+	if (lcp->args.lc_newoffset) {
+		READ_BUF(8);
+		READ64(lcp->args.lc_last_wr);
+	} else
+		lcp->args.lc_last_wr = 0;
+	READ_BUF(4);
+	READ32(timechange);
+	if (timechange) {
+		READ_BUF(12);
+		READ64(lcp->args.lc_mtime.seconds);
+		READ32(lcp->args.lc_mtime.nseconds);
+	} else {
+		lcp->args.lc_mtime.seconds = 0;
+		lcp->args.lc_mtime.nseconds = 0;
+	}
+	READ_BUF(8);
+	READ32(lcp->args.lc_seg.layout_type);
+	/* XXX: saving XDR'ed layout update. Since we don't have the
+	 * current_fh yet, and therefore no export_ops, we can't call
+	 * the layout specific decode routines. File and pVFS2
+	 * do not use the layout update....
+	 */
+	READ32(lcp->args.lc_up_len);
+	if (lcp->args.lc_up_len > 0) {
+		READ_BUF(lcp->args.lc_up_len);
+		READMEM(lcp->args.lc_up_layout, lcp->args.lc_up_len);
+	}
+
+	DECODE_TAIL;
+}
 #endif /* CONFIG_PNFSD */
 
 static __be32
@@ -1597,7 +1642,7 @@ static nfsd4_dec nfsd41_dec_ops[] = {
 #if defined(CONFIG_PNFSD)
 	[OP_GETDEVICEINFO]	= (nfsd4_dec)nfsd4_decode_getdevinfo,
 	[OP_GETDEVICELIST]	= (nfsd4_dec)nfsd4_decode_getdevlist,
-	[OP_LAYOUTCOMMIT]	= (nfsd4_dec)nfsd4_decode_notsupp,
+	[OP_LAYOUTCOMMIT]	= (nfsd4_dec)nfsd4_decode_layoutcommit,
 	[OP_LAYOUTGET]		= (nfsd4_dec)nfsd4_decode_layoutget,
 	[OP_LAYOUTRETURN]	= (nfsd4_dec)nfsd4_decode_notsupp,
 #else  /* CONFIG_PNFSD */
@@ -3793,6 +3838,27 @@ err:
 	resp->p = p_start;
 	return nfserr;
 }
+
+static __be32
+nfsd4_encode_layoutcommit(struct nfsd4_compoundres *resp, __be32 nfserr,
+			  struct nfsd4_pnfs_layoutcommit *lcp)
+{
+	__be32 *p;
+
+	if (nfserr)
+		goto out;
+
+	RESERVE_SPACE(4);
+	WRITE32(lcp->res.lc_size_chg);
+	ADJUST_ARGS();
+	if (lcp->res.lc_size_chg) {
+		RESERVE_SPACE(8);
+		WRITE64(lcp->res.lc_newsize);
+		ADJUST_ARGS();
+	}
+out:
+	return nfserr;
+}
 #endif /* CONFIG_PNFSD */
 
 static __be32
@@ -3858,7 +3924,7 @@ static nfsd4_enc nfsd4_enc_ops[] = {
 #if defined(CONFIG_PNFSD)
 	[OP_GETDEVICEINFO]	= (nfsd4_enc)nfsd4_encode_getdevinfo,
 	[OP_GETDEVICELIST]	= (nfsd4_enc)nfsd4_encode_getdevlist,
-	[OP_LAYOUTCOMMIT]	= (nfsd4_enc)nfsd4_encode_noop,
+	[OP_LAYOUTCOMMIT]	= (nfsd4_enc)nfsd4_encode_layoutcommit,
 	[OP_LAYOUTGET]		= (nfsd4_enc)nfsd4_encode_layoutget,
 	[OP_LAYOUTRETURN]	= (nfsd4_enc)nfsd4_encode_noop,
 #else  /* CONFIG_PNFSD */
