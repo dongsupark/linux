@@ -2978,6 +2978,16 @@ STALE_STATEID(stateid_t *stateid)
 	return 1;
 }
 
+static __be32
+nfs4_check_stateid(stateid_t *stateid)
+{
+	if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
+		return nfserr_bad_stateid;
+	if (STALE_STATEID(stateid))
+		return nfserr_stale_stateid;
+	return 0;
+}
+
 static inline int
 access_permit_read(unsigned long access_bmap)
 {
@@ -3175,13 +3185,9 @@ nfs4_preprocess_seqid_op(struct nfsd4_compound_state *cstate, u32 seqid,
 	*stpp = NULL;
 	*sopp = NULL;
 
-	if (ZERO_STATEID(stateid) || ONE_STATEID(stateid)) {
-		dprintk("NFSD: preprocess_seqid_op: magic stateid!\n");
-		return nfserr_bad_stateid;
-	}
-
-	if (STALE_STATEID(stateid))
-		return nfserr_stale_stateid;
+	status = nfs4_check_stateid(stateid);
+	if (status)
+		return status;
 
 	if (nfsd4_has_session(cstate))
 		flags |= HAS_SESSION;
@@ -3456,11 +3462,8 @@ nfsd4_delegreturn(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	if (nfsd4_has_session(cstate))
 		flags |= HAS_SESSION;
 	nfs4_lock_state();
-	status = nfserr_bad_stateid;
-	if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
-		goto out;
-	status = nfserr_stale_stateid;
-	if (STALE_STATEID(stateid))
+	status = nfs4_check_stateid(stateid);
+	if (status)
 		goto out;
 	status = nfserr_bad_stateid;
 	if (!is_delegation_stateid(stateid))
