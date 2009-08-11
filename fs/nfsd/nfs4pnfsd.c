@@ -114,6 +114,35 @@ nfsd4_init_pnfs_slabs(void)
 	return 0;
 }
 
+/* XXX: Need to implement the notify types and track which
+ * clients have which devices. */
+void pnfs_set_device_notify(clientid_t *clid, unsigned int types)
+{
+	struct nfs4_client *clp;
+	dprintk("%s: -->\n", __func__);
+
+	nfs4_lock_state();
+	/* Indicate that client has a device so we can only notify
+	 * the correct clients */
+	clp = find_confirmed_client(clid);
+	if (clp) {
+		atomic_inc(&clp->cl_deviceref);
+		dprintk("%s: Incr device count (clnt %p) to %d\n",
+			__func__, clp, atomic_read(&clp->cl_deviceref));
+	}
+	nfs4_unlock_state();
+}
+
+/* Clear notifications for this client
+ * XXX: Do we need to loop through a clean up all
+ *      krefs when nfsd cleans up the client? */
+void pnfs_clear_device_notify(struct nfs4_client *clp)
+{
+	atomic_dec(&clp->cl_deviceref);
+	dprintk("%s: Decr device count (clnt %p) to %d\n",
+		__func__, clp, atomic_read(&clp->cl_deviceref));
+}
+
 /*
  * Note: must be called under the state lock
  */
@@ -1442,6 +1471,9 @@ create_device_notify_per_cl(struct nfs4_client *clp, void *p)
 	struct nfs4_notify_device *cbnd;
 	struct create_device_notify_list_arg *arg = p;
 
+	if (atomic_read(&clp->cl_deviceref) <= 0)
+		return 0;
+
 	cbnd = kzalloc(sizeof(*cbnd), GFP_KERNEL);
 	if (!cbnd)
 		return -ENOMEM;
@@ -1479,6 +1511,7 @@ int nfsd_device_notify_cb(struct super_block *sb,
 			  struct nfsd4_pnfs_cb_dev_list *ndl)
 {
 	struct nfs4_notify_device *cbnd;
+	struct nfs4_client *nd_client;
 	unsigned int notify_num = 0;
 	int status = 0;
 	struct list_head todolist;
@@ -1498,7 +1531,9 @@ int nfsd_device_notify_cb(struct super_block *sb,
 		cbnd = list_entry(todolist.next, struct nfs4_notify_device,
 				  nd_perclnt);
 		list_del_init(&cbnd->nd_perclnt);
+		nd_client = cbnd->nd_client;
 		nfsd4_cb_notify_device(cbnd);
+		pnfs_clear_device_notify(nd_client);
 		notify_num++;
 	}
 

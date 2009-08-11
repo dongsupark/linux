@@ -1258,6 +1258,7 @@ static struct nfs4_client *create_client(struct xdr_netobj name, char *recdir,
 #if defined(CONFIG_PNFSD)
 	INIT_LIST_HEAD(&clp->cl_layouts);
 	INIT_LIST_HEAD(&clp->cl_layoutrecalls);
+	atomic_set(&clp->cl_deviceref, 0);
 #endif /* CONFIG_PNFSD */
 	INIT_LIST_HEAD(&clp->cl_lru);
 	INIT_LIST_HEAD(&clp->cl_callbacks);
