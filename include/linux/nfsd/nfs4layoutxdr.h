@@ -35,6 +35,7 @@
 #define NFSD_NFS4LAYOUTXDR_H
 
 #include <linux/sunrpc/xdr.h>
+#include <linux/nfsd/nfsd4_pnfs.h>
 
 /* the nfsd4_pnfs_devlist dev_addr for the file layout type */
 struct pnfs_filelayout_devaddr {
@@ -53,6 +54,23 @@ struct pnfs_filelayout_device {
 	u32					*fl_stripeindices_list;
 	u32					fl_device_length;
 	struct pnfs_filelayout_multipath	*fl_device_list;
+};
+
+struct pnfs_filelayout_layout {
+	u32                             lg_layout_type; /* response */
+	u32                             lg_stripe_type; /* response */
+	u32                             lg_commit_through_mds; /* response */
+	u64                             lg_stripe_unit; /* response */
+	u64                             lg_pattern_offset; /* response */
+	u32                             lg_first_stripe_index;	/* response */
+	struct nfsd4_pnfs_deviceid	device_id;		/* response */
+	u32                             lg_fh_length;		/* response */
+	struct knfsd_fh                 *lg_fh_list;		/* response */
+};
+
+enum stripetype4 {
+	STRIPE_SPARSE = 1,
+	STRIPE_DENSE = 2
 };
 
 #endif /* NFSD_NFS4LAYOUTXDR_H */
