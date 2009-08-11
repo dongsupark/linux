@@ -274,6 +274,25 @@ get_ds_stateid(struct pnfs_ds_stateid *dsp)
 	kref_get(&dsp->ds_ref);
 }
 
+void
+nfs4_pnfs_state_shutdown(void)
+{
+	struct pnfs_ds_stateid *dsp;
+	int i;
+
+	dprintk("pNFSD %s: -->\n", __func__);
+
+	ds_lock_state();
+	for (i = 0; i < STATEID_HASH_SIZE; i++) {
+		while (!list_empty(&ds_stid_hashtbl[i])) {
+			dsp = list_entry(ds_stid_hashtbl[i].next,
+					 struct pnfs_ds_stateid, ds_hash);
+			put_ds_stateid(dsp);
+		}
+	}
+	ds_unlock_state();
+}
+
 static struct pnfs_mds_id *
 alloc_init_mds_id(struct pnfs_get_state *gsp)
 {
