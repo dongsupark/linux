@@ -1032,6 +1032,87 @@ nfsd4_layout_verify(struct super_block *sb, struct svc_export *exp,
 out:
 	return status;
 }
+
+static __be32
+nfsd4_getdevlist(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_getdevlist *gdlp)
+{
+	struct super_block *sb;
+	struct svc_fh *current_fh = &cstate->current_fh;
+	int status;
+
+	dprintk("%s: type %u maxdevices %u cookie %llu verf %llu\n",
+		__func__, gdlp->gd_layout_type, gdlp->gd_maxdevices,
+		gdlp->gd_cookie, gdlp->gd_verf);
+
+
+	status = fh_verify(rqstp, current_fh, 0, NFSD_MAY_NOP);
+	if (status)
+		goto out;
+
+	status = nfserr_inval;
+	sb = current_fh->fh_dentry->d_inode->i_sb;
+	if (!sb)
+		goto out;
+
+	/* We must be able to encode at list one device */
+	if (!gdlp->gd_maxdevices)
+		goto out;
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(sb, current_fh->fh_export,
+				     gdlp->gd_layout_type);
+	if (status)
+		goto out;
+
+	/* Do nothing if underlying file system does not support
+	 * getdevicelist */
+	if (!sb->s_pnfs_op->get_device_iter) {
+		status = nfserr_notsupp;
+		goto out;
+	}
+
+	/* Set up arguments so device can be retrieved at encode time */
+	gdlp->gd_fhp = &cstate->current_fh;
+out:
+	return status;
+}
+
+static __be32
+nfsd4_getdevinfo(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_getdevinfo *gdp)
+{
+	struct super_block *sb;
+	int status;
+
+	dprintk("%s: layout_type %u dev_id %llx:%llx maxcnt %u\n",
+	       __func__, gdp->gd_layout_type, gdp->gd_devid.sbid,
+	       gdp->gd_devid.devid, gdp->gd_maxcount);
+
+	status = nfserr_inval;
+	sb = find_sbid_id(gdp->gd_devid.sbid);
+	dprintk("%s: sb %p\n", __func__, sb);
+	if (!sb) {
+		status = nfserr_noent;
+		goto out;
+	}
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(sb, NULL, gdp->gd_layout_type);
+	if (status)
+		goto out;
+
+	/* Set up arguments so device can be retrieved at encode time */
+	gdp->gd_sb = sb;
+out:
+	return status;
+}
 #endif /* CONFIG_PNFSD */
 
 /*
@@ -1758,6 +1839,17 @@ static struct nfsd4_operation nfsd4_ops[] = {
 		.op_name = "OP_FREE_STATEID",
 		.op_rsize_bop = (nfsd4op_rsize)nfsd4_only_status_rsize,
 	},
+#if defined(CONFIG_PNFSD)
+	[OP_GETDEVICELIST] = {
+		.op_func = (nfsd4op_func)nfsd4_getdevlist,
+		.op_name = "OP_GETDEVICELIST",
+	},
+	[OP_GETDEVICEINFO] = {
+		.op_func = (nfsd4op_func)nfsd4_getdevinfo,
+		.op_flags = ALLOWED_WITHOUT_FH,
+		.op_name = "OP_GETDEVICEINFO",
+	},
+#endif /* CONFIG_PNFSD */
 };
 
 #ifdef NFSD_DEBUG
