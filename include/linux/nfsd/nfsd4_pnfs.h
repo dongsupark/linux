@@ -34,6 +34,7 @@
 #ifndef _LINUX_NFSD_NFSD4_PNFS_H
 #define _LINUX_NFSD_NFSD4_PNFS_H
 
+#include <linux/nfsd/state.h>
 #include <linux/exportfs.h>
 #include <linux/exp_xdr.h>
 
@@ -47,6 +48,36 @@ struct nfsd4_pnfs_dev_iter_res {
 	u64		gd_verf;	/* request/repsonse */
 	u64		gd_devid;	/* response */
 	u32		gd_eof;		/* response */
+};
+
+struct nfsd4_layout_seg {
+	u64	clientid;
+	u32	layout_type;
+	u32	iomode;
+	u64	offset;
+	u64	length;
+};
+
+/* Used by layout_get to encode layout (loc_body var in spec)
+ * Args:
+ * minlength - min number of accessible bytes given by layout
+ * fsid - Major part of struct pnfs_deviceid.  File system uses this
+ * to build the deviceid returned in the layout.
+ * fh - fs can modify the file handle for use on data servers
+ * seg - layout info requested and layout info returned
+ * xdr - xdr info
+ * return_on_close - true if layout to be returned on file close
+ */
+
+struct nfsd4_pnfs_layoutget_arg {
+	u64			lg_minlength;
+	u64			lg_fsid;
+	const struct knfsd_fh	*lg_fh;
+};
+
+struct nfsd4_pnfs_layoutget_res {
+	struct nfsd4_layout_seg	lg_seg;	/* request/resopnse */
+	u32			lg_return_on_close;
 };
 
 /*
@@ -81,6 +112,26 @@ struct pnfs_export_operations {
 	int (*get_device_iter) (struct super_block *,
 				u32 layout_type,
 				struct nfsd4_pnfs_dev_iter_res *);
+
+	/* Retrieve and encode a layout for inode onto the xdr stream.
+	 * arg->minlength is the minimum number of accessible bytes required
+	 *   by the client.
+	 * The maximum number of bytes to encode the layout is given by
+	 *   the xdr stream end pointer.
+	 * arg->fsid contains the major part of struct pnfs_deviceid.
+	 *   The file system uses this to build the deviceid returned
+	 *   in the layout.
+	 * res->seg - layout segment requested and layout info returned.
+	 * res->fh can be modified the file handle for use on data servers
+	 * res->return_on_close - true if layout to be returned on file close
+	 */
+	int (*layout_get) (struct inode *,
+			   struct exp_xdr_stream *xdr,
+			   const struct nfsd4_pnfs_layoutget_arg *,
+			   struct nfsd4_pnfs_layoutget_res *);
+
+	/* Can layout segments be merged for this layout type? */
+	int (*can_merge_layouts) (u32 layout_type);
 };
 
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
