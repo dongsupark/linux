@@ -14,6 +14,7 @@ enum nfsd_fsid {
 	FSID_UUID8,
 	FSID_UUID16,
 	FSID_UUID16_INUM,
+	FSID_MAX
 };
 
 enum fsid_source {
@@ -201,6 +202,44 @@ fh_unlock(struct svc_fh *fhp)
 		mutex_unlock(&fhp->fh_dentry->d_inode->i_mutex);
 		fhp->fh_locked = 0;
 	}
+}
+
+#if defined(CONFIG_PNFSD)
+
+/*
+ * fh_fsid_type is overloaded to indicate whether a filehandle was one supplied
+ * to a DS by LAYOUTGET.  nfs4_preprocess_stateid_op() uses this to decide how
+ * to handle a given stateid.
+ */
+static inline int pnfs_fh_is_ds(struct knfsd_fh *fh)
+{
+	return fh->fh_fsid_type >= FSID_MAX;
+}
+
+static inline void pnfs_fh_mark_ds(struct knfsd_fh *fh)
+{
+	BUG_ON(fh->fh_version != 1);
+	BUG_ON(pnfs_fh_is_ds(fh));
+	fh->fh_fsid_type += FSID_MAX;
+}
+
+#else  /* CONFIG_PNFSD */
+
+static inline int pnfs_fh_is_ds(struct knfsd_fh *fh)
+{
+	return 0;
+}
+
+#endif /* CONFIG_PNFSD */
+
+/* allows fh_verify() to check the real fsid_type (i.e., not overloaded). */
+static inline int pnfs_fh_fsid_type(struct knfsd_fh *fh)
+{
+	int fsid_type = fh->fh_fsid_type;
+
+	if (pnfs_fh_is_ds(fh))
+		return fsid_type - FSID_MAX;
+	return fsid_type;
 }
 
 #endif /* _LINUX_NFSD_FH_INT_H */
