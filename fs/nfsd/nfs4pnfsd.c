@@ -1555,3 +1555,83 @@ err:
 		put_nfs4_file(lrfile);
 	return (todo_len && status) ? -EAGAIN : status;
 }
+
+struct create_device_notify_list_arg {
+	struct list_head *todolist;
+	struct nfsd4_pnfs_cb_dev_list *ndl;
+};
+
+static int
+create_device_notify_per_cl(struct nfs4_client *clp, void *p)
+{
+	struct nfs4_notify_device *cbnd;
+	struct create_device_notify_list_arg *arg = p;
+
+	cbnd = kmalloc(sizeof(*cbnd), GFP_KERNEL);
+	if (!cbnd)
+		return -ENOMEM;
+
+	cbnd->nd_list = arg->ndl;
+	cbnd->nd_client = clp;
+	list_add(&cbnd->nd_perclnt, arg->todolist);
+	atomic_inc(&clp->cl_count);
+	return 0;
+}
+
+/* Create a list of clients to send device notifications. */
+int
+create_device_notify_list(struct list_head *todolist,
+			  struct nfsd4_pnfs_cb_dev_list *ndl)
+{
+	int status;
+	struct create_device_notify_list_arg arg = {
+		.todolist = todolist,
+		.ndl = ndl,
+	};
+
+	nfs4_lock_state();
+	status = filter_confirmed_clients(create_device_notify_per_cl, &arg);
+	nfs4_unlock_state();
+
+	return status;
+}
+
+/*
+ * For each client that a device, send a device notification.
+ * XXX: Need to track which clients have which devices.
+ */
+int nfsd_device_notify_cb(struct super_block *sb,
+			  struct nfsd4_pnfs_cb_dev_list *ndl)
+{
+	struct nfs4_notify_device *cbnd;
+	unsigned int notify_num = 0;
+	int status2, status = 0;
+	struct list_head todolist;
+
+	BUG_ON(!ndl || ndl->cbd_len == 0 || !ndl->cbd_list);
+
+	dprintk("NFSD %s: cbl %p len %u\n", __func__, ndl, ndl->cbd_len);
+
+	if (nfsd_serv == NULL)
+		return -ENOENT;
+
+	INIT_LIST_HEAD(&todolist);
+
+	status = create_device_notify_list(&todolist, ndl);
+
+	while (!list_empty(&todolist)) {
+		cbnd = list_entry(todolist.next, struct nfs4_notify_device,
+				  nd_perclnt);
+		list_del_init(&cbnd->nd_perclnt);
+		status2 = nfsd4_cb_notify_device(cbnd);
+		put_nfs4_client(cbnd->nd_client);
+		if (status2)
+			status = status2;
+		notify_num++;
+		kfree(cbnd);
+	}
+
+	dprintk("NFSD %s: status %d clients %u\n",
+		__func__, status, notify_num);
+	return status;
+}
