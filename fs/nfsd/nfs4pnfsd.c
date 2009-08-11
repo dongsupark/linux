@@ -83,6 +83,35 @@ find_alloc_file(struct inode *ino, struct svc_fh *current_fh)
 	return alloc_init_file(ino, current_fh);
 }
 
+/* XXX: Need to implement the notify types and track which
+ * clients have which devices. */
+void pnfs_set_device_notify(clientid_t *clid, unsigned int types)
+{
+	struct nfs4_client *clp;
+	dprintk("%s: -->\n", __func__);
+
+	nfs4_lock_state();
+	/* Indicate that client has a device so we can only notify
+	 * the correct clients */
+	clp = find_confirmed_client(clid);
+	if (clp) {
+		atomic_inc(&clp->cl_deviceref);
+		dprintk("%s: Incr device count (clnt %p) to %d\n",
+			__func__, clp, atomic_read(&clp->cl_deviceref));
+	}
+	nfs4_unlock_state();
+}
+
+/* Clear notifications for this client
+ * XXX: Do we need to loop through a clean up all
+ *      krefs when nfsd cleans up the client? */
+void pnfs_clear_device_notify(struct nfs4_client *clp)
+{
+	atomic_dec(&clp->cl_deviceref);
+	dprintk("%s: Decr device count (clnt %p) to %d\n",
+		__func__, clp, atomic_read(&clp->cl_deviceref));
+}
+
 static struct nfs4_layout_state *
 alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
 			stateid_t *stateid)

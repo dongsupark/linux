@@ -237,6 +237,7 @@ struct nfs4_client {
 	struct list_head	cl_layouts;	/* outstanding layouts */
 	struct list_head	cl_layoutrecalls; /* outstanding layoutrecall
 						     callbacks */
+	atomic_t		cl_deviceref;	/* Num outstanding devs */
 #endif /* CONFIG_PNFSD */
 };
 
@@ -505,6 +506,7 @@ extern int create_layout_recall_list(struct list_head *todolist,
 		unsigned *todo_len, struct nfsd4_pnfs_cb_layout *cbl,
 		struct nfs4_file *lrfile);
 extern int nfsd4_cb_notify_device(struct nfs4_notify_device *cbnd);
+extern void pnfs_clear_device_notify(struct nfs4_client *clp);
 extern void pnfs_expire_client(struct nfs4_client *clp);
 #else /* CONFIG_PNFSD */
 static inline void nfsd4_free_pnfs_slabs(void) {}

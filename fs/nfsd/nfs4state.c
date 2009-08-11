@@ -883,6 +883,7 @@ static struct nfs4_client *create_client(struct xdr_netobj name, char *recdir,
 #if defined(CONFIG_PNFSD)
 	INIT_LIST_HEAD(&clp->cl_layouts);
 	INIT_LIST_HEAD(&clp->cl_layoutrecalls);
+	atomic_set(&clp->cl_deviceref, 0);
 #endif /* CONFIG_PNFSD */
 	INIT_LIST_HEAD(&clp->cl_sessions);
 	INIT_LIST_HEAD(&clp->cl_lru);
@@ -4338,8 +4339,11 @@ int nfsd_device_notify_cb(struct super_block *sb,
 	cbnd.nd_list = ndl;
 	for (i = 0; i < CLIENT_HASH_SIZE; i++)
 		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
+			if (atomic_read(&clp->cl_deviceref) <= 0)
+				continue;
 			cbnd.nd_client = clp;
 			status2 = nfsd4_cb_notify_device(&cbnd);
+			pnfs_clear_device_notify(clp);
 			if (status2)
 				status = status2;
 			notify_num++;
