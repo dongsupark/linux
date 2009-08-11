@@ -10,6 +10,7 @@
 #include <linux/exportfs.h>
 
 #include <linux/sunrpc/svcauth_gss.h>
+#include <linux/nfsd/nfsd4_pnfs.h>
 #include "nfsd.h"
 #include "vfs.h"
 #include "auth.h"
@@ -136,6 +137,7 @@ static inline __be32 check_pseudo_root(struct svc_rqst *rqstp,
 static __be32 nfsd_set_fh_dentry(struct svc_rqst *rqstp, struct svc_fh *fhp)
 {
 	struct knfsd_fh	*fh = &fhp->fh_handle;
+	int fsid_type;
 	struct fid *fid = NULL, sfid;
 	struct svc_export *exp;
 	struct dentry *dentry;
@@ -156,7 +158,8 @@ static __be32 nfsd_set_fh_dentry(struct svc_rqst *rqstp, struct svc_fh *fhp)
 			return error;
 		if (fh->fh_auth_type != 0)
 			return error;
-		len = key_len(fh->fh_fsid_type) / 4;
+		fsid_type = pnfs_fh_fsid_type(fh);
+		len = key_len(fsid_type) / 4;
 		if (len == 0)
 			return error;
 		if  (fh->fh_fsid_type == FSID_MAJOR_MINOR) {
@@ -169,7 +172,7 @@ static __be32 nfsd_set_fh_dentry(struct svc_rqst *rqstp, struct svc_fh *fhp)
 		data_left -= len;
 		if (data_left < 0)
 			return error;
-		exp = rqst_exp_find(rqstp, fh->fh_fsid_type, fh->fh_auth);
+		exp = rqst_exp_find(rqstp, fsid_type, fh->fh_auth);
 		fid = (struct fid *)(fh->fh_auth + len);
 	} else {
 		__u32 tfh[2];
