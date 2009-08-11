@@ -614,10 +614,9 @@ out:
  * TODO: cb_sequence should support referring call lists, cachethis, multiple
  * slots, and mark callback channel down on communication errors.
  */
-static void nfsd4_cb_prepare(struct rpc_task *task, void *calldata)
+static void nfsd4_cb_prepare_sequence(struct rpc_task *task,
+				      struct nfs4_client *clp)
 {
-	struct nfs4_delegation *dp = calldata;
-	struct nfs4_client *clp = dp->dl_client;
 	struct nfs4_rpc_args *args = task->tk_msg.rpc_argp;
 	u32 minorversion = clp->cl_cb_conn.cb_minorversion;
 	int status = 0;
@@ -635,6 +634,12 @@ static void nfsd4_cb_prepare(struct rpc_task *task, void *calldata)
 		}
 	}
 	rpc_call_start(task);
+}
+
+static void nfsd4_cb_recall_prepare(struct rpc_task *task, void *calldata)
+{
+	struct nfs4_delegation *dp = calldata;
+	nfsd4_cb_prepare_sequence(task, dp->dl_client);
 }
 
 static void nfsd4_cb_done(struct rpc_task *task, void *calldata)
@@ -712,7 +717,7 @@ static void nfsd4_cb_recall_release(void *calldata)
 }
 
 static const struct rpc_call_ops nfsd4_cb_recall_ops = {
-	.rpc_call_prepare = nfsd4_cb_prepare,
+	.rpc_call_prepare = nfsd4_cb_recall_prepare,
 	.rpc_call_done = nfsd4_cb_recall_done,
 	.rpc_release = nfsd4_cb_recall_release,
 };
