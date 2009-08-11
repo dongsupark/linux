@@ -2318,6 +2318,29 @@ out_acl:
 		}
 		WRITE64(stat.ino);
 	}
+#if defined(CONFIG_PNFSD)
+	if (bmval1 & FATTR4_WORD1_FS_LAYOUT_TYPES) {
+		int type = 0;
+
+	/* Query the underlying filesystem for supported pNFS layout types.
+	 * Currently, we only support one layout type per file system.
+	 * The export_ops->layout_type() returns the pnfs_layouttype4.
+	 */
+		buflen -= 4;
+		if (buflen < 0)		/* length */
+			goto out_resource;
+
+		if (exp->ex_pnfs == 1)
+			type = LAYOUT_NFSV4_FILES;
+		if (type) {
+			if ((buflen -= 4) < 0)	/* type */
+				goto out_resource;
+			WRITE32(1); 	/* length */
+			WRITE32(type);  /* type */
+		} else
+			WRITE32(0);  /* length */
+	}
+#endif /* CONFIG_PNFSD */
 	if (bmval2 & FATTR4_WORD2_SUPPATTR_EXCLCREAT) {
 		WRITE32(3);
 		WRITE32(NFSD_SUPPATTR_EXCLCREAT_WORD0);
