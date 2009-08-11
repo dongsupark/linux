@@ -160,6 +160,21 @@ struct nfsd4_pnfs_layoutcommit {
 	u64			lc_newsize;	/* response */
 };
 
+enum layoutreturn_flags {
+	LR_FLAG_INTERN = 1 << 0
+};
+
+struct nfsd4_pnfs_layoutreturn {
+	u32			lr_return_type;	/* request */
+	struct nfsd4_layout_seg	lr_seg;		/* request */
+	u32			lr_reclaim;	/* request */
+	u32			lr_flags;
+	stateid_t		lr_sid;		/* request/resopnse */
+	u32			lrf_body_len;	/* request */
+	void			*lrf_body;	/* request */
+	u32			lrs_present;	/* response */
+};
+
 /*
  * fh_fsid_type is overloaded to indicate whether a filehandle was one supplied
  * to a DS by LAYOUTGET.  nfs4_preprocess_stateid_op() uses this to decide how
