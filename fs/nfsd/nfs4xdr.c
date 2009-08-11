@@ -3274,7 +3274,19 @@ nfsd4_encode_sequence(struct nfsd4_compoundres *resp, int nfserr,
 
 static __be32 nfsd4_pnfs_fl_getdeviter(struct pnfs_deviter_arg *arg)
 {
-	/* stub */
+	if (arg->type != LAYOUT_NFSV4_FILES) {
+		printk(KERN_ERR "%s: ERROR: layout type isn't 'file' "
+			"(type: %x)\n", __func__, arg->type);
+		return -ENOTSUPP;
+	}
+
+	if (arg->cookie == 0) {
+		arg->cookie = 1;
+		arg->verf = 1;
+		arg->devid = 1;
+	} else
+		arg->eof = 1;
+
 	return 0;
 }
 
