@@ -90,7 +90,7 @@ int nfs4_pnfs_get_layout(struct svc_fh *, struct pnfs_layoutget_arg *,
 					stateid_t *);
 int nfs4_pnfs_return_layout(struct svc_fh *,
 					struct nfsd4_pnfs_layoutreturn *);
-
+void nfs4_pnfs_state_shutdown(void);
 #endif /* CONFIG_PNFSD */
 
 #endif /* LINUX_NFSD_PNFSD_H */

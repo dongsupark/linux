@@ -472,6 +472,7 @@ extern void release_pnfs_ds_dev_list(struct nfs4_stateid *stp);
 extern void nfs4_ds_get_verifier(stateid_t *stateid,
 		struct super_block *sb, u32 *p);
 extern int nfs4_preprocess_pnfs_ds_stateid(struct svc_fh *, stateid_t *);
+extern void nfs4_pnfs_state_shutdown(void);
 extern void pnfs_expire_client(struct nfs4_client *clp);
 #else /* CONFIG_PNFSD */
 static inline void nfsd4_free_pnfs_slabs(void) {}
