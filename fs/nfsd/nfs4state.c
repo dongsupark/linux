@@ -1337,6 +1337,9 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		cr_ses->flags &= ~SESSION4_PERSIST;
 		cr_ses->flags &= ~SESSION4_RDMA;
 
+		if (is_ds_only_session(unconf->cl_exchange_flags))
+			cr_ses->flags &= ~SESSION4_BACK_CHAN;
+
 		if (cr_ses->flags & SESSION4_BACK_CHAN) {
 			unconf->cl_cb_xprt = rqstp->rq_xprt;
 			svc_xprt_get(unconf->cl_cb_xprt);
