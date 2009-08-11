@@ -34,10 +34,22 @@
 #ifndef LINUX_NFSD_PNFSD_H
 #define LINUX_NFSD_PNFSD_H
 
+#include <linux/list.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 
+#include "state.h"
 #include "xdr4.h"
 
+/* outstanding layout */
+struct nfs4_layout {
+	struct list_head		lo_perfile;	/* hash by f_id */
+	struct list_head		lo_perclnt;	/* hash by clientid */
+	struct nfs4_file		*lo_file;	/* backpointer */
+	struct nfs4_client		*lo_client;
+	struct nfsd4_layout_seg 	lo_seg;
+};
+
 struct super_block *find_sbid_id(u64);
+__be32 nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *, struct exp_xdr_stream *);
 
 #endif /* LINUX_NFSD_PNFSD_H */
