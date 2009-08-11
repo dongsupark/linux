@@ -453,6 +453,12 @@ struct nfsd4_pnfs_layoutget {
 	u32			lg_roc;		/* response */
 };
 
+struct nfsd4_pnfs_layoutcommit {
+	struct nfsd4_pnfs_layoutcommit_arg args;
+	stateid_t		lc_sid;		/* request */
+	struct nfsd4_pnfs_layoutcommit_res res;
+};
+
 struct nfsd4_op {
 	int					opnum;
 	__be32					status;
@@ -501,6 +507,7 @@ struct nfsd4_op {
 		struct nfsd4_pnfs_getdevlist	pnfs_getdevlist;
 		struct nfsd4_pnfs_getdevinfo	pnfs_getdevinfo;
 		struct nfsd4_pnfs_layoutget	pnfs_layoutget;
+		struct nfsd4_pnfs_layoutcommit	pnfs_layoutcommit;
 #endif /* CONFIG_PNFSD */
 	} u;
 	struct nfs4_replay *			replay;
