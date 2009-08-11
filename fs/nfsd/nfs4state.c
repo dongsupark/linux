@@ -2471,7 +2471,7 @@ find_openstateowner_str(unsigned int hashval, struct nfsd4_open *open)
 }
 
 /* search file_hashtbl[] for file */
-static struct nfs4_file *
+struct nfs4_file *
 find_file(struct inode *ino)
 {
 	unsigned int hashval = file_hashval(ino);

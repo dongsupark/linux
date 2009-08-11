@@ -1550,6 +1550,33 @@ nfsd4_decode_layoutcommit(struct nfsd4_compoundargs *argp,
 
 	DECODE_TAIL;
 }
+
+static __be32
+nfsd4_decode_layoutreturn(struct nfsd4_compoundargs *argp,
+			  struct nfsd4_pnfs_layoutreturn *lrp)
+{
+	DECODE_HEAD;
+
+	READ_BUF(16);
+	READ32(lrp->args.lr_reclaim);
+	READ32(lrp->args.lr_seg.layout_type);
+	READ32(lrp->args.lr_seg.iomode);
+	READ32(lrp->args.lr_return_type);
+	if (lrp->args.lr_return_type == RETURN_FILE) {
+		READ_BUF(16);
+		READ64(lrp->args.lr_seg.offset);
+		READ64(lrp->args.lr_seg.length);
+		nfsd4_decode_stateid(argp, &lrp->lr_sid);
+		READ_BUF(4);
+		READ32(lrp->args.lrf_body_len);
+		if (lrp->args.lrf_body_len > 0) {
+			READ_BUF(lrp->args.lrf_body_len);
+			READMEM(lrp->args.lrf_body, lrp->args.lrf_body_len);
+		}
+	}
+
+	DECODE_TAIL;
+}
 #endif /* CONFIG_PNFSD */
 
 static __be32
@@ -1658,7 +1685,7 @@ static nfsd4_dec nfsd41_dec_ops[] = {
 	[OP_GETDEVICELIST]	= (nfsd4_dec)nfsd4_decode_getdevlist,
 	[OP_LAYOUTCOMMIT]	= (nfsd4_dec)nfsd4_decode_layoutcommit,
 	[OP_LAYOUTGET]		= (nfsd4_dec)nfsd4_decode_layoutget,
-	[OP_LAYOUTRETURN]	= (nfsd4_dec)nfsd4_decode_notsupp,
+	[OP_LAYOUTRETURN]	= (nfsd4_dec)nfsd4_decode_layoutreturn,
 #else  /* CONFIG_PNFSD */
 	[OP_GETDEVICEINFO]	= (nfsd4_dec)nfsd4_decode_notsupp,
 	[OP_GETDEVICELIST]	= (nfsd4_dec)nfsd4_decode_notsupp,
@@ -3885,6 +3912,24 @@ nfsd4_encode_layoutcommit(struct nfsd4_compoundres *resp, __be32 nfserr,
 out:
 	return nfserr;
 }
+
+static __be32
+nfsd4_encode_layoutreturn(struct nfsd4_compoundres *resp, __be32 nfserr,
+			  struct nfsd4_pnfs_layoutreturn *lrp)
+{
+	__be32 *p;
+
+	if (nfserr)
+		goto out;
+
+	RESERVE_SPACE(4);
+	WRITE32(lrp->lrs_present != 0);    /* got stateid? */
+	ADJUST_ARGS();
+	if (lrp->lrs_present)
+		nfsd4_encode_stateid(resp, &lrp->lr_sid);
+out:
+	return nfserr;
+}
 #endif /* CONFIG_PNFSD */
 
 static __be32
@@ -3952,7 +3997,7 @@ static nfsd4_enc nfsd4_enc_ops[] = {
 	[OP_GETDEVICELIST]	= (nfsd4_enc)nfsd4_encode_getdevlist,
 	[OP_LAYOUTCOMMIT]	= (nfsd4_enc)nfsd4_encode_layoutcommit,
 	[OP_LAYOUTGET]		= (nfsd4_enc)nfsd4_encode_layoutget,
-	[OP_LAYOUTRETURN]	= (nfsd4_enc)nfsd4_encode_noop,
+	[OP_LAYOUTRETURN]	= (nfsd4_enc)nfsd4_encode_layoutreturn,
 #else  /* CONFIG_PNFSD */
 	[OP_GETDEVICEINFO]	= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_GETDEVICELIST]	= (nfsd4_enc)nfsd4_encode_noop,
