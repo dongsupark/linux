@@ -16,6 +16,13 @@
 #include <linux/namei.h>
 #include <linux/sched.h>
 
+#if defined(CONFIG_PNFSD)
+struct pnfsd_cb_ctl pnfsd_cb_ctl = {
+	.lock = __SPIN_LOCK_UNLOCKED(pnfsd_cb_ctl.lock)
+};
+EXPORT_SYMBOL(pnfsd_cb_ctl);
+#endif /* CONFIG_PNFSD */
+
 #define dprintk(fmt, args...) do{}while(0)
 
 
