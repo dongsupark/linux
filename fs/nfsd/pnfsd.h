@@ -100,6 +100,16 @@ struct pnfs_mds_id {
 	struct kref		di_ref;
 };
 
+/* notify device request (from exported filesystem) */
+struct nfs4_notify_device {
+	struct nfsd4_pnfs_cb_dev_list  *nd_list;
+	struct nfs4_client	       *nd_client;
+	struct list_head	        nd_perclnt;
+
+	/* nfsd internal */
+	struct nfsd4_callback		nd_recall;
+};
+
 u64 find_create_sbid(struct super_block *);
 struct super_block *find_sbid_id(u64);
 __be32 nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *, struct exp_xdr_stream *);
@@ -114,5 +124,8 @@ void *layoutrecall_done(struct nfs4_layoutrecall *);
 void nfsd4_cb_layout(struct nfs4_layoutrecall *);
 int nfsd_layout_recall_cb(struct super_block *, struct inode *,
 			  struct nfsd4_pnfs_cb_layout *);
+int nfsd_device_notify_cb(struct super_block *,
+			  struct nfsd4_pnfs_cb_dev_list *);
+void nfsd4_cb_notify_device(struct nfs4_notify_device *);
 
 #endif /* LINUX_NFSD_PNFSD_H */
