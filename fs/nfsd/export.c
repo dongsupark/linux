@@ -31,6 +31,7 @@
 #include <linux/sunrpc/svc.h>
 #include <linux/nfsd/nfsd.h>
 #include <linux/nfsd/nfsfh.h>
+#include <linux/nfsd/nfsd4_pnfs.h>
 #include <linux/nfsd/syscall.h>
 #include <linux/lockd/bind.h>
 #include <linux/sunrpc/msg_prot.h>
