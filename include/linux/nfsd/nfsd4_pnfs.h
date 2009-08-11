@@ -136,6 +136,7 @@ struct nfsd4_pnfs_getdevinfo {
 	deviceid_t	gd_devid;	/* request */
 	u32		gd_maxcount;	/* request */
 	u32		gd_notify_types; /* request */
+	struct super_block *gd_sb;
 };
 
 struct nfsd4_pnfs_layoutget {
@@ -206,6 +207,18 @@ struct pnfsd_cb_operations {
 struct pnfs_export_operations {
 	/* Returns the supported pnfs_layouttype4. */
 	int (*layout_type) (struct super_block *);
+
+	/* Retrieve and encode a device onto the xdr stream.
+	 * Args:
+	 * sb - superblock
+	 * arg - layout type, device id, maxcount
+	 * arg.xdr - xdr stream for encoding
+	 * arg.func - Optional function called by file system to encode
+	 * device on xdr stream.
+	 */
+	int (*get_device_info) (struct super_block *, struct pnfs_devinfo_arg *);
+	/* Retrieve all available devices via an iterator */
+	int (*get_device_iter) (struct super_block *, struct pnfs_deviter_arg *);
 
 	/* pNFS Files layout specific operations */
 

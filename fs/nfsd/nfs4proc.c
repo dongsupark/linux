@@ -1211,6 +1211,13 @@ nfsd4_getdevlist(struct svc_rqst *rqstp,
 	if (status)
 		goto out;
 
+	/* Do nothing if underlying file system does not support
+	 * getdevicelist */
+	if (!sb->s_pnfs_op->get_device_iter) {
+		status = nfserr_notsupp;
+		goto out;
+	}
+
 	/* Set up arguments so device can be retrieved at encode time */
 	gdlp->gd_fhp = &cstate->current_fh;
 out:
@@ -1436,6 +1443,14 @@ nfsd4_getdevinfo(struct svc_rqst *rqstp,
 	status = nfsd4_layout_verify(sb, gdp->gd_type);
 	if (status)
 		goto out;
+
+	if (!sb->s_pnfs_op->get_device_info) {
+		status = nfserr_notsupp;
+		goto out;
+	}
+
+	/* Set up arguments so device can be retrieved at encode time */
+	gdp->gd_sb = sb;
 out:
 	return status;
 }

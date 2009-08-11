@@ -3305,6 +3305,7 @@ nfsd4_encode_devlist_iterator(struct nfsd4_compoundres *resp,
 			      struct nfsd4_pnfs_getdevlist *gdevl,
 			      unsigned int *dev_count)
 {
+	struct super_block *sb = gdevl->gd_fhp->fh_dentry->d_inode->i_sb;
 	struct pnfs_deviter_arg iter_arg;
 	__be32 nfserr;
 	int maxnum = gdevl->gd_maxnum;
@@ -3329,7 +3330,7 @@ nfsd4_encode_devlist_iterator(struct nfsd4_compoundres *resp,
 			iter_arg.type,
 			iter_arg.cookie,
 			iter_arg.verf);
-		nfserr = nfsd4_pnfs_fl_getdeviter(&iter_arg);
+		nfserr = sb->s_pnfs_op->get_device_iter(sb, &iter_arg);
 		dprintk("%s: post get_device_iter err: %d, eof: %u\n",
 			__func__,
 			nfserr,
@@ -3429,14 +3430,21 @@ out_err:
 	goto out;
 }
 
-/* For a given device id encode the associated device */
+/* For a given device id, have the file system retrieve and encode the
+ * associated device.  For file layout, the encoding function is
+ * passed down to the file system.  The file system then has the option
+ * of using this encoding function or one of its own.
+ *
+ * Note: the file system must return the XDR size of struct device_addr4
+ * da_addr_body in pnfs_xdr_info.bytes_written on NFS4ERR_TOOSMALL for the
+ * gdir_mincount calculation.
+ */
 static __be32
 nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, int nfserr,
 			struct nfsd4_pnfs_getdevinfo *gdev)
 {
-	struct pnfs_devinfo_arg args = {
-		.type = gdev->gd_type,
-	};
+	struct pnfs_devinfo_arg args;
+	struct super_block *sb;
 	int maxcount = 0, type_notify_len = 12;
 	int has_bitmap;
 	u32 *p_in = resp->p;
@@ -3445,6 +3453,8 @@ nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, int nfserr,
 	dprintk("%s: err %d\n", __func__, nfserr);
 	if (nfserr)
 		return nfserr;
+
+	sb = gdev->gd_sb;
 
 	/* Set the file layout encoding function.  Once other layout
 	 * types are added to the kernel they can be set here
@@ -3481,7 +3491,8 @@ nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, int nfserr,
 	args.xdr.resp = resp;
 	args.xdr.maxcount = maxcount;
 
-	nfserr = nfsd4_pnfs_fl_getdevinfo(&args);
+	/* Call file system to retrieve and encode device */
+	nfserr = sb->s_pnfs_op->get_device_info(sb, &args);
 	if (nfserr) {
 		/* Rewind to the beginning */
 		p = p_in;
@@ -3492,8 +3503,13 @@ nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, int nfserr,
 		goto out;
 	}
 
-	/* Update the xdr stream with the number of bytes written.
-	 * If xdr_buf pages are used, do not
+	/* The file system should never write 0 bytes without
+	 * returning an error
+	 */
+	BUG_ON(args.xdr.bytes_written <= 0);
+
+	/* Update the xdr stream with the number of bytes written
+	 * by the file system. If xdr_buf pages are used, do not
 	 * update the xdr stream which will now point at the xdr_buf
 	 * tail for the notification bitmap encoding.
 	 */
