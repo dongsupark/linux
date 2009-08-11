@@ -358,6 +358,14 @@ static void svc_export_request(struct cache_detail *cd,
 
 #if defined(CONFIG_PNFSD)
 static struct pnfs_export_operations pnfsd_default_ops;
+
+static struct pnfsd_cb_operations pnfsd_cb_op = {
+	.cb_layout_recall = nfsd_layout_recall_cb,
+	.cb_device_notify = nfsd_device_notify_cb,
+
+	.cb_get_state = nfs4_pnfs_cb_get_state,
+	.cb_change_state = nfs4_pnfs_cb_change_state,
+};
 #endif /* CONFIG_PNFSD */
 
 static struct svc_export *svc_export_update(struct svc_export *new,
@@ -1633,8 +1641,17 @@ nfsd_export_init(void)
 	if (rv)
 		return rv;
 	rv = cache_register(&svc_expkey_cache);
-	if (rv)
+	if (rv) {
 		cache_unregister(&svc_export_cache);
+		goto out;
+	}
+#if defined(CONFIG_PNFSD)
+	spin_lock(&pnfsd_cb_ctl.lock);
+	pnfsd_cb_ctl.module = THIS_MODULE;
+	pnfsd_cb_ctl.cb_op = &pnfsd_cb_op;
+	spin_unlock(&pnfsd_cb_ctl.lock);
+#endif /* CONFIG_PNFSD */
+out:
 	return rv;
 
 }
@@ -1662,6 +1679,12 @@ nfsd_export_shutdown(void)
 
 	exp_writelock();
 
+#if defined(CONFIG_PNFSD)
+	spin_lock(&pnfsd_cb_ctl.lock);
+	pnfsd_cb_ctl.module = NULL;
+	pnfsd_cb_ctl.cb_op = NULL;
+	spin_unlock(&pnfsd_cb_ctl.lock);
+#endif /* CONFIG_PNFSD */
 	cache_unregister(&svc_expkey_cache);
 	cache_unregister(&svc_export_cache);
 	svcauth_unix_purge();
