@@ -186,6 +186,7 @@ struct nfsd4_pnfs_cb_layout {
 	u32			cbl_layoutchanged;	/* request */
 	stateid_t		cbl_sid;		/* request */
 	struct nfs4_fsid	cbl_fsid;
+	void			*cbl_cookie;		/* fs private */
 };
 
 /* pNFS Metadata to Data server state communication */

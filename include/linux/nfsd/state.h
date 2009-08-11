@@ -476,7 +476,7 @@ extern void release_pnfs_ds_dev_list(struct nfs4_stateid *stp);
 extern void nfs4_pnfs_state_init(void);
 extern int put_layoutrecall(struct nfs4_layoutrecall *);
 extern void nomatching_layout(struct nfs4_layoutrecall *);
-extern void layoutrecall_done(struct nfs4_layoutrecall *);
+extern void *layoutrecall_done(struct nfs4_layoutrecall *);
 extern int nfsd4_cb_layout(struct nfs4_layoutrecall *lp);
 extern void nfsd4_free_pnfs_slabs(void);
 extern void nfsd4_free_slab(struct kmem_cache **slab);
