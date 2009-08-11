@@ -48,6 +48,10 @@
 #include <linux/nfsd/xdr4.h>
 #include <linux/nfs4_acl.h>
 #include <linux/sunrpc/gss_api.h>
+#if defined(CONFIG_PNFSD)
+#include <linux/nfsd/pnfsd.h>
+#include <linux/exportfs.h>
+#endif /* CONFIG_PNFSD */
 
 #define NFSDDBG_FACILITY		NFSDDBG_PROC
 
@@ -949,6 +953,15 @@ nfsd4_verify(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	status = _nfsd4_verify(rqstp, cstate, verify);
 	return status == nfserr_same ? nfs_ok : status;
 }
+
+#if defined(CONFIG_PNFSD)
+static __be32
+nfsd4_layout_verify(struct svc_export *exp, unsigned int layout_type)
+{
+	/* stubb */
+	return 0;
+}
+#endif /* CONFIG_PNFSD */
 
 /*
  * NULL call.
