@@ -2924,8 +2924,14 @@ nfs4_preprocess_stateid_op(struct nfsd4_compound_state *cstate,
 		return nfserr_grace;
 
 #if defined(CONFIG_PNFSD)
-	if (pnfs_fh_is_ds(&current_fh->fh_handle))
-		return 0;
+	if (pnfs_fh_is_ds(&current_fh->fh_handle)) {
+		if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
+			status = nfserr_bad_stateid;
+		else
+			status = nfs4_preprocess_pnfs_ds_stateid(current_fh,
+								 stateid);
+		goto out;
+	}
 #endif /* CONFIG_PNFSD */
 
 	if (nfsd4_has_session(cstate))
