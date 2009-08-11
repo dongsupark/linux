@@ -34,6 +34,7 @@
  */
 #include <linux/file.h>
 #include <linux/slab.h>
+#include <linux/nfsd/nfs4layoutxdr.h>
 
 #include "cache.h"
 #include "xdr4.h"
