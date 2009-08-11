@@ -2580,6 +2580,12 @@ out_acl:
 		} else
 			WRITE32(0);  /* length */
 	}
+
+	if (bmval2 & FATTR4_WORD2_LAYOUT_BLKSIZE) {
+		if ((buflen -= 4) < 0)
+			goto out_resource;
+		WRITE32(stat.blksize);
+	}
 #endif /* CONFIG_PNFSD */
 	if (bmval2 & FATTR4_WORD2_SUPPATTR_EXCLCREAT) {
 		WRITE32(3);
