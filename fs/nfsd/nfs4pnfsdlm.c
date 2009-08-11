@@ -291,3 +291,92 @@ out:
 	dprintk("<-- %s returns %d\n", __func__, err);
 	return err;
 }
+
+static int get_stripe_unit(int blocksize)
+{
+	if (blocksize >= NFSSVC_MAXBLKSIZE)
+		return blocksize;
+	return NFSSVC_MAXBLKSIZE - (NFSSVC_MAXBLKSIZE % blocksize);
+}
+
+/*
+ * Look up inode block device in pnfs_dlm_device list.
+ * Hash on the inode->i_ino and number of data servers.
+ */
+static int dlm_ino_hash(struct inode *ino)
+{
+	struct dlm_device_entry *de;
+	u32 hash_mask = 0;
+
+	/* If can't find the inode block device in the pnfs_dlm_deivce list
+	 * then don't hand out a layout
+	 */
+	de = nfsd4_find_pnfs_dlm_device(ino->i_sb->s_bdev->bd_disk->disk_name);
+	if (!de)
+		return -EINVAL;
+	hash_mask = de->num_ds - 1;
+	return ino->i_ino & hash_mask;
+}
+
+static int nfsd4_pnfs_dlm_layoutget(struct inode *inode,
+			   struct exp_xdr_stream *xdr,
+			   const struct nfsd4_pnfs_layoutget_arg *args,
+			   struct nfsd4_pnfs_layoutget_res *res)
+{
+	struct pnfs_filelayout_layout *layout = NULL;
+	struct knfsd_fh *fhp = NULL;
+	int rc = 0, index;
+
+	dprintk("%s: LAYOUT_GET\n", __func__);
+
+	index = dlm_ino_hash(inode);
+	dprintk("%s first stripe index %d i_ino %lu\n", __func__, index,
+		inode->i_ino);
+	if (index < 0)
+		return index;
+
+	res->lg_seg.layout_type = LAYOUT_NFSV4_FILES;
+	/* Always give out whole file layouts */
+	res->lg_seg.offset = 0;
+	res->lg_seg.length = NFS4_MAX_UINT64;
+	/* Always give out READ ONLY layouts */
+	res->lg_seg.iomode = IOMODE_READ;
+
+	layout = kzalloc(sizeof(*layout), GFP_KERNEL);
+	if (layout == NULL) {
+		rc = -ENOMEM;
+		goto error;
+	}
+
+	/* Set file layout response args */
+	layout->lg_layout_type = LAYOUT_NFSV4_FILES;
+	layout->lg_stripe_type = STRIPE_SPARSE;
+	layout->lg_commit_through_mds = false;
+	layout->lg_stripe_unit = get_stripe_unit(inode->i_sb->s_blocksize);
+	layout->lg_fh_length = 1;
+	layout->device_id.fsid = args->lg_fsid;
+	layout->device_id.devid = 1;                                /*FSFTEMP*/
+	layout->lg_first_stripe_index = index;                      /*FSFTEMP*/
+	layout->lg_pattern_offset = 0;
+
+	fhp = kmalloc(sizeof(*fhp), GFP_KERNEL);
+	if (fhp == NULL) {
+		rc = -ENOMEM;
+		goto error;
+	}
+
+	memcpy(fhp, args->lg_fh, sizeof(*fhp));
+	pnfs_fh_mark_ds(fhp);
+	layout->lg_fh_list = fhp;
+
+	/* Call nfsd to encode layout */
+	rc = filelayout_encode_layout(xdr, layout);
+exit:
+	kfree(layout);
+	kfree(fhp);
+	return rc;
+
+error:
+	res->lg_seg.length = 0;
+	goto exit;
+}
