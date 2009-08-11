@@ -220,6 +220,17 @@ struct pnfs_export_operations {
 	/* Retrieve all available devices via an iterator */
 	int (*get_device_iter) (struct super_block *, struct pnfs_deviter_arg *);
 
+	/* Retrieve and encode a layout onto the xdr stream.
+	 * Args:
+	 * inode - inode for which to retrieve layout
+	 * arg.xdr - xdr stream for encoding
+	 * arg.func - Optional function called by file system to encode
+	 * layout on xdr stream.
+	 */
+	int (*layout_get) (struct inode *, struct pnfs_layoutget_arg *);
+	/* Can layout segments be merged for this layout type? */
+	int (*can_merge_layouts) (u32 layout_type);
+
 	/* pNFS Files layout specific operations */
 
 	/* Get the write verifier for DS (called on MDS only) */

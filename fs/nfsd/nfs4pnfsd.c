@@ -623,12 +623,17 @@ nfs4_pnfs_get_layout(struct svc_fh *current_fh,
 {
 	int status = nfserr_layouttrylater;
 	struct inode *ino = current_fh->fh_dentry->d_inode;
+	struct super_block *sb = ino->i_sb;
+	int can_merge;
 	struct nfs4_file *fp;
 	struct nfs4_client *clp;
 	struct nfs4_layout *lp = NULL;
 	struct nfs4_layout_state *ls = NULL;
 
 	dprintk("NFSD: %s Begin\n", __func__);
+
+	can_merge = sb->s_pnfs_op->can_merge_layouts != NULL &&
+		    sb->s_pnfs_op->can_merge_layouts(args->seg.layout_type);
 
 	nfs4_lock_state();
 	fp = find_alloc_file(ino, current_fh);
@@ -659,7 +664,10 @@ nfs4_pnfs_get_layout(struct svc_fh *current_fh,
 		__func__, args->seg.layout_type, args->xdr.maxcount,
 		args->seg.iomode, args->seg.offset, args->seg.length);
 
-	status = nfsd4_pnfs_fl_layoutget(ino, args);
+	/* FIXME: need to eliminate the use of the state lock */
+	nfs4_unlock_state();
+	status = sb->s_pnfs_op->layout_get(ino, args);
+	nfs4_lock_state();
 
 	dprintk("pNFS %s: post-export status %d "
 		"iomode %u offset %llu length %llu\n",
@@ -685,6 +693,14 @@ nfs4_pnfs_get_layout(struct svc_fh *current_fh,
 		goto out_freelayout;
 	}
 
+	/* SUCCESS!
+	 * Can the new layout be merged into an existing one?
+	 * If so, free unused layout struct
+	 */
+	if (can_merge && merge_layout(fp, clp, &args->seg))
+		goto out_freelayout;
+
+	/* Can't merge, so let's initialize this new layout */
 	init_layout(ls, lp, fp, clp, current_fh, &args->seg);
 out:
 	if (ls)

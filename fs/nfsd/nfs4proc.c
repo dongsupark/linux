@@ -1254,6 +1254,14 @@ nfsd4_layoutget(struct svc_rqst *rqstp,
 	if (status)
 		goto out;
 
+	/* check to see if pNFS is supported. */
+	status = nfserr_layoutunavailable;
+	if (!sb->s_pnfs_op->layout_get) {
+		printk(KERN_INFO "pNFS %s: Underlying file system "
+		       "does not support layout_get\n", __func__);
+		goto out;
+	}
+
 	status = nfserr_inval;
 	if (lgp->lg_seg.iomode != IOMODE_READ &&
 	    lgp->lg_seg.iomode != IOMODE_RW &&
