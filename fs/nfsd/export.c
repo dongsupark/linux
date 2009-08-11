@@ -15,7 +15,7 @@
 #include <linux/namei.h>
 #include <linux/module.h>
 #include <linux/exportfs.h>
-
+#include <linux/nfsd/nfsd4_pnfs.h>
 #include <net/ipv6.h>
 
 #include "nfsd.h"
