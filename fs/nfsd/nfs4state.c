@@ -4578,6 +4578,7 @@ __nfs4_state_shutdown(void)
 	}
 
 	nfsd4_shutdown_recdir();
+	nfs4_pnfs_state_shutdown();
 }
 
 void
