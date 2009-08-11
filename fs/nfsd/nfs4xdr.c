@@ -3752,7 +3752,7 @@ nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
 	if (xdr.end - xdr.p > exp_xdr_qwords(maxcount & ~3))
 		xdr.end = xdr.p + exp_xdr_qwords(maxcount & ~3);
 
-	/* Retrieve, encode, and merge layout */
+	/* Retrieve, encode, and merge layout; process stateid */
 	nfserr = nfs4_pnfs_get_layout(lgp, &xdr);
 	if (nfserr)
 		goto err;
