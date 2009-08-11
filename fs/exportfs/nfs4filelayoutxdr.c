@@ -31,6 +31,8 @@
  */
 #include <linux/exp_xdr.h>
 #include <linux/module.h>
+#include <linux/nfs4.h>
+#include <linux/nfsd/nfsfh.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 
 /* We do our-own dprintk so filesystems are not dependent on sunrpc */
@@ -131,3 +133,86 @@ out:
 	return error;
 }
 EXPORT_SYMBOL(filelayout_encode_devinfo);
+
+/* Encodes the loc_body structure from draft 13
+ * on the response stream.
+ * Use linux error codes (not nfs) since these values are being
+ * returned to the file system.
+ */
+u32
+filelayout_encode_layout(struct exp_xdr_stream *xdr,
+			 const struct pnfs_filelayout_layout *flp)
+{
+	u32 len = 0, nfl_util, fhlen, i;
+	u32 *layoutlen_p;
+	u32 nfserr;
+	__be32 *p;
+
+	dprintk("%s: device_id %llx:%llx fsi %u, numfh %u\n",
+		__func__,
+		flp->device_id.pnfs_fsid,
+		flp->device_id.pnfs_devid,
+		flp->lg_first_stripe_index,
+		flp->lg_fh_length);
+
+	/* Ensure file system added at least one file handle */
+	if (flp->lg_fh_length <= 0) {
+		dprintk("%s: File Layout has no file handles!!\n", __func__);
+		nfserr = NFS4ERR_LAYOUTUNAVAILABLE;
+		goto out;
+	}
+
+	/* Ensure room for len, devid, util, first_stripe_index,
+	 * pattern_offset, number of filehandles */
+	p = layoutlen_p = exp_xdr_reserve_qwords(xdr, 1+2+2+1+1+2+1);
+	if (!p) {
+		nfserr = NFS4ERR_TOOSMALL;
+		goto out;
+	}
+
+	/* save spot for opaque file layout length, fill-in later*/
+	p++;
+
+	/* encode device id */
+	p = exp_xdr_encode_u64(p, flp->device_id.sbid);
+	p = exp_xdr_encode_u64(p, flp->device_id.devid);
+
+	/* set and encode flags */
+	nfl_util = flp->lg_stripe_unit;
+	if (flp->lg_commit_through_mds)
+		nfl_util |= NFL4_UFLG_COMMIT_THRU_MDS;
+	if (flp->lg_stripe_type == STRIPE_DENSE)
+		nfl_util |= NFL4_UFLG_DENSE;
+	p = exp_xdr_encode_u32(p, nfl_util);
+
+	/* encode first stripe index */
+	p = exp_xdr_encode_u32(p, flp->lg_first_stripe_index);
+
+	/* encode striping pattern start */
+	p = exp_xdr_encode_u64(p, flp->lg_pattern_offset);
+
+	/* encode number of file handles */
+	p = exp_xdr_encode_u32(p, flp->lg_fh_length);
+
+	/* encode file handles */
+	for (i = 0; i < flp->lg_fh_length; i++) {
+		fhlen = flp->lg_fh_list[i].fh_size;
+		p = exp_xdr_reserve_space(xdr, 4 + fhlen);
+		if (!p) {
+			nfserr = NFS4ERR_TOOSMALL;
+			goto out;
+		}
+		p = exp_xdr_encode_opaque(p, &flp->lg_fh_list[i].fh_base, fhlen);
+	}
+
+	/* Set number of bytes encoded =  total_bytes_encoded - length var */
+	len = (char *)p - (char *)layoutlen_p;
+	exp_xdr_encode_u32(layoutlen_p, len - 4);
+
+	nfserr = NFS_OK;
+out:
+	dprintk("%s: End err %u xdrlen %d\n",
+		__func__, nfserr, len);
+	return nfserr;
+}
+EXPORT_SYMBOL(filelayout_encode_layout);
