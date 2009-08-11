@@ -34,4 +34,6 @@
 #ifndef LINUX_NFSD_PNFSD_H
 #define LINUX_NFSD_PNFSD_H
 
+#include <linux/nfsd/nfsd4_pnfs.h>
+
 #endif /* LINUX_NFSD_PNFSD_H */
