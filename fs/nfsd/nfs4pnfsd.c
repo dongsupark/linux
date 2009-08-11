@@ -671,6 +671,13 @@ int nfs4_pnfs_return_layout(struct svc_fh *current_fh,
 			goto out;
 		}
 
+		/* Check the stateid */
+		dprintk("%s PROCESS LO_STATEID inode %p\n", __func__, ino);
+		status = nfs4_process_layout_stateid(clp, fp, &lrp->lr_sid,
+						     NULL);
+		if (status)
+			goto out_put_file;
+
 		/* update layouts */
 		layouts_found = pnfs_return_file_layouts(clp, fp, lrp);
 	} else {
@@ -685,9 +692,10 @@ int nfs4_pnfs_return_layout(struct svc_fh *current_fh,
 		ex_fsid,
 		lrp->lr_seg.offset, lrp->lr_seg.length, layouts_found);
 
-out:
+out_put_file:
 	if (fp)
 		put_nfs4_file(fp);
+out:
 	nfs4_unlock_state();
 
 	dprintk("pNFS %s: exit status %d \n", __func__, status);
