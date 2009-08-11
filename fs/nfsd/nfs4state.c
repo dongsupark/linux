@@ -66,6 +66,7 @@ static void nfs4_set_recdir(char *recdir);
 
 /* Currently used for almost all code touching nfsv4 state: */
 static DEFINE_MUTEX(client_mutex);
+struct task_struct *client_mutex_owner;
 
 /*
  * Currently used for the del_recall_lru and file hash table.  In an
@@ -83,11 +84,21 @@ void
 nfs4_lock_state(void)
 {
 	mutex_lock(&client_mutex);
+	client_mutex_owner = current;
+}
+
+#define BUG_ON_UNLOCKED_STATE() BUG_ON(client_mutex_owner != current)
+
+void
+nfs4_bug_on_unlocked_state(void)
+{
+	BUG_ON(client_mutex_owner != current);
 }
 
 void
 nfs4_unlock_state(void)
 {
+	client_mutex_owner = NULL;
 	mutex_unlock(&client_mutex);
 }
 
@@ -183,6 +194,7 @@ static void nfs4_file_put_fd(struct nfs4_file *fp, int oflag)
 		return;
 
 	fp->fi_fds[oflag] = NULL;
+	BUG_ON_UNLOCKED_STATE();
 	nfs4_unlock_state();	/* allow nested layout recall/return */
 	fput(fd);
 	nfs4_lock_state();
@@ -936,6 +948,8 @@ expire_client(struct nfs4_client *clp)
 	struct nfs4_stateowner *sop;
 	struct nfs4_delegation *dp;
 	struct list_head reaplist;
+
+	BUG_ON_UNLOCKED_STATE();
 
 	INIT_LIST_HEAD(&reaplist);
 	spin_lock(&recall_lock);
@@ -2195,6 +2209,7 @@ find_openstateowner_str(unsigned int hashval, struct nfsd4_open *open)
 {
 	struct nfs4_stateowner *so = NULL;
 
+	BUG_ON_UNLOCKED_STATE();
 	list_for_each_entry(so, &ownerstr_hashtbl[hashval], so_strhash) {
 		if (same_owner_str(so, &open->op_owner, &open->op_clientid))
 			return so;
