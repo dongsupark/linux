@@ -25,6 +25,9 @@
 
 #define NFSDDBG_FACILITY                NFSDDBG_PROC
 
+/* Globals */
+static u32 current_layoutid = 1;
+
 /*
  * Currently used for manipulating the layout state.
  */
@@ -105,6 +108,80 @@ nfsd4_init_pnfs_slabs(void)
 	return 0;
 }
 
+static struct nfs4_layout_state *
+alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
+			stateid_t *stateid)
+{
+	struct nfs4_layout_state *new;
+
+	/* FIXME: use a kmem_cache */
+	new = kzalloc(sizeof(*new), GFP_KERNEL);
+	if (!new)
+		return new;
+	get_nfs4_file(fp);
+	INIT_LIST_HEAD(&new->ls_perfile);
+	INIT_LIST_HEAD(&new->ls_layouts);
+	kref_init(&new->ls_ref);
+	new->ls_client = clp;
+	new->ls_file = fp;
+	new->ls_stateid.si_boot = stateid->si_boot;
+	new->ls_stateid.si_stateownerid = 0; /* identifies layout stateid */
+	new->ls_stateid.si_generation = 1;
+	spin_lock(&layout_lock);
+	new->ls_stateid.si_fileid = current_layoutid++;
+	list_add(&new->ls_perfile, &fp->fi_layout_states);
+	spin_unlock(&layout_lock);
+	return new;
+}
+
+static inline void
+get_layout_state(struct nfs4_layout_state *ls)
+{
+	kref_get(&ls->ls_ref);
+}
+
+static void
+destroy_layout_state_common(struct nfs4_layout_state *ls)
+{
+	struct nfs4_file *fp = ls->ls_file;
+
+	dprintk("pNFS %s: ls %p fp %p clp %p\n", __func__, ls, fp,
+		ls->ls_client);
+	BUG_ON(!list_empty(&ls->ls_layouts));
+	kfree(ls);
+	put_nfs4_file(fp);
+}
+
+static void
+destroy_layout_state(struct kref *kref)
+{
+	struct nfs4_layout_state *ls =
+			container_of(kref, struct nfs4_layout_state, ls_ref);
+
+	spin_lock(&layout_lock);
+	list_del(&ls->ls_perfile);
+	spin_unlock(&layout_lock);
+	destroy_layout_state_common(ls);
+}
+
+static void
+destroy_layout_state_locked(struct kref *kref)
+{
+	struct nfs4_layout_state *ls =
+			container_of(kref, struct nfs4_layout_state, ls_ref);
+
+	list_del(&ls->ls_perfile);
+	destroy_layout_state_common(ls);
+}
+
+static inline void
+put_layout_state(struct nfs4_layout_state *ls)
+{
+	dprintk("pNFS %s: ls %p ls_ref %d\n", __func__, ls,
+		atomic_read(&ls->ls_ref.refcount));
+	kref_put(&ls->ls_ref, destroy_layout_state);
+}
+
 static inline struct nfs4_layout *
 alloc_layout(void)
 {
@@ -118,21 +195,27 @@ free_layout(struct nfs4_layout *lp)
 }
 
 static void
-init_layout(struct nfs4_layout *lp,
+init_layout(struct nfs4_layout_state *ls,
+	    struct nfs4_layout *lp,
 	    struct nfs4_file *fp,
 	    struct nfs4_client *clp,
 	    struct svc_fh *current_fh,
 	    struct nfsd4_layout_seg *seg)
 {
-	dprintk("pNFS %s: lp %p clp %p fp %p ino %p\n", __func__,
-		lp, clp, fp, fp->fi_inode);
+	dprintk("pNFS %s: ls %p lp %p clp %p fp %p ino %p\n", __func__,
+		ls, lp, clp, fp, fp->fi_inode);
 
 	get_nfs4_file(fp);
 	lp->lo_client = clp;
 	lp->lo_file = fp;
+	get_layout_state(ls);
+	lp->lo_state = ls;
 	memcpy(&lp->lo_seg, seg, sizeof(lp->lo_seg));
+	spin_lock(&layout_lock);
+	list_add_tail(&lp->lo_perstate, &ls->ls_layouts);
 	list_add_tail(&lp->lo_perclnt, &clp->cl_layouts);
 	list_add_tail(&lp->lo_perfile, &fp->fi_layouts);
+	spin_unlock(&layout_lock);
 	dprintk("pNFS %s end\n", __func__);
 }
 
@@ -295,6 +378,7 @@ merge_layout(struct nfs4_file *fp,
 {
 	struct nfs4_layout *lp = NULL;
 
+	spin_lock(&layout_lock);
 	list_for_each_entry (lp, &fp->fi_layouts, lo_perfile)
 		if (lp->lo_seg.layout_type == seg->layout_type &&
 		    lp->lo_seg.clientid == seg->clientid &&
@@ -303,6 +387,7 @@ merge_layout(struct nfs4_file *fp,
 			extend_layout(&lp->lo_seg, seg);
 			break;
 		}
+	spin_unlock(&layout_lock);
 
 	return lp;
 }
@@ -319,6 +404,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 	struct nfs4_file *fp;
 	struct nfs4_client *clp;
 	struct nfs4_layout *lp = NULL;
+	struct nfs4_layout_state *ls = NULL;
 	struct nfsd4_pnfs_layoutget_arg args = {
 		.lg_minlength = lgp->lg_minlength,
 		.lg_fh = &lgp->lg_fhp->fh_handle,
@@ -417,7 +503,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		goto out_freelayout;
 
 	/* Can't merge, so let's initialize this new layout */
-	init_layout(lp, fp, clp, lgp->lg_fhp, &res.lg_seg);
+	init_layout(ls, lp, fp, clp, lgp->lg_fhp, &res.lg_seg);
 out_unlock:
 	if (fp)
 		put_nfs4_file(fp);
