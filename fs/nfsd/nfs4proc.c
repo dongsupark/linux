@@ -1328,26 +1328,30 @@ nfsd4_layoutcommit(struct svc_rqst *rqstp,
 	dprintk("%s:new offset: %d new size: %llu old size: %lld\n",
 		__func__, lcp->lc_newoffset, lcp->lc_last_wr + 1, ino->i_size);
 
-	fh_lock(current_fh);
-	if ((lcp->lc_newoffset == 0) ||
-	    ((lcp->lc_last_wr + 1) <= ino->i_size)) {
-		status = 0;
-		lcp->lc_size_chg = 0;
-		fh_unlock(current_fh);
-		goto out;
-	}
-
 	/* Set clientid from sessionid */
 	copy_clientid((clientid_t *)&lcp->lc_seg.clientid, cstate->session);
 
-	/* Try our best to update the file size */
-	dprintk("%s: Modifying file size\n", __func__);
-	ia.ia_valid = ATTR_SIZE;
-	ia.ia_size = lcp->lc_last_wr + 1;
-	status = notify_change(current_fh->fh_dentry, &ia);
-	dprintk("%s:notify_change result %d\n", __func__, status);
+	if (sb->s_pnfs_op->layout_commit) {
+		status = sb->s_pnfs_op->layout_commit(ino, lcp);
+		dprintk("%s:layout_commit result %d\n", __func__, status);
+	} else {
+		fh_lock(current_fh);
+		if ((lcp->lc_newoffset == 0) ||
+		    ((lcp->lc_last_wr + 1) <= ino->i_size)) {
+			status = 0;
+			lcp->lc_size_chg = 0;
+			fh_unlock(current_fh);
+			goto out;
+		}
 
-	fh_unlock(current_fh);
+		/* Try our best to update the file size */
+		dprintk("%s: Modifying file size\n", __func__);
+		ia.ia_valid = ATTR_SIZE;
+		ia.ia_size = lcp->lc_last_wr + 1;
+		status = notify_change(current_fh->fh_dentry, &ia);
+		fh_unlock(current_fh);
+		dprintk("%s:notify_change result %d\n", __func__, status);
+	}
 
 	if (!status) {
 		if (EX_ISSYNC(current_fh->fh_export)) {
@@ -1356,8 +1360,7 @@ nfsd4_layoutcommit(struct svc_rqst *rqstp,
 			write_inode_now(ino, 1);
 		}
 		lcp->lc_size_chg = 1;
-		lcp->lc_newsize = ino->i_size;
-		status = 0;
+		lcp->lc_newsize = i_size_read(ino);
 	}
 out:
 	return status;

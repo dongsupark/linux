@@ -228,6 +228,8 @@ struct pnfs_export_operations {
 	 * layout on xdr stream.
 	 */
 	int (*layout_get) (struct inode *, struct pnfs_layoutget_arg *);
+	/* Commit changes to layout */
+	int (*layout_commit) (struct inode *, struct nfsd4_pnfs_layoutcommit *);
 	/* Can layout segments be merged for this layout type? */
 	int (*can_merge_layouts) (u32 layout_type);
 
