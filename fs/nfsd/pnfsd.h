@@ -99,12 +99,13 @@ struct pnfs_mds_id {
 	struct kref		di_ref;
 };
 
-int nfs4_pnfs_cb_get_state(struct super_block *, struct pnfs_get_state *);
-int nfs4_pnfs_cb_change_state(struct pnfs_get_state *);
 u64 find_create_sbid(struct super_block *);
 struct super_block *find_sbid_id(u64);
 __be32 nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *, struct exp_xdr_stream *);
 int nfs4_pnfs_return_layout(struct super_block *, struct svc_fh *,
 					struct nfsd4_pnfs_layoutreturn *);
+int nfs4_pnfs_cb_get_state(struct super_block *, struct pnfs_get_state *);
+int nfs4_pnfs_cb_change_state(struct pnfs_get_state *);
+void nfs4_ds_get_verifier(stateid_t *, struct super_block *, u32 *);
 
 #endif /* LINUX_NFSD_PNFSD_H */
