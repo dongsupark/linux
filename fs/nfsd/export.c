@@ -389,7 +389,8 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 	}
 
 	if (inode->i_sb->s_pnfs_op &&
-	    !inode->i_sb->s_pnfs_op->layout_type) {
+	    (!inode->i_sb->s_pnfs_op->layout_type ||
+	     !inode->i_sb->s_pnfs_op->get_device_info)) {
 		dprintk("exp_export: export of invalid fs pnfs export ops.\n");
 		return -EINVAL;
 	}
