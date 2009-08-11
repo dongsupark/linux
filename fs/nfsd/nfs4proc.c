@@ -49,6 +49,7 @@
 #include <linux/nfs4_acl.h>
 #include <linux/sunrpc/gss_api.h>
 #include <linux/exportfs.h>
+#include <linux/nfsd/nfs4layoutxdr.h>
 
 #include "pnfsd.h"
 

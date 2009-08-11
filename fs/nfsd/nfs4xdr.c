@@ -58,6 +58,7 @@
 #include <linux/sunrpc/gss_api.h>
 #include <linux/sunrpc/svcauth_gss.h>
 #include <linux/exportfs.h>
+#include <linux/nfsd/nfs4layoutxdr.h>
 
 #define NFSDDBG_FACILITY		NFSDDBG_XDR
 
