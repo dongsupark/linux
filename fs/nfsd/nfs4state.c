@@ -284,6 +284,7 @@ unhash_delegation(struct nfs4_delegation *dp)
 	((id) & CLIENT_HASH_MASK)
 #define clientstr_hashval(name) \
 	(opaque_hashval((name), 8) & CLIENT_HASH_MASK)
+
 /*
  * reclaim_str_hashtbl[] holds known client info from previous reset/reboot
  * used in reboot/reset lease grace period processing
@@ -291,7 +292,7 @@ unhash_delegation(struct nfs4_delegation *dp)
  * conf_id_hashtbl[], and conf_str_hashtbl[] hold
  * confirmed setclientid_confirmed info.
  *
- * unconf_str_hastbl[] and unconf_id_hashtbl[] hold unconfirmed 
+ * unconf_str_hastbl[] and unconf_id_hashtbl[] hold unconfirmed
  * setclientid info.
  *
  * client_lru holds client queue ordered by nfs4_client.cl_time
@@ -300,7 +301,7 @@ unhash_delegation(struct nfs4_delegation *dp)
  * close_lru holds (open) stateowner queue ordered by nfs4_stateowner.so_time
  * for last close replay.
  */
-static struct list_head	reclaim_str_hashtbl[CLIENT_HASH_SIZE];
+static struct list_head reclaim_str_hashtbl[CLIENT_HASH_SIZE];
 static int reclaim_str_hashtbl_size = 0;
 static struct list_head	conf_id_hashtbl[CLIENT_HASH_SIZE];
 static struct list_head	conf_str_hashtbl[CLIENT_HASH_SIZE];
@@ -4312,6 +4313,40 @@ out:
 	if ((status == -ENOENT) && len)
 		status = 0;
 	dprintk("%s: <-- list len %u status %d\n", __func__, len, status);
+	return status;
+}
+
+/*
+ * Spawn a thread to perform a device notify
+ *
+ */
+int nfsd_device_notify_cb(struct super_block *sb,
+			  struct nfsd4_pnfs_cb_dev_list *ndl)
+{
+	struct nfs4_notify_device cbnd;
+	struct nfs4_client *clp = NULL;
+	unsigned int i, notify_num = 0;
+	int status2, status = 0;
+
+	BUG_ON(!ndl || ndl->cbd_len == 0 || !ndl->cbd_list);
+
+	dprintk("NFSD %s: cbl %p len %u\n", __func__, ndl, ndl->cbd_len);
+
+	if (nfsd_serv == NULL)
+		return -ENOENT;
+
+	cbnd.nd_list = ndl;
+	for (i = 0; i < CLIENT_HASH_SIZE; i++)
+		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
+			cbnd.nd_client = clp;
+			status2 = nfsd4_cb_notify_device(&cbnd);
+			if (status2)
+				status = status2;
+			notify_num++;
+		}
+
+	dprintk("NFSD %s: i %d status %d clients %u\n",
+		__func__, i , status, notify_num);
 	return status;
 }
 

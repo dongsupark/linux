@@ -189,6 +189,18 @@ struct nfsd4_pnfs_cb_layout {
 	void			*cbl_cookie;		/* fs private */
 };
 
+struct nfsd4_pnfs_cb_dev_item {
+	u32			cbd_notify_type;	/* request */
+	u32			cbd_layout_type;	/* request */
+	deviceid_t		cbd_devid;		/* request */
+	u32			cbd_immediate;		/* request */
+};
+
+struct nfsd4_pnfs_cb_dev_list {
+	u32				cbd_len;  /* request */
+	struct nfsd4_pnfs_cb_dev_item  *cbd_list; /* request */
+};
+
 /* pNFS Metadata to Data server state communication */
 struct pnfs_get_state {
 	u32			dsid;    /* request */
@@ -207,6 +219,8 @@ struct pnfsd_cb_operations {
 	/* Generic callbacks */
 	int (*cb_layout_recall) (struct super_block *, struct inode *,
 				 struct nfsd4_pnfs_cb_layout *);
+	int (*cb_device_notify) (struct super_block *,
+				 struct nfsd4_pnfs_cb_dev_list *);
 };
 
 struct pnfs_export_operations {

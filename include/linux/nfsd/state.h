@@ -282,6 +282,12 @@ struct nfs4_layoutrecall {
 	struct nfs4_layoutrecall	*parent; /* The initiating recall */
 };
 
+/* notify device request (from exported filesystem) */
+struct nfs4_notify_device {
+	struct nfsd4_pnfs_cb_dev_list  *nd_list;
+	struct nfs4_client	       *nd_client;
+};
+
 #endif /* CONFIG_PNFSD */
 
 /* struct nfs4_client_reset
@@ -498,6 +504,7 @@ extern int lo_recall_per_client(struct nfs4_client *clp,
 extern int create_layout_recall_list(struct list_head *todolist,
 		unsigned *todo_len, struct nfsd4_pnfs_cb_layout *cbl,
 		struct nfs4_file *lrfile);
+extern int nfsd4_cb_notify_device(struct nfs4_notify_device *cbnd);
 extern void pnfs_expire_client(struct nfs4_client *clp);
 #else /* CONFIG_PNFSD */
 static inline void nfsd4_free_pnfs_slabs(void) {}
