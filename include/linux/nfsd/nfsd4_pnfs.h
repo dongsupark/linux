@@ -229,4 +229,11 @@ static inline int pnfs_fh_is_ds(struct knfsd_fh *fh)
 
 #endif /* CONFIG_PNFSD */
 
+/*
+ * callbacks provided by the nfsd
+ */
+struct pnfsd_cb_operations {
+	/* Generic callbacks */
+};
+
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
