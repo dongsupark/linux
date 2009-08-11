@@ -1114,6 +1114,48 @@ nfsd4_getdevinfo(struct svc_rqst *rqstp,
 out:
 	return status;
 }
+
+static __be32
+nfsd4_layoutget(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_layoutget *lgp)
+{
+	int status;
+	struct super_block *sb;
+	struct svc_fh *current_fh = &cstate->current_fh;
+
+	status = fh_verify(rqstp, current_fh, 0, NFSD_MAY_NOP);
+	if (status)
+		goto out;
+
+	status = nfserr_inval;
+	sb = current_fh->fh_dentry->d_inode->i_sb;
+	if (!sb)
+		goto out;
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(sb, current_fh->fh_export,
+				     lgp->lg_seg.layout_type);
+	if (status)
+		goto out;
+
+	status = nfserr_badiomode;
+	if (lgp->lg_seg.iomode != IOMODE_READ &&
+	    lgp->lg_seg.iomode != IOMODE_RW) {
+		dprintk("pNFS %s: invalid iomode %d\n", __func__,
+			lgp->lg_seg.iomode);
+		goto out;
+	}
+
+	/* Set up arguments so layout can be retrieved at encode time */
+	lgp->lg_fhp = current_fh;
+	copy_clientid((clientid_t *)&lgp->lg_seg.clientid, cstate->session);
+	status = nfs_ok;
+out:
+	return status;
+}
 #endif /* CONFIG_PNFSD */
 
 /*
@@ -1849,6 +1891,10 @@ static struct nfsd4_operation nfsd4_ops[] = {
 		.op_func = (nfsd4op_func)nfsd4_getdevinfo,
 		.op_flags = ALLOWED_WITHOUT_FH,
 		.op_name = "OP_GETDEVICEINFO",
+	},
+	[OP_LAYOUTGET] = {
+		.op_func = (nfsd4op_func)nfsd4_layoutget,
+		.op_name = "OP_LAYOUTGET",
 	},
 #endif /* CONFIG_PNFSD */
 };
