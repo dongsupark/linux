@@ -49,6 +49,9 @@ enum {
 	NFSD_Gracetime,
 	NFSD_RecoveryDir,
 #endif
+#ifdef CONFIG_PNFSD
+	NFSD_pnfs_dlm_device,
+#endif
 };
 
 /*
@@ -67,6 +70,9 @@ static ssize_t write_leasetime(struct file *file, char *buf, size_t size);
 static ssize_t write_gracetime(struct file *file, char *buf, size_t size);
 static ssize_t write_recoverydir(struct file *file, char *buf, size_t size);
 #endif
+#ifdef CONFIG_PNFSD
+static ssize_t write_pnfs_dlm_device(struct file *file, char *buf, size_t size);
+#endif
 
 static ssize_t (*write_op[])(struct file *, char *, size_t) = {
 	[NFSD_Fh] = write_filehandle,
@@ -81,6 +87,9 @@ static ssize_t (*write_op[])(struct file *, char *, size_t) = {
 	[NFSD_Leasetime] = write_leasetime,
 	[NFSD_Gracetime] = write_gracetime,
 	[NFSD_RecoveryDir] = write_recoverydir,
+#endif
+#ifdef CONFIG_PNFSD
+	[NFSD_pnfs_dlm_device] = write_pnfs_dlm_device,
 #endif
 };
 
@@ -1059,6 +1068,66 @@ static ssize_t write_recoverydir(struct file *file, char *buf, size_t size)
 
 #endif
 
+#ifdef CONFIG_PNFSD
+
+static ssize_t __write_pnfs_dlm_device(struct file *file, char *buf,
+				       size_t size)
+{
+	char *mesg = buf;
+	char *pnfs_dlm_device;
+	int max_size = NFSD_PNFS_DLM_DEVICE_MAX;
+	int len, ret = 0;
+
+	if (size > 0) {
+		ret = -EINVAL;
+		if (size > max_size || buf[size-1] != '\n')
+			return ret;
+		buf[size-1] = 0;
+
+		pnfs_dlm_device = mesg;
+		len = qword_get(&mesg, pnfs_dlm_device, size);
+		if (len <= 0)
+			return ret;
+
+		ret = nfsd4_set_pnfs_dlm_device(pnfs_dlm_device, len);
+	}
+	return ret <= 0 ? ret : strlen(buf);
+}
+
+/**
+ * write_pnfs_dlm_device - Set or report the current pNFS data server list
+ *
+ * Input:
+ *			buf:		ignored
+ *			size:		zero
+ *
+ * OR
+ *
+ * Input:
+ *			buf:		C string containing a block device name,
+ *					a colon, and then a comma separated
+ *					list of pNFS data server IPv4 addresses
+ *			size:		non-zero length of C string in @buf
+ * Output:
+ *	On success:	passed-in buffer filled with '\n'-terminated C
+ *			string containing a block device name, a colon, and
+ *			then a comma separated list of pNFS
+ *			data server IPv4 addresses.
+ *			return code is the size in bytes of the string
+ *	On error:	return code is a negative errno value
+ */
+static ssize_t write_pnfs_dlm_device(struct file *file, char *buf, size_t size)
+{
+	ssize_t rv;
+
+	mutex_lock(&nfsd_mutex);
+	rv = __write_pnfs_dlm_device(file, buf, size);
+	mutex_unlock(&nfsd_mutex);
+	return rv;
+}
+
+#endif /* CONFIG_PNFSD */
+
 /*----------------------------------------------------------------------------*/
 /*
  *	populating the filesystem.
@@ -1088,6 +1157,10 @@ static int nfsd_fill_super(struct super_block * sb, void * data, int silent)
 		[NFSD_Leasetime] = {"nfsv4leasetime", &transaction_ops, S_IWUSR|S_IRUSR},
 		[NFSD_Gracetime] = {"nfsv4gracetime", &transaction_ops, S_IWUSR|S_IRUSR},
 		[NFSD_RecoveryDir] = {"nfsv4recoverydir", &transaction_ops, S_IWUSR|S_IRUSR},
+#endif
+#ifdef CONFIG_PNFSD
+		[NFSD_pnfs_dlm_device] = {"pnfs_dlm_device", &transaction_ops,
+					   S_IWUSR|S_IRUSR},
 #endif
 		/* last one */ {""}
 	};
