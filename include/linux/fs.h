@@ -32,6 +32,7 @@
 #include <uapi/linux/fs.h>
 
 struct export_operations;
+struct pnfs_export_operations;
 struct hd_geometry;
 struct iovec;
 struct nameidata;
@@ -1241,6 +1242,7 @@ struct super_block {
 	const struct dquot_operations	*dq_op;
 	const struct quotactl_ops	*s_qcop;
 	const struct export_operations *s_export_op;
+	const struct pnfs_export_operations *s_pnfs_op;
 	unsigned long		s_flags;
 	unsigned long		s_magic;
 	struct dentry		*s_root;
