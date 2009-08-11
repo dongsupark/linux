@@ -106,6 +106,17 @@ struct nfsd4_pnfs_layoutreturn_arg {
 	void			*lr_cookie;	/* fs private */
 };
 
+/* pNFS Metadata to Data server state communication */
+struct pnfs_get_state {
+	u32			dsid;		/* request */
+	u64			ino;		/* request */
+	nfs4_stateid		stid;		/* request;response */
+	nfs4_clientid		clid;		/* response */
+	u32			access;		/* response */
+	u32			stid_gen;	/* response */
+	u32			verifier[2];	/* response */
+};
+
 /*
  * pNFS export operations vector.
  *
@@ -184,6 +195,12 @@ struct pnfs_export_operations {
 
 	/* Can layout segments be merged for this layout type? */
 	int (*can_merge_layouts) (u32 layout_type);
+
+	/* pNFS Files layout specific operations */
+
+	/* Call fs on DS only */
+	int (*get_state) (struct inode *, struct knfsd_fh *,
+			  struct pnfs_get_state *);
 };
 
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
