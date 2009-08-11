@@ -21,8 +21,10 @@
  *
  ******************************************************************************/
 
+#include <linux/nfs4.h>
 #include <linux/nfsd/debug.h>
 #include <linux/nfsd/nfs4pnfsdlm.h>
+#include <linux/nfsd/nfs4layoutxdr.h>
 
 #define NFSDDBG_FACILITY                NFSDDBG_FILELAYOUT
 
@@ -160,4 +162,24 @@ void nfsd4_pnfs_dlm_shutdown(void)
 		kfree(dlm_pdev);
 	}
 	spin_unlock(&dlm_device_list_lock);
+}
+
+static int nfsd4_pnfs_dlm_getdeviter(struct super_block *sb,
+				     u32 layout_type,
+				     struct nfsd4_pnfs_dev_iter_res *res)
+{
+	if (layout_type != LAYOUT_NFSV4_1_FILES) {
+		printk(KERN_ERR "%s: ERROR: layout type isn't 'file' "
+			"(type: %x)\n", __func__, layout_type);
+		return -ENOTSUPP;
+	}
+
+	res->gd_eof = 1;
+	if (res->gd_cookie)
+		return -ENOENT;
+
+	res->gd_cookie = 1;
+	res->gd_verf = 1;
+	res->gd_devid = 1;
+	return 0;
 }
