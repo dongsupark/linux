@@ -355,7 +355,8 @@ static struct svc_export *svc_export_update(struct svc_export *new,
 					    struct svc_export *old);
 static struct svc_export *svc_export_lookup(struct svc_export *);
 
-static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
+static int check_export(struct inode *inode, int *flags, unsigned char *uuid,
+			bool ex_pnfs)
 {
 
 	/*
@@ -392,6 +393,14 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 	    !inode->i_sb->s_export_op->fh_to_dentry) {
 		dprintk("exp_export: export of invalid fs type.\n");
 		return -EINVAL;
+	}
+
+	dprintk("%s: s_pnfs_op %p ex_pnfs %d\n", __func__,
+		inode->i_sb->s_pnfs_op, ex_pnfs);
+
+	if (!ex_pnfs) {
+		inode->i_sb->s_pnfs_op = NULL;
+		return 0;
 	}
 
 	return 0;
@@ -585,6 +594,8 @@ static int svc_export_parse(struct cache_detail *cd, char *mesg, int mlen)
 					if (exp.ex_uuid == NULL)
 						err = -ENOMEM;
 				}
+			} else if (strcmp(buf, "pnfs") == 0) {
+				exp.ex_pnfs = 1;
 			} else if (strcmp(buf, "secinfo") == 0)
 				err = secinfo_parse(&mesg, buf, &exp);
 			else
@@ -598,7 +609,7 @@ static int svc_export_parse(struct cache_detail *cd, char *mesg, int mlen)
 		}
 
 		err = check_export(exp.ex_path.dentry->d_inode, &exp.ex_flags,
-				   exp.ex_uuid);
+				   exp.ex_uuid, exp.ex_pnfs);
 		if (err)
 			goto out4;
 	}
@@ -659,6 +670,8 @@ static int svc_export_show(struct seq_file *m,
 				seq_printf(m, "%02x", exp->ex_uuid[i]);
 			}
 		}
+		if (exp->ex_pnfs)
+			seq_puts(m, ",pnfs");
 		show_secinfo(m, exp);
 	}
 	seq_puts(m, ")\n");
@@ -686,6 +699,7 @@ static void svc_export_init(struct cache_head *cnew, struct cache_head *citem)
 	new->ex_fslocs.locations = NULL;
 	new->ex_fslocs.locations_count = 0;
 	new->ex_fslocs.migrated = 0;
+	new->ex_pnfs = 0;
 }
 
 static void export_update(struct cache_head *cnew, struct cache_head *citem)
@@ -698,6 +712,7 @@ static void export_update(struct cache_head *cnew, struct cache_head *citem)
 	new->ex_anon_uid = item->ex_anon_uid;
 	new->ex_anon_gid = item->ex_anon_gid;
 	new->ex_fsid = item->ex_fsid;
+	new->ex_pnfs = item->ex_pnfs;
 	new->ex_uuid = item->ex_uuid;
 	item->ex_uuid = NULL;
 	new->ex_pathname = item->ex_pathname;
@@ -1036,7 +1051,7 @@ exp_export(struct nfsctl_export *nxp)
 		goto finish;
 	}
 
-	err = check_export(path.dentry->d_inode, &nxp->ex_flags, NULL);
+	err = check_export(path.dentry->d_inode, &nxp->ex_flags, NULL, false);
 	if (err) goto finish;
 
 	err = -ENOMEM;
