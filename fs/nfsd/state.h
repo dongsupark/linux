@@ -38,6 +38,7 @@
 #include <linux/idr.h>
 #include <linux/sunrpc/svc_xprt.h>
 #include <linux/nfsd/nfsfh.h>
+#include <linux/nfsd/export.h>
 #include "nfsfh.h"
 
 typedef struct {
@@ -61,17 +62,6 @@ typedef struct {
 	(s)->si_opaque.so_clid.cl_id, \
 	(s)->si_opaque.so_id, \
 	(s)->si_generation
-
-struct nfsd4_callback {
-	void *cb_op;
-	struct nfs4_client *cb_clp;
-	struct list_head cb_per_client;
-	u32 cb_minorversion;
-	struct rpc_message cb_msg;
-	const struct rpc_call_ops *cb_ops;
-	struct work_struct cb_work;
-	bool cb_done;
-};
 
 struct nfs4_stid {
 #define NFS4_OPEN_STID 1
@@ -282,6 +272,8 @@ struct nfs4_client {
 						/* wait here for slots */
 #if defined(CONFIG_PNFSD)
 	struct list_head	cl_layouts;	/* outstanding layouts */
+	struct list_head	cl_layoutrecalls; /* outstanding layoutrecall
+						     callbacks */
 #endif /* CONFIG_PNFSD */
 };
 
@@ -520,6 +512,8 @@ extern void nfsd4_init_stid(struct nfs4_stid *, struct nfs4_client *, unsigned c
 extern void nfsd4_unhash_stid(struct nfs4_stid *);
 extern struct nfs4_stid *find_stateid(struct nfs4_client *, stateid_t *);
 extern __be32 nfsd4_lookup_stateid(stateid_t *, unsigned char typemask, struct nfs4_stid **);
+extern void expire_client_lock(struct nfs4_client *);
+extern int filter_confirmed_clients(int (* func)(struct nfs4_client *, void *), void *);
 
 #if defined(CONFIG_PNFSD)
 extern int nfsd4_init_pnfs_slabs(void);
