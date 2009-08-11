@@ -36,6 +36,7 @@
 
 #include <linux/exportfs.h>
 #include <linux/exp_xdr.h>
+#include <linux/nfs_xdr.h>
 
 struct nfsd4_pnfs_deviceid {
 	u64	sbid;			/* per-superblock unique ID */
@@ -77,6 +78,21 @@ struct nfsd4_pnfs_layoutget_arg {
 struct nfsd4_pnfs_layoutget_res {
 	struct nfsd4_layout_seg	lg_seg;	/* request/resopnse */
 	u32			lg_return_on_close;
+};
+
+struct nfsd4_pnfs_layoutcommit_arg {
+	struct nfsd4_layout_seg	lc_seg;		/* request */
+	u32			lc_reclaim;	/* request */
+	u32			lc_newoffset;	/* request */
+	u64			lc_last_wr;	/* request */
+	struct nfstime4		lc_mtime;	/* request */
+	u32			lc_up_len;	/* layout length */
+	void			*lc_up_layout;	/* decoded by callback */
+};
+
+struct nfsd4_pnfs_layoutcommit_res {
+	u32			lc_size_chg;	/* boolean for response */
+	u64			lc_newsize;	/* response */
 };
 
 /*
@@ -145,6 +161,11 @@ struct pnfs_export_operations {
 				     struct exp_xdr_stream *xdr,
 				     const struct nfsd4_pnfs_layoutget_arg *,
 				     struct nfsd4_pnfs_layoutget_res *);
+
+	/* Commit changes to layout */
+	int (*layout_commit) (struct inode *,
+			      const struct nfsd4_pnfs_layoutcommit_arg *,
+			      struct nfsd4_pnfs_layoutcommit_res *);
 
 	/* Can layout segments be merged for this layout type? */
 	int (*can_merge_layouts) (u32 layout_type);
