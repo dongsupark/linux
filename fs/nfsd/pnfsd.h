@@ -52,6 +52,7 @@ struct nfs4_layout {
 	struct list_head		lo_perclnt;	/* hash by clientid */
 	struct nfs4_file		*lo_file;	/* backpointer */
 	struct nfs4_client		*lo_client;
+	struct nfs4_layout_state	*lo_state;
 	struct nfsd4_layout_seg		lo_seg;
 };
 
