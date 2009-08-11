@@ -2838,6 +2838,10 @@ nfsd4_encode_commit(struct nfsd4_compoundres *resp, __be32 nfserr, struct nfsd4_
 	if (!nfserr) {
 		RESERVE_SPACE(8);
 		WRITEMEM(commit->co_verf.data, 8);
+		dprintk("NFSD: nfsd4_encode_commit: verifier %x:%x\n",
+			((u32 *)(&commit->co_verf.data))[0],
+			((u32 *)(&commit->co_verf.data))[1]);
+
 		ADJUST_ARGS();
 	}
 	return nfserr;
@@ -3421,6 +3425,9 @@ nfsd4_encode_write(struct nfsd4_compoundres *resp, __be32 nfserr, struct nfsd4_w
 		WRITE32(write->wr_bytes_written);
 		WRITE32(write->wr_how_written);
 		WRITEMEM(write->wr_verifier.data, 8);
+		dprintk("NFSD: nfsd4_encode_write: verifier %x:%x\n",
+			((u32 *)(&write->wr_verifier.data))[0],
+			((u32 *)(&write->wr_verifier.data))[1]);
 		ADJUST_ARGS();
 	}
 	return nfserr;
