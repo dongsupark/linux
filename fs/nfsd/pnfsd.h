@@ -132,5 +132,7 @@ int nfsd_device_notify_cb(struct super_block *,
 int nfsd4_cb_notify_device(struct nfs4_notify_device *);
 void pnfs_set_device_notify(clientid_t *, unsigned int types);
 void pnfs_clear_device_notify(struct nfs4_client *);
+int create_device_notify_list(struct list_head *,
+			      struct nfsd4_pnfs_cb_dev_list *);
 
 #endif /* LINUX_NFSD_PNFSD_H */
