@@ -38,4 +38,7 @@
 
 #include "xdr4.h"
 
+u64 find_create_sbid(struct super_block *);
+struct super_block *find_sbid_id(u64);
+
 #endif /* LINUX_NFSD_PNFSD_H */
