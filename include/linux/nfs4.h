@@ -34,6 +34,7 @@ struct nfs4_fsid {
 };
 
 typedef struct { char data[NFS4_VERIFIER_SIZE]; } nfs4_verifier;
+typedef struct { char data[NFS4_CLIENTID_SIZE]; } nfs4_clientid;
 
 struct nfs_stateid4 {
 	__be32 seqid;
