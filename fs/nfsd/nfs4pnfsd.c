@@ -148,6 +148,72 @@ put_layout_state(struct nfs4_layout_state *ls)
 	kref_put(&ls->ls_ref, destroy_layout_state);
 }
 
+/*
+ * nfs4_preocess_layout_stateid ()
+ *
+ * We have looked up the nfs4_file corresponding to the current_fh, and
+ * confirmed the clientid. Pull the few tests from nfs4_preprocess_stateid_op()
+ * that make sense with a layout stateid.
+ *
+ * Called with the state_lock held
+ * Returns zero and stateid is updated, or error.
+ *
+ * Note: the struct nfs4_layout_state pointer is only set by layoutget.
+ */
+static __be32
+nfs4_process_layout_stateid(struct nfs4_client *clp, struct nfs4_file *fp,
+			    stateid_t *stateid, struct nfs4_layout_state **lsp,
+			    bool do_alloc)
+{
+	struct nfs4_layout_state *ls = NULL;
+	__be32 status = 0;
+	struct nfs4_stid *stid;
+
+	dprintk("--> %s clp %p fp %p operation stateid=" STATEID_FMT "\n",
+		__func__, clp, fp, STATEID_VAL(stateid));
+
+	status = nfsd4_lookup_stateid(stateid, (NFS4_OPEN_STID | NFS4_LOCK_STID |
+					NFS4_DELEG_STID | NFS4_LAYOUT_STID),
+					&stid);
+	if (status)
+		goto out;
+
+	/* Is this the first use of this layout ? */
+	if (stid->sc_type != NFS4_LAYOUT_STID) {
+		/* Only alloc layout state on layoutget. */
+		if (!do_alloc) {
+			dprintk("%s: ERROR: Not layoutget but no layout stateid\n", __func__);
+			status = nfserr_bad_stateid;
+			goto out;
+		}
+
+		ls = alloc_init_layout_state(clp, stateid);
+		if (!ls) {
+			status = nfserr_jukebox;
+			goto out;
+		}
+	} else {
+		ls = container_of(stid, struct nfs4_layout_state, ls_stid);
+
+		/* BAD STATEID */
+		if (stateid->si_generation > ls->ls_stid.sc_stateid.si_generation) {
+			dprintk("%s bad stateid 1\n", __func__);
+			status = nfserr_bad_stateid;
+			goto out;
+		}
+	}
+	status = 0;
+
+	get_layout_state(ls);
+	*lsp = ls;
+	dprintk("%s: layout stateid=" STATEID_FMT " ref=%d\n", __func__,
+		STATEID_VAL(&ls->ls_stid.sc_stateid), atomic_read(&ls->ls_ref.refcount));
+out:
+	dprintk("<-- %s status %d\n", __func__, htonl(status));
+
+	return status;
+}
+
 static struct nfs4_layout *
 alloc_layout(void)
 {
@@ -160,20 +226,35 @@ free_layout(struct nfs4_layout *lp)
 	kmem_cache_free(pnfs_layout_slab, lp);
 }
 
+static void update_layout_stateid(struct nfs4_layout_state *ls, stateid_t *sid)
+{
+	spin_lock(&layout_lock);
+	update_stateid(&(ls)->ls_stid.sc_stateid);
+	memcpy((sid), &(ls)->ls_stid.sc_stateid, sizeof(stateid_t));
+	spin_unlock(&layout_lock);
+	dprintk("%s Updated ls_stid to %d on layoutstate %p\n",
+		__func__, sid->si_generation, ls);
+}
+
 static void
 init_layout(struct nfs4_layout *lp,
+	    struct nfs4_layout_state *ls,
 	    struct nfs4_file *fp,
 	    struct nfs4_client *clp,
 	    struct svc_fh *current_fh,
-	    struct nfsd4_layout_seg *seg)
+	    struct nfsd4_layout_seg *seg,
+	    stateid_t *stateid)
 {
-	dprintk("pNFS %s: lp %p clp %p fp %p ino %p\n", __func__,
-		lp, clp, fp, fp->fi_inode);
+	dprintk("pNFS %s: lp %p ls %p clp %p fp %p ino %p\n", __func__,
+		lp, ls, clp, fp, fp->fi_inode);
 
 	get_nfs4_file(fp);
 	lp->lo_client = clp;
 	lp->lo_file = fp;
 	memcpy(&lp->lo_seg, seg, sizeof(lp->lo_seg));
+	get_layout_state(ls);		/* put on destroy_layout */
+	lp->lo_state = ls;
+	update_layout_stateid(ls, stateid);
 	list_add_tail(&lp->lo_perclnt, &clp->cl_layouts);
 	list_add_tail(&lp->lo_perfile, &fp->fi_layouts);
 	dprintk("pNFS %s end\n", __func__);
@@ -362,6 +443,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 	struct nfs4_file *fp;
 	struct nfs4_client *clp;
 	struct nfs4_layout *lp = NULL;
+	struct nfs4_layout_state *ls = NULL;
 	struct nfsd4_pnfs_layoutget_arg args = {
 		.lg_minlength = lgp->lg_minlength,
 		.lg_fh = &lgp->lg_fhp->fh_handle,
@@ -460,8 +542,10 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		goto out_freelayout;
 
 	/* Can't merge, so let's initialize this new layout */
-	init_layout(lp, fp, clp, lgp->lg_fhp, &res.lg_seg);
+	init_layout(lp, ls, fp, clp, lgp->lg_fhp, &res.lg_seg, &lgp->lg_sid);
 out_unlock:
+	if (ls)
+		put_layout_state(ls);
 	if (fp)
 		put_nfs4_file(fp);
 	nfs4_unlock_state();
