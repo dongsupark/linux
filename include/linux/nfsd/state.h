@@ -453,6 +453,7 @@ extern struct nfs4_file * alloc_init_file(struct inode *ino, struct svc_fh *curr
 extern void put_nfs4_file(struct nfs4_file *fi);
 extern void get_nfs4_file(struct nfs4_file *fi);
 extern struct nfs4_client * find_confirmed_client(clientid_t *clid);
+extern void nfs4_bug_on_unlocked_state(void);
 extern void pnfs_expire_client(struct nfs4_client *clp);
 #else /* CONFIG_PNFSD */
 static inline void nfsd4_free_pnfs_slabs(void) {}
