@@ -1820,6 +1820,10 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 			status = nfserr_seq_misordered;
 			goto out_free_conn;
 		}
+
+		if (is_ds_only_session(unconf->cl_exchange_flags))
+			cr_ses->flags &= ~SESSION4_BACK_CHAN;
+
 		old = find_confirmed_client_by_name(&unconf->cl_name, nn);
 		if (old)
 			expire_client(old);
