@@ -16,7 +16,7 @@
 #include <linux/module.h>
 #include <linux/exportfs.h>
 #include <linux/sunrpc/svc_xprt.h>
-
+#include <linux/nfsd/nfsd4_pnfs.h>
 #include <net/ipv6.h>
 
 #include "nfsd.h"
