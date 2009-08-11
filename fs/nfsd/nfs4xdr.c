@@ -2320,6 +2320,7 @@ out_acl:
 	}
 #if defined(CONFIG_PNFSD)
 	if (bmval1 & FATTR4_WORD1_FS_LAYOUT_TYPES) {
+		struct super_block *sb = dentry->d_inode->i_sb;
 		int type = 0;
 
 	/* Query the underlying filesystem for supported pNFS layout types.
@@ -2330,8 +2331,8 @@ out_acl:
 		if (buflen < 0)		/* length */
 			goto out_resource;
 
-		if (exp->ex_pnfs == 1)
-			type = LAYOUT_NFSV4_FILES;
+		if (sb && sb->s_pnfs_op->layout_type)
+			type = sb->s_pnfs_op->layout_type(sb);
 		if (type) {
 			if ((buflen -= 4) < 0)	/* type */
 				goto out_resource;
