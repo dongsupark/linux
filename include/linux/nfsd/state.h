@@ -235,6 +235,8 @@ struct nfs4_client {
 						/* wait here for slots */
 #if defined(CONFIG_PNFSD)
 	struct list_head	cl_layouts;	/* outstanding layouts */
+	struct list_head	cl_layoutrecalls; /* outstanding layoutrecall
+						     callbacks */
 #endif /* CONFIG_PNFSD */
 };
 
@@ -266,6 +268,17 @@ struct nfs4_layout {
 	struct nfs4_client		*lo_client;
 	struct nfs4_layout_state	*lo_state;
 	struct nfsd4_layout_seg 	lo_seg;
+};
+
+/* layoutrecall request (from exported filesystem) */
+struct nfs4_layoutrecall {
+	struct kref			clr_ref;
+	struct nfsd4_pnfs_cb_layout	cb;	/* request */
+	struct list_head		clr_perclnt; /* on cl_layoutrecalls */
+	struct nfs4_client	       *clr_client;
+	struct nfs4_file	       *clr_file;
+	struct timespec			clr_time;	/* last activity */
+	struct nfs4_layoutrecall	*parent; /* The initiating recall */
 };
 
 #endif /* CONFIG_PNFSD */
@@ -456,9 +469,14 @@ extern struct nfs4_stateid * find_stateid(stateid_t *stid, int flags);
 extern struct nfs4_delegation * find_delegation_stateid(struct inode *ino,
 		stateid_t *stid);
 extern __be32 nfs4_check_stateid(stateid_t *stateid);
+extern void expire_client_lock(struct nfs4_client *clp);
 #if defined(CONFIG_PNFSD)
 extern void release_pnfs_ds_dev_list(struct nfs4_stateid *stp);
 extern void nfs4_pnfs_state_init(void);
+extern int put_layoutrecall(struct nfs4_layoutrecall *);
+extern void nomatching_layout(struct nfs4_layoutrecall *);
+extern void layoutrecall_done(struct nfs4_layoutrecall *);
+extern int nfsd4_cb_layout(struct nfs4_layoutrecall *lp);
 extern void nfsd4_free_pnfs_slabs(void);
 extern void nfsd4_free_slab(struct kmem_cache **slab);
 extern int nfsd4_init_pnfs_slabs(void);
@@ -473,6 +491,12 @@ extern void nfs4_ds_get_verifier(stateid_t *stateid,
 		struct super_block *sb, u32 *p);
 extern int nfs4_preprocess_pnfs_ds_stateid(struct svc_fh *, stateid_t *);
 extern void nfs4_pnfs_state_shutdown(void);
+extern int lo_recall_per_client(struct nfs4_client *clp,
+		struct nfsd4_pnfs_cb_layout *cbl, struct nfs4_file *lrfile,
+		struct list_head *todolist);
+extern int create_layout_recall_list(struct list_head *todolist,
+		unsigned *todo_len, struct nfsd4_pnfs_cb_layout *cbl,
+		struct nfs4_file *lrfile);
 extern void pnfs_expire_client(struct nfs4_client *clp);
 #else /* CONFIG_PNFSD */
 static inline void nfsd4_free_pnfs_slabs(void) {}

@@ -84,6 +84,8 @@ struct pnfs_mds_id {
 	struct kref		di_ref;
 };
 
+int nfsd_layout_recall_cb(struct super_block *, struct inode *,
+			  struct nfsd4_pnfs_cb_layout *);
 int nfs4_pnfs_cb_get_state(struct super_block *, struct pnfs_get_state *);
 int nfs4_pnfs_cb_change_state(struct pnfs_get_state *);
 int nfs4_pnfs_get_layout(struct svc_fh *, struct pnfs_layoutget_arg *,
