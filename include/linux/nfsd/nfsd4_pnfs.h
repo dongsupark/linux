@@ -165,6 +165,8 @@ enum layoutreturn_flags {
 	LR_FLAG_INTERN = 1 << 0
 };
 
+#define PNFS_LAST_LAYOUT_NO_RECALLS ((void *)-1) /* used with lr_cookie below */
+
 struct nfsd4_pnfs_layoutreturn {
 	u32			lr_return_type;	/* request */
 	struct nfsd4_layout_seg	lr_seg;		/* request */
@@ -174,6 +176,7 @@ struct nfsd4_pnfs_layoutreturn {
 	u32			lrf_body_len;	/* request */
 	void			*lrf_body;	/* request */
 	u32			lrs_present;	/* response */
+	void			*lr_cookie;	/* fs private */
 };
 
 struct nfsd4_pnfs_cb_layout {
@@ -230,6 +233,8 @@ struct pnfs_export_operations {
 	int (*layout_get) (struct inode *, struct pnfs_layoutget_arg *);
 	/* Commit changes to layout */
 	int (*layout_commit) (struct inode *, struct nfsd4_pnfs_layoutcommit *);
+	/* Returns the layout */
+	int (*layout_return) (struct inode *, struct nfsd4_pnfs_layoutreturn *);
 	/* Can layout segments be merged for this layout type? */
 	int (*can_merge_layouts) (u32 layout_type);
 

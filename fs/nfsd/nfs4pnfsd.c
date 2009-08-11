@@ -380,6 +380,29 @@ destroy_layout(struct nfs4_layout *lp)
 	put_nfs4_file(fp);
 }
 
+void fs_layout_return(struct super_block *sb, struct inode *ino,
+		      struct nfsd4_pnfs_layoutreturn *lrp, int flags,
+		      void *recall_cookie)
+{
+	int ret;
+
+	if (unlikely(!sb->s_pnfs_op->layout_return))
+		return;
+
+	lrp->lr_flags = flags;
+	lrp->lr_cookie = recall_cookie;
+
+	if (!ino) /* FSID or ALL */
+		ino = sb->s_root->d_inode;
+
+	ret = sb->s_pnfs_op->layout_return(ino, lrp);
+	dprintk("%s: inode %lu iomode=%d offset=0x%llx length=0x%llx "
+		"cookie = %p flags 0x%x status=%d\n",
+		__func__, ino->i_ino, lrp->lr_seg.iomode, lrp->lr_seg.offset,
+		lrp->lr_seg.length, recall_cookie, flags, ret);
+
+}
+
 /*
  * Create a layoutrecall structure
  * An optional layoutrecall can be cloned (except for the layoutrecall lists)
@@ -859,7 +882,7 @@ recall_return_partial_match(struct nfs4_layoutrecall *clr,
 	       lo_seg_overlapping(&clr->cb.cbl_seg, &lrp->lr_seg);
 }
 
-int nfs4_pnfs_return_layout(struct svc_fh *current_fh,
+int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 			    struct nfsd4_pnfs_layoutreturn *lrp)
 {
 	int status = 0;
@@ -869,6 +892,7 @@ int nfs4_pnfs_return_layout(struct svc_fh *current_fh,
 	struct nfs4_client *clp;
 	struct nfs4_layoutrecall *clr, *nextclr;
 	u64 ex_fsid = current_fh->fh_export->ex_fsid;
+	void *recall_cookie = NULL;
 
 	dprintk("NFSD: %s\n", __func__);
 
@@ -895,6 +919,9 @@ int nfs4_pnfs_return_layout(struct svc_fh *current_fh,
 
 		/* update layouts */
 		layouts_found = pnfs_return_file_layouts(clp, fp, lrp);
+		/* optimize for the all-empty case */
+		if (list_empty(&fp->fi_layouts))
+			recall_cookie = PNFS_LAST_LAYOUT_NO_RECALLS;
 	} else {
 		layouts_found = pnfs_return_client_layouts(clp, lrp, ex_fsid);
 	}
@@ -929,6 +956,9 @@ out_put_file:
 		put_nfs4_file(fp);
 out:
 	nfs4_unlock_state();
+
+	/* call exported filesystem layout_return (ignore return-code) */
+	fs_layout_return(sb, ino, lrp, 0, recall_cookie);
 
 	dprintk("pNFS %s: exit status %d \n", __func__, status);
 	return status;

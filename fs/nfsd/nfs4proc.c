@@ -1414,7 +1414,7 @@ nfsd4_layoutreturn(struct svc_rqst *rqstp,
 	/* Set clientid from sessionid */
 	copy_clientid((clientid_t *)&lrp->lr_seg.clientid, cstate->session);
 	lrp->lrs_present = (lrp->lr_return_type == RETURN_FILE);
-	status = nfs4_pnfs_return_layout(current_fh, lrp);
+	status = nfs4_pnfs_return_layout(sb, current_fh, lrp);
 out:
 	dprintk("pNFS %s: status %d layout_type 0x%x\n",
 		__func__, status, lrp->lr_seg.layout_type);
