@@ -200,7 +200,7 @@ struct pnfs_filelayout_layout;
 
 extern int filelayout_encode_devinfo(struct exp_xdr_stream *xdr,
 				     const struct pnfs_filelayout_device *fdev);
-extern u32 filelayout_encode_layout(struct exp_xdr_stream *xdr,
-				    const struct pnfs_filelayout_layout *flp);
+extern enum nfsstat4 filelayout_encode_layout(struct exp_xdr_stream *xdr,
+				      const struct pnfs_filelayout_layout *flp);
 #endif /* defined(CONFIG_EXPORTFS_FILE_LAYOUT) */
 #endif /* LINUX_EXPORTFS_H */
