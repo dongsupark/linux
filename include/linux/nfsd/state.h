@@ -278,6 +278,7 @@ struct nfs4_layoutrecall {
 	struct nfs4_client	       *clr_client;
 	struct nfs4_file	       *clr_file;
 	struct timespec			clr_time;	/* last activity */
+	struct super_block 		*clr_sb; /* We might not have a file */
 	struct nfs4_layoutrecall	*parent; /* The initiating recall */
 };
 

@@ -1089,14 +1089,25 @@ cl_has_layout(struct nfs4_client *clp, struct nfsd4_pnfs_cb_layout *cbl,
 	}
 }
 
+/*
+ * Called without the layout_lock.
+ */
 void
 nomatching_layout(struct nfs4_layoutrecall *clr)
 {
 	struct nfsd4_pnfs_layoutreturn lr = {
 		.lr_return_type = clr->cb.cbl_recall_type,
 		.lr_seg = clr->cb.cbl_seg,
-		.lr_flags = LR_FLAG_INTERN,
 	};
+	struct inode *inode;
+
+	if (clr->clr_file) {
+		inode = igrab(clr->clr_file->fi_inode);
+		if (WARN_ON(!inode))
+			return;
+	} else {
+		inode = NULL;
+	}
 
 	dprintk("%s: clp %p fp %p: simulating layout_return\n", __func__,
 		clr->clr_client, clr->clr_file);
@@ -1110,22 +1121,32 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 	spin_lock(&layout_lock);
 	layoutrecall_done(clr);
 	spin_unlock(&layout_lock);
+
+	fs_layout_return(clr->clr_sb, inode, &lr, LR_FLAG_INTERN, NULL);
+	iput(inode);
 }
 
 void pnfs_expire_client(struct nfs4_client *clp)
 {
-	struct nfs4_layoutrecall *lrp;
+	for (;;) {
+		struct nfs4_layoutrecall *lrp = NULL;
 
-	spin_lock(&layout_lock);
-	while (!list_empty(&clp->cl_layoutrecalls)) {
-		lrp = list_entry(clp->cl_layoutrecalls.next,
-				 struct nfs4_layoutrecall, clr_perclnt);
-			dprintk("NFSD: expire client. lrp %p, fp %p\n", lrp,
-				lrp->clr_file);
+		spin_lock(&layout_lock);
+		if (!list_empty(&clp->cl_layoutrecalls)) {
+			lrp = list_entry(clp->cl_layoutrecalls.next,
+					 struct nfs4_layoutrecall, clr_perclnt);
+			get_layoutrecall(lrp);
+		}
+		spin_unlock(&layout_lock);
+		if (!lrp)
+			break;
+
+		dprintk("%s: lrp %p, fp %p\n", __func__, lrp, lrp->clr_file);
 		BUG_ON(lrp->clr_client != clp);
-		layoutrecall_done(lrp);
+		nomatching_layout(lrp);
+		put_layoutrecall(lrp);
 	}
-	spin_unlock(&layout_lock);
+
 	for (;;) {
 		struct nfs4_layout *lp = NULL;
 		struct inode *inode = NULL;
@@ -1249,6 +1270,7 @@ spawn_layout_recall(struct super_block *sb, struct list_head *todolist,
 		}
 
 		pending->clr_time = CURRENT_TIME;
+		pending->clr_sb = sb;
 		if (parent) {
 			/* If we created a parent its initial ref count is 1.
 			 * We will need to de-ref it eventually. So we just
