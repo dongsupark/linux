@@ -1754,6 +1754,7 @@ alloc_init_file(struct inode *ino, struct svc_fh *current_fh)
 		INIT_LIST_HEAD(&fp->fi_delegations);
 #if defined(CONFIG_PNFSD)
 		INIT_LIST_HEAD(&fp->fi_layouts);
+		INIT_LIST_HEAD(&fp->fi_layout_states);
 #endif /* CONFIG_PNFSD */
 		spin_lock(&recall_lock);
 		list_add(&fp->fi_hash, &file_hashtbl[hashval]);
@@ -4181,3 +4182,4 @@ nfs4_reset_lease(time_t leasetime)
 {
 	user_lease_time = leasetime;
 }
+
