@@ -34,7 +34,6 @@
 #ifndef _LINUX_NFSD_NFSD4_PNFS_H
 #define _LINUX_NFSD_NFSD4_PNFS_H
 
-#include <linux/nfsd/state.h>
 #include <linux/nfs_xdr.h>
 #include <linux/exportfs.h>
 #include <linux/exp_xdr.h>
@@ -96,6 +95,17 @@ struct nfsd4_pnfs_layoutcommit_res {
 	u64			lc_newsize;	/* response */
 };
 
+#define PNFS_LAST_LAYOUT_NO_RECALLS ((void *)-1) /* used with lr_cookie below */
+
+struct nfsd4_pnfs_layoutreturn_arg {
+	u32			lr_return_type;	/* request */
+	struct nfsd4_layout_seg	lr_seg;		/* request */
+	u32			lr_reclaim;	/* request */
+	u32			lrf_body_len;	/* request */
+	void			*lrf_body;	/* request */
+	void			*lr_cookie;	/* fs private */
+};
+
 /*
  * pNFS export operations vector.
  *
@@ -150,6 +160,10 @@ struct pnfs_export_operations {
 	int (*layout_commit) (struct inode *,
 			      const struct nfsd4_pnfs_layoutcommit_arg *,
 			      struct nfsd4_pnfs_layoutcommit_res *);
+
+	/* Returns the layout */
+	int (*layout_return) (struct inode *,
+			      const struct nfsd4_pnfs_layoutreturn_arg *);
 
 	/* Can layout segments be merged for this layout type? */
 	int (*can_merge_layouts) (u32 layout_type);

@@ -59,5 +59,7 @@ struct nfs4_layout {
 };
 
 int nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *, struct exp_xdr_stream *);
+int nfs4_pnfs_return_layout(struct super_block *, struct svc_fh *,
+					struct nfsd4_pnfs_layoutreturn *);
 
 #endif /* LINUX_NFSD_PNFSD_H */
