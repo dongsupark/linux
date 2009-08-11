@@ -459,6 +459,17 @@ struct nfsd4_pnfs_layoutcommit {
 	struct nfsd4_pnfs_layoutcommit_res res;
 };
 
+enum layoutreturn_flags {
+	LR_FLAG_INTERN = 1 << 0,	/* internal return */
+};
+
+struct nfsd4_pnfs_layoutreturn {
+	struct nfsd4_pnfs_layoutreturn_arg args;
+	u32			lr_flags;
+	stateid_t		lr_sid;		/* request/resopnse */
+	u32			lrs_present;	/* response */
+};
+
 struct nfsd4_op {
 	int					opnum;
 	__be32					status;
@@ -508,6 +519,7 @@ struct nfsd4_op {
 		struct nfsd4_pnfs_getdevinfo	pnfs_getdevinfo;
 		struct nfsd4_pnfs_layoutget	pnfs_layoutget;
 		struct nfsd4_pnfs_layoutcommit	pnfs_layoutcommit;
+		struct nfsd4_pnfs_layoutreturn	pnfs_layoutreturn;
 #endif /* CONFIG_PNFSD */
 	} u;
 	struct nfs4_replay *			replay;
