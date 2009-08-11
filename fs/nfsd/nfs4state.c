@@ -4870,6 +4870,7 @@ __nfs4_state_shutdown(void)
 
 	nfsd4_client_tracking_exit(&init_net);
 	put_net(&init_net);
+	nfs4_pnfs_state_shutdown();
 }
 
 void
