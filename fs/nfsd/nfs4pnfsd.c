@@ -33,6 +33,12 @@ static u32 current_layoutid = 1;
  */
 static DEFINE_SPINLOCK(layout_lock);
 
+#if defined(CONFIG_DEBUG_SPINLOCK) || defined(CONFIG_SMP)
+#  define BUG_ON_UNLOCKED_LAYOUT() BUG_ON(!spin_is_locked(&layout_lock))
+#else
+#  define BUG_ON_UNLOCKED_LAYOUT()
+#endif
+
 /*
  * Layout state - NFSv4.1 pNFS
  */
@@ -236,6 +242,7 @@ find_get_layout_state(struct nfs4_client *clp, struct nfs4_file *fp)
 {
 	struct nfs4_layout_state *ls;
 
+	BUG_ON_UNLOCKED_LAYOUT();
 	list_for_each_entry(ls, &fp->fi_layout_states, ls_perfile) {
 		if (ls->ls_client == clp) {
 			dprintk("pNFS %s: before GET ls %p ls_ref %d\n",
@@ -418,6 +425,7 @@ init_layout(struct nfs4_layout_state *ls,
 static void
 dequeue_layout(struct nfs4_layout *lp)
 {
+	BUG_ON_UNLOCKED_LAYOUT();
 	list_del(&lp->lo_perclnt);
 	list_del(&lp->lo_perfile);
 	list_del(&lp->lo_perstate);
@@ -430,6 +438,7 @@ destroy_layout(struct nfs4_layout *lp)
 	struct nfs4_file *fp;
 	struct nfs4_layout_state *ls;
 
+	BUG_ON_UNLOCKED_LAYOUT();
 	clp = lp->lo_client;
 	fp = lp->lo_file;
 	ls = lp->lo_state;
@@ -612,6 +621,7 @@ layoutrecall_done(struct nfs4_layoutrecall *clr)
 
 	dprintk("pNFS %s: clr %p clr_ref %d\n", __func__, clr,
 		atomic_read(&clr->clr_ref.refcount));
+	BUG_ON_UNLOCKED_LAYOUT();
 	list_del_init(&clr->clr_perclnt);
 	put_layoutrecall(clr);
 
