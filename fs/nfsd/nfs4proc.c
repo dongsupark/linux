@@ -1106,10 +1106,63 @@ out:
 	return err;
 }
 
+static int get_stripe_unit(int blocksize)
+{
+	if (blocksize >= NFSSVC_MAXBLKSIZE)
+		return blocksize;
+	return NFSSVC_MAXBLKSIZE - (NFSSVC_MAXBLKSIZE % blocksize);
+}
+
 int nfsd4_pnfs_fl_layoutget(struct inode *inode, struct pnfs_layoutget_arg *arg)
 {
-	/* stub */
-	return 0;
+	int rc = 0;
+	struct pnfs_filelayout_layout *layout = NULL;
+	struct knfsd_fh *fhp = NULL;
+
+	dprintk("%s: LAYOUT_GET\n", __func__);
+
+	/* Set layout indept response args */
+	arg->seg.layout_type = LAYOUT_NFSV4_FILES;
+	arg->seg.offset = 0;
+	arg->seg.length = inode->i_sb->s_maxbytes; /* The maximum file size */
+
+	layout = kzalloc(sizeof(*layout), GFP_KERNEL);
+	if (layout == NULL) {
+		rc = -ENOMEM;
+		goto error;
+	}
+
+	/* Set file layout response args */
+	layout->lg_layout_type = LAYOUT_NFSV4_FILES;
+	layout->lg_stripe_type = STRIPE_SPARSE;
+	layout->lg_commit_through_mds = false;
+	layout->lg_stripe_unit = get_stripe_unit(inode->i_sb->s_blocksize);
+	layout->lg_fh_length = 1;
+	layout->device_id.pnfs_fsid = arg->fsid;
+	layout->device_id.pnfs_devid = 1;                       /*FSFTEMP*/
+	layout->lg_first_stripe_index = 0;                      /*FSFTEMP*/
+	layout->lg_pattern_offset = 0;
+
+	fhp = kmalloc(sizeof(*fhp), GFP_KERNEL);
+	if (fhp == NULL) {
+		rc = -ENOMEM;
+		goto error;
+	}
+
+	memcpy(fhp, arg->fh, sizeof(*fhp));
+	pnfs_fh_mark_ds(fhp);
+	layout->lg_fh_list = fhp;
+
+	/* Call nfsd to encode layout */
+	rc = arg->func(&arg->xdr, layout);
+exit:
+	kfree(layout);
+	kfree(fhp);
+	return rc;
+
+error:
+	arg->seg.length = 0;
+	goto exit;
 }
 
 static __be32
