@@ -373,6 +373,36 @@ destroy_layout(struct nfs4_layout *lp)
 	put_layout_state_locked(ls);
 	put_nfs4_file(fp);
 }
+/*
+ * get_state() and cb_get_state() are
+ */
+void
+release_pnfs_ds_dev_list(struct nfs4_stateid *stp)
+{
+	struct pnfs_ds_dev_entry *ddp;
+
+	while (!list_empty(&stp->st_pnfs_ds_id)) {
+		ddp = list_entry(stp->st_pnfs_ds_id.next,
+				 struct pnfs_ds_dev_entry, dd_dev_entry);
+		list_del(&ddp->dd_dev_entry);
+		kfree(ddp);
+	}
+}
+
+static int
+nfs4_add_pnfs_ds_dev(struct nfs4_stateid *stp, u32 dsid)
+{
+	struct pnfs_ds_dev_entry *ddp;
+
+	ddp = kmalloc(sizeof(*ddp), GFP_KERNEL);
+	if (!ddp)
+		return -ENOMEM;
+
+	INIT_LIST_HEAD(&ddp->dd_dev_entry);
+	list_add(&ddp->dd_dev_entry, &stp->st_pnfs_ds_id);
+	ddp->dd_dsid = dsid;
+	return 0;
+}
 
 /*
  * are two octet ranges overlapping?
@@ -699,6 +729,59 @@ out:
 	nfs4_unlock_state();
 
 	dprintk("pNFS %s: exit status %d \n", __func__, status);
+	return status;
+}
+
+/*
+ * PNFS Metadata server export operations callback for get_state
+ *
+ * called by the cluster fs when it receives a get_state() from a data
+ * server.
+ * returns status, or pnfs_get_state* with pnfs_get_state->status set.
+ *
+ */
+int
+nfs4_pnfs_cb_get_state(struct super_block *sb, struct pnfs_get_state *arg)
+{
+	struct nfs4_stateid *stp;
+	int flags = LOCK_STATE | OPEN_STATE; /* search both hash tables */
+	int status = -EINVAL;
+	struct inode *ino;
+	struct nfs4_delegation *dl;
+
+	dprintk("NFSD: %s sid=" STATEID_FMT " ino %llu\n", __func__,
+		STATEID_VAL(&arg->stid), arg->ino);
+
+	nfs4_lock_state();
+	stp = find_stateid(&arg->stid, flags);
+	if (!stp) {
+		ino = iget_locked(sb, arg->ino);
+		if (!ino)
+			goto out;
+
+		if (ino->i_state & I_NEW) {
+			iget_failed(ino);
+			goto out;
+		}
+
+		dl = find_delegation_stateid(ino, &arg->stid);
+		if (dl)
+			status = 0;
+
+		iput(ino);
+	} else {
+		/* XXX ANDROS: marc removed nfs4_check_fh - how come? */
+
+		/* arg->devid is the Data server id, set by the cluster fs */
+		status = nfs4_add_pnfs_ds_dev(stp, arg->dsid);
+		if (status)
+			goto out;
+
+		arg->access = stp->st_access_bmap;
+		arg->clid = stp->st_stateowner->so_client->cl_clientid;
+	}
+out:
+	nfs4_unlock_state();
 	return status;
 }
 
