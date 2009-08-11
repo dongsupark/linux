@@ -439,12 +439,24 @@ static inline struct file *find_any_file(struct nfs4_file *f)
 		return f->fi_fds[O_RDONLY];
 }
 
+#if defined(CONFIG_PNFSD)
+/* pNFS Metadata server state */
+
+struct pnfs_ds_dev_entry {
+	struct list_head	dd_dev_entry; /* st_pnfs_ds_id entry */
+	u32			dd_dsid;
+};
+#endif /* CONFIG_PNFSD */
+
 /* "ol" stands for "Open or Lock".  Better suggestions welcome. */
 struct nfs4_ol_stateid {
 	struct nfs4_stid    st_stid; /* must be first field */
 	struct list_head              st_perfile;
 	struct list_head              st_perstateowner;
 	struct list_head              st_lockowners;
+#if defined(CONFIG_PNFSD)
+	struct list_head              st_pnfs_ds_id;
+#endif /* CONFIG_PNFSD */
 	struct nfs4_stateowner      * st_stateowner;
 	struct nfs4_file            * st_file;
 	unsigned long                 st_access_bmap;
@@ -504,10 +516,13 @@ extern __be32 nfsd4_lookup_stateid(stateid_t *, unsigned char typemask, struct n
 extern int nfsd4_init_pnfs_slabs(void);
 extern void nfsd4_free_pnfs_slabs(void);
 extern void pnfs_expire_client(struct nfs4_client *);
+extern void release_pnfs_ds_dev_list(struct nfs4_ol_stateid *);
+extern void nfs4_pnfs_state_init(void);
 #else /* CONFIG_PNFSD */
 static inline void nfsd4_free_pnfs_slabs(void) {}
 static inline int nfsd4_init_pnfs_slabs(void) { return 0; }
 static inline void pnfs_expire_client(struct nfs4_client *clp) {}
+static inline void release_pnfs_ds_dev_list(struct nfs4_ol_stateid *stp) {}
 #endif /* CONFIG_PNFSD */
 
 static inline u64

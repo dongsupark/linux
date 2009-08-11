@@ -396,6 +396,37 @@ find_create_sbid(struct super_block *sb)
 }
 
 /*
+ * get_state() and cb_get_state() are
+ */
+void
+release_pnfs_ds_dev_list(struct nfs4_ol_stateid *stp)
+{
+	struct pnfs_ds_dev_entry *ddp;
+
+	while (!list_empty(&stp->st_pnfs_ds_id)) {
+		ddp = list_entry(stp->st_pnfs_ds_id.next,
+				 struct pnfs_ds_dev_entry, dd_dev_entry);
+		list_del(&ddp->dd_dev_entry);
+		kfree(ddp);
+	}
+}
+
+static int
+nfs4_add_pnfs_ds_dev(struct nfs4_ol_stateid *stp, u32 dsid)
+{
+	struct pnfs_ds_dev_entry *ddp;
+
+	ddp = kmalloc(sizeof(*ddp), GFP_KERNEL);
+	if (!ddp)
+		return -ENOMEM;
+
+	INIT_LIST_HEAD(&ddp->dd_dev_entry);
+	list_add(&ddp->dd_dev_entry, &stp->st_pnfs_ds_id);
+	ddp->dd_dsid = dsid;
+	return 0;
+}
+
+/*
  * are two octet ranges overlapping?
  * start1            last1
  *   |-----------------|
@@ -784,6 +815,43 @@ out:
 	fs_layout_return(sb, ino, lrp, 0, recall_cookie);
 
 	dprintk("pNFS %s: exit status %d\n", __func__, status);
+	return status;
+}
+
+/*
+ * PNFS Metadata server export operations callback for get_state
+ *
+ * called by the cluster fs when it receives a get_state() from a data
+ * server.
+ * returns status, or pnfs_get_state* with pnfs_get_state->status set.
+ *
+ */
+int
+nfs4_pnfs_cb_get_state(struct super_block *sb, struct pnfs_get_state *arg)
+{
+	struct nfs4_stid *stid;
+	struct nfs4_ol_stateid *stp;
+	int status = -EINVAL;
+	stateid_t *stateid = (stateid_t *)&arg->stid;
+
+	dprintk("NFSD: %s sid=" STATEID_FMT " ino %llu\n", __func__,
+		STATEID_VAL(stateid), arg->ino);
+
+	nfs4_lock_state();
+	status = nfsd4_lookup_stateid(stateid, NFS4_OPEN_STID|NFS4_LOCK_STID, &stid);
+	if (!status) {
+		stp = container_of(stid, struct nfs4_ol_stateid, st_stid);
+		/* arg->dsid is the Data server id, set by the cluster fs */
+		status = nfs4_add_pnfs_ds_dev(stp, arg->dsid);
+		if (status)
+			goto out;
+
+		arg->access = stp->st_access_bmap;
+		*(clientid_t *)&arg->clid =
+			stp->st_stateowner->so_client->cl_clientid;
+	}
+out:
+	nfs4_unlock_state();
 	return status;
 }
 

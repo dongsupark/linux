@@ -17,6 +17,7 @@
 
 #define NFS4_BITMAP_SIZE	2
 #define NFS4_VERIFIER_SIZE	8
+#define NFS4_CLIENTID_SIZE	8
 #define NFS4_STATEID_SEQID_SIZE 4
 #define NFS4_STATEID_OTHER_SIZE 12
 #define NFS4_STATEID_SIZE	(NFS4_STATEID_SEQID_SIZE + NFS4_STATEID_OTHER_SIZE)
@@ -194,6 +195,7 @@ struct nfs4_fsid {
 };
 
 typedef struct { char data[NFS4_VERIFIER_SIZE]; } nfs4_verifier;
+typedef struct { char data[NFS4_CLIENTID_SIZE]; } nfs4_clientid;
 
 struct nfs_stateid4 {
 	__be32 seqid;
