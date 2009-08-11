@@ -37,6 +37,7 @@
 #include <linux/exportfs.h>
 #include <linux/exp_xdr.h>
 #include <linux/nfs_xdr.h>
+#include <linux/nfsd/export.h>
 
 struct nfsd4_pnfs_deviceid {
 	u64	sbid;			/* per-superblock unique ID */
@@ -205,11 +206,36 @@ struct pnfs_export_operations {
 			  struct pnfs_get_state *);
 };
 
+struct nfsd4_pnfs_cb_layout {
+	u32			cbl_recall_type;	/* request */
+	struct nfsd4_layout_seg cbl_seg;		/* request */
+	u32			cbl_layoutchanged;	/* request */
+	nfs4_stateid		cbl_sid;		/* request */
+	struct nfs4_fsid	cbl_fsid;
+};
+
+/* layoutrecall request (from exported filesystem) */
+struct nfs4_layoutrecall {
+	struct kref			clr_ref;
+	struct nfsd4_pnfs_cb_layout	cb;	/* request */
+	struct list_head		clr_perclnt; /* on cl_layoutrecalls */
+	struct nfs4_client	       *clr_client;
+	struct nfs4_file	       *clr_file;
+	struct timespec			clr_time;	/* last activity */
+	struct super_block		*clr_sb; /* We might not have a file */
+	struct nfs4_layoutrecall	*parent; /* The initiating recall */
+
+	/* nfsd internal */
+	struct nfsd4_callback		clr_recall;
+};
+
 /*
  * callbacks provided by the nfsd
  */
 struct pnfsd_cb_operations {
 	/* Generic callbacks */
+	int (*cb_layout_recall) (struct super_block *, struct inode *,
+				 struct nfsd4_pnfs_cb_layout *);
 };
 
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
