@@ -2919,6 +2919,11 @@ nfs4_preprocess_stateid_op(struct nfsd4_compound_state *cstate,
 	if (grace_disallows_io(ino))
 		return nfserr_grace;
 
+#if defined(CONFIG_PNFSD)
+	if (pnfs_fh_is_ds(&current_fh->fh_handle))
+		return 0;
+#endif /* CONFIG_PNFSD */
+
 	if (nfsd4_has_session(cstate))
 		flags |= HAS_SESSION;
 
