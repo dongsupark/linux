@@ -511,9 +511,11 @@ extern __be32 nfsd4_lookup_stateid(stateid_t *, unsigned char typemask, struct n
 #if defined(CONFIG_PNFSD)
 extern int nfsd4_init_pnfs_slabs(void);
 extern void nfsd4_free_pnfs_slabs(void);
+extern void pnfs_expire_client(struct nfs4_client *);
 #else /* CONFIG_PNFSD */
 static inline void nfsd4_free_pnfs_slabs(void) {}
 static inline int nfsd4_init_pnfs_slabs(void) { return 0; }
+static inline void pnfs_expire_client(struct nfs4_client *clp) {}
 #endif /* CONFIG_PNFSD */
 
 static inline u64
