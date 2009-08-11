@@ -99,6 +99,7 @@ struct svc_export {
 	uid_t			ex_anon_uid;
 	gid_t			ex_anon_gid;
 	int			ex_fsid;
+	int			ex_pnfs;
 	unsigned char *		ex_uuid; /* 16 byte fsid */
 	struct nfsd4_fs_locations ex_fslocs;
 	int			ex_nflavors;
