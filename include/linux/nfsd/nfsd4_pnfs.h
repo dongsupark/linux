@@ -228,6 +228,18 @@ struct nfs4_layoutrecall {
 	void				*clr_args;	/* nfsd internal */
 };
 
+struct nfsd4_pnfs_cb_dev_item {
+	u32			cbd_notify_type;	/* request */
+	u32			cbd_layout_type;	/* request */
+	struct nfsd4_pnfs_deviceid cbd_devid;		/* request */
+	u32			cbd_immediate;		/* request */
+};
+
+struct nfsd4_pnfs_cb_dev_list {
+	u32				cbd_len;  /* request */
+	struct nfsd4_pnfs_cb_dev_item  *cbd_list; /* request */
+};
+
 /*
  * callbacks provided by the nfsd
  */
@@ -235,6 +247,8 @@ struct pnfsd_cb_operations {
 	/* Generic callbacks */
 	int (*cb_layout_recall) (struct super_block *, struct inode *,
 				 struct nfsd4_pnfs_cb_layout *);
+	int (*cb_device_notify) (struct super_block *,
+				 struct nfsd4_pnfs_cb_dev_list *);
 };
 
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
