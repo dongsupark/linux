@@ -961,6 +961,75 @@ nfsd4_layout_verify(struct svc_export *exp, unsigned int layout_type)
 	/* stubb */
 	return 0;
 }
+
+int nfsd4_pnfs_fl_getdevinfo(struct pnfs_devinfo_arg *arg)
+{
+	/* stub */
+	return 0;
+}
+
+static __be32
+nfsd4_getdevlist(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_getdevlist *gdlp)
+{
+	struct svc_fh *current_fh = &cstate->current_fh;
+	int status;
+
+	dprintk("%s: type %u maxnum %u cookie %llu verf %llu\n",
+		__func__, gdlp->gd_type, gdlp->gd_maxnum,
+		gdlp->gd_cookie, gdlp->gd_verf);
+
+
+	status = fh_verify(rqstp, current_fh, 0, NFSD_MAY_NOP);
+	if (status) {
+		printk("pNFS %s: verify filehandle failed\n", __func__);
+		goto out;
+	}
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type */
+	status = nfsd4_layout_verify(current_fh->fh_export, gdlp->gd_type);
+	if (status)
+		goto out;
+
+	/* Set up arguments so device can be retrieved at encode time */
+	gdlp->gd_fhp = &cstate->current_fh;
+out:
+	return status;
+}
+
+static __be32
+nfsd4_getdevinfo(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_getdevinfo *gdp)
+{
+	struct svc_export *exp = NULL;
+	u32 fsidv = gdp->gd_devid.pnfs_fsid;
+	int status;
+
+	dprintk("%s: type %u dev_id %llx:%llx maxcnt %u\n",
+	       __func__, gdp->gd_type, gdp->gd_devid.pnfs_fsid,
+	       gdp->gd_devid.pnfs_devid, gdp->gd_maxcount);
+
+	status = nfserr_inval;
+	exp = rqst_exp_find(rqstp, FSID_NUM, &fsidv);
+	dprintk("%s: exp %p\n", __func__, exp);
+	if (IS_ERR(exp)) {
+		status = nfserrno(PTR_ERR(exp));
+		goto out;
+	}
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(exp, gdp->gd_type);
+	exp_put(exp);
+	if (status)
+		goto out;
+out:
+	return status;
+}
 #endif /* CONFIG_PNFSD */
 
 /*
@@ -1323,6 +1392,17 @@ static struct nfsd4_operation nfsd4_ops[] = {
 		.op_flags = ALLOWED_WITHOUT_FH | ALLOWED_AS_FIRST_OP,
 		.op_name = "OP_SEQUENCE",
 	},
+#if defined(CONFIG_PNFSD)
+	[OP_GETDEVICELIST] = {
+		.op_func = (nfsd4op_func)nfsd4_getdevlist,
+		.op_name = "OP_GETDEVICELIST",
+	},
+	[OP_GETDEVICEINFO] = {
+		.op_func = (nfsd4op_func)nfsd4_getdevinfo,
+		.op_flags = ALLOWED_WITHOUT_FH,
+		.op_name = "OP_GETDEVICEINFO",
+	},
+#endif /* CONFIG_PNFSD */
 };
 
 static const char *nfsd4_op_name(unsigned opnum)
