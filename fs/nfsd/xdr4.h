@@ -415,6 +415,7 @@ struct nfsd4_pnfs_getdevinfo {
 	struct nfsd4_pnfs_deviceid gd_devid;	/* request */
 	u32			gd_layout_type;	/* request */
 	u32			gd_maxcount;	/* request */
+	u32			gd_notify_types;/* request */
 	struct super_block	*gd_sb;
 };
 
