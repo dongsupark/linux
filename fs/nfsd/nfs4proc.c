@@ -998,6 +998,7 @@ nfsd4_verify(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 }
 
 #if defined(CONFIG_PNFSD)
+
 static __be32
 nfsd4_layout_verify(struct super_block *sb, struct svc_export *exp,
 		    unsigned int layout_type)
