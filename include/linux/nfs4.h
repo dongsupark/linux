@@ -173,6 +173,11 @@ struct nfs4_acl {
 	struct nfs4_ace	aces[0];
 };
 
+struct nfs4_fsid {
+	u64	major;
+	u64	minor;
+};
+
 typedef struct { char data[NFS4_VERIFIER_SIZE]; } nfs4_verifier;
 typedef struct { char data[NFS4_STATEID_SIZE]; } nfs4_stateid;
 
