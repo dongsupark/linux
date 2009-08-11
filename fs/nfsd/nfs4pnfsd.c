@@ -472,6 +472,11 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		goto out_unlock;
 	}
 
+	/* Check decoded layout stateid */
+	nfserr = nfs4_process_layout_stateid(clp, fp, &lgp->lg_sid, &ls, true);
+	if (nfserr)
+		goto out_unlock;
+
 	/* pre-alloc layout in case we can't merge after we call
 	 * the file system
 	 */
