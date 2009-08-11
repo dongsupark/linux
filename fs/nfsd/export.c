@@ -22,6 +22,7 @@
 #include "nfsd.h"
 #include "nfsfh.h"
 #include "netns.h"
+#include "pnfsd.h"
 
 #define NFSDDBG_FACILITY	NFSDDBG_EXPORT
 
@@ -341,6 +342,16 @@ static int svc_export_upcall(struct cache_detail *cd, struct cache_head *h)
 {
 	return sunrpc_cache_pipe_upcall(cd, h, svc_export_request);
 }
+
+#if defined(CONFIG_PNFSD)
+static struct pnfsd_cb_operations pnfsd_cb_op = {
+	.cb_layout_recall = nfsd_layout_recall_cb,
+	.cb_device_notify = nfsd_device_notify_cb,
+
+	.cb_get_state = nfs4_pnfs_cb_get_state,
+	.cb_change_state = nfs4_pnfs_cb_change_state,
+};
+#endif /* CONFIG_PNFSD */
 
 static struct svc_export *svc_export_update(struct svc_export *new,
 					    struct svc_export *old);
@@ -1271,6 +1282,12 @@ nfsd_export_init(struct net *net)
 	rv = cache_register_net(nn->svc_expkey_cache, net);
 	if (rv)
 		goto destroy_expkey_cache;
+#if defined(CONFIG_PNFSD)
+	spin_lock(&pnfsd_cb_ctl.lock);
+	pnfsd_cb_ctl.module = THIS_MODULE;
+	pnfsd_cb_ctl.cb_op = &pnfsd_cb_op;
+	spin_unlock(&pnfsd_cb_ctl.lock);
+#endif /* CONFIG_PNFSD */
 	return 0;
 
 destroy_expkey_cache:
@@ -1304,6 +1321,12 @@ nfsd_export_shutdown(struct net *net)
 
 	dprintk("nfsd: shutting down export module (net: %p).\n", net);
 
+#if defined(CONFIG_PNFSD)
+	spin_lock(&pnfsd_cb_ctl.lock);
+	pnfsd_cb_ctl.module = NULL;
+	pnfsd_cb_ctl.cb_op = NULL;
+	spin_unlock(&pnfsd_cb_ctl.lock);
+#endif /* CONFIG_PNFSD */
 	cache_unregister_net(nn->svc_expkey_cache, net);
 	cache_unregister_net(nn->svc_export_cache, net);
 	cache_destroy_net(nn->svc_expkey_cache, net);
