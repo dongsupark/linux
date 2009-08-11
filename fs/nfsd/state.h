@@ -37,6 +37,7 @@
 
 #include <linux/sunrpc/svc_xprt.h>
 #include <linux/nfsd/nfsfh.h>
+#include <linux/nfsd/export.h>
 #include "nfsfh.h"
 
 typedef struct {
@@ -64,15 +65,6 @@ typedef struct {
 	(s)->si_stateownerid, \
 	(s)->si_fileid, \
 	(s)->si_generation
-
-struct nfsd4_callback {
-	void *cb_op;
-	struct nfs4_client *cb_clp;
-	u32 cb_minorversion;
-	struct rpc_message cb_msg;
-	const struct rpc_call_ops *cb_ops;
-	struct work_struct cb_work;
-};
 
 struct nfs4_delegation {
 	struct list_head	dl_perfile;
@@ -256,6 +248,8 @@ struct nfs4_client {
 						/* wait here for slots */
 #if defined(CONFIG_PNFSD)
 	struct list_head	cl_layouts;	/* outstanding layouts */
+	struct list_head	cl_layoutrecalls; /* outstanding layoutrecall
+						     callbacks */
 #endif /* CONFIG_PNFSD */
 };
 
@@ -503,6 +497,8 @@ extern struct nfs4_client *find_confirmed_client(clientid_t *);
 extern struct nfs4_stateid *find_stateid(stateid_t *, int flags);
 extern struct nfs4_delegation *find_delegation_stateid(struct inode *, stateid_t *);
 extern __be32 nfs4_check_stateid(stateid_t *);
+extern void expire_client_lock(struct nfs4_client *);
+extern int filter_confirmed_clients(int (* func)(struct nfs4_client *, void *), void *);
 
 #if defined(CONFIG_PNFSD)
 extern int nfsd4_init_pnfs_slabs(void);

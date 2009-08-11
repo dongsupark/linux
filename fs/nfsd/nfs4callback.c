@@ -48,10 +48,14 @@ enum {
 	NFSPROC4_CLNT_CB_NULL = 0,
 	NFSPROC4_CLNT_CB_RECALL,
 	NFSPROC4_CLNT_CB_SEQUENCE,
+#if defined(CONFIG_PNFSD)
+	NFSPROC4_CLNT_CB_LAYOUT,
+#endif
 };
 
 enum nfs_cb_opnum4 {
 	OP_CB_RECALL            = 4,
+	OP_CB_LAYOUT            = 5,
 	OP_CB_SEQUENCE          = 11,
 };
 
@@ -78,6 +82,13 @@ enum nfs_cb_opnum4 {
 #define NFS4_dec_cb_recall_sz		(cb_compound_dec_hdr_sz  +      \
 					cb_sequence_dec_sz +            \
 					op_dec_sz)
+#define NFS4_enc_cb_layout_sz		(cb_compound_enc_hdr_sz +       \
+					cb_sequence_enc_sz +            \
+					1 + 3 +                         \
+					enc_nfs4_fh_sz + 4)
+#define NFS4_dec_cb_layout_sz		(cb_compound_dec_hdr_sz  +      \
+					cb_sequence_dec_sz +            \
+					op_dec_sz)
 
 /*
 * Generic encode routines from fs/nfs/nfs4xdr.c
@@ -94,6 +105,10 @@ xdr_writemem(__be32 *p, const void *ptr, int nbytes)
 }
 
 #define WRITE32(n)               *p++ = htonl(n)
+#define WRITE64(n)               do {				\
+	*p++ = htonl((u32)((n) >> 32));				\
+	*p++ = htonl((u32)(n));					\
+} while (0)
 #define WRITEMEM(ptr,nbytes)     do {                           \
 	p = xdr_writemem(p, ptr, nbytes);                       \
 } while (0)
@@ -268,6 +283,62 @@ encode_cb_sequence(struct xdr_stream *xdr, struct nfsd4_callback *cb,
 	hdr->nops++;
 }
 
+#if defined(CONFIG_PNFSD)
+
+#include "pnfsd.h"
+
+static void
+encode_cb_layout(struct xdr_stream *xdr, struct nfs4_layoutrecall *clr,
+		 struct nfs4_cb_compound_hdr *hdr)
+{
+	u32 *p;
+
+	BUG_ON(hdr->minorversion == 0);
+
+	RESERVE_SPACE(20);
+	WRITE32(OP_CB_LAYOUT);
+	WRITE32(clr->cb.cbl_seg.layout_type);
+	WRITE32(clr->cb.cbl_seg.iomode);
+	WRITE32(clr->cb.cbl_layoutchanged);
+	WRITE32(clr->cb.cbl_recall_type);
+	if (unlikely(clr->cb.cbl_recall_type == RETURN_FSID)) {
+		struct nfs4_fsid fsid = clr->cb.cbl_fsid;
+
+		RESERVE_SPACE(16);
+		WRITE64(fsid.major);
+		WRITE64(fsid.minor);
+		dprintk("%s: type %x iomode %d changed %d recall_type %d "
+			"fsid 0x%llx-0x%llx\n",
+			__func__, clr->cb.cbl_seg.layout_type,
+			clr->cb.cbl_seg.iomode, clr->cb.cbl_layoutchanged,
+			clr->cb.cbl_recall_type, fsid.major, fsid.minor);
+	} else if (clr->cb.cbl_recall_type == RETURN_FILE) {
+		int len = clr->clr_file->fi_fhlen;
+		stateid_t *cbl_sid = (stateid_t *)&clr->cb.cbl_sid;
+
+		RESERVE_SPACE(20 + len);
+		WRITE32(len);
+		WRITEMEM(clr->clr_file->fi_fhval, len);
+		WRITE64(clr->cb.cbl_seg.offset);
+		WRITE64(clr->cb.cbl_seg.length);
+		encode_stateid(xdr, cbl_sid);
+		dprintk("%s: type %x iomode %d changed %d recall_type %d "
+			"offset %lld length %lld stateid " STATEID_FMT "\n",
+			__func__, clr->cb.cbl_seg.layout_type,
+			clr->cb.cbl_seg.iomode, clr->cb.cbl_layoutchanged,
+			clr->cb.cbl_recall_type,
+			clr->cb.cbl_seg.offset, clr->cb.cbl_seg.length,
+			STATEID_VAL(cbl_sid));
+	} else {
+		dprintk("%s: type %x iomode %d changed %d recall_type %d\n",
+			__func__, clr->cb.cbl_seg.layout_type,
+			clr->cb.cbl_seg.iomode, clr->cb.cbl_layoutchanged,
+			clr->cb.cbl_recall_type);
+	}
+	hdr->nops++;
+}
+#endif /* CONFIG_PNFSD */
+
 static int
 nfs4_xdr_enc_cb_null(struct rpc_rqst *req, __be32 *p)
 {
@@ -297,6 +368,26 @@ nfs4_xdr_enc_cb_recall(struct rpc_rqst *req, __be32 *p,
 	return 0;
 }
 
+#if defined(CONFIG_PNFSD)
+static int
+nfs4_xdr_enc_cb_layout(struct rpc_rqst *req, u32 *p,
+		       struct nfsd4_callback *cb)
+{
+	struct xdr_stream xdr;
+	struct nfs4_layoutrecall *args = cb->cb_op;
+	struct nfs4_cb_compound_hdr hdr = {
+		.ident = 0,
+		.minorversion = cb->cb_minorversion,
+	};
+
+	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
+	encode_cb_compound_hdr(&xdr, &hdr);
+	encode_cb_sequence(&xdr, cb, &hdr);
+	encode_cb_layout(&xdr, args, &hdr);
+	encode_cb_nops(&hdr);
+	return 0;
+}
+#endif /* CONFIG_PNFSD */
 
 static int
 decode_cb_compound_hdr(struct xdr_stream *xdr, struct nfs4_cb_compound_hdr *hdr){
@@ -413,6 +504,30 @@ out:
 	return status;
 }
 
+#if defined(CONFIG_PNFSD)
+static int
+nfs4_xdr_dec_cb_layout(struct rpc_rqst *rqstp, __be32 *p,
+		       struct nfsd4_callback *cb)
+{
+	struct xdr_stream xdr;
+	struct nfs4_cb_compound_hdr hdr;
+	int status;
+
+	xdr_init_decode(&xdr, &rqstp->rq_rcv_buf, p);
+	status = decode_cb_compound_hdr(&xdr, &hdr);
+	if (status)
+		goto out;
+	if (cb) {
+		status = decode_cb_sequence(&xdr, cb, rqstp);
+		if (status)
+			goto out;
+	}
+	status = decode_cb_op_hdr(&xdr, OP_CB_LAYOUT);
+out:
+	return status;
+}
+#endif /* CONFIG_PNFSD */
+
 /*
  * RPC procedure tables
  */
@@ -430,6 +545,9 @@ out:
 static struct rpc_procinfo     nfs4_cb_procedures[] = {
     PROC(CB_NULL,      NULL,     enc_cb_null,     dec_cb_null),
     PROC(CB_RECALL,    COMPOUND,   enc_cb_recall,      dec_cb_recall),
+#if defined(CONFIG_PNFSD)
+    PROC(CB_LAYOUT,    COMPOUND,   enc_cb_layout,      dec_cb_layout),
+#endif
 };
 
 static struct rpc_version       nfs_cb_version4 = {
@@ -646,12 +764,9 @@ static void nfsd4_cb_recall_prepare(struct rpc_task *task, void *calldata)
 	nfsd4_cb_prepare_sequence(task, cb, dp->dl_client);
 }
 
-static void nfsd4_cb_done(struct rpc_task *task, void *calldata)
+static void nfsd4_cb_done_sequence(struct rpc_task *task,
+				   struct nfs4_client *clp)
 {
-	struct nfsd4_callback *cb = calldata;
-	struct nfs4_delegation *dp = container_of(cb, struct nfs4_delegation, dl_recall);
-	struct nfs4_client *clp = dp->dl_client;
-
 	dprintk("%s: minorversion=%d\n", __func__,
 		clp->cl_minorversion);
 
@@ -676,7 +791,7 @@ static void nfsd4_cb_recall_done(struct rpc_task *task, void *calldata)
 	struct nfs4_client *clp = dp->dl_client;
 	struct rpc_clnt *current_rpc_client = clp->cl_cb_client;
 
-	nfsd4_cb_done(task, calldata);
+	nfsd4_cb_done_sequence(task, clp);
 
 	if (current_rpc_client == NULL) {
 		/* We're shutting down; give up. */
@@ -828,3 +943,86 @@ void nfsd4_cb_recall(struct nfs4_delegation *dp)
 
 	queue_work(callback_wq, &dp->dl_recall.cb_work);
 }
+
+#if defined(CONFIG_PNFSD)
+static void nfsd4_cb_layout_prepare(struct rpc_task *task, void *calldata)
+{
+	struct nfsd4_callback *cb = calldata;
+	struct nfs4_layoutrecall *clr = container_of(cb, struct nfs4_layoutrecall, clr_recall);
+	
+	nfsd4_cb_prepare_sequence(task, cb, clr->clr_client);
+}
+
+static void nfsd4_cb_layout_done(struct rpc_task *task, void *calldata)
+{
+	struct nfsd4_callback *cb = calldata;
+	struct nfs4_layoutrecall *clr = container_of(cb, struct nfs4_layoutrecall, clr_recall);
+	struct nfs4_client *clp = clr->clr_client;
+
+	nfsd4_cb_done_sequence(task, clp);
+
+	if (!task->tk_status)
+		return;
+
+	printk("%s: clp %p cb_client %p fp %p failed with status %d\n",
+	       __func__,
+	       clp,
+	       clp->cl_cb_client,
+	       clr->clr_file,
+	       task->tk_status);
+
+	switch (task->tk_status) {
+	case -EIO:
+		/* Network partition? */
+		atomic_set(&clp->cl_cb_set, 0);
+		warn_no_callback_path(clp, task->tk_status);
+		/* FIXME:
+		 * The pnfs standard states that we need to only expire
+		 * the client after at-least "lease time" .eg lease-time * 2
+		 * when failing to communicate a recall
+		 */
+		break;
+	case -NFS4ERR_DELAY:
+		/* Poll the client until it's done with the layout */
+		rpc_delay(task, HZ/100); /* 10 mili-seconds */
+		task->tk_status = 0;
+		rpc_restart_call_prepare(task);
+		break;
+	case -NFS4ERR_NOMATCHING_LAYOUT:
+		nomatching_layout(clr);
+	}
+}
+
+static void nfsd4_cb_layout_release(void *calldata)
+{
+	struct nfsd4_callback *cb = calldata;
+	struct nfs4_layoutrecall *clr = container_of(cb, struct nfs4_layoutrecall, clr_recall);
+
+	put_layoutrecall(clr);
+}
+
+static const struct rpc_call_ops nfsd4_cb_layout_ops = {
+	.rpc_call_prepare = nfsd4_cb_layout_prepare,
+	.rpc_call_done = nfsd4_cb_layout_done,
+	.rpc_release = nfsd4_cb_layout_release,
+};
+
+/*
+ * Called with state lock.
+ */
+void
+nfsd4_cb_layout(struct nfs4_layoutrecall *clr)
+{
+	struct nfsd4_callback *cb = &clr->clr_recall;
+
+	cb->cb_op = clr;
+	cb->cb_clp = clr->clr_client;
+	cb->cb_msg.rpc_proc = &nfs4_cb_procedures[NFSPROC4_CLNT_CB_LAYOUT];
+	cb->cb_msg.rpc_argp = cb;
+	cb->cb_msg.rpc_resp = cb;
+	cb->cb_msg.rpc_cred = callback_cred;
+
+	cb->cb_ops = &nfsd4_cb_layout_ops;
+	queue_work(callback_wq, &cb->cb_work);
+}
+#endif /* CONFIG_PNFSD */
