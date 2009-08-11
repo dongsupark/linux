@@ -427,6 +427,16 @@ struct nfsd4_pnfs_getdevlist {
 	u32		gd_eof;		/* response */
 };
 
+struct nfsd4_pnfs_layoutget {
+	u64			lg_minlength;	/* request */
+	u32			lg_signal;	/* request */
+	u32			lg_maxcount;	/* request */
+	struct svc_fh		*lg_fhp;	/* request */
+	stateid_t		lg_sid;		/* request/response */
+	struct nfsd4_layout_seg	lg_seg;		/* request/response */
+	u32			lg_roc;		/* response */
+};
+
 struct nfsd4_op {
 	int					opnum;
 	__be32					status;
@@ -474,6 +484,7 @@ struct nfsd4_op {
 #if defined(CONFIG_PNFSD)
 		struct nfsd4_pnfs_getdevlist	pnfs_getdevlist;
 		struct nfsd4_pnfs_getdevinfo	pnfs_getdevinfo;
+		struct nfsd4_pnfs_layoutget	pnfs_layoutget;
 #endif /* CONFIG_PNFSD */
 	} u;
 	struct nfs4_replay *			replay;

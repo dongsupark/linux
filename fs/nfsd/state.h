@@ -279,6 +279,9 @@ struct nfs4_client {
 	unsigned long		cl_cb_slot_busy;
 	struct rpc_wait_queue	cl_cb_waitq;	/* backchannel callers may */
 						/* wait here for slots */
+#if defined(CONFIG_PNFSD)
+	struct list_head	cl_layouts;	/* outstanding layouts */
+#endif /* CONFIG_PNFSD */
 };
 
 static inline void
@@ -405,6 +408,13 @@ struct nfs4_file {
 	atomic_t		fi_delegees;
 	struct inode		*fi_inode;
 	bool			fi_had_conflict;
+#if defined(CONFIG_PNFSD)
+	struct list_head	fi_layouts;
+	/* used by layoutget / layoutrecall */
+	struct nfs4_fsid	fi_fsid;
+	u32			fi_fhlen;
+	u8			fi_fhval[NFS4_FHSIZE];
+#endif /* CONFIG_PNFSD */
 };
 
 /* XXX: for first cut may fall back on returning file that doesn't work
@@ -487,5 +497,38 @@ extern void nfsd4_remove_clid_dir(struct nfs4_client *clp);
 extern void release_session_client(struct nfsd4_session *);
 extern __be32 nfs4_validate_stateid(struct nfs4_client *, stateid_t *);
 extern void nfsd4_purge_closed_stateid(struct nfs4_stateowner *);
+extern void nfsd4_free_slab(struct kmem_cache **);
+extern struct nfs4_file *find_alloc_file(struct inode *, struct svc_fh *);
+extern void put_nfs4_file(struct nfs4_file *);
+extern void get_nfs4_file(struct nfs4_file *);
+extern struct nfs4_client *find_confirmed_client(clientid_t *);
+
+#if defined(CONFIG_PNFSD)
+extern int nfsd4_init_pnfs_slabs(void);
+extern void nfsd4_free_pnfs_slabs(void);
+#else /* CONFIG_PNFSD */
+static inline void nfsd4_free_pnfs_slabs(void) {}
+static inline int nfsd4_init_pnfs_slabs(void) { return 0; }
+#endif /* CONFIG_PNFSD */
+
+static inline u64
+end_offset(u64 start, u64 len)
+{
+	u64 end;
+
+	end = start + len;
+	return end >= start ? end : NFS4_MAX_UINT64;
+}
+
+/* last octet in a range */
+static inline u64
+last_byte_offset(u64 start, u64 len)
+{
+	u64 end;
+
+	BUG_ON(!len);
+	end = start + len;
+	return end > start ? end - 1 : NFS4_MAX_UINT64;
+}
 
 #endif   /* NFSD4_STATE_H */
