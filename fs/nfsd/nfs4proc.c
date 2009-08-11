@@ -1236,6 +1236,60 @@ nfsd4_layoutcommit(struct svc_rqst *rqstp,
 out:
 	return status;
 }
+
+static __be32
+nfsd4_layoutreturn(struct svc_rqst *rqstp,
+		struct nfsd4_compound_state *cstate,
+		struct nfsd4_pnfs_layoutreturn *lrp)
+{
+	int status;
+	struct super_block *sb;
+	struct svc_fh *current_fh = &cstate->current_fh;
+
+	status = fh_verify(rqstp, current_fh, 0, NFSD_MAY_NOP);
+	if (status)
+		goto out;
+
+	status = nfserr_inval;
+	sb = current_fh->fh_dentry->d_inode->i_sb;
+	if (!sb)
+		goto out;
+
+	/* Ensure underlying file system supports pNFS and,
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(sb, current_fh->fh_export,
+				     lrp->args.lr_seg.layout_type);
+	if (status)
+		goto out;
+
+	status = nfserr_inval;
+	if (lrp->args.lr_return_type != RETURN_FILE &&
+	    lrp->args.lr_return_type != RETURN_FSID &&
+	    lrp->args.lr_return_type != RETURN_ALL) {
+		dprintk("pNFS %s: invalid return_type %d\n", __func__,
+			lrp->args.lr_return_type);
+		goto out;
+	}
+
+	status = nfserr_inval;
+	if (lrp->args.lr_seg.iomode != IOMODE_READ &&
+	    lrp->args.lr_seg.iomode != IOMODE_RW &&
+	    lrp->args.lr_seg.iomode != IOMODE_ANY) {
+		dprintk("pNFS %s: invalid iomode %d\n", __func__,
+			lrp->args.lr_seg.iomode);
+		goto out;
+	}
+
+	/* Set clientid from sessionid */
+	copy_clientid((clientid_t *)&lrp->args.lr_seg.clientid, cstate->session);
+	lrp->lrs_present = (lrp->args.lr_return_type == RETURN_FILE);
+	status = nfs4_pnfs_return_layout(sb, current_fh, lrp);
+out:
+	dprintk("pNFS %s: status %d return_type 0x%x lrs_present %d\n",
+		__func__, status, lrp->args.lr_return_type, lrp->lrs_present);
+	return status;
+}
 #endif /* CONFIG_PNFSD */
 
 /*
@@ -1979,6 +2033,10 @@ static struct nfsd4_operation nfsd4_ops[] = {
 	[OP_LAYOUTCOMMIT] = {
 		.op_func = (nfsd4op_func)nfsd4_layoutcommit,
 		.op_name = "OP_LAYOUTCOMMIT",
+	},
+	[OP_LAYOUTRETURN] = {
+		.op_func = (nfsd4op_func)nfsd4_layoutreturn,
+		.op_name = "OP_LAYOUTRETURN",
 	},
 #endif /* CONFIG_PNFSD */
 };
