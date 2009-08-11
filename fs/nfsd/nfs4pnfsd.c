@@ -298,7 +298,6 @@ destroy_layout(struct nfs4_layout *lp)
 	struct nfs4_file *fp;
 	struct nfs4_layout_state *ls;
 
-	dequeue_layout(lp);
 	clp = lp->lo_client;
 	fp = lp->lo_file;
 	ls = lp->lo_state;
@@ -848,6 +847,7 @@ pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
 		trim_layout(&lp->lo_seg, &lrp->args.lr_seg);
 		if (!lp->lo_seg.length) {
 			lrp->lrs_present = 0;
+			dequeue_layout(lp);
 			destroy_layout(lp);
 		}
 	}
@@ -877,6 +877,7 @@ pnfs_return_client_layouts(struct nfs4_client *clp,
 			continue;
 
 		layouts_found++;
+		dequeue_layout(lp);
 		destroy_layout(lp);
 	}
 	spin_unlock(&layout_lock);
@@ -1151,18 +1152,6 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 
 void pnfs_expire_client(struct nfs4_client *clp)
 {
-	struct nfs4_layout *lp;
-
-	spin_lock(&layout_lock);
-	while (!list_empty(&clp->cl_layouts)) {
-		lp = list_entry(clp->cl_layouts.next, struct nfs4_layout,
-				lo_perclnt);
-		dprintk("NFSD: expire client. lp %p, fp %p\n", lp,
-			lp->lo_file);
-		BUG_ON(lp->lo_client != clp);
-		destroy_layout(lp);
-	}
-	spin_unlock(&layout_lock);
 	for (;;) {
 		struct nfs4_layoutrecall *lrp = NULL;
 
@@ -1180,6 +1169,40 @@ void pnfs_expire_client(struct nfs4_client *clp)
 		BUG_ON(lrp->clr_client != clp);
 		nomatching_layout(lrp);
 		put_layoutrecall(lrp);
+	}
+
+	for (;;) {
+		struct nfs4_layout *lp = NULL;
+		struct inode *inode = NULL;
+		struct nfsd4_pnfs_layoutreturn lr;
+		bool empty = false;
+
+		spin_lock(&layout_lock);
+		if (!list_empty(&clp->cl_layouts)) {
+			lp = list_entry(clp->cl_layouts.next,
+					struct nfs4_layout, lo_perclnt);
+			inode = igrab(lp->lo_file->fi_inode);
+			memset(&lr, 0, sizeof(lr));
+			lr.args.lr_return_type = RETURN_FILE;
+			lr.args.lr_seg = lp->lo_seg;
+			empty = list_empty(&lp->lo_file->fi_layouts);
+			BUG_ON(lp->lo_client != clp);
+			dequeue_layout(lp);
+			destroy_layout(lp); /* do not access lp after this */
+		}
+		spin_unlock(&layout_lock);
+		if (!lp)
+			break;
+
+		if (WARN_ON(!inode))
+			break;
+
+		dprintk("%s: inode %lu lp %p clp %p\n", __func__, inode->i_ino,
+			lp, clp);
+
+		fs_layout_return(inode->i_sb, inode, &lr, LR_FLAG_EXPIRE,
+				 empty ? PNFS_LAST_LAYOUT_NO_RECALLS : NULL);
+		iput(inode);
 	}
 }
 
