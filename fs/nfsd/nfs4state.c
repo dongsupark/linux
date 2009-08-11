@@ -1460,8 +1460,12 @@ nfsd4_replay_cache_entry(struct nfsd4_compoundres *resp,
 static void
 nfsd4_set_ex_flags(struct nfs4_client *new, struct nfsd4_exchange_id *clid)
 {
-	/* pNFS is not supported */
+#if defined(CONFIG_PNFSD)
+	new->cl_exchange_flags |= EXCHGID4_FLAG_USE_PNFS_MDS |
+				  EXCHGID4_FLAG_USE_PNFS_DS;
+#else  /* CONFIG_PNFSD */
 	new->cl_exchange_flags |= EXCHGID4_FLAG_USE_NON_PNFS;
+#endif /* CONFIG_PNFSD */
 
 	/* Referrals are supported, Migration is not. */
 	new->cl_exchange_flags |= EXCHGID4_FLAG_SUPP_MOVED_REFER;
