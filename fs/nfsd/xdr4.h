@@ -37,6 +37,8 @@
 #ifndef _LINUX_NFSD_XDR4_H
 #define _LINUX_NFSD_XDR4_H
 
+#include <linux/nfsd/nfsd4_pnfs.h>
+
 #include "state.h"
 #include "nfsd.h"
 
@@ -409,6 +411,22 @@ struct nfsd4_reclaim_complete {
 	u32 rca_one_fs;
 };
 
+struct nfsd4_pnfs_getdevinfo {
+	struct nfsd4_pnfs_deviceid gd_devid;	/* request */
+	u32			gd_layout_type;	/* request */
+	u32			gd_maxcount;	/* request */
+	struct super_block	*gd_sb;
+};
+
+struct nfsd4_pnfs_getdevlist {
+	u32             gd_layout_type;	/* request */
+	u32		gd_maxdevices;	/* request */
+	u64		gd_cookie;	/* request - response */
+	u64		gd_verf;	/* request - response */
+	struct svc_fh	*gd_fhp;	/* response */
+	u32		gd_eof;		/* response */
+};
+
 struct nfsd4_op {
 	int					opnum;
 	__be32					status;
@@ -453,6 +471,10 @@ struct nfsd4_op {
 		struct nfsd4_reclaim_complete	reclaim_complete;
 		struct nfsd4_test_stateid	test_stateid;
 		struct nfsd4_free_stateid	free_stateid;
+#if defined(CONFIG_PNFSD)
+		struct nfsd4_pnfs_getdevlist	pnfs_getdevlist;
+		struct nfsd4_pnfs_getdevinfo	pnfs_getdevinfo;
+#endif /* CONFIG_PNFSD */
 	} u;
 	struct nfs4_replay *			replay;
 };
