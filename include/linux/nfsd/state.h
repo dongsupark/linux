@@ -440,6 +440,10 @@ extern int nfs4_has_reclaimed_state(const char *name, bool use_exchange_id);
 extern void nfsd4_recdir_purge_old(void);
 extern int nfsd4_create_clid_dir(struct nfs4_client *clp);
 extern void nfsd4_remove_clid_dir(struct nfs4_client *clp);
+extern struct nfs4_stateid * find_stateid(stateid_t *stid, int flags);
+extern struct nfs4_delegation * find_delegation_stateid(struct inode *ino,
+		stateid_t *stid);
+extern __be32 nfs4_check_stateid(stateid_t *stateid);
 #if defined(CONFIG_PNFSD)
 extern void nfsd4_free_pnfs_slabs(void);
 extern void nfsd4_free_slab(struct kmem_cache **slab);
