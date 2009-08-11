@@ -959,8 +959,28 @@ nfsd4_verify(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 static __be32
 nfsd4_layout_verify(struct svc_export *exp, unsigned int layout_type)
 {
-	/* stubb */
-	return 0;
+	__be32 status;
+
+	/* check to see if pNFS  is supported. */
+	status = nfserr_layoutunavailable;
+	if (exp->ex_pnfs == 0) {
+		printk(KERN_INFO "pNFS %s: Underlying file system "
+			"does not support pNFS\n", __func__);
+		goto out;
+	}
+
+	/* check to see if requested layout type is supported. */
+	status = nfserr_unknown_layouttype;
+	if (layout_type != LAYOUT_NFSV4_FILES) {
+		printk(KERN_INFO "pNFS %s: requested layout type %d "
+			"does not match suppored type %d\n",
+			__func__, layout_type, LAYOUT_NFSV4_FILES);
+		goto out;
+	}
+
+	status = nfs_ok;
+out:
+	return status;
 }
 
 int nfsd4_pnfs_fl_getdevinfo(struct pnfs_devinfo_arg *arg)
