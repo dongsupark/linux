@@ -287,6 +287,7 @@ struct nfs4_layoutrecall {
 struct nfs4_notify_device {
 	struct nfsd4_pnfs_cb_dev_list  *nd_list;
 	struct nfs4_client	       *nd_client;
+	struct list_head	        nd_perclnt;
 };
 
 #endif /* CONFIG_PNFSD */
@@ -507,6 +508,8 @@ extern int create_layout_recall_list(struct list_head *todolist,
 		struct nfs4_file *lrfile);
 extern int nfsd4_cb_notify_device(struct nfs4_notify_device *cbnd);
 extern void pnfs_clear_device_notify(struct nfs4_client *clp);
+extern int create_device_notify_list(struct list_head *todolist,
+		struct nfsd4_pnfs_cb_dev_list *ndl);
 extern void pnfs_expire_client(struct nfs4_client *clp);
 #else /* CONFIG_PNFSD */
 static inline void nfsd4_free_pnfs_slabs(void) {}

@@ -55,6 +55,9 @@
 #include <linux/lockd/bind.h>
 #include <linux/module.h>
 #include <linux/sunrpc/svcauth_gss.h>
+#if defined(CONFIG_PNFSD)
+#include <linux/nfsd/nfsd4_pnfs.h>
+#endif /* CONFIG_PNFSD */
 
 #define NFSDDBG_FACILITY                NFSDDBG_PROC
 
@@ -4317,40 +4320,35 @@ out:
 	return status;
 }
 
-/*
- * Spawn a thread to perform a device notify
- *
- */
-int nfsd_device_notify_cb(struct super_block *sb,
+/* Create a list of clients to send device notifications. */
+int
+create_device_notify_list(struct list_head *todolist,
 			  struct nfsd4_pnfs_cb_dev_list *ndl)
 {
-	struct nfs4_notify_device cbnd;
+	int status = 0, i;
 	struct nfs4_client *clp = NULL;
-	unsigned int i, notify_num = 0;
-	int status2, status = 0;
+	struct nfs4_notify_device *cbnd;
 
-	BUG_ON(!ndl || ndl->cbd_len == 0 || !ndl->cbd_list);
+	nfs4_lock_state();
 
-	dprintk("NFSD %s: cbl %p len %u\n", __func__, ndl, ndl->cbd_len);
-
-	if (nfsd_serv == NULL)
-		return -ENOENT;
-
-	cbnd.nd_list = ndl;
+	/* Create notify client list */
 	for (i = 0; i < CLIENT_HASH_SIZE; i++)
 		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
 			if (atomic_read(&clp->cl_deviceref) <= 0)
 				continue;
-			cbnd.nd_client = clp;
-			status2 = nfsd4_cb_notify_device(&cbnd);
-			pnfs_clear_device_notify(clp);
-			if (status2)
-				status = status2;
-			notify_num++;
+			cbnd = kmalloc(sizeof(*cbnd), GFP_KERNEL);
+			if (!cbnd) {
+				status = -ENOMEM;
+				goto out;
+			}
+			cbnd->nd_list = ndl;
+			cbnd->nd_client = clp;
+			list_add(&cbnd->nd_perclnt, todolist);
+			atomic_inc(&clp->cl_count);
 		}
 
-	dprintk("NFSD %s: i %d status %d clients %u\n",
-		__func__, i , status, notify_num);
+out:
+	nfs4_unlock_state();
 	return status;
 }
 
