@@ -79,6 +79,20 @@ struct nfsd4_fs_locations {
 };
 
 /*
+ * Callbacks
+ */
+struct nfsd4_callback {
+	void *cb_op;
+	struct nfs4_client *cb_clp;
+	struct list_head cb_per_client;
+	u32 cb_minorversion;
+	struct rpc_message cb_msg;
+	const struct rpc_call_ops *cb_ops;
+	struct work_struct cb_work;
+	bool cb_done;
+};
+
+/*
  * We keep an array of pseudoflavors with the export, in order from most
  * to least preferred.  For the foreseeable future, we don't expect more
  * than the eight pseudoflavors null, unix, krb5, krb5i, krb5p, skpm3,
