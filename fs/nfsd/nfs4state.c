@@ -42,6 +42,8 @@
 #include "xdr4.h"
 #include "vfs.h"
 
+#include "pnfsd.h"
+
 #define NFSDDBG_FACILITY                NFSDDBG_PROC
 
 /* Globals */
@@ -271,8 +273,8 @@ unhash_delegation(struct nfs4_delegation *dp)
  * reclaim_str_hashtbl[] holds known client info from previous reset/reboot
  * used in reboot/reset lease grace period processing
  *
- * conf_id_hashtbl[], and conf_str_hashtbl[] hold confirmed
- * setclientid_confirmed info. 
+ * conf_id_hashtbl[], and conf_str_hashtbl[] hold
+ * confirmed setclientid_confirmed info.
  *
  * unconf_str_hastbl[] and unconf_id_hashtbl[] hold unconfirmed 
  * setclientid info.
@@ -774,6 +776,13 @@ expire_client(struct nfs4_client *clp)
 	put_nfs4_client(clp);
 }
 
+void expire_client_lock(struct nfs4_client *clp)
+{
+	nfs4_lock_state();
+	expire_client(clp);
+	nfs4_unlock_state();
+}
+
 static void copy_verf(struct nfs4_client *target, nfs4_verifier *source)
 {
 	memcpy(target->cl_verifier.data, source->data,
@@ -865,6 +874,7 @@ static struct nfs4_client *create_client(struct xdr_netobj name, char *recdir,
 	INIT_LIST_HEAD(&clp->cl_delegations);
 #if defined(CONFIG_PNFSD)
 	INIT_LIST_HEAD(&clp->cl_layouts);
+	INIT_LIST_HEAD(&clp->cl_layoutrecalls);
 #endif /* CONFIG_PNFSD */
 	INIT_LIST_HEAD(&clp->cl_sessions);
 	INIT_LIST_HEAD(&clp->cl_lru);
@@ -984,6 +994,24 @@ find_unconfirmed_client_by_str(const char *dname, unsigned int hashval,
 			return clp;
 	}
 	return NULL;
+}
+
+int
+filter_confirmed_clients(int (* func)(struct nfs4_client *, void *),
+			 void *arg)
+{
+	struct nfs4_client *clp, *next;
+	int i, status = 0;
+
+	for (i = 0; i < CLIENT_HASH_SIZE; i++)
+		list_for_each_entry_safe (clp, next, &conf_str_hashtbl[i],
+					  cl_strhash) {
+			status = func(clp, arg);
+			if (status)
+				break;
+		}
+
+	return status;
 }
 
 static void
