@@ -540,4 +540,19 @@ out_freelayout:
 	goto out;
 }
 
+void pnfs_expire_client(struct nfs4_client *clp)
+{
+	struct nfs4_layout *lp;
+
+	spin_lock(&layout_lock);
+	while (!list_empty(&clp->cl_layouts)) {
+		lp = list_entry(clp->cl_layouts.next, struct nfs4_layout,
+				lo_perclnt);
+		dprintk("NFSD: expire client. lp %p, fp %p\n", lp,
+			lp->lo_file);
+		BUG_ON(lp->lo_client != clp);
+		destroy_layout(lp);
+	}
+	spin_unlock(&layout_lock);
+}
 #endif /* CONFIG_PNFSD */
