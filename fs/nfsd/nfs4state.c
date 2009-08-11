@@ -59,8 +59,6 @@ static u64 current_sessionid = 1;
 #define ONE_STATEID(stateid)  (!memcmp((stateid), &onestateid, sizeof(stateid_t)))
 
 /* forward declarations */
-static struct nfs4_stateid * find_stateid(stateid_t *stid, int flags);
-static struct nfs4_delegation * find_delegation_stateid(struct inode *ino, stateid_t *stid);
 static char user_recovery_dirname[PATH_MAX] = "/var/lib/nfs/v4recovery";
 static void nfs4_set_recdir(char *recdir);
 
@@ -2968,7 +2966,7 @@ nfs4_check_fh(struct svc_fh *fhp, struct nfs4_stateid *stp)
 	return fhp->fh_dentry->d_inode != stp->st_file->fi_inode;
 }
 
-static int
+int
 STALE_STATEID(stateid_t *stateid)
 {
 	if (stateid->si_boot == boot_time)
@@ -2978,7 +2976,7 @@ STALE_STATEID(stateid_t *stateid)
 	return 1;
 }
 
-static __be32
+__be32
 nfs4_check_stateid(stateid_t *stateid)
 {
 	if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
@@ -3509,7 +3507,7 @@ static struct list_head lock_ownerid_hashtbl[LOCK_HASH_SIZE];
 static struct list_head	lock_ownerstr_hashtbl[LOCK_HASH_SIZE];
 static struct list_head lockstateid_hashtbl[STATEID_HASH_SIZE];
 
-static struct nfs4_stateid *
+struct nfs4_stateid *
 find_stateid(stateid_t *stid, int flags)
 {
 	struct nfs4_stateid *local;
@@ -3538,7 +3536,7 @@ find_stateid(stateid_t *stid, int flags)
 	return NULL;
 }
 
-static struct nfs4_delegation *
+struct nfs4_delegation *
 find_delegation_stateid(struct inode *ino, stateid_t *stid)
 {
 	struct nfs4_file *fp;

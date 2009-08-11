@@ -487,6 +487,9 @@ extern struct nfs4_file *find_alloc_file(struct inode *, struct svc_fh *);
 extern void put_nfs4_file(struct nfs4_file *);
 extern void get_nfs4_file(struct nfs4_file *);
 extern struct nfs4_client *find_confirmed_client(clientid_t *);
+extern struct nfs4_stateid *find_stateid(stateid_t *, int flags);
+extern struct nfs4_delegation *find_delegation_stateid(struct inode *, stateid_t *);
+extern __be32 nfs4_check_stateid(stateid_t *);
 
 #if defined(CONFIG_PNFSD)
 extern int nfsd4_init_pnfs_slabs(void);
