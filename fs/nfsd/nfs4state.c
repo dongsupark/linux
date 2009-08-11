@@ -1139,7 +1139,7 @@ static void gen_confirm(struct nfs4_client *clp)
 	*p++ = i++;
 }
 
-static struct nfs4_stid *find_stateid(struct nfs4_client *cl, stateid_t *t)
+struct nfs4_stid *find_stateid(struct nfs4_client *cl, stateid_t *t)
 {
 	return idr_find(&cl->cl_stateids, t->si_opaque.so_id);
 }
@@ -3373,7 +3373,7 @@ __be32 nfs4_validate_stateid(struct nfs4_client *cl, stateid_t *stateid)
 	return nfs_ok;
 }
 
-static __be32 nfsd4_lookup_stateid(stateid_t *stateid, unsigned char typemask, struct nfs4_stid **s)
+__be32 nfsd4_lookup_stateid(stateid_t *stateid, unsigned char typemask, struct nfs4_stid **s)
 {
 	struct nfs4_client *cl;
 
