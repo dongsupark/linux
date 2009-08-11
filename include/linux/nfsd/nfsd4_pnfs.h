@@ -35,6 +35,19 @@
 #define _LINUX_NFSD_NFSD4_PNFS_H
 
 #include <linux/exportfs.h>
+#include <linux/exp_xdr.h>
+
+struct nfsd4_pnfs_deviceid {
+	u64	sbid;			/* per-superblock unique ID */
+	u64	devid;			/* filesystem-wide unique device ID */
+};
+
+struct nfsd4_pnfs_dev_iter_res {
+	u64		gd_cookie;	/* request/repsonse */
+	u64		gd_verf;	/* request/repsonse */
+	u64		gd_devid;	/* response */
+	u32		gd_eof;		/* response */
+};
 
 /*
  * pNFS export operations vector.
@@ -49,6 +62,25 @@
 struct pnfs_export_operations {
 	/* Returns the supported pnfs_layouttype4. */
 	int (*layout_type) (struct super_block *);
+
+	/* Encode device info onto the xdr stream. */
+	int (*get_device_info) (struct super_block *,
+				struct exp_xdr_stream *,
+				u32 layout_type,
+				const struct nfsd4_pnfs_deviceid *);
+
+	/* Retrieve all available devices via an iterator.
+	 * arg->cookie == 0 indicates the beginning of the list,
+	 * otherwise arg->verf is used to verify that the list hasn't changed
+	 * while retrieved.
+	 *
+	 * On output, the filesystem sets the devid based on the current cookie
+	 * and sets res->cookie and res->verf corresponding to the next entry.
+	 * When the last entry in the list is retrieved, res->eof is set to 1.
+	 */
+	int (*get_device_iter) (struct super_block *,
+				u32 layout_type,
+				struct nfsd4_pnfs_dev_iter_res *);
 };
 
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
