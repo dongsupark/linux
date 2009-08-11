@@ -290,6 +290,29 @@ destroy_layout(struct nfs4_layout *lp)
 	put_nfs4_file(fp);
 }
 
+void fs_layout_return(struct super_block *sb, struct inode *ino,
+		      struct nfsd4_pnfs_layoutreturn *lrp, int flags,
+		      void *recall_cookie)
+{
+	int ret;
+
+	if (unlikely(!sb->s_pnfs_op->layout_return))
+		return;
+
+	lrp->lr_flags = flags;
+	lrp->args.lr_cookie = recall_cookie;
+
+	if (!ino) /* FSID or ALL */
+		ino = sb->s_root->d_inode;
+
+	ret = sb->s_pnfs_op->layout_return(ino, &lrp->args);
+	dprintk("%s: inode %lu iomode=%d offset=0x%llx length=0x%llx "
+		"cookie = %p flags 0x%x status=%d\n",
+		__func__, ino->i_ino, lrp->args.lr_seg.iomode,
+		lrp->args.lr_seg.offset, lrp->args.lr_seg.length,
+		recall_cookie, flags, ret);
+}
+
 static u64
 alloc_init_sbid(struct super_block *sb)
 {
@@ -591,6 +614,165 @@ out:
 out_freelayout:
 	free_layout(lp);
 	goto out_unlock;
+}
+
+static void
+trim_layout(struct nfsd4_layout_seg *lo, struct nfsd4_layout_seg *lr)
+{
+	u64 lo_start = lo->offset;
+	u64 lo_end = end_offset(lo_start, lo->length);
+	u64 lr_start = lr->offset;
+	u64 lr_end = end_offset(lr_start, lr->length);
+
+	dprintk("%s:Begin lo %llu:%lld lr %llu:%lld\n", __func__,
+		lo->offset, lo->length, lr->offset, lr->length);
+
+	/* lr fully covers lo? */
+	if (lr_start <= lo_start && lo_end <= lr_end) {
+		lo->length = 0;
+		goto out;
+	}
+
+	/*
+	 * split not supported yet. retain layout segment.
+	 * remains must be returned by the client
+	 * on the final layout return.
+	 */
+	if (lo_start < lr_start && lr_end < lo_end) {
+		dprintk("%s: split not supported\n", __func__);
+		goto out;
+	}
+
+	if (lo_start < lr_start)
+		lo_end = lr_start - 1;
+	else /* lr_end < lo_end */
+		lo_start = lr_end + 1;
+
+	lo->offset = lo_start;
+	lo->length = (lo_end == NFS4_MAX_UINT64) ? lo_end : lo_end - lo_start;
+out:
+	dprintk("%s:End lo %llu:%lld\n", __func__, lo->offset, lo->length);
+}
+
+static int
+pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
+			 struct nfsd4_pnfs_layoutreturn *lrp,
+			 struct nfs4_layout_state *ls)
+{
+	int layouts_found = 0;
+	struct nfs4_layout *lp, *nextlp;
+
+	dprintk("%s: clp %p fp %p\n", __func__, clp, fp);
+	spin_lock(&layout_lock);
+	list_for_each_entry_safe (lp, nextlp, &fp->fi_layouts, lo_perfile) {
+		dprintk("%s: lp %p client %p,%p lo_type %x,%x iomode %d,%d\n",
+			__func__, lp,
+			lp->lo_client, clp,
+			lp->lo_seg.layout_type, lrp->args.lr_seg.layout_type,
+			lp->lo_seg.iomode, lrp->args.lr_seg.iomode);
+		if (lp->lo_client != clp ||
+		    lp->lo_seg.layout_type != lrp->args.lr_seg.layout_type ||
+		    (lp->lo_seg.iomode != lrp->args.lr_seg.iomode &&
+		     lrp->args.lr_seg.iomode != IOMODE_ANY) ||
+		     !lo_seg_overlapping(&lp->lo_seg, &lrp->args.lr_seg))
+			continue;
+		layouts_found++;
+		trim_layout(&lp->lo_seg, &lrp->args.lr_seg);
+		if (!lp->lo_seg.length) {
+			lrp->lrs_present = 0;
+			destroy_layout(lp);
+		}
+	}
+	if (ls && layouts_found && lrp->lrs_present)
+		update_layout_stateid(ls, &lrp->lr_sid);
+	spin_unlock(&layout_lock);
+
+	return layouts_found;
+}
+
+static int
+pnfs_return_client_layouts(struct nfs4_client *clp,
+			   struct nfsd4_pnfs_layoutreturn *lrp, u64 ex_fsid)
+{
+	int layouts_found = 0;
+	struct nfs4_layout *lp, *nextlp;
+
+	spin_lock(&layout_lock);
+	list_for_each_entry_safe (lp, nextlp, &clp->cl_layouts, lo_perclnt) {
+		if (lrp->args.lr_seg.layout_type != lp->lo_seg.layout_type ||
+		   (lrp->args.lr_seg.iomode != lp->lo_seg.iomode &&
+		    lrp->args.lr_seg.iomode != IOMODE_ANY))
+			continue;
+
+		if (lrp->args.lr_return_type == RETURN_FSID &&
+		    !same_fsid_major(&lp->lo_file->fi_fsid, ex_fsid))
+			continue;
+
+		layouts_found++;
+		destroy_layout(lp);
+	}
+	spin_unlock(&layout_lock);
+
+	return layouts_found;
+}
+
+int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
+			    struct nfsd4_pnfs_layoutreturn *lrp)
+{
+	int status = 0;
+	int layouts_found = 0;
+	struct inode *ino = current_fh->fh_dentry->d_inode;
+	struct nfs4_file *fp = NULL;
+	struct nfs4_client *clp;
+	struct nfs4_layout_state *ls = NULL;
+	u64 ex_fsid = current_fh->fh_export->ex_fsid;
+	void *recall_cookie = NULL;
+
+	dprintk("NFSD: %s\n", __func__);
+
+	nfs4_lock_state();
+	clp = find_confirmed_client((clientid_t *)&lrp->args.lr_seg.clientid);
+	if (!clp)
+		goto out;
+
+	if (lrp->args.lr_return_type == RETURN_FILE) {
+		fp = find_file(ino);
+		if (!fp) {
+			printk(KERN_ERR "%s: RETURN_FILE: no nfs4_file for "
+				"ino %p:%lu\n",
+				__func__, ino, ino ? ino->i_ino : 0L);
+			goto out;
+		}
+
+		/* update layouts */
+		layouts_found = pnfs_return_file_layouts(clp, fp, lrp, ls);
+		/* optimize for the all-empty case */
+		if (list_empty(&fp->fi_layouts))
+			recall_cookie = PNFS_LAST_LAYOUT_NO_RECALLS;
+	} else {
+		layouts_found = pnfs_return_client_layouts(clp, lrp, ex_fsid);
+	}
+
+	dprintk("pNFS %s: clp %p fp %p layout_type 0x%x iomode %d "
+		"return_type %d fsid 0x%llx offset %llu length %llu: "
+		"layouts_found %d\n",
+		__func__, clp, fp, lrp->args.lr_seg.layout_type,
+		lrp->args.lr_seg.iomode, lrp->args.lr_return_type,
+		ex_fsid,
+		lrp->args.lr_seg.offset, lrp->args.lr_seg.length, layouts_found);
+
+	if (fp)
+		put_nfs4_file(fp);
+	if (ls)
+		put_layout_state(ls);
+out:
+	nfs4_unlock_state();
+
+	/* call exported filesystem layout_return (ignore return-code) */
+	fs_layout_return(sb, ino, lrp, 0, recall_cookie);
+
+	dprintk("pNFS %s: exit status %d\n", __func__, status);
+	return status;
 }
 
 void pnfs_expire_client(struct nfs4_client *clp)
