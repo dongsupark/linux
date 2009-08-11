@@ -125,6 +125,13 @@
 #define EXCHGID4_FLAG_USE_PNFS_DS		0x00040000
 #define EXCHGID4_FLAG_MASK_PNFS			0x00070000
 
+static inline bool
+is_ds_only_session(u32 exchange_flags)
+{
+	u32 mask = EXCHGID4_FLAG_USE_PNFS_DS | EXCHGID4_FLAG_USE_PNFS_MDS;
+	return (exchange_flags & mask) == EXCHGID4_FLAG_USE_PNFS_DS;
+}
+
 #define EXCHGID4_FLAG_UPD_CONFIRMED_REC_A	0x40000000
 #define EXCHGID4_FLAG_CONFIRMED_R		0x80000000
 /*
