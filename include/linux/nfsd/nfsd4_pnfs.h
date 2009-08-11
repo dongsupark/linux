@@ -205,4 +205,11 @@ struct pnfs_export_operations {
 			  struct pnfs_get_state *);
 };
 
+/*
+ * callbacks provided by the nfsd
+ */
+struct pnfsd_cb_operations {
+	/* Generic callbacks */
+};
+
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
