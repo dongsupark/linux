@@ -473,9 +473,10 @@ put_layoutrecall(struct nfs4_layoutrecall *clr)
 	return kref_put(&clr->clr_ref, destroy_layoutrecall);
 }
 
-void
+void *
 layoutrecall_done(struct nfs4_layoutrecall *clr)
 {
+	void *recall_cookie = clr->cb.cbl_cookie;
 	struct nfs4_layoutrecall *parent = clr->parent;
 
 	dprintk("pNFS %s: clr %p clr_ref %d\n", __func__, clr,
@@ -483,8 +484,10 @@ layoutrecall_done(struct nfs4_layoutrecall *clr)
 	list_del_init(&clr->clr_perclnt);
 	put_layoutrecall(clr);
 
-	if (parent)
-		put_layoutrecall(parent);
+	if (parent && !put_layoutrecall(parent))
+		recall_cookie = NULL;
+
+	return recall_cookie;
 }
 
 /*
@@ -994,7 +997,7 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 			continue;
 
 		if (recall_return_perfect_match(clr, lrp, fp, current_fh))
-			layoutrecall_done(clr);
+			recall_cookie = layoutrecall_done(clr);
 		else if (layouts_found &&
 			 recall_return_partial_match(clr, lrp, fp, current_fh))
 			clr->clr_time = CURRENT_TIME;
@@ -1123,6 +1126,7 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 		.args.lr_seg = clr->cb.cbl_seg,
 	};
 	struct inode *inode;
+	void *recall_cookie;
 
 	if (clr->clr_file) {
 		inode = igrab(clr->clr_file->fi_inode);
@@ -1143,10 +1147,11 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 					   clr->cb.cbl_fsid.major);
 
 	spin_lock(&layout_lock);
-	layoutrecall_done(clr);
+	recall_cookie = layoutrecall_done(clr);
 	spin_unlock(&layout_lock);
 
-	fs_layout_return(clr->clr_sb, inode, &lr, LR_FLAG_INTERN, NULL);
+	fs_layout_return(clr->clr_sb, inode, &lr, LR_FLAG_INTERN,
+			 recall_cookie);
 	iput(inode);
 }
 
@@ -1404,6 +1409,10 @@ int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 	}
 
 	INIT_LIST_HEAD(&todolist);
+
+	/* If no cookie provided by FS, return a default one */
+	if (!cbl->cbl_cookie)
+		cbl->cbl_cookie = PNFS_LAST_LAYOUT_NO_RECALLS;
 
 	status = create_layout_recall_list(&todolist, &todo_len, cbl, lrfile);
 	if (list_empty(&todolist)) {
