@@ -203,4 +203,43 @@ extern int filelayout_encode_devinfo(struct exp_xdr_stream *xdr,
 extern enum nfsstat4 filelayout_encode_layout(struct exp_xdr_stream *xdr,
 				      const struct pnfs_filelayout_layout *flp);
 #endif /* defined(CONFIG_EXPORTFS_FILE_LAYOUT) */
+
+#if defined(CONFIG_PNFSD)
+#include <linux/module.h>
+
+struct pnfsd_cb_operations;
+
+struct pnfsd_cb_ctl {
+	spinlock_t lock;
+	struct module *module;
+	const struct pnfsd_cb_operations *cb_op;
+};
+
+/* in expfs.c so that file systems can depend on it */
+extern struct pnfsd_cb_ctl pnfsd_cb_ctl;
+
+static inline int
+pnfsd_get_cb_op(struct pnfsd_cb_ctl *ctl)
+{
+	int ret = -ENOENT;
+
+	spin_lock(&pnfsd_cb_ctl.lock);
+	if (!pnfsd_cb_ctl.cb_op)
+		goto out;
+	if (!try_module_get(pnfsd_cb_ctl.module))
+		goto out;
+	ctl->cb_op = pnfsd_cb_ctl.cb_op;
+	ctl->module = pnfsd_cb_ctl.module;
+	ret = 0;
+out:
+	spin_unlock(&pnfsd_cb_ctl.lock);
+	return ret;
+}
+
+static inline void
+pnfsd_put_cb_op(struct pnfsd_cb_ctl *ctl)
+{
+	module_put(ctl->module);
+}
+#endif /* CONFIG_PNFSD */
 #endif /* LINUX_EXPORTFS_H */
