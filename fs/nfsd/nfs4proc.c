@@ -987,24 +987,26 @@ nfs4_set_pnfs_ds_list(char *dslist, int len)
 }
 
 static __be32
-nfsd4_layout_verify(struct svc_export *exp, unsigned int layout_type)
+nfsd4_layout_verify(struct super_block *sb, unsigned int layout_type)
 {
-	__be32 status;
+	int status, type;
 
 	/* check to see if pNFS  is supported. */
 	status = nfserr_layoutunavailable;
-	if (exp->ex_pnfs == 0) {
+	if (!sb->s_pnfs_op->layout_type) {
 		printk(KERN_INFO "pNFS %s: Underlying file system "
 			"does not support pNFS\n", __func__);
 		goto out;
 	}
 
+	type = sb->s_pnfs_op->layout_type(sb);
+
 	/* check to see if requested layout type is supported. */
 	status = nfserr_unknown_layouttype;
-	if (layout_type != LAYOUT_NFSV4_FILES) {
+	if (type != layout_type) {
 		printk(KERN_INFO "pNFS %s: requested layout type %d "
-			"does not match suppored type %d\n",
-			__func__, layout_type, LAYOUT_NFSV4_FILES);
+		       "does not match suppored type %d\n",
+			__func__, layout_type, type);
 		goto out;
 	}
 
@@ -1182,6 +1184,7 @@ nfsd4_getdevlist(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *cstate,
 		struct nfsd4_pnfs_getdevlist *gdlp)
 {
+	struct super_block *sb;
 	struct svc_fh *current_fh = &cstate->current_fh;
 	int status;
 
@@ -1196,9 +1199,15 @@ nfsd4_getdevlist(struct svc_rqst *rqstp,
 		goto out;
 	}
 
+	status = nfserr_inval;
+	sb = current_fh->fh_dentry->d_inode->i_sb;
+	if (!sb)
+		goto out;
+
 	/* Ensure underlying file system supports pNFS and,
-	 * if so, the requested layout type */
-	status = nfsd4_layout_verify(current_fh->fh_export, gdlp->gd_type);
+	 * if so, the requested layout type
+	 */
+	status = nfsd4_layout_verify(sb, gdlp->gd_type);
 	if (status)
 		goto out;
 
@@ -1217,6 +1226,7 @@ nfsd4_layoutget(struct svc_rqst *rqstp,
 		struct nfsd4_pnfs_layoutget *lgp)
 {
 	int status;
+	struct super_block *sb;
 	struct svc_fh *current_fh = &cstate->current_fh;
 
 	status = fh_verify(rqstp, current_fh, 0, NFSD_MAY_NOP);
@@ -1225,11 +1235,15 @@ nfsd4_layoutget(struct svc_rqst *rqstp,
 		goto out;
 	}
 
+	status = nfserr_inval;
+	sb = current_fh->fh_dentry->d_inode->i_sb;
+	if (!sb)
+		goto out;
+
 	/* Ensure underlying file system supports pNFS and,
 	 * if so, the requested layout type
 	 */
-	status = nfsd4_layout_verify(current_fh->fh_export,
-				   lgp->lg_seg.layout_type);
+	status = nfsd4_layout_verify(sb, lgp->lg_seg.layout_type);
 	if (status)
 		goto out;
 
@@ -1264,6 +1278,7 @@ nfsd4_layoutcommit(struct svc_rqst *rqstp,
 	int status;
 	struct inode *ino = NULL;
 	struct iattr ia;
+	struct super_block *sb;
 	struct svc_fh *current_fh = &cstate->current_fh;
 
 	dprintk("NFSD: nfsd4_layoutcommit \n");
@@ -1278,11 +1293,15 @@ nfsd4_layoutcommit(struct svc_rqst *rqstp,
 	if (!ino)
 		goto out;
 
+	status = nfserr_inval;
+	sb = ino->i_sb;
+	if (!sb)
+		goto out;
+
 	/* Ensure underlying file system supports pNFS and,
 	 * if so, the requested layout type
 	 */
-	status = nfsd4_layout_verify(current_fh->fh_export,
-				   lcp->lc_seg.layout_type);
+	status = nfsd4_layout_verify(sb, lcp->lc_seg.layout_type);
 	if (status)
 		goto out;
 
@@ -1335,6 +1354,7 @@ nfsd4_layoutreturn(struct svc_rqst *rqstp,
 		struct nfsd4_pnfs_layoutreturn *lrp)
 {
 	int status;
+	struct super_block *sb;
 	struct svc_fh *current_fh = &cstate->current_fh;
 
 	status = fh_verify(rqstp, current_fh, 0, NFSD_MAY_NOP);
@@ -1343,11 +1363,15 @@ nfsd4_layoutreturn(struct svc_rqst *rqstp,
 		goto out;
 	}
 
+	status = nfserr_inval;
+	sb = current_fh->fh_dentry->d_inode->i_sb;
+	if (!sb)
+		goto out;
+
 	/* Ensure underlying file system supports pNFS and,
 	 * if so, the requested layout type
 	 */
-	status = nfsd4_layout_verify(current_fh->fh_export,
-				   lrp->lr_seg.layout_type);
+	status = nfsd4_layout_verify(sb, lrp->lr_seg.layout_type);
 	if (status)
 		goto out;
 
@@ -1384,6 +1408,7 @@ nfsd4_getdevinfo(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *cstate,
 		struct nfsd4_pnfs_getdevinfo *gdp)
 {
+	struct super_block *sb;
 	struct svc_export *exp = NULL;
 	u32 fsidv = gdp->gd_devid.pnfs_fsid;
 	int status;
@@ -1399,12 +1424,16 @@ nfsd4_getdevinfo(struct svc_rqst *rqstp,
 		status = nfserrno(PTR_ERR(exp));
 		goto out;
 	}
+	sb = exp->ex_path.dentry->d_inode->i_sb;
+	exp_put(exp);
+	dprintk("%s: sb %p\n", __func__, sb);
+	if (!sb)
+		goto out;
 
 	/* Ensure underlying file system supports pNFS and,
 	 * if so, the requested layout type
 	 */
-	status = nfsd4_layout_verify(exp, gdp->gd_type);
-	exp_put(exp);
+	status = nfsd4_layout_verify(sb, gdp->gd_type);
 	if (status)
 		goto out;
 out:

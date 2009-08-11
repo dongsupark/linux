@@ -204,6 +204,9 @@ struct pnfsd_cb_operations {
 };
 
 struct pnfs_export_operations {
+	/* Returns the supported pnfs_layouttype4. */
+	int (*layout_type) (struct super_block *);
+
 	/* pNFS Files layout specific operations */
 
 	/* Get the write verifier for DS (called on MDS only) */
