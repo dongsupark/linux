@@ -391,7 +391,7 @@ update_ds_stateid(struct pnfs_ds_stateid *dsp, struct svc_fh *cfh,
 
 	dprintk("pNFSD: %s dsp %p\n", __func__, dsp);
 
-	dcp = find_pnfs_ds_clientid(&gsp->clid);
+	dcp = find_pnfs_ds_clientid((clientid_t *)&gsp->clid);
 	if (!dcp) {
 		dcp = alloc_init_ds_clientid(gsp);
 		if (!dcp)
