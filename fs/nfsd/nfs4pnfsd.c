@@ -118,7 +118,29 @@ alloc_init_sbid(struct super_block *sb)
 	return id;
 }
 
-static u64
+struct super_block *
+find_sbid_id(u64 id)
+{
+	struct sbid_tracker *sbid;
+	struct super_block *sb = NULL;
+	unsigned long hash_idx = id & SBID_HASH_MASK;
+	int pos = 0;
+
+	spin_lock(&layout_lock);
+	list_for_each_entry (sbid, &sbid_hashtbl[hash_idx], hash) {
+		pos++;
+		if (sbid->id != id)
+			continue;
+		if (pos > 1)
+			list_move(&sbid->hash, &sbid_hashtbl[hash_idx]);
+		sb = sbid->sb;
+		break;
+	}
+	spin_unlock(&layout_lock);
+	return sb;
+}
+
+u64
 find_create_sbid(struct super_block *sb)
 {
 	struct sbid_tracker *sbid;
@@ -131,10 +153,8 @@ find_create_sbid(struct super_block *sb)
 		pos++;
 		if (sbid->sb != sb)
 			continue;
-		if (pos > 1) {
-			list_del(&sbid->hash);
-			list_add(&sbid->hash, &sbid_hashtbl[hash_idx]);
-		}
+		if (pos > 1)
+			list_move(&sbid->hash, &sbid_hashtbl[hash_idx]);
 		id = sbid->id;
 		break;
 	}

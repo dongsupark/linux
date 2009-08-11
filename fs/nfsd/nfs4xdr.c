@@ -46,6 +46,7 @@
 #include <linux/utsname.h>
 #include <linux/pagemap.h>
 #include <linux/sunrpc/svcauth_gss.h>
+#include <linux/exportfs.h>
 
 #include "idmap.h"
 #include "acl.h"
@@ -53,6 +54,7 @@
 #include "vfs.h"
 #include "state.h"
 #include "cache.h"
+#include "pnfsd.h"
 
 #define NFSDDBG_FACILITY		NFSDDBG_XDR
 
@@ -1434,6 +1436,42 @@ static __be32 nfsd4_decode_reclaim_complete(struct nfsd4_compoundargs *argp, str
 	DECODE_TAIL;
 }
 
+#if defined(CONFIG_PNFSD)
+static __be32
+nfsd4_decode_getdevlist(struct nfsd4_compoundargs *argp,
+			struct nfsd4_pnfs_getdevlist *gdevl)
+{
+	DECODE_HEAD;
+
+	READ_BUF(16 + sizeof(nfs4_verifier));
+	READ32(gdevl->gd_layout_type);
+	READ32(gdevl->gd_maxdevices);
+	READ64(gdevl->gd_cookie);
+	COPYMEM(&gdevl->gd_verf, sizeof(nfs4_verifier));
+
+	DECODE_TAIL;
+}
+
+static __be32
+nfsd4_decode_getdevinfo(struct nfsd4_compoundargs *argp,
+			struct nfsd4_pnfs_getdevinfo *gdev)
+{
+	u32 num;
+	DECODE_HEAD;
+
+	READ_BUF(12 + sizeof(struct nfsd4_pnfs_deviceid));
+	READ64(gdev->gd_devid.sbid);
+	READ64(gdev->gd_devid.devid);
+	READ32(gdev->gd_layout_type);
+	READ32(gdev->gd_maxcount);
+	READ32(num);
+	if (num)
+		READ_BUF(4); /* TODO: for now, just skip notify_types */
+
+	DECODE_TAIL;
+}
+#endif /* CONFIG_PNFSD */
+
 static __be32
 nfsd4_decode_noop(struct nfsd4_compoundargs *argp, void *p)
 {
@@ -1535,11 +1573,19 @@ static nfsd4_dec nfsd41_dec_ops[] = {
 	[OP_DESTROY_SESSION]	= (nfsd4_dec)nfsd4_decode_destroy_session,
 	[OP_FREE_STATEID]	= (nfsd4_dec)nfsd4_decode_free_stateid,
 	[OP_GET_DIR_DELEGATION]	= (nfsd4_dec)nfsd4_decode_notsupp,
+#if defined(CONFIG_PNFSD)
+	[OP_GETDEVICEINFO]	= (nfsd4_dec)nfsd4_decode_getdevinfo,
+	[OP_GETDEVICELIST]	= (nfsd4_dec)nfsd4_decode_getdevlist,
+	[OP_LAYOUTCOMMIT]	= (nfsd4_dec)nfsd4_decode_notsupp,
+	[OP_LAYOUTGET]		= (nfsd4_dec)nfsd4_decode_notsupp,
+	[OP_LAYOUTRETURN]	= (nfsd4_dec)nfsd4_decode_notsupp,
+#else  /* CONFIG_PNFSD */
 	[OP_GETDEVICEINFO]	= (nfsd4_dec)nfsd4_decode_notsupp,
 	[OP_GETDEVICELIST]	= (nfsd4_dec)nfsd4_decode_notsupp,
 	[OP_LAYOUTCOMMIT]	= (nfsd4_dec)nfsd4_decode_notsupp,
 	[OP_LAYOUTGET]		= (nfsd4_dec)nfsd4_decode_notsupp,
 	[OP_LAYOUTRETURN]	= (nfsd4_dec)nfsd4_decode_notsupp,
+#endif /* CONFIG_PNFSD */
 	[OP_SECINFO_NO_NAME]	= (nfsd4_dec)nfsd4_decode_secinfo_no_name,
 	[OP_SEQUENCE]		= (nfsd4_dec)nfsd4_decode_sequence,
 	[OP_SET_SSV]		= (nfsd4_dec)nfsd4_decode_notsupp,
@@ -3417,6 +3463,209 @@ nfsd4_encode_test_stateid(struct nfsd4_compoundres *resp, int nfserr,
 	return nfserr;
 }
 
+#if defined(CONFIG_PNFSD)
+
+/* Uses the export interface to iterate through the available devices
+ * and encodes them on the response stream.
+ */
+static  __be32
+nfsd4_encode_devlist_iterator(struct nfsd4_compoundres *resp,
+			      struct nfsd4_pnfs_getdevlist *gdevl,
+			      unsigned int *dev_count)
+{
+	struct super_block *sb = gdevl->gd_fhp->fh_dentry->d_inode->i_sb;
+	__be32 nfserr;
+	int status;
+	__be32 *p;
+	struct nfsd4_pnfs_dev_iter_res res = {
+		.gd_cookie = gdevl->gd_cookie,
+		.gd_verf = gdevl->gd_verf,
+		.gd_eof = 0
+	};
+	u64 sbid;
+
+	dprintk("%s: Begin\n", __func__);
+
+	sbid = find_create_sbid(sb);
+	*dev_count = 0;
+	do {
+		status = sb->s_pnfs_op->get_device_iter(sb,
+							gdevl->gd_layout_type,
+							&res);
+		if (status) {
+			if (status == -ENOENT) {
+				res.gd_eof = 1;
+				/* return success */
+				break;
+			}
+			nfserr = nfserrno(status);
+			goto out_err;
+		}
+
+		/* Encode device id and layout type */
+		RESERVE_SPACE(sizeof(struct nfsd4_pnfs_deviceid));
+		WRITE64((__be64)sbid);
+		WRITE64(res.gd_devid);	/* devid minor */
+		ADJUST_ARGS();
+		(*dev_count)++;
+	} while (*dev_count < gdevl->gd_maxdevices && !res.gd_eof);
+	gdevl->gd_cookie = res.gd_cookie;
+	gdevl->gd_verf = res.gd_verf;
+	gdevl->gd_eof = res.gd_eof;
+	nfserr = nfs_ok;
+out_err:
+	dprintk("%s: Encoded %u devices\n", __func__, *dev_count);
+	return nfserr;
+}
+
+/* Encodes the response of get device list.
+*/
+static __be32
+nfsd4_encode_getdevlist(struct nfsd4_compoundres *resp, __be32 nfserr,
+			struct nfsd4_pnfs_getdevlist *gdevl)
+{
+	unsigned int dev_count = 0, lead_count;
+	u32 *p_in = resp->p;
+	__be32 *p;
+
+	dprintk("%s: err %d\n", __func__, nfserr);
+	if (nfserr)
+		return nfserr;
+
+	/* Ensure we have room for cookie, verifier, and devlist len,
+	 * which we will backfill in after we encode as many devices as possible
+	 */
+	lead_count = 8 + sizeof(nfs4_verifier) + 4;
+	RESERVE_SPACE(lead_count);
+	/* skip past these values */
+	p += XDR_QUADLEN(lead_count);
+	ADJUST_ARGS();
+
+	/* Iterate over as many device ids as possible on the xdr stream */
+	nfserr = nfsd4_encode_devlist_iterator(resp, gdevl, &dev_count);
+	if (nfserr)
+		goto out_err;
+
+	/* Backfill in cookie, verf and number of devices encoded */
+	p = p_in;
+	WRITE64(gdevl->gd_cookie);
+	WRITEMEM(&gdevl->gd_verf, sizeof(nfs4_verifier));
+	WRITE32(dev_count);
+
+	/* Skip over devices */
+	p += XDR_QUADLEN(dev_count * sizeof(struct nfsd4_pnfs_deviceid));
+	ADJUST_ARGS();
+
+	/* are we at the end of devices? */
+	RESERVE_SPACE(4);
+	WRITE32(gdevl->gd_eof);
+	ADJUST_ARGS();
+
+	dprintk("%s: done.\n", __func__);
+
+	nfserr = nfs_ok;
+out:
+	return nfserr;
+out_err:
+	p = p_in;
+	ADJUST_ARGS();
+	goto out;
+}
+
+/* For a given device id, have the file system retrieve and encode the
+ * associated device.  For file layout, the encoding function is
+ * passed down to the file system.  The file system then has the option
+ * of using this encoding function or one of its own.
+ *
+ * Note: the file system must return the XDR size of struct device_addr4
+ * da_addr_body in pnfs_xdr_info.bytes_written on NFS4ERR_TOOSMALL for the
+ * gdir_mincount calculation.
+ */
+static __be32
+nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, __be32 nfserr,
+			struct nfsd4_pnfs_getdevinfo *gdev)
+{
+	struct super_block *sb;
+	int maxcount = 0, type_notify_len = 12;
+	__be32 *p, *p_save = NULL, *p_in = resp->p;
+	struct exp_xdr_stream xdr;
+
+	dprintk("%s: err %d\n", __func__, nfserr);
+	if (nfserr)
+		return nfserr;
+
+	sb = gdev->gd_sb;
+
+	if (gdev->gd_maxcount != 0) {
+		/* FIXME: this will be bound by the session max response */
+		maxcount = svc_max_payload(resp->rqstp);
+		if (maxcount > gdev->gd_maxcount)
+			maxcount = gdev->gd_maxcount;
+
+		/* Ensure have room for type and notify field */
+		maxcount -= type_notify_len;
+		if (maxcount < 0) {
+			nfserr = -ETOOSMALL;
+			goto toosmall;
+		}
+	}
+
+	RESERVE_SPACE(4);
+	WRITE32(gdev->gd_layout_type);
+	ADJUST_ARGS();
+
+	/* If maxcount is 0 then just update notifications */
+	if (gdev->gd_maxcount == 0)
+		goto handle_notifications;
+
+	xdr.p = p_save = resp->p;
+	xdr.end = resp->end;
+	if (xdr.end - xdr.p > exp_xdr_qwords(maxcount & ~3))
+		xdr.end = xdr.p + exp_xdr_qwords(maxcount & ~3);
+
+	nfserr = sb->s_pnfs_op->get_device_info(sb, &xdr, gdev->gd_layout_type,
+						&gdev->gd_devid);
+	if (nfserr) {
+		/* Rewind to the beginning */
+		p = p_in;
+		ADJUST_ARGS();
+		if (nfserr == -ETOOSMALL)
+			goto toosmall;
+		printk(KERN_ERR "%s: export ERROR %d\n", __func__, nfserr);
+		goto out;
+	}
+
+	/* The file system should never write 0 bytes without
+	 * returning an error
+	 */
+	BUG_ON(xdr.p == p_save);
+	BUG_ON(xdr.p > xdr.end);
+
+	/* Update the xdr stream with the number of bytes encoded
+	 * by the file system.
+	 */
+	p = xdr.p;
+	ADJUST_ARGS();
+
+handle_notifications:
+	/* Encode supported device notifications.
+	 * Note: Currently none are supported.
+	 */
+	RESERVE_SPACE(4);
+	WRITE32(0);
+	ADJUST_ARGS();
+
+out:
+	return nfserrno(nfserr);
+toosmall:
+	dprintk("%s: maxcount too small\n", __func__);
+	RESERVE_SPACE(4);
+	WRITE32((p_save ? (xdr.p - p_save) * 4 : 0) + type_notify_len);
+	ADJUST_ARGS();
+	goto out;
+}
+#endif /* CONFIG_PNFSD */
+
 static __be32
 nfsd4_encode_noop(struct nfsd4_compoundres *resp, __be32 nfserr, void *p)
 {
@@ -3477,11 +3726,19 @@ static nfsd4_enc nfsd4_enc_ops[] = {
 	[OP_DESTROY_SESSION]	= (nfsd4_enc)nfsd4_encode_destroy_session,
 	[OP_FREE_STATEID]	= (nfsd4_enc)nfsd4_encode_free_stateid,
 	[OP_GET_DIR_DELEGATION]	= (nfsd4_enc)nfsd4_encode_noop,
+#if defined(CONFIG_PNFSD)
+	[OP_GETDEVICEINFO]	= (nfsd4_enc)nfsd4_encode_getdevinfo,
+	[OP_GETDEVICELIST]	= (nfsd4_enc)nfsd4_encode_getdevlist,
+	[OP_LAYOUTCOMMIT]	= (nfsd4_enc)nfsd4_encode_noop,
+	[OP_LAYOUTGET]		= (nfsd4_enc)nfsd4_encode_noop,
+	[OP_LAYOUTRETURN]	= (nfsd4_enc)nfsd4_encode_noop,
+#else  /* CONFIG_PNFSD */
 	[OP_GETDEVICEINFO]	= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_GETDEVICELIST]	= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_LAYOUTCOMMIT]	= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_LAYOUTGET]		= (nfsd4_enc)nfsd4_encode_noop,
 	[OP_LAYOUTRETURN]	= (nfsd4_enc)nfsd4_encode_noop,
+#endif /* CONFIG_PNFSD */
 	[OP_SECINFO_NO_NAME]	= (nfsd4_enc)nfsd4_encode_secinfo_no_name,
 	[OP_SEQUENCE]		= (nfsd4_enc)nfsd4_encode_sequence,
 	[OP_SET_SSV]		= (nfsd4_enc)nfsd4_encode_noop,
