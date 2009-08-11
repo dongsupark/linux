@@ -36,6 +36,7 @@
 
 #include <linux/nfsd/state.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
+#include <linux/nfsd/xdr4.h>
 
 /* outstanding layout stateid */
 struct nfs4_layout_state {
@@ -58,6 +59,51 @@ struct nfs4_layout {
 	struct nfsd4_layout_seg 	lo_seg;
 };
 
+struct pnfs_inval_state {
+	struct knfsd_fh		mdsfh; /* needed only by invalidate all */
+	stateid_t		stid;
+	clientid_t		clid;
+	u32			status;
+};
+
+/* pNFS Data Server state */
+#define DS_STATEID_VALID   0
+#define DS_STATEID_ERROR   1
+#define DS_STATEID_NEW     2
+
+struct pnfs_ds_stateid {
+	struct list_head	ds_hash;        /* ds_stateid hash entry */
+	struct list_head	ds_perclid;     /* per client hash entry */
+	stateid_t		ds_stid;
+	struct knfsd_fh		ds_fh;
+	unsigned long		ds_access;
+	u32			ds_status;      /* from MDS */
+	u32			ds_verifier[2]; /* from MDS */
+	wait_queue_head_t	ds_waitq;
+	unsigned long		ds_flags;
+	struct kref		ds_ref;
+	clientid_t		ds_mdsclid;
+};
+
+struct pnfs_ds_clientid {
+	struct list_head	dc_hash;        /* mds_clid_hashtbl entry */
+	struct list_head	dc_stateid;     /* ds_stateid head */
+	struct list_head	dc_permdsid;    /* per mdsid hash entry */
+	clientid_t		dc_mdsclid;
+	struct kref		dc_ref;
+	uint32_t		dc_mdsid;
+};
+
+struct pnfs_mds_id {
+	struct list_head	di_hash;        /* mds_nodeid list entry */
+	struct list_head	di_mdsclid;     /* mds_clientid head */
+	uint32_t		di_mdsid;
+	time_t			di_mdsboot;	/* mds boot time */
+	struct kref		di_ref;
+};
+
+int nfs4_pnfs_cb_get_state(struct super_block *, struct pnfs_get_state *);
+int nfs4_pnfs_cb_change_state(struct pnfs_get_state *);
 int nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *, struct exp_xdr_stream *);
 int nfs4_pnfs_return_layout(struct super_block *, struct svc_fh *,
 					struct nfsd4_pnfs_layoutreturn *);
