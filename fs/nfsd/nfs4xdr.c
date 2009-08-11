@@ -3447,6 +3447,12 @@ nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
 		goto err;
 	}
 
+	/* Set the file layout encoding function.  Once other layout
+	 * types are added to the kernel they can be set here
+	 */
+	if (lgp->lg_seg.layout_type == LAYOUT_NFSV4_FILES)
+		args.func = filelayout_encode_layout;
+
 	/* Set args for call to fs */
 	args.minlength = lgp->lg_minlength;
 	args.seg = lgp->lg_seg;
