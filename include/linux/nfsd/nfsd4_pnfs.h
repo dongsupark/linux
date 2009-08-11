@@ -182,6 +182,10 @@ struct pnfsd_cb_operations {
 	/* Generic callbacks */
 };
 
+struct pnfs_export_operations {
+	/* stub */
+};
+
 /*
  * fh_fsid_type is overloaded to indicate whether a filehandle was one supplied
  * to a DS by LAYOUTGET.  nfs4_preprocess_stateid_op() uses this to decide how
