@@ -49,6 +49,13 @@ config FS_POSIX_ACL
 config EXPORTFS
 	tristate
 
+config EXPORTFS_FILE_LAYOUT
+	bool
+	depends on PNFSD && EXPORTFS
+	help
+	  Exportfs support for the NFSv4.1 files layout type.
+	  Must be automatically selected by supporting filesystems.
+
 config FILE_LOCKING
 	bool "Enable POSIX file locking API" if EXPERT
 	default y
