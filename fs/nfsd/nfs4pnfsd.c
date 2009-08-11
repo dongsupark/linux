@@ -453,6 +453,11 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 	if (!fp || !clp)
 		goto out;
 
+	/* Check decoded layout stateid */
+	status = nfs4_process_layout_stateid(clp, fp, &lgp->lg_sid, &ls);
+	if (status)
+		goto out;
+
 	/* pre-alloc layout in case we can't merge after we call
 	 * the file system
 	 */
