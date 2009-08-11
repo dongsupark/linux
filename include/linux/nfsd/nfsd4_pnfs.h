@@ -34,6 +34,8 @@
 #ifndef _LINUX_NFSD_NFSD4_PNFS_H
 #define _LINUX_NFSD_NFSD4_PNFS_H
 
+#include <linux/exportfs.h>
+
 /*
  * pNFS export operations vector.
  *
@@ -45,7 +47,8 @@
  * All other methods are optional and can be set to NULL if not implemented.
  */
 struct pnfs_export_operations {
-	/* stub */
+	/* Returns the supported pnfs_layouttype4. */
+	int (*layout_type) (struct super_block *);
 };
 
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
