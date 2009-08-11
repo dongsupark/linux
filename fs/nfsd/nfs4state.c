@@ -3451,6 +3451,9 @@ nfs4_preprocess_stateid_op(struct net *net, struct nfsd4_compound_state *cstate,
 	if (grace_disallows_io(net, ino))
 		return nfserr_grace;
 
+	if (pnfs_fh_is_ds(&current_fh->fh_handle))
+		return 0;
+
 	if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
 		return check_special_stateids(net, current_fh, stateid, flags);
 
