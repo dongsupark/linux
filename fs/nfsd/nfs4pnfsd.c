@@ -260,6 +260,36 @@ init_layout(struct nfs4_layout *lp,
 	dprintk("pNFS %s end\n", __func__);
 }
 
+static void
+dequeue_layout(struct nfs4_layout *lp)
+{
+	list_del(&lp->lo_perclnt);
+	list_del(&lp->lo_perfile);
+}
+
+/*
+ * Note: always called under the layout_lock
+ */
+static void
+destroy_layout(struct nfs4_layout *lp)
+{
+	struct nfs4_client *clp;
+	struct nfs4_file *fp;
+	struct nfs4_layout_state *ls;
+
+	dequeue_layout(lp);
+	clp = lp->lo_client;
+	fp = lp->lo_file;
+	ls = lp->lo_state;
+	dprintk("pNFS %s: lp %p clp %p fp %p ino %p\n",
+		__func__, lp, clp, fp, fp->fi_inode);
+
+	kmem_cache_free(pnfs_layout_slab, lp);
+	/* release references taken by init_layout */
+	put_layout_state(ls);
+	put_nfs4_file(fp);
+}
+
 static u64
 alloc_init_sbid(struct super_block *sb)
 {
@@ -561,4 +591,20 @@ out:
 out_freelayout:
 	free_layout(lp);
 	goto out_unlock;
+}
+
+void pnfs_expire_client(struct nfs4_client *clp)
+{
+	struct nfs4_layout *lp;
+
+	spin_lock(&layout_lock);
+	while (!list_empty(&clp->cl_layouts)) {
+		lp = list_entry(clp->cl_layouts.next, struct nfs4_layout,
+				lo_perclnt);
+		dprintk("NFSD: expire client. lp %p, fp %p\n", lp,
+			lp->lo_file);
+		BUG_ON(lp->lo_client != clp);
+		destroy_layout(lp);
+	}
+	spin_unlock(&layout_lock);
 }
