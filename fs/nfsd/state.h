@@ -496,6 +496,8 @@ extern void get_nfs4_file(struct nfs4_file *);
 extern struct nfs4_client *find_confirmed_client(clientid_t *);
 extern void nfsd4_init_stid(struct nfs4_stid *, struct nfs4_client *, unsigned char type);
 extern void nfsd4_unhash_stid(struct nfs4_stid *);
+extern struct nfs4_stid *find_stateid(struct nfs4_client *, stateid_t *);
+extern __be32 nfsd4_lookup_stateid(stateid_t *, unsigned char typemask, struct nfs4_stid **);
 
 #if defined(CONFIG_PNFSD)
 extern int nfsd4_init_pnfs_slabs(void);
