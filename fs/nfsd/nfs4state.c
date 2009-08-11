@@ -178,10 +178,15 @@ static void nfs4_file_get_access(struct nfs4_file *fp, int oflag)
 
 static void nfs4_file_put_fd(struct nfs4_file *fp, int oflag)
 {
-	if (fp->fi_fds[oflag]) {
-		fput(fp->fi_fds[oflag]);
-		fp->fi_fds[oflag] = NULL;
-	}
+	struct file *fd = fp->fi_fds[oflag];
+
+	if (!fd)
+		return;
+
+	fp->fi_fds[oflag] = NULL;
+	nfs4_unlock_state();	/* allow nested layout recall/return */
+	fput(fd);
+	nfs4_lock_state();
 }
 
 static void __nfs4_file_put_access(struct nfs4_file *fp, int oflag)
