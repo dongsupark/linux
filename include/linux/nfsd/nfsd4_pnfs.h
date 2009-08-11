@@ -198,6 +198,8 @@ struct pnfs_export_operations {
 
 	/* pNFS Files layout specific operations */
 
+	/* Get the write verifier for DS (called on MDS only) */
+	void (*get_verifier) (struct super_block *, u32 *p);
 	/* Call fs on DS only */
 	int (*get_state) (struct inode *, struct knfsd_fh *,
 			  struct pnfs_get_state *);
