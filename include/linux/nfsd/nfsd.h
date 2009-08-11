@@ -181,6 +181,15 @@ static inline void nfs4_reset_lease(time_t leasetime) { }
 static inline int nfs4_reset_recoverydir(char *recdir) { return 0; }
 #endif
 
+#ifdef CONFIG_PNFSD
+/* Length of comma separated pnfs data server IPv4 addresses. Enough room for
+ * 32 addresses.
+ */
+#define NFSD_PNFS_DS_LIST_MAX   512
+
+void nfs4_set_pnfs_ds_list(char *dslist, int len);
+#endif
+
 /*
  * lockd binding
  */

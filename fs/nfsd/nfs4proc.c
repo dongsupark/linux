@@ -956,6 +956,24 @@ nfsd4_verify(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 }
 
 #if defined(CONFIG_PNFSD)
+static char pnfs_ds_list[NFSD_PNFS_DS_LIST_MAX] = "/0";
+
+char *
+nfs4_pnfs_ds_list(void)
+{
+	return pnfs_ds_list;
+}
+
+/* Set the pNFS data server comma separated list of IPv4 addresses */
+void
+nfs4_set_pnfs_ds_list(char *dslist, int len)
+{
+	dprintk("--> %s len %d\n", __func__, len);
+	/* XXX Do some sanity check the dslist format. len has benn checked. */
+	memset(pnfs_ds_list, 0, NFSD_PNFS_DS_LIST_MAX);
+	memcpy(pnfs_ds_list, dslist, len);
+}
+
 static __be32
 nfsd4_layout_verify(struct svc_export *exp, unsigned int layout_type)
 {
