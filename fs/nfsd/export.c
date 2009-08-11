@@ -31,6 +31,7 @@
 #include <linux/sunrpc/svc.h>
 #include <linux/nfsd/nfsd.h>
 #include <linux/nfsd/nfsfh.h>
+#include <linux/nfsd/pnfsd.h>
 #include <linux/nfsd/syscall.h>
 #include <linux/lockd/bind.h>
 #include <linux/sunrpc/msg_prot.h>
@@ -355,6 +356,10 @@ static void svc_export_request(struct cache_detail *cd,
 	(*bpp)[-1] = '\n';
 }
 
+#if defined(CONFIG_PNFSD)
+static struct pnfs_export_operations pnfsd_default_ops;
+#endif /* CONFIG_PNFSD */
+
 static struct svc_export *svc_export_update(struct svc_export *new,
 					    struct svc_export *old);
 static struct svc_export *svc_export_lookup(struct svc_export *);
@@ -388,6 +393,11 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 		dprintk("exp_export: export of invalid fs type.\n");
 		return -EINVAL;
 	}
+
+#if defined(CONFIG_PNFSD)
+	if (!inode->i_sb->s_pnfs_op)
+		inode->i_sb->s_pnfs_op = &pnfsd_default_ops;
+#endif /* CONFIG_PNFSD */
 
 	return 0;
 
