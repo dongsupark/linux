@@ -347,6 +347,7 @@ struct nfs4_file {
 	struct list_head	fi_delegations;
 #if defined(CONFIG_PNFSD)
 	struct list_head	fi_layouts;
+	struct list_head	fi_layout_states;
 #endif /* CONFIG_PNFSD */
 	struct inode		*fi_inode;
 	u32                     fi_id;      /* used with stateowner->so_id 

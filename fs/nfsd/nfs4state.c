@@ -1770,6 +1770,7 @@ alloc_init_file(struct inode *ino, struct svc_fh *current_fh)
 		fp->fi_had_conflict = false;
 #if defined(CONFIG_PNFSD)
 		INIT_LIST_HEAD(&fp->fi_layouts);
+		INIT_LIST_HEAD(&fp->fi_layout_states);
 		fp->fi_fsid.major = current_fh->fh_export->ex_fsid;
 		fp->fi_fsid.minor = 0;
 		fp->fi_fhlen = current_fh->fh_handle.fh_size;
