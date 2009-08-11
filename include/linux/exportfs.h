@@ -2,6 +2,7 @@
 #define LINUX_EXPORTFS_H 1
 
 #include <linux/types.h>
+#include <linux/exp_xdr.h>
 
 struct dentry;
 struct inode;
@@ -193,4 +194,12 @@ extern struct dentry *generic_fh_to_parent(struct super_block *sb,
 	struct fid *fid, int fh_len, int fh_type,
 	struct inode *(*get_inode) (struct super_block *sb, u64 ino, u32 gen));
 
+#if defined(CONFIG_EXPORTFS_FILE_LAYOUT)
+struct pnfs_filelayout_device;
+struct pnfs_filelayout_layout;
+
+extern int filelayout_encode_devinfo(struct exp_xdr_stream *xdr,
+				     const struct pnfs_filelayout_device *fdev);
+
+#endif /* defined(CONFIG_EXPORTFS_FILE_LAYOUT) */
 #endif /* LINUX_EXPORTFS_H */
