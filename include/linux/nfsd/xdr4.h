@@ -40,6 +40,7 @@
 #define _LINUX_NFSD_XDR4_H
 
 #include <linux/nfs4.h>
+#include <linux/nfsd/nfsd4_pnfs.h>
 
 #define NFSD4_MAX_TAGLEN	128
 #define XDR_LEN(n)                     (((n) + 3) & ~3)
@@ -382,6 +383,22 @@ struct nfsd4_destroy_session {
 	struct nfs4_sessionid	sessionid;
 };
 
+struct nfsd4_pnfs_getdevinfo {
+	struct nfsd4_pnfs_deviceid gd_devid;	/* request */
+	u32			gd_layout_type;	/* request */
+	u32			gd_maxcount;	/* request */
+	struct super_block	*gd_sb;
+};
+
+struct nfsd4_pnfs_getdevlist {
+	u32             gd_layout_type;	/* request */
+	u32		gd_maxdevices;	/* request */
+	u64		gd_cookie;	/* request - response */
+	u64		gd_verf;	/* request - response */
+	struct svc_fh 	*gd_fhp;	/* response */
+	u32		gd_eof;		/* response */
+};
+
 struct nfsd4_op {
 	int					opnum;
 	__be32					status;
@@ -422,6 +439,10 @@ struct nfsd4_op {
 		struct nfsd4_create_session	create_session;
 		struct nfsd4_destroy_session	destroy_session;
 		struct nfsd4_sequence		sequence;
+#if defined(CONFIG_PNFSD)
+		struct nfsd4_pnfs_getdevlist	pnfs_getdevlist;
+		struct nfsd4_pnfs_getdevinfo	pnfs_getdevinfo;
+#endif /* CONFIG_PNFSD */
 	} u;
 	struct nfs4_replay *			replay;
 };
