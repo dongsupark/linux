@@ -21,6 +21,11 @@
  *
  ******************************************************************************/
 #include <linux/genhd.h>
+#include <linux/sunrpc/svc.h>
+#include <linux/nfsd/nfsd.h>
+#include <linux/nfs4.h>
+#include <linux/nfsd/state.h>
+#include <linux/nfsd/nfsd4_pnfs.h>
 
 /*
  * Length of comma separated pnfs data server IPv4 addresses. Enough room for

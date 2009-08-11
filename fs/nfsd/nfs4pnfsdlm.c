@@ -26,6 +26,8 @@
 #include <linux/nfsd/nfsd.h>
 #include <linux/nfsd/nfs4pnfsdlm.h>
 
+#include "pnfsd.h"
+
 #define NFSDDBG_FACILITY                NFSDDBG_PROC
 
 /* Just use a linked list. Do not expect more than 32 dlm_device_entries
@@ -161,4 +163,24 @@ void nfsd4_pnfs_dlm_shutdown(void)
 		kfree(dlm_pdev);
 	}
 	spin_unlock(&dlm_device_list_lock);
+}
+
+static int nfsd4_pnfs_dlm_getdeviter(struct super_block *sb,
+				     u32 layout_type,
+				     struct nfsd4_pnfs_dev_iter_res *res)
+{
+	if (layout_type != LAYOUT_NFSV4_FILES) {
+		printk(KERN_ERR "%s: ERROR: layout type isn't 'file' "
+			"(type: %x)\n", __func__, layout_type);
+		return -ENOTSUPP;
+	}
+
+	res->gd_eof = 1;
+	if (res->gd_cookie)
+		return -ENOENT;
+
+	res->gd_cookie = 1;
+	res->gd_verf = 1;
+	res->gd_devid = 1;
+	return 0;
 }
