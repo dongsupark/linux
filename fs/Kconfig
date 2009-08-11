@@ -223,6 +223,15 @@ config LOCKD_V4
 config EXPORTFS
 	tristate
 
+config EXPORTFS_FILE_LAYOUT
+	bool "Exportfs support for the NFSv4.1 files layout type"
+	depends on PNFSD && EXPORTFS
+	help
+	  Say Y here if you want exportfs support for the NFSv4.1
+	  files layout type.
+
+	  If unsure, say N.
+
 config NFS_ACL_SUPPORT
 	tristate
 	select FS_POSIX_ACL
