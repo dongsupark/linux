@@ -46,6 +46,7 @@
 #include <linux/utsname.h>
 #include <linux/sunrpc/svcauth_gss.h>
 #include <linux/exportfs.h>
+#include <linux/nfsd/nfs4layoutxdr.h>
 
 #include "idmap.h"
 #include "acl.h"
