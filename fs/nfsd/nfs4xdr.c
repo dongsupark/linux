@@ -48,6 +48,7 @@
 #include <linux/nfs4_acl.h>
 #include <linux/sunrpc/svcauth_gss.h>
 #include <linux/exportfs.h>
+#include <linux/nfsd/nfs4layoutxdr.h>
 
 #include "xdr4.h"
 #include "vfs.h"
