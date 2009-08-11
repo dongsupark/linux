@@ -176,6 +176,13 @@ struct nfsd4_pnfs_layoutreturn {
 };
 
 /*
+ * callbacks provided by the nfsd
+ */
+struct pnfsd_cb_operations {
+	/* Generic callbacks */
+};
+
+/*
  * fh_fsid_type is overloaded to indicate whether a filehandle was one supplied
  * to a DS by LAYOUTGET.  nfs4_preprocess_stateid_op() uses this to decide how
  * to handle a given stateid.
