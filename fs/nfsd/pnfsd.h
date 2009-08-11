@@ -127,5 +127,7 @@ int nfsd_layout_recall_cb(struct super_block *, struct inode *,
 int nfsd_device_notify_cb(struct super_block *,
 			  struct nfsd4_pnfs_cb_dev_list *);
 void nfsd4_cb_notify_device(struct nfs4_notify_device *);
+void pnfs_set_device_notify(clientid_t *, unsigned int types);
+void pnfs_clear_device_notify(struct nfs4_client *);
 
 #endif /* LINUX_NFSD_PNFSD_H */
