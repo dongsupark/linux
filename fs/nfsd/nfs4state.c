@@ -56,7 +56,7 @@
 #include <linux/module.h>
 #include <linux/sunrpc/svcauth_gss.h>
 #if defined(CONFIG_PNFSD)
-#include <linux/nfsd/nfsd4_pnfs.h>
+#include <linux/nfsd/pnfsd.h>
 #endif /* CONFIG_PNFSD */
 
 #define NFSDDBG_FACILITY                NFSDDBG_PROC
