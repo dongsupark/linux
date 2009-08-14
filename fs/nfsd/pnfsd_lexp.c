@@ -27,7 +27,6 @@
 #include <linux/nfsd/state.h>
 #include <linux/nfsd/pnfsd.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
-#include <linux/nfs4_pnfs.h>
 
 #define NFSDDBG_FACILITY NFSDDBG_PNFS
 
