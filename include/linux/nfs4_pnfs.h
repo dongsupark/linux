@@ -109,7 +109,7 @@ struct layoutdriver_io_operations {
 	 * inode specific layout structure.  Each subsequent layoutget operation results in
 	 * a set_layout call to set the opaque layout in the layout driver.*/
 	void * (*alloc_layout) (struct pnfs_mount_type *mountid, struct inode *inode);
-	void (*free_layout) (struct pnfs_layout_type *layoutid);
+	void (*free_layout) (void *layoutid);
 	struct pnfs_layout_segment * (*alloc_lseg) (struct pnfs_layout_type *layoutid, struct nfs4_pnfs_layoutget_res *lgr);
 	void (*free_lseg) (struct pnfs_layout_segment *lseg);
 
@@ -121,6 +121,9 @@ struct layoutdriver_io_operations {
 	void (*cleanup_layoutcommit) (struct pnfs_layout_type *layoutid,
 				      struct pnfs_layoutcommit_arg *args,
 				      int status);
+	void (*encode_layoutreturn) (struct pnfs_layout_type *layoutid,
+				struct xdr_stream *xdr,
+				const struct nfs4_pnfs_layoutreturn_arg *args);
 
 	/* Registration information for a new mounted file system
 	 */

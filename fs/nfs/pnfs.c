@@ -312,8 +312,8 @@ put_unlock_current_layout(struct pnfs_layout_type *lo)
 		struct layoutdriver_io_operations *io_ops =
 			PNFS_LD_IO_OPS(lo);
 
-		dprintk("%s: freeing layout %p\n", __func__, lo);
-		io_ops->free_layout(lo);
+		dprintk("%s: freeing layout %p\n", __func__, lo->ld_data);
+		io_ops->free_layout(lo->ld_data);
 		lo->ld_data = NULL;
 
 		/* Unlist the inode. */

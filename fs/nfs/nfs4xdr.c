@@ -1829,12 +1829,24 @@ encode_layoutreturn(struct xdr_stream *xdr,
 	*p++ = cpu_to_be32(args->lseg.iomode);
 	*p = cpu_to_be32(args->return_type);
 	if (args->return_type == RETURN_FILE) {
-		p = reserve_space(xdr, 20 + NFS4_STATEID_SIZE);
+		struct layoutdriver_io_operations *ld_io_ops =
+			NFS_SERVER(args->inode)->pnfs_curr_ld->ld_io_ops;
+
+		p = reserve_space(xdr, 16 + NFS4_STATEID_SIZE);
 		p = xdr_encode_hyper(p, args->lseg.offset);
 		p = xdr_encode_hyper(p, args->lseg.length);
 		p = xdr_encode_opaque_fixed(p, &args->stateid.data,
 					    NFS4_STATEID_SIZE);
-		*p = cpu_to_be32(0); /* FIXME: opaque lrf_body currently always empty */
+
+		dprintk("%s: call %pF\n", __func__,
+			ld_io_ops->encode_layoutreturn);
+		if (ld_io_ops->encode_layoutreturn) {
+			ld_io_ops->encode_layoutreturn(
+				&NFS_I(args->inode)->layout, xdr, args);
+		} else {
+			p = reserve_space(xdr, 4);
+			*p = cpu_to_be32(0);
+		}
 	}
 	hdr->nops++;
 	hdr->replen += decode_layoutreturn_maxsz;
