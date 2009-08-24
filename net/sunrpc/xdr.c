@@ -518,6 +518,27 @@ __be32 * xdr_reserve_space(struct xdr_stream *xdr, size_t nbytes)
 EXPORT_SYMBOL_GPL(xdr_reserve_space);
 
 /**
+ * xdr_rewind_stream - rewind a stream back to some checkpoint
+ * @xdr: pointer to xdr_stream
+ * @q: some checkpoint at historical place of @xdr
+ *
+ * Restors an xdr stream to some historical point. @q must be
+ * a logical xdr point in the past that was sampled by @q = @xdr->p.
+ */
+__be32 *xdr_rewind_stream(struct xdr_stream *xdr, __be32 *q)
+{
+	size_t nbytes = (xdr->p - q) << 2;
+
+	BUG_ON(xdr->p < q);
+	BUG_ON(nbytes > xdr->iov->iov_len || nbytes > xdr->buf->len);
+	xdr->p = q;
+	xdr->iov->iov_len -= nbytes;
+	xdr->buf->len -= nbytes;
+	return q;
+}
+EXPORT_SYMBOL_GPL(xdr_rewind_stream);
+
+/**
  * xdr_write_pages - Insert a list of pages into an XDR buffer for sending
  * @xdr: pointer to xdr_stream
  * @pages: list of pages
