@@ -164,21 +164,25 @@ spnfs_pipe_downcall(struct file *filp, const char __user *src, size_t mlen)
 {
 	struct rpc_inode *rpci = RPC_I(filp->f_dentry->d_inode);
 	struct spnfs *spnfs = (struct spnfs *)rpci->private;
-	struct spnfs_msg im_in, *im = &spnfs->spnfs_im;
+	struct spnfs_msg *im_in = NULL, *im = &spnfs->spnfs_im;
 	int ret;
 
-	if (mlen != sizeof(im_in))
-		return (-ENOSPC);
+	if (mlen != sizeof(struct spnfs_msg))
+		return -ENOSPC;
 
-	if (copy_from_user(&im_in, src, mlen) != 0)
-		return (-EFAULT);
+	im_in = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
+	if (im_in == NULL)
+		return -ENOMEM;
+
+	if (copy_from_user(im_in, src, mlen) != 0)
+		return -EFAULT;
 
 	mutex_lock(&spnfs->spnfs_plock);
 
 	ret = mlen;
-	im->im_status = im_in.im_status;
+	im->im_status = im_in->im_status;
 	/* If we got an error, terminate now, and wake up pending upcalls */
-	if (!(im_in.im_status & SPNFS_STATUS_SUCCESS)) {
+	if (!(im_in->im_status & SPNFS_STATUS_SUCCESS)) {
 		wake_up(&spnfs->spnfs_wq);
 		goto out;
 	}
@@ -188,9 +192,9 @@ spnfs_pipe_downcall(struct file *filp, const char __user *src, size_t mlen)
 	/* DMXXX: do not understand the comment above, from original code */
 	/* DMXXX: when do we _not_ match the current upcall? */
 	/* DMXXX: anyway, let's to a simplistic check */
-	if (im_in.im_type == im->im_type) {
+	if (im_in->im_type == im->im_type) {
 		/* copy the response into the spnfs struct */
-		memcpy(&im->im_res, &im_in.im_res, sizeof(im->im_res));
+		memcpy(&im->im_res, &im_in->im_res, sizeof(im->im_res));
 		ret = mlen;
 	} else
 		dprintk("spnfs: downcall type != upcall type\n");
@@ -200,6 +204,7 @@ spnfs_pipe_downcall(struct file *filp, const char __user *src, size_t mlen)
 /* DMXXX handle rval processing */
 out:
 	mutex_unlock(&spnfs->spnfs_plock);
+	kfree(im_in);
 	return ret;
 }
 
