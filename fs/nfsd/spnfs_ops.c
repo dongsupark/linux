@@ -86,22 +86,34 @@ int
 spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 {
 	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
-	struct spnfs_msg im;
-	union spnfs_msg_res res;
+	struct spnfs_msg *im = NULL;
+	union spnfs_msg_res *res = NULL;
 	struct pnfs_filelayout_layout *flp = NULL;
 	int status = 0, i;
 
-	im.im_type = SPNFS_TYPE_LAYOUTGET;
-	im.im_args.layoutget_args.inode = inode->i_ino;
-	im.im_args.layoutget_args.generation = inode->i_generation;
+	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
+	if (im == NULL) {
+		status = -ENOMEM;
+		goto layoutget_cleanup;
+	}
+
+	res = kmalloc(sizeof(union spnfs_msg_res), GFP_KERNEL);
+	if (res == NULL) {
+		status = -ENOMEM;
+		goto layoutget_cleanup;
+	}
+
+	im->im_type = SPNFS_TYPE_LAYOUTGET;
+	im->im_args.layoutget_args.inode = inode->i_ino;
+	im->im_args.layoutget_args.generation = inode->i_generation;
 
 	/* call function to queue the msg for upcall */
-	if (spnfs_upcall(spnfs, &im, &res) != 0) {
+	if (spnfs_upcall(spnfs, im, res) != 0) {
 		dprintk("failed spnfs upcall: layoutget\n");
 		status = -EIO;
 		goto layoutget_cleanup;
 	}
-	status = res.layoutget_res.status;
+	status = res->layoutget_res.status;
 	if (status != 0)
 		goto layoutget_cleanup;
 
@@ -124,14 +136,14 @@ spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 		goto layoutget_cleanup;
 	}
 	flp->device_id.pnfs_fsid = lgp->fsid;
-	flp->device_id.pnfs_devid = res.layoutget_res.devid;
+	flp->device_id.pnfs_devid = res->layoutget_res.devid;
 	flp->lg_layout_type = 1; /* XXX */
-	flp->lg_stripe_type = res.layoutget_res.stripe_type;
+	flp->lg_stripe_type = res->layoutget_res.stripe_type;
 	flp->lg_commit_through_mds = 0;
-	flp->lg_stripe_unit =  res.layoutget_res.stripe_size;
+	flp->lg_stripe_unit =  res->layoutget_res.stripe_size;
 	flp->lg_first_stripe_index = 0;
 	flp->lg_pattern_offset = 0;
-	flp->lg_fh_length = res.layoutget_res.stripe_count;
+	flp->lg_fh_length = res->layoutget_res.stripe_count;
 
 	flp->lg_fh_list = kmalloc(flp->lg_fh_length * sizeof(struct knfsd_fh),
 				  GFP_KERNEL);
@@ -144,10 +156,10 @@ spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 	 * and fh_val into a knfsd_fh structure.
 	 */
 	for (i = 0; i < flp->lg_fh_length; i++) {
-		flp->lg_fh_list[i].fh_size = res.layoutget_res.flist[i].fh_len;
+		flp->lg_fh_list[i].fh_size = res->layoutget_res.flist[i].fh_len;
 		memcpy(&flp->lg_fh_list[i].fh_base,
-		       res.layoutget_res.flist[i].fh_val,
-		       res.layoutget_res.flist[i].fh_len);
+		       res->layoutget_res.flist[i].fh_val,
+		       res->layoutget_res.flist[i].fh_len);
 	}
 
 	/* encode the layoutget body */
@@ -159,6 +171,8 @@ layoutget_cleanup:
 			kfree(flp->lg_fh_list);
 		kfree(flp);
 	}
+	kfree(im);
+	kfree(res);
 
 	return status;
 }
@@ -257,29 +271,46 @@ int
 spnfs_getdeviceiter(struct super_block *sb, struct pnfs_deviter_arg *iter)
 {
 	struct spnfs *spnfs = global_spnfs;   /* XXX keep up the pretence */
-	struct spnfs_msg im;
-	union spnfs_msg_res res;
+	struct spnfs_msg *im = NULL;
+	union spnfs_msg_res *res = NULL;
 	int status = 0;
 
-	im.im_type = SPNFS_TYPE_GETDEVICEITER;
-	im.im_args.getdeviceiter_args.cookie = iter->cookie;
+	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
+	if (im == NULL) {
+		status = -ENOMEM;
+		goto getdeviceiter_out;
+	}
+
+	res = kmalloc(sizeof(union spnfs_msg_res), GFP_KERNEL);
+	if (res == NULL) {
+		status = -ENOMEM;
+		goto getdeviceiter_out;
+	}
+
+	im->im_type = SPNFS_TYPE_GETDEVICEITER;
+	im->im_args.getdeviceiter_args.cookie = iter->cookie;
 
 	/* call function to queue the msg for upcall */
-	status = spnfs_upcall(spnfs, &im, &res);
+	status = spnfs_upcall(spnfs, im, res);
 	if (status != 0) {
 		dprintk("%s spnfs upcall failure: %d\n", __func__, status);
-		return -EIO;
+		status = -EIO;
+		goto getdeviceiter_out;
 	}
-	status = res.getdeviceiter_res.status;
+	status = res->getdeviceiter_res.status;
 
-	if (res.getdeviceiter_res.eof)
+	if (res->getdeviceiter_res.eof)
 		iter->eof = 1;
 	else {
-		iter->devid = res.getdeviceiter_res.devid;
-		iter->cookie = res.getdeviceiter_res.cookie;
-		iter->verf = res.getdeviceiter_res.verf;
+		iter->devid = res->getdeviceiter_res.devid;
+		iter->cookie = res->getdeviceiter_res.cookie;
+		iter->verf = res->getdeviceiter_res.verf;
 		iter->eof = 0;
 	}
+
+getdeviceiter_out:
+	kfree(im);
+	kfree(res);
 
 	return status;
 }
@@ -353,30 +384,42 @@ int
 spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
 {
 	struct spnfs *spnfs = global_spnfs;
-	struct spnfs_msg im;
-	union spnfs_msg_res res;
+	struct spnfs_msg *im = NULL;
+	union spnfs_msg_res *res = NULL;
 	struct spnfs_device *dev;
 	struct pnfs_filelayout_device *fldev = NULL;
 	struct pnfs_filelayout_multipath *mp = NULL;
 	struct pnfs_filelayout_devaddr *fldap = NULL;
 	int status = 0, i, len;
 
-	im.im_type = SPNFS_TYPE_GETDEVICEINFO;
+	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
+	if (im == NULL) {
+		status = -ENOMEM;
+		goto getdeviceinfo_out;
+	}
+
+	res = kmalloc(sizeof(union spnfs_msg_res), GFP_KERNEL);
+	if (res == NULL) {
+		status = -ENOMEM;
+		goto getdeviceinfo_out;
+	}
+
+	im->im_type = SPNFS_TYPE_GETDEVICEINFO;
 	/* XXX FIX: figure out what to do about fsid */
-	im.im_args.getdeviceinfo_args.devid = info->devid.pnfs_devid;
+	im->im_args.getdeviceinfo_args.devid = info->devid.pnfs_devid;
 
 	/* call function to queue the msg for upcall */
-	status = spnfs_upcall(spnfs, &im, &res);
+	status = spnfs_upcall(spnfs, im, res);
 	if (status != 0) {
 		dprintk("%s spnfs upcall failure: %d\n", __func__, status);
 		status = -EIO;
 		goto getdeviceinfo_out;
 	}
-	status = res.getdeviceinfo_res.status;
+	status = res->getdeviceinfo_res.status;
 	if (status != 0)
 		goto getdeviceinfo_out;
 
-	dev = &res.getdeviceinfo_res.devinfo;
+	dev = &res->getdeviceinfo_res.devinfo;
 
 	/* Fill in the device data, i.e., nfs4_1_file_layout_ds_addr4 */
 	fldev = kmalloc(sizeof(struct pnfs_filelayout_device), GFP_KERNEL);
@@ -483,6 +526,9 @@ getdeviceinfo_out:
 		kfree(fldev);
 	}
 
+	kfree(im);
+	kfree(res);
+
 	return status;
 }
 
@@ -496,27 +542,42 @@ int
 spnfs_open(struct inode *inode, struct nfsd4_open *open)
 {
 	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
-	struct spnfs_msg im;
-	union spnfs_msg_res res;
+	struct spnfs_msg *im = NULL;
+	union spnfs_msg_res *res = NULL;
 	int status = 0;
 
-	im.im_type = SPNFS_TYPE_OPEN;
-	im.im_args.open_args.inode = inode->i_ino;
-	im.im_args.open_args.create = open->op_create;
-	im.im_args.open_args.createmode = open->op_createmode;
-	im.im_args.open_args.truncate = open->op_truncate;
-	im.im_args.open_args.truncate = open->op_truncate;
+	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
+	if (im == NULL) {
+		status = -ENOMEM;
+		goto open_out;
+	}
+
+	res = kmalloc(sizeof(union spnfs_msg_res), GFP_KERNEL);
+	if (res == NULL) {
+		status = -ENOMEM;
+		goto open_out;
+	}
+
+	im->im_type = SPNFS_TYPE_OPEN;
+	im->im_args.open_args.inode = inode->i_ino;
+	im->im_args.open_args.generation = inode->i_generation;
+	im->im_args.open_args.create = open->op_create;
+	im->im_args.open_args.createmode = open->op_createmode;
+	im->im_args.open_args.truncate = open->op_truncate;
 
 	/* call function to queue the msg for upcall */
-	status = spnfs_upcall(spnfs, &im, &res);
+	status = spnfs_upcall(spnfs, im, res);
 	if (status != 0) {
 		dprintk("%s spnfs upcall failure: %d\n", __func__, status);
 		status = -EIO;
 		goto open_out;
 	}
-	status = res.open_res.status;
+	status = res->open_res.status;
 
 open_out:
+	kfree(im);
+	kfree(res);
+
 	return status;
 }
 
@@ -536,24 +597,39 @@ int
 spnfs_remove(unsigned long ino, unsigned long generation)
 {
 	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
-	struct spnfs_msg im;
-	union spnfs_msg_res res;
+	struct spnfs_msg *im = NULL;
+	union spnfs_msg_res *res = NULL;
 	int status = 0;
 
-	im.im_type = SPNFS_TYPE_REMOVE;
-	im.im_args.remove_args.inode = ino;
-	im.im_args.remove_args.generation = generation;
+	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
+	if (im == NULL) {
+		status = -ENOMEM;
+		goto remove_out;
+	}
+
+	res = kmalloc(sizeof(union spnfs_msg_res), GFP_KERNEL);
+	if (res == NULL) {
+		status = -ENOMEM;
+		goto remove_out;
+	}
+
+	im->im_type = SPNFS_TYPE_REMOVE;
+	im->im_args.remove_args.inode = ino;
+	im->im_args.remove_args.generation = generation;
 
 	/* call function to queue the msg for upcall */
-	status = spnfs_upcall(spnfs, &im, &res);
+	status = spnfs_upcall(spnfs, im, res);
 	if (status != 0) {
 		dprintk("%s spnfs upcall failure: %d\n", __func__, status);
 		status = -EIO;
 		goto remove_out;
 	}
-	status = res.remove_res.status;
+	status = res->remove_res.status;
 
 remove_out:
+	kfree(im);
+	kfree(res);
+
 	return status;
 }
 
@@ -561,23 +637,35 @@ int
 spnfs_read_one(struct inode *inode, loff_t offset, size_t len, char *buf)
 {
 	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
-	struct spnfs_msg im;
-	union spnfs_msg_res res;
+	struct spnfs_msg *im = NULL;
+	union spnfs_msg_res *res = NULL;
 	int status = 0;
 	unsigned long todo = len;
 	unsigned long bytecount = 0;
 
-	im.im_type = SPNFS_TYPE_READ;
-	im.im_args.read_args.inode = inode->i_ino;
-	im.im_args.read_args.generation = inode->i_generation;
+	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
+	if (im == NULL) {
+		status = -ENOMEM;
+		goto read_out;
+	}
+
+	res = kmalloc(sizeof(union spnfs_msg_res), GFP_KERNEL);
+	if (res == NULL) {
+		status = -ENOMEM;
+		goto read_out;
+	}
+
+	im->im_type = SPNFS_TYPE_READ;
+	im->im_args.read_args.inode = inode->i_ino;
+	im->im_args.read_args.generation = inode->i_generation;
 	while (todo > 0) {
-		im.im_args.read_args.offset = offset;
+		im->im_args.read_args.offset = offset;
 		if (todo > SPNFS_MAX_IO)
-			im.im_args.read_args.len = SPNFS_MAX_IO;
+			im->im_args.read_args.len = SPNFS_MAX_IO;
 		else
-			im.im_args.read_args.len = todo;
+			im->im_args.read_args.len = todo;
 		/* call function to queue the msg for upcall */
-		status = spnfs_upcall(spnfs, &im, &res);
+		status = spnfs_upcall(spnfs, im, res);
 		if (status != 0) {
 			dprintk("%s spnfs upcall failure: %d\n",
 				__func__, status);
@@ -585,7 +673,7 @@ spnfs_read_one(struct inode *inode, loff_t offset, size_t len, char *buf)
 			goto read_out;
 		}
 		/* status < 0 => error, status > 0 => bytes moved */
-		status = res.read_res.status;
+		status = res->read_res.status;
 		if (status < 0) {
 			dprintk("%s spnfs read failure: %d\n",
 				__func__, status);
@@ -598,7 +686,7 @@ spnfs_read_one(struct inode *inode, loff_t offset, size_t len, char *buf)
 			goto read_out;
 		}
 		/* status = number of bytes successfully i/o'd */
-		memcpy(buf, res.read_res.data, status);
+		memcpy(buf, res->read_res.data, status);
 		buf += status;
 		offset += status;
 		bytecount += status;
@@ -607,6 +695,9 @@ spnfs_read_one(struct inode *inode, loff_t offset, size_t len, char *buf)
 	status = bytecount;
 
 read_out:
+	kfree(im);
+	kfree(res);
+
 	return status;
 }
 
@@ -639,25 +730,37 @@ int
 spnfs_write_one(struct inode *inode, loff_t offset, size_t len, char *buf)
 {
 	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
-	struct spnfs_msg im;
-	union spnfs_msg_res res;
+	struct spnfs_msg *im = NULL;
+	union spnfs_msg_res *res = NULL;
 	int status = 0;
 	size_t todo = len;
 	unsigned long bytecount = 0;
 
-	im.im_type = SPNFS_TYPE_WRITE;
-	im.im_args.write_args.inode = inode->i_ino;
-	im.im_args.write_args.generation = inode->i_generation;
+	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
+	if (im == NULL) {
+		status = -ENOMEM;
+		goto write_out;
+	}
+
+	res = kmalloc(sizeof(union spnfs_msg_res), GFP_KERNEL);
+	if (res == NULL) {
+		status = -ENOMEM;
+		goto write_out;
+	}
+
+	im->im_type = SPNFS_TYPE_WRITE;
+	im->im_args.write_args.inode = inode->i_ino;
+	im->im_args.write_args.generation = inode->i_generation;
 	while (todo > 0) {
-		im.im_args.write_args.offset = offset;
+		im->im_args.write_args.offset = offset;
 		if (todo > SPNFS_MAX_IO)
-			im.im_args.write_args.len = SPNFS_MAX_IO;
+			im->im_args.write_args.len = SPNFS_MAX_IO;
 		else
-			im.im_args.write_args.len = todo;
-		memcpy(im.im_args.write_args.data, buf,
-			im.im_args.write_args.len);
+			im->im_args.write_args.len = todo;
+		memcpy(im->im_args.write_args.data, buf,
+			im->im_args.write_args.len);
 		/* call function to queue the msg for upcall */
-		status = spnfs_upcall(spnfs, &im, &res);
+		status = spnfs_upcall(spnfs, im, res);
 		if (status != 0) {
 			dprintk("%s spnfs upcall failure: %d\n",
 				__func__, status);
@@ -665,7 +768,7 @@ spnfs_write_one(struct inode *inode, loff_t offset, size_t len, char *buf)
 			goto write_out;
 		}
 		/* status < 0 => error, status > 0 => bytes moved */
-		status = res.write_res.status;
+		status = res->write_res.status;
 		if (status < 0) {
 			dprintk("%s spnfs write failure: %d\n",
 				__func__, status);
@@ -687,6 +790,9 @@ spnfs_write_one(struct inode *inode, loff_t offset, size_t len, char *buf)
 	status = bytecount;
 
 write_out:
+	kfree(im);
+	kfree(res);
+
 	return status;
 }
 
