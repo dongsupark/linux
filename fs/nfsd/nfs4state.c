@@ -3267,17 +3267,6 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 			(int)cstate->current_fh.fh_dentry->d_name.len,
 			cstate->current_fh.fh_dentry->d_name.name);
 
-#if defined(CONFIG_SPNFS)
-	{
-		struct super_block *sb;
-
-		/* temporary hook for spnfs testing purposes */
-		sb = cstate->current_fh.fh_dentry->d_inode->i_sb;
-		if (sb->s_pnfs_op->close)
-			sb->s_pnfs_op->close(cstate->current_fh.fh_dentry->d_inode);
-	}
-#endif /* CONFIG_SPNFS */
-
 	nfs4_lock_state();
 	/* check close_lru for replay */
 	if ((status = nfs4_preprocess_seqid_op(cstate,

@@ -377,8 +377,6 @@ static struct pnfs_export_operations spnfs_export_ops = {
 	.get_device_iter = spnfs_getdeviceiter,
 	.layout_get = spnfs_layoutget,
 	.layout_return = spnfs_layoutreturn,
-	.propagate_open = spnfs_open,
-	.close = spnfs_close,
 };
 
 static struct pnfs_export_operations spnfs_ds_export_ops = {

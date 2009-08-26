@@ -396,26 +396,20 @@ nfsd4_open(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	 */
 	status = nfsd4_process_open2(rqstp, &cstate->current_fh, open);
 #if defined(CONFIG_SPNFS)
-	if (!status) {
-		__be32 pstatus;
-		struct super_block *sb;
+	if (!status && spnfs_enabled()) {
+		struct inode *inode = cstate->current_fh.fh_dentry->d_inode;
 
-		sb = cstate->current_fh.fh_dentry->d_inode->i_sb;
-		if (sb->s_pnfs_op->propagate_open) {
-			pstatus = nfs4_spnfs_propagate_open(sb,
-				&cstate->current_fh, open);
-			if (pstatus) {
-				dprintk(
-		       "nfsd: pNFS could not be enabled for inode: %ld\n",
-		       (long int)&cstate->current_fh.fh_dentry->d_inode->i_ino);
-				/*
-				 * XXX When there's a failure then need to
-				 * indicate to future ops that no pNFS is
-				 * available.  Should I save the status in
-				 * the inode?  It's kind of a big hammer.
-				 * But there may be no stripes available?
-				 */
-			}
+		status = spnfs_open(inode, open);
+		if (status) {
+			dprintk(
+			     "nfsd: pNFS could not be enabled for inode: %lu\n",
+			     inode->i_ino);
+			/*
+			 * XXX When there's a failure then need to indicate to
+			 * future ops that no pNFS is available.  Should I save
+			 * the status in the inode?  It's kind of a big hammer.
+			 * But there may be no stripes available?
+			 */
 		}
 	}
 #endif /* CONFIG_SPNFS */

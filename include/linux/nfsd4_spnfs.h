@@ -300,6 +300,8 @@ struct spnfs {
 	struct mutex		spnfs_plock;
 };
 
+struct nfsd4_open;
+
 int spnfs_layout_type(struct super_block *);
 int spnfs_layoutget(struct inode *, struct pnfs_layoutget_arg *);
 int spnfs_layoutcommit(void);
@@ -307,8 +309,7 @@ int spnfs_layoutreturn(struct inode *, struct nfsd4_pnfs_layoutreturn *);
 int spnfs_getdeviceiter(struct super_block *, struct pnfs_deviter_arg *);
 int spnfs_getdeviceinfo(struct super_block *, struct pnfs_devinfo_arg *);
 int spnfs_setattr(void);
-int spnfs_open(struct inode *, void *);
-int spnfs_close(struct inode *);
+int spnfs_open(struct inode *, struct nfsd4_open *);
 int spnfs_get_state(struct inode *, struct knfsd_fh *, struct pnfs_get_state *);
 int spnfs_remove(unsigned long, unsigned long);
 int spnfs_read(struct inode *, loff_t, unsigned long *, int, struct svc_rqst *);
@@ -321,7 +322,6 @@ int nfsd_spnfs_new(void);
 void nfsd_spnfs_delete(void);
 int spnfs_upcall(struct spnfs *, struct spnfs_msg *, union spnfs_msg_res *);
 int spnfs_enabled(void);
-int nfs4_spnfs_propagate_open(struct super_block *, struct svc_fh *, void *);
 int spnfs_init_proc(void);
 
 #endif /* __KERNEL__ && CONFIG_SPNFS */

@@ -1431,39 +1431,4 @@ int nfsd_device_notify_cb(struct super_block *sb,
 		__func__, status, notify_num);
 	return status;
 }
-
-#if defined(CONFIG_SPNFS)
-int nfs4_spnfs_propagate_open(struct super_block *sb, struct svc_fh *current_fh,
-				void *p)
-{
-	int status = 0;
-	struct nfsd4_pnfs_open poa;
-	struct nfsd4_open *openp = NULL;
-
-	if (sb->s_pnfs_op->propagate_open) {
-		openp = (struct nfsd4_open *)p;
-		poa.op_create = openp->op_create;
-		poa.op_createmode = openp->op_createmode;
-		poa.op_truncate = openp->op_truncate;
-		strncpy(poa.op_fn, openp->op_fname.data, openp->op_fname.len);
-		poa.op_fn[openp->op_fname.len] = '\0';
-
-		status = sb->s_pnfs_op->propagate_open(
-			current_fh->fh_dentry->d_inode, &poa);
-		if (status) {
-			printk(KERN_WARNING
-			"nfsd: pNFS could not be enabled for inode: %ld\n",
-			current_fh->fh_dentry->d_inode->i_ino);
-			/*
-			* XXX When there's a failure then need to indicate to
-			* future ops that no pNFS is available.  Should I
-			* save the status in the inode?  It's kind of a big
-			* hammer.  But there may be no stripes available?
-			*/
-		}
-	}
-	return status;
-}
-#endif /* CONFIG_SPNFS */
-
 #endif /* CONFIG_PNFSD */

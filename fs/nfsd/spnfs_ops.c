@@ -75,7 +75,6 @@ extern int spnfs_use_layoutsegments;
 extern uint64_t layoutsegment_size;
 #endif /* CONFIG_SPNFS_LAYOUTSEGMENTS */
 extern struct spnfs *global_spnfs;
-static struct inode *recall_inode;
 
 int
 spnfs_layout_type(struct super_block *sb)
@@ -540,12 +539,11 @@ spnfs_setattr(void)
 }
 
 int
-spnfs_open(struct inode *inode, void *p)
+spnfs_open(struct inode *inode, struct nfsd4_open *open)
 {
 	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
 	struct spnfs_msg *im = NULL;
 	union spnfs_msg_res *res = NULL;
-	struct nfsd4_pnfs_open *poa;
 	int status = 0;
 
 	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
@@ -560,13 +558,12 @@ spnfs_open(struct inode *inode, void *p)
 		goto open_out;
 	}
 
-	poa = (struct nfsd4_pnfs_open *)p;
 	im->im_type = SPNFS_TYPE_OPEN;
 	im->im_args.open_args.inode = inode->i_ino;
 	im->im_args.open_args.generation = inode->i_generation;
-	im->im_args.open_args.create = poa->op_create;
-	im->im_args.open_args.createmode = poa->op_createmode;
-	im->im_args.open_args.truncate = poa->op_truncate;
+	im->im_args.open_args.create = open->op_create;
+	im->im_args.open_args.createmode = open->op_createmode;
+	im->im_args.open_args.truncate = open->op_truncate;
 
 	/* call function to queue the msg for upcall */
 	status = spnfs_upcall(spnfs, im, res);
@@ -577,49 +574,11 @@ spnfs_open(struct inode *inode, void *p)
 	}
 	status = res->open_res.status;
 
-	/*
-	 * Some temporary hackery to test layoutrecall.  If the file
-	 * starts with .recall, save its inode.  Upon close of this file,
-	 * a layoutrecall will be triggered.
-	 */
-	if (strncmp(poa->op_fn, ".recall", 7) == 0) {
-		recall_inode = inode;
-		dprintk("%s: will recall layout for %s, ino = %lu\n",
-			__func__, poa->op_fn, inode->i_ino);
-	}
-
 open_out:
 	kfree(im);
 	kfree(res);
 
 	return status;
-}
-
-/* MSXXX: some temporary hackery used to test layoutrecall */
-int
-spnfs_close(struct inode *inode)
-{
-	struct super_block *sb = inode->i_sb;
-	struct nfsd4_pnfs_cb_layout lr;
-
-	/* trigger layoutrecall */
-	if (inode == recall_inode) {
-		dprintk("%s: recalling layout for ino = %lu\n",
-			__func__, inode->i_ino);
-		recall_inode = NULL;
-
-		lr.cbl_recall_type = RECALL_FILE;
-		lr.cbl_seg.layout_type = LAYOUT_NFSV4_FILES;
-		lr.cbl_seg.clientid = 0;
-		lr.cbl_seg.offset = 0;
-		lr.cbl_seg.length = NFS4_MAX_UINT64;
-		lr.cbl_seg.iomode = IOMODE_ANY;
-		lr.cbl_layoutchanged = 0;
-
-		nfsd_layout_recall_cb(sb, inode, &lr);
-	}
-
-	return 0;
 }
 
 int
