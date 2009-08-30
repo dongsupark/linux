@@ -356,9 +356,19 @@ destroy_lseg(struct kref *kref)
 static inline void
 put_lseg(struct pnfs_layout_segment *lseg)
 {
+	bool do_wake_up;
+	struct nfs_inode *nfsi;
+
 	if (!lseg)
 		return;
+
+	dprintk("%s: lseg %p ref %d valid %d\n", __func__, lseg,
+		atomic_read(&lseg->kref.refcount), lseg->valid);
+	do_wake_up = !lseg->valid;
+	nfsi = PNFS_NFS_INODE(lseg->layout);
 	kref_put(&lseg->kref, destroy_lseg);
+	if (do_wake_up)
+		wake_up(&nfsi->lo_waitq);
 }
 
 static inline u64
