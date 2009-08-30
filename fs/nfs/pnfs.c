@@ -339,6 +339,7 @@ init_lseg(struct pnfs_layout_type *lo, struct pnfs_layout_segment *lseg)
 {
 	INIT_LIST_HEAD(&lseg->fi_list);
 	kref_init(&lseg->kref);
+	lseg->valid = true;
 	lseg->layout = lo;
 }
 
@@ -845,7 +846,8 @@ has_matching_lseg(struct pnfs_layout_segment *lseg,
 static struct pnfs_layout_segment *
 pnfs_has_layout(struct pnfs_layout_type *lo,
 		struct nfs4_pnfs_layout_segment *range,
-		bool take_ref)
+		bool take_ref,
+		bool only_valid)
 {
 	struct pnfs_layout_segment *lseg, *ret = NULL;
 
@@ -853,7 +855,8 @@ pnfs_has_layout(struct pnfs_layout_type *lo,
 
 	BUG_ON_UNLOCKED_LO(lo);
 	list_for_each_entry (lseg, &lo->segs, fi_list) {
-		if (has_matching_lseg(lseg, range)) {
+		if (has_matching_lseg(lseg, range) &&
+		    (lseg->valid || !only_valid)) {
 			ret = lseg;
 			if (take_ref)
 				kref_get(&ret->kref);
@@ -896,7 +899,7 @@ pnfs_update_layout(struct inode *ino,
 	}
 
 	/* Check to see if the layout for the given range already exists */
-	lseg = pnfs_has_layout(lo, &arg, lsegpp != NULL);
+	lseg = pnfs_has_layout(lo, &arg, lsegpp != NULL, true);
 	if (lseg) {
 		dprintk("%s: Using cached lseg %p for %llu@%llu iomode %d)\n",
 			__func__,

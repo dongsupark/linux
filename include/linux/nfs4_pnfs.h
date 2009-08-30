@@ -91,6 +91,7 @@ struct pnfs_layout_segment {
 	struct list_head fi_list;
 	struct nfs4_pnfs_layout_segment range;
 	struct kref kref;
+	bool valid;
 	struct pnfs_layout_type *layout;
 	u8 ld_data[];			/* layout driver private data */
 };
