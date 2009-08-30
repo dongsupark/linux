@@ -338,6 +338,7 @@ pnfs_layout_release(struct pnfs_layout_type *lo,
 	if (range)
 		pnfs_free_layout(lo, range);
 	put_unlock_current_layout(lo);
+	wake_up_all(&nfsi->lo_waitq);
 }
 
 static inline void
@@ -556,6 +557,25 @@ should_free_lseg(struct pnfs_layout_segment *lseg,
 	       lo_seg_intersecting(&lseg->range, range);
 }
 
+static struct pnfs_layout_segment *
+has_layout_to_return(struct pnfs_layout_type *lo,
+		     struct nfs4_pnfs_layout_segment *range)
+{
+	struct pnfs_layout_segment *out = NULL, *lseg;
+	dprintk("%s:Begin lo %p offset %llu length %llu iomode %d\n",
+		__func__, lo, range->offset, range->length, range->iomode);
+
+	BUG_ON_UNLOCKED_LO(lo);
+	list_for_each_entry (lseg, &lo->segs, fi_list)
+		if (should_free_lseg(lseg, range)) {
+			out = lseg;
+			break;
+		}
+
+	dprintk("%s:Return lseg=%p\n", __func__, out);
+	return out;
+}
+
 static void
 pnfs_free_layout(struct pnfs_layout_type *lo,
 		 struct nfs4_pnfs_layout_segment *range)
@@ -577,6 +597,37 @@ pnfs_free_layout(struct pnfs_layout_type *lo,
 	}
 
 	dprintk("%s:Return\n", __func__);
+}
+
+static inline bool
+_pnfs_can_return_lseg(struct pnfs_layout_segment *lseg)
+{
+	return atomic_read(&lseg->kref.refcount) == 1;
+}
+
+static bool
+pnfs_return_layout_barrier(struct nfs_inode *nfsi,
+			   struct nfs4_pnfs_layout_segment *range)
+{
+	struct pnfs_layout_segment *lseg;
+	bool ret = false;
+
+	spin_lock(&nfsi->lo_lock);
+	list_for_each_entry (lseg, &nfsi->layout.segs, fi_list) {
+		if (!should_free_lseg(lseg, range))
+			continue;
+		lseg->valid = false;
+		if (!_pnfs_can_return_lseg(lseg)) {
+			dprintk("%s: wait on lseg %p refcount %d\n",
+				__func__, lseg,
+				atomic_read(&lseg->kref.refcount));
+			ret = true;
+		}
+	}
+	spin_unlock(&nfsi->lo_lock);
+
+	dprintk("%s:Return %d\n", __func__, ret);
+	return ret;
 }
 
 static int
@@ -618,7 +669,7 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 	struct pnfs_layout_type *lo = NULL;
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct nfs4_pnfs_layout_segment arg;
-	int status;
+	int status = 0;
 
 	dprintk("--> %s type %d\n", __func__, type);
 
@@ -639,23 +690,33 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 				status = 0;
 			}
 		}
-		lo = get_lock_current_layout(nfsi);
-		if (lo == NULL) {
-			status = -EIO;
-			goto out;
-		}
 
-		/* FIXME: We need a barrier here.
-		 * Synchronize with outstanding I/Os and
-		 * mark the returned segments as begin returned.
-		 * Conflicting layout gets should then wait on them */
+		lo = get_lock_current_layout(nfsi);
+		if (lo && !has_layout_to_return(lo, &arg)) {
+			put_unlock_current_layout(lo);
+			lo = NULL;
+		}
+		if (!lo) {
+			dprintk("%s: no layout segments to return\n", __func__);
+			/* must send the LAYOUTRETURN in response to recall */
+			if (stateid)
+				goto send_return;
+			else
+				goto out;
+		}
 
 		/* unlock w/o put rebalanced by eventual call to
 		 * pnfs_layout_release
 		 */
 		spin_unlock(&nfsi->lo_lock);
-	}
 
+		if (pnfs_return_layout_barrier(nfsi, &arg)) {
+			dprintk("%s: waiting\n", __func__);
+			wait_event(nfsi->lo_waitq,
+				!pnfs_return_layout_barrier(nfsi, &arg));
+		}
+	}
+send_return:
 	status = return_layout(ino, &arg, stateid, type, lo);
 out:
 	dprintk("<-- %s status: %d\n", __func__, status);
