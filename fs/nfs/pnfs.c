@@ -854,7 +854,7 @@ get_lock_alloc_layout(struct inode *ino)
 		 */
 		res = wait_on_bit_lock(
 			&nfsi->pnfs_layout_state, NFS_INO_LAYOUT_ALLOC,
-			pnfs_wait_schedule, TASK_INTERRUPTIBLE);
+			pnfs_wait_schedule, TASK_KILLABLE);
 		if (res) {
 			lo = ERR_PTR(res);
 			break;
@@ -946,7 +946,10 @@ pnfs_has_layout(struct pnfs_layout_type *lo,
 		}
 	}
 
-	dprintk("%s:Return %p\n", __func__, ret);
+	dprintk("%s:Return lseg %p take_ref %d ref %d valid %d\n",
+		__func__, ret, take_ref,
+		ret ? atomic_read(&ret->kref.refcount) : 0,
+		ret ? ret->valid : 0);
 	return ret;
 }
 
@@ -971,7 +974,9 @@ pnfs_update_layout(struct inode *ino,
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct pnfs_layout_type *lo;
 	struct pnfs_layout_segment *lseg = NULL;
-	int result = -EIO;
+	bool take_ref = (lsegpp != NULL);
+	DEFINE_WAIT(__wait);
+	int result = 0;
 
 	lo = get_lock_alloc_layout(ino);
 	if (IS_ERR(lo)) {
@@ -981,7 +986,35 @@ pnfs_update_layout(struct inode *ino,
 	}
 
 	/* Check to see if the layout for the given range already exists */
-	lseg = pnfs_has_layout(lo, &arg, lsegpp != NULL, true);
+	lseg = pnfs_has_layout(lo, &arg, take_ref, !take_ref);
+	if (lseg && !lseg->valid) {
+		spin_unlock(&nfsi->lo_lock);
+		if (take_ref)
+			put_lseg(lseg);
+		for (;;) {
+			prepare_to_wait(&nfsi->lo_waitq, &__wait,
+					TASK_KILLABLE);
+			spin_lock(&nfsi->lo_lock);
+			lseg = pnfs_has_layout(lo, &arg, take_ref, !take_ref);
+			if (!lseg || lseg->valid)
+				break;
+			dprintk("%s: invalid lseg %p ref %d\n", __func__,
+				lseg, atomic_read(&lseg->kref.refcount)-1);
+			if (take_ref)
+				put_lseg(lseg);
+			if (signal_pending(current)) {
+				lseg = NULL;
+				result = -ERESTARTSYS;
+				break;
+			}
+			spin_unlock(&nfsi->lo_lock);
+			schedule();
+		}
+		finish_wait(&nfsi->lo_waitq, &__wait);
+		if (result)
+			goto out_put;
+	}
+
 	if (lseg) {
 		dprintk("%s: Using cached lseg %p for %llu@%llu iomode %d)\n",
 			__func__,
@@ -990,7 +1023,6 @@ pnfs_update_layout(struct inode *ino,
 			arg.offset,
 			arg.iomode);
 
-		result = 0;
 		goto out_put;
 	}
 
