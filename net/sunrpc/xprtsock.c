@@ -2196,7 +2196,7 @@ void bc_free(void *buffer)
 
 /*
  * Use the svc_sock to send the callback. Must be called with svsk->sk_mutex
- * held. Borrows heavily from svc_tcp_sendto and xs_tcp_semd_request.
+ * held. Borrows heavily from svc_tcp_sendto and xs_tcp_send_request.
  */
 static int bc_sendto(struct rpc_rqst *req)
 {
@@ -2520,7 +2520,7 @@ static struct rpc_xprt *xs_setup_tcp(struct xprt_create *args)
 
 		INIT_DELAYED_WORK(&transport->connect_worker, xs_tcp_connect_worker6);
 		xs_format_ipv6_peer_addresses(xprt, "tcp",
-					      RPCBIND_NETID_TCP);
+					      RPCBIND_NETID_TCP6);
 		break;
 	default:
 		kfree(xprt);
