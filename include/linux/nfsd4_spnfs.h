@@ -285,6 +285,14 @@ struct spnfs_msg {
 	union spnfs_msg_res	im_res;
 };
 
+/* spnfs configuration info */
+struct spnfs_config {
+	unsigned char		dense_striping;
+	int			stripe_size;
+	int			num_ds;
+	char			ds_dir[SPNFS_MAX_DATA_SERVERS][80];  /* XXX */
+};
+
 #if defined(__KERNEL__) && defined(CONFIG_SPNFS)
 
 #include <linux/nfsd/state.h>
@@ -322,6 +330,8 @@ void nfsd_spnfs_delete(void);
 int spnfs_upcall(struct spnfs *, struct spnfs_msg *, union spnfs_msg_res *);
 int spnfs_enabled(void);
 int spnfs_init_proc(void);
+
+extern struct spnfs_config *spnfs_config;
 
 #endif /* __KERNEL__ && CONFIG_SPNFS */
 
