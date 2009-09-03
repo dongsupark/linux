@@ -319,8 +319,9 @@ int spnfs_setattr(void);
 int spnfs_open(struct inode *, struct nfsd4_open *);
 int spnfs_get_state(struct inode *, struct knfsd_fh *, struct pnfs_get_state *);
 int spnfs_remove(unsigned long, unsigned long);
-int spnfs_read(struct inode *, loff_t, unsigned long *, int, struct svc_rqst *);
-int spnfs_write(struct inode *, loff_t, size_t, int, struct svc_rqst *);
+__be32 spnfs_read(struct inode *, loff_t, unsigned long *,
+		  int, struct svc_rqst *);
+__be32 spnfs_write(struct inode *, loff_t, size_t, int, struct svc_rqst *);
 int spnfs_getfh(int, struct nfs_fh *);
 int spnfs_test_layoutrecall(char *, u64, u64);
 int spnfs_layoutrecall(struct inode *, int, u64, u64);
