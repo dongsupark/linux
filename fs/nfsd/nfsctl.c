@@ -1572,6 +1572,7 @@ static void __exit exit_nfsd(void)
 	remove_proc_entry("fs/nfs/spnfs/recall", NULL);
 	remove_proc_entry("fs/nfs/spnfs/layoutseg", NULL);
 	remove_proc_entry("fs/nfs/spnfs/getfh", NULL);
+	remove_proc_entry("fs/nfs/spnfs/config", NULL);
 	remove_proc_entry("fs/nfs/spnfs/ctl", NULL);
 	remove_proc_entry("fs/nfs/spnfs", NULL);
 #endif /* CONFIG_PROC_FS && CONFIG_SPNFS */
