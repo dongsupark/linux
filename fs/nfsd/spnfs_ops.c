@@ -39,6 +39,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/namei.h>
+#include <linux/kthread.h>
+#include <asm/div64.h>
 
 #include <linux/sunrpc/clnt.h>
 #include <linux/workqueue.h>
@@ -633,188 +635,215 @@ remove_out:
 	return status;
 }
 
-int
-spnfs_read_one(struct inode *inode, loff_t offset, size_t len, char *buf)
+static int
+read_one(struct inode *inode, loff_t offset, size_t len, char *buf,
+	 struct file **filp)
 {
-	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
-	struct spnfs_msg *im = NULL;
-	union spnfs_msg_res *res = NULL;
-	int status = 0;
-	unsigned long todo = len;
-	unsigned long bytecount = 0;
-
-	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
-	if (im == NULL) {
-		status = -ENOMEM;
-		goto read_out;
-	}
-
-	res = kmalloc(sizeof(union spnfs_msg_res), GFP_KERNEL);
-	if (res == NULL) {
-		status = -ENOMEM;
-		goto read_out;
-	}
-
-	im->im_type = SPNFS_TYPE_READ;
-	im->im_args.read_args.inode = inode->i_ino;
-	im->im_args.read_args.generation = inode->i_generation;
-	while (todo > 0) {
-		im->im_args.read_args.offset = offset;
-		if (todo > SPNFS_MAX_IO)
-			im->im_args.read_args.len = SPNFS_MAX_IO;
-		else
-			im->im_args.read_args.len = todo;
-		/* call function to queue the msg for upcall */
-		status = spnfs_upcall(spnfs, im, res);
-		if (status != 0) {
-			dprintk("%s spnfs upcall failure: %d\n",
-				__func__, status);
-			status = -EIO;
-			goto read_out;
-		}
-		/* status < 0 => error, status > 0 => bytes moved */
-		status = res->read_res.status;
-		if (status < 0) {
-			dprintk("%s spnfs read failure: %d\n",
-				__func__, status);
-			status = -EIO;
-			goto read_out;
-		}
-		/* status == 0, maybe eof.  not making forward progress */
-		if (status == 0) {
-			status = bytecount;
-			goto read_out;
-		}
-		/* status = number of bytes successfully i/o'd */
-		memcpy(buf, res->read_res.data, status);
-		buf += status;
-		offset += status;
-		bytecount += status;
-		todo -= status;
-	}
-	status = bytecount;
-
-read_out:
-	kfree(im);
-	kfree(res);
-
-	return status;
-}
-
-int
-spnfs_read(struct inode *inode, loff_t offset, unsigned long *lenp, int vlen,
-		struct svc_rqst *rqstp)
-{
-	int vnum, err, bytecount = 0;
+	loff_t bufoffset = 0, soffset, pos, snum, soff, tmp;
 	size_t iolen;
+	int completed = 0, ds, err;
 
-	for (vnum = 0 ; vnum < vlen ; vnum++) {
-		iolen = rqstp->rq_vec[vnum].iov_len;
-		err = spnfs_read_one(inode, offset + bytecount, iolen,
-				(char *)rqstp->rq_vec[vnum].iov_base);
+	while (len > 0) {
+		tmp = offset;
+		soff = do_div(tmp, spnfs_config->stripe_size);
+		snum = tmp;
+		ds = do_div(tmp, spnfs_config->num_ds);
+		if (spnfs_config->dense_striping == 0)
+			soffset = offset;
+		else {
+			tmp = snum;
+			do_div(tmp, spnfs_config->num_ds);
+			soffset = tmp * spnfs_config->stripe_size + soff;
+		}
+		if (len < spnfs_config->stripe_size - soff)
+			iolen = len;
+		else
+			iolen = spnfs_config->stripe_size - soff;
+
+		pos = soffset;
+		err = vfs_read(filp[ds], buf + bufoffset, iolen, &pos);
 		if (err < 0)
 			return -EIO;
+		if (err == 0)
+			break;
+		filp[ds]->f_pos = pos;
+		iolen = err;
+		completed += iolen;
+		len -= iolen;
+		offset += iolen;
+		bufoffset += iolen;
+	}
+
+	return completed;
+}
+
+static __be32
+read(struct inode *inode, loff_t offset, unsigned long *lenp, int vlen,
+     struct svc_rqst *rqstp)
+{
+	int i, vnum, err, bytecount = 0;
+	char path[128];
+	struct file *filp[SPNFS_MAX_DATA_SERVERS];
+	size_t iolen;
+	__be32 status = nfs_ok;
+
+	/*
+	 * XXX We should just be doing this at open time, but it gets
+	 * kind of messy storing this info in nfsd's state structures
+	 * and piggybacking its path through the various state handling
+	 * functions.  Revisit this.
+	 */
+	memset(filp, 0, SPNFS_MAX_DATA_SERVERS * sizeof(struct file *));
+	for (i = 0; i < spnfs_config->num_ds; i++) {
+		sprintf(path, "%s/%ld.%u", spnfs_config->ds_dir[i],
+			inode->i_ino, inode->i_generation);
+		filp[i] = filp_open(path, O_RDONLY | O_LARGEFILE, 0);
+		if (filp[i] == NULL) {
+			status = nfserr_io;
+			goto read_out;
+		}
+		get_file(filp[i]);
+	}
+
+	for (vnum = 0 ; vnum < vlen ; vnum++) {
+		iolen = rqstp->rq_vec[vnum].iov_len;
+		err = read_one(inode, offset + bytecount, iolen,
+			       (char *)rqstp->rq_vec[vnum].iov_base, filp);
+		if (err < 0) {
+			status = nfserr_io;
+			goto read_out;
+		}
 		if (err < iolen) {
 			bytecount += err;
-			goto out;
+			goto read_out;
 		}
 		bytecount += rqstp->rq_vec[vnum].iov_len;
 	}
 
-out:
+read_out:
 	*lenp = bytecount;
-	return 0;
+	for (i = 0; i < spnfs_config->num_ds; i++) {
+		if (filp[i]) {
+			filp_close(filp[i], current->files);
+			fput(filp[i]);
+		}
+	}
+	return status;
 }
 
-int
-spnfs_write_one(struct inode *inode, loff_t offset, size_t len, char *buf)
+__be32
+spnfs_read(struct inode *inode, loff_t offset, unsigned long *lenp, int vlen,
+	   struct svc_rqst *rqstp)
 {
-	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
-	struct spnfs_msg *im = NULL;
-	union spnfs_msg_res *res = NULL;
-	int status = 0;
-	size_t todo = len;
-	unsigned long bytecount = 0;
-
-	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
-	if (im == NULL) {
-		status = -ENOMEM;
-		goto write_out;
+	if (spnfs_config)
+		return read(inode, offset, lenp, vlen, rqstp);
+	else {
+		printk(KERN_ERR "Please upgrade to latest spnfsd\n");
+		return nfserr_notsupp;
 	}
+}
 
-	res = kmalloc(sizeof(union spnfs_msg_res), GFP_KERNEL);
-	if (res == NULL) {
-		status = -ENOMEM;
-		goto write_out;
-	}
+static int
+write_one(struct inode *inode, loff_t offset, size_t len, char *buf,
+	  struct file **filp)
+{
+	loff_t bufoffset = 0, soffset, pos, snum, soff, tmp;
+	size_t iolen;
+	int completed = 0, ds, err;
 
-	im->im_type = SPNFS_TYPE_WRITE;
-	im->im_args.write_args.inode = inode->i_ino;
-	im->im_args.write_args.generation = inode->i_generation;
-	while (todo > 0) {
-		im->im_args.write_args.offset = offset;
-		if (todo > SPNFS_MAX_IO)
-			im->im_args.write_args.len = SPNFS_MAX_IO;
+	while (len > 0) {
+		tmp = offset;
+		soff = do_div(tmp, spnfs_config->stripe_size);
+		snum = tmp;
+		ds = do_div(tmp, spnfs_config->num_ds);
+		if (spnfs_config->dense_striping == 0)
+			soffset = offset;
+		else {
+			tmp = snum;
+			do_div(tmp, spnfs_config->num_ds);
+			soffset = tmp * spnfs_config->stripe_size + soff;
+		}
+		if (len < spnfs_config->stripe_size - soff)
+			iolen = len;
 		else
-			im->im_args.write_args.len = todo;
-		memcpy(im->im_args.write_args.data, buf,
-			im->im_args.write_args.len);
-		/* call function to queue the msg for upcall */
-		status = spnfs_upcall(spnfs, im, res);
-		if (status != 0) {
-			dprintk("%s spnfs upcall failure: %d\n",
-				__func__, status);
-			status = -EIO;
-			goto write_out;
-		}
-		/* status < 0 => error, status > 0 => bytes moved */
-		status = res->write_res.status;
-		if (status < 0) {
-			dprintk("%s spnfs write failure: %d\n",
-				__func__, status);
-			status = -EIO;
-			goto write_out;
-		}
-		/* status == 0.  not making forward progress */
-		if (status == 0) {
-			dprintk("spnfs write no forward progress\n");
-			status = bytecount;
-			goto write_out;
-		}
-		/* status = number of bytes successfully i/o'd */
-		buf += status;
-		offset += status;
-		bytecount += status;
-		todo -= status;
+			iolen = spnfs_config->stripe_size - soff;
+
+		pos = soffset;
+		err = vfs_write(filp[ds], buf + bufoffset, iolen, &pos);
+		if (err < 0)
+			return -EIO;
+		filp[ds]->f_pos = pos;
+		iolen = err;
+		completed += iolen;
+		len -= iolen;
+		offset += iolen;
+		bufoffset += iolen;
 	}
-	status = bytecount;
+
+	return completed;
+}
+
+static __be32
+write(struct inode *inode, loff_t offset, size_t len, int vlen,
+      struct svc_rqst *rqstp)
+{
+	int i, vnum, err, bytecount = 0;
+	char path[128];
+	struct file *filp[SPNFS_MAX_DATA_SERVERS];
+	size_t iolen;
+	__be32 status = nfs_ok;
+
+	/*
+	 * XXX We should just be doing this at open time, but it gets
+	 * kind of messy storing this info in nfsd's state structures
+	 * and piggybacking its path through the various state handling
+	 * functions.  Revisit this.
+	 */
+	memset(filp, 0, SPNFS_MAX_DATA_SERVERS * sizeof(struct file *));
+	for (i = 0; i < spnfs_config->num_ds; i++) {
+		sprintf(path, "%s/%ld.%u", spnfs_config->ds_dir[i],
+			inode->i_ino, inode->i_generation);
+		filp[i] = filp_open(path, O_RDWR | O_LARGEFILE, 0);
+		if (filp[i] == NULL) {
+			status = nfserr_io;
+			goto write_out;
+		}
+		get_file(filp[i]);
+	}
+
+	for (vnum = 0; vnum < vlen; vnum++) {
+		iolen = rqstp->rq_vec[vnum].iov_len;
+		err = write_one(inode, offset + bytecount, iolen,
+				(char *)rqstp->rq_vec[vnum].iov_base, filp);
+		if (err != iolen) {
+			dprintk("spnfs_write: err=%d expected %Zd\n", err, len);
+			status = nfserr_io;
+			goto write_out;
+		}
+		bytecount += rqstp->rq_vec[vnum].iov_len;
+	}
 
 write_out:
-	kfree(im);
-	kfree(res);
+	for (i = 0; i < spnfs_config->num_ds; i++) {
+		if (filp[i]) {
+			filp_close(filp[i], current->files);
+			fput(filp[i]);
+		}
+	}
 
 	return status;
 }
 
-int
+__be32
 spnfs_write(struct inode *inode, loff_t offset, size_t len, int vlen,
-		struct svc_rqst *rqstp)
+	    struct svc_rqst *rqstp)
 {
-	int vnum, err, bytecount = 0;
-	size_t iolen;
-
-	for (vnum = 0 ; vnum < vlen ; vnum++) {
-		iolen = rqstp->rq_vec[vnum].iov_len;
-		err = spnfs_write_one(inode, offset + bytecount, iolen,
-				(char *)rqstp->rq_vec[vnum].iov_base);
-		if (err != iolen) {
-			dprintk("err=%d expected %Zd\n", err, len);
-			return -EIO;
-		}
-		bytecount += rqstp->rq_vec[vnum].iov_len;
+	if (spnfs_config)
+		return write(inode, offset, len, vlen, rqstp);
+	else {
+		printk(KERN_ERR "Please upgrade to latest spnfsd\n");
+		return nfserr_notsupp;
 	}
-
-	return 0;
 }
 
 int
