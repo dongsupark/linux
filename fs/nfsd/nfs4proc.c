@@ -880,9 +880,7 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		status = spnfs_write(cstate->current_fh.fh_dentry->d_inode,
 			write->wr_offset, write->wr_buflen, write->wr_vlen,
 			rqstp);
-		if (status < 0)
-			status = nfserr_io;
-		else {
+		if (status == nfs_ok) {
 			/* DMXXX: HACK to get filesize set */
 			/* write one byte at offset+length-1 */
 			struct kvec k[1];
