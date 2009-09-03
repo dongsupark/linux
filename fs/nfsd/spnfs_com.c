@@ -75,6 +75,7 @@ static struct rpc_pipe_ops spnfs_upcall_ops = {
 
 /* evil global variable */
 struct spnfs *global_spnfs;
+struct spnfs_config *spnfs_config;
 #ifdef CONFIG_SPNFS_LAYOUTSEGMENTS
 int spnfs_use_layoutsegments;
 uint64_t layoutsegment_size;
@@ -311,9 +312,10 @@ int spnfs_enabled(void)
  * getfh - fd to fh conversion
  * recall - recall a layout from the command line, for example:
  *		echo <path> > /proc/fs/spnfs/recall
+ * config - configuration info, e.g., stripe size, num ds, etc.
  */
 
-/*************** start ctl **************************/
+/*-------------- start ctl -------------------------*/
 static ssize_t ctl_write(struct file *file, const char __user *buf,
 			 size_t count, loff_t *offset)
 {
@@ -331,13 +333,30 @@ static ssize_t ctl_write(struct file *file, const char __user *buf,
 	return count;
 }
 
-static struct file_operations ctl_ops = {
+static const struct file_operations ctl_ops = {
 	.write		= ctl_write,
 };
-/*************** end ctl ****************************/
+/*-------------- end ctl ---------------------------*/
 
+/*-------------- start config -------------------------*/
+static ssize_t config_write(struct file *file, const char __user *buf,
+			    size_t count, loff_t *offset)
+{
+	static struct spnfs_config cfg;
 
-/*************** start getfh ************************/
+	if (copy_from_user(&cfg, buf, count))
+		return -EFAULT;
+
+	spnfs_config = &cfg;
+	return 0;
+}
+
+static const struct file_operations config_ops = {
+	.write		= config_write,
+};
+/*-------------- end config ---------------------------*/
+
+/*-------------- start getfh -----------------------*/
 static int getfh_open(struct inode *inode, struct file *file)
 {
 	file->private_data = kmalloc(sizeof(struct nfs_fh), GFP_KERNEL);
@@ -375,16 +394,16 @@ static int getfh_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static struct file_operations getfh_ops = {
+static const struct file_operations getfh_ops = {
 	.open		= getfh_open,
 	.read		= getfh_read,
 	.write		= getfh_write,
 	.release	= getfh_release,
 };
-/*************** end getfh *************************/
+/*-------------- end getfh ------------------------*/
 
 
-/*************** start recall layout ***************/
+/*-------------- start recall layout --------------*/
 static ssize_t recall_write(struct file *file, const char __user *buf,
 			    size_t count, loff_t *offset)
 {
@@ -436,14 +455,14 @@ static ssize_t recall_write(struct file *file, const char __user *buf,
 	return count;
 }
 
-static struct file_operations recall_ops = {
+static const struct file_operations recall_ops = {
 	.write		= recall_write,
 };
-/*************** end recall layout ***************/
+/*-------------- end recall layout --------------*/
 
 
 #ifdef CONFIG_SPNFS_LAYOUTSEGMENTS
-/*************** start layoutseg **************************/
+/*-------------- start layoutseg -------------------------*/
 static ssize_t layoutseg_write(struct file *file, const char __user *buf,
 			       size_t count, loff_t *offset)
 {
@@ -459,12 +478,12 @@ static ssize_t layoutseg_write(struct file *file, const char __user *buf,
 	return count;
 }
 
-static struct file_operations layoutseg_ops = {
+static const struct file_operations layoutseg_ops = {
 	.write		= layoutseg_write,
 };
-/*************** end layoutseg ****************************/
+/*-------------- end layoutseg ---------------------------*/
 
-/*************** start layoutsegsize **************************/
+/*-------------- start layoutsegsize -------------------------*/
 static ssize_t layoutsegsize_write(struct file *file, const char __user *buf,
 				   size_t count, loff_t *offset)
 {
@@ -477,10 +496,10 @@ static ssize_t layoutsegsize_write(struct file *file, const char __user *buf,
 	return count;
 }
 
-static struct file_operations layoutsegsize_ops = {
+static const struct file_operations layoutsegsize_ops = {
 	.write		= layoutsegsize_write,
 };
-/*************** end layoutsegsize ****************************/
+/*-------------- end layoutsegsize ---------------------------*/
 #endif /* CONFIG_SPNFS_LAYOUTSEGMENTS */
 
 int
@@ -496,6 +515,11 @@ spnfs_init_proc(void)
 	if (!entry)
 		return -ENOMEM;
 	entry->proc_fops = &ctl_ops;
+
+	entry = create_proc_entry("fs/spnfs/config", 0, NULL);
+	if (!entry)
+		return -ENOMEM;
+	entry->proc_fops = &config_ops;
 
 	entry = create_proc_entry("fs/spnfs/getfh", 0, NULL);
 	if (!entry)
