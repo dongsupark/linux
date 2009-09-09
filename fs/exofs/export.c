@@ -180,9 +180,58 @@ static int exofs_layout_return(
 	return 0;
 }
 
+int exofs_get_device_info(struct super_block *sb, struct pnfs_devinfo_arg *arg)
+{
+	struct exofs_sb_info *sbi = sb->s_fs_info;
+	struct pnfs_osd_deviceaddr devaddr;
+	const struct osd_dev_info *odi;
+	u32 *p, *start, *end;
+	int err;
+
+	memset(&devaddr, 0, sizeof(devaddr));
+
+	if (arg->devid.pnfs_devid != SINGLE_DEV_ID)
+		return -ENODEV;
+
+	odi = osduld_device_info(sbi->s_dev);
+
+	devaddr.oda_systemid.len = odi->systemid_len;
+	devaddr.oda_systemid.data = (void *)odi->systemid; /* !const cast */
+
+	devaddr.oda_osdname.len = odi->osdname_len ;
+	devaddr.oda_osdname.data = (void *)odi->osdname;/* !const cast */
+
+	/* Now encode the device info */
+	p = start = arg->xdr.resp->p;
+	end = start + arg->xdr.maxcount;
+
+	/* skip opaque size, will be filled-in later */
+	if (p + 1 > end) {
+		err = -E2BIG;
+		goto err;
+	}
+	p++;
+
+	err = pnfs_osd_xdr_encode_deviceaddr(&p, end, &devaddr);
+	if (err)
+		goto err;
+
+	arg->xdr.bytes_written = (p - start) * 4;
+	*start = htonl(arg->xdr.bytes_written - 4);
+
+	EXOFS_DBGMSG("xdr_bytes=%u\n", arg->xdr.bytes_written);
+	return 0;
+
+err:
+	EXOFS_DBGMSG("Error: err=%d at_byte=%zu\n",
+		     err, (p - start) * 4);
+	return err;
+}
+
 struct pnfs_export_operations exofs_pnfs_ops = {
 	.layout_type	= exofs_layout_type,
 	.layout_get	= exofs_layout_get,
 	.layout_commit	= exofs_layout_commit,
 	.layout_return	= exofs_layout_return,
+	.get_device_info = exofs_get_device_info,
 };
