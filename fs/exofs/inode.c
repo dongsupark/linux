@@ -771,11 +771,7 @@ static int exofs_get_block(struct inode *inode, sector_t iblock,
 const struct osd_attr g_attr_logical_length = ATTR_DEF(
 	OSD_APAGE_OBJECT_INFORMATION, OSD_ATTR_OI_LOGICAL_LENGTH, 8);
 
-/*
- * Truncate a file to the specified size - all we have to do is set the size
- * attribute.  We make sure the object exists first.
- */
-void exofs_truncate(struct inode *inode)
+static int _do_truncate(struct inode *inode)
 {
 	struct exofs_sb_info *sbi = inode->i_sb->s_fs_info;
 	struct exofs_i_info *oi = exofs_i(inode);
@@ -786,19 +782,13 @@ void exofs_truncate(struct inode *inode)
 	__be64 newsize;
 	int ret;
 
-	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)
-	     || S_ISLNK(inode->i_mode)))
-		return;
-	if (exofs_inode_is_fast_symlink(inode))
-		return;
-	if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
-		return;
 	inode->i_mtime = inode->i_ctime = CURRENT_TIME;
 
 	nobh_truncate_page(inode->i_mapping, isize, exofs_get_block);
 
 	or = osd_start_request(sbi->s_dev, GFP_KERNEL);
 	if (unlikely(!or)) {
+		ret = -ENOMEM;
 		EXOFS_ERR("ERROR: exofs_truncate: osd_start_request failed\n");
 		goto fail;
 	}
@@ -810,14 +800,37 @@ void exofs_truncate(struct inode *inode)
 	attr.val_ptr = &newsize;
 	osd_req_add_set_attr_list(or, &attr, 1);
 
+	ret = exofs_sync_op(or, sbi->s_timeout, oi->i_cred);
+	osd_end_request(or);
+
+fail:
+	return ret;
+}
+
+/*
+ * Truncate a file to the specified size - all we have to do is set the size
+ * attribute.  We make sure the object exists first.
+ */
+void exofs_truncate(struct inode *inode)
+{
+	struct exofs_i_info *oi = exofs_i(inode);
+	int ret;
+
+	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)
+	     || S_ISLNK(inode->i_mode)))
+		return;
+	if (exofs_inode_is_fast_symlink(inode))
+		return;
+	if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
+		return;
+
 	/* if we are about to truncate an object, and it hasn't been
 	 * created yet, wait
 	 */
 	if (unlikely(wait_obj_created(oi)))
 		goto fail;
 
-	ret = exofs_sync_op(or, sbi->s_timeout, oi->i_cred);
-	osd_end_request(or);
+	ret = exofs_inode_recall_layout(inode, _do_truncate);
 	if (ret)
 		goto fail;
 
@@ -911,6 +924,7 @@ static void __oi_init(struct exofs_i_info *oi)
 {
 	init_waitqueue_head(&oi->i_wq);
 	oi->i_flags = 0;
+	spin_lock_init(&oi->i_layout_lock);
 }
 /*
  * Fill in an inode read from the OSD and set it up for use

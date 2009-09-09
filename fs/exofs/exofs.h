@@ -74,6 +74,7 @@ struct exofs_i_info {
 	uint32_t       i_data[EXOFS_IDATA];/*short symlink names and device #s*/
 	uint32_t       i_dir_start_lookup; /* which page to start lookup      */
 	wait_queue_head_t i_wq;            /* wait queue for inode            */
+	spinlock_t     i_layout_lock;      /* lock for layout/return/recall   */
 	uint64_t       i_commit_size;      /* the object's written length     */
 	uint8_t        i_cred[OSD_CAP_LEN];/* all-powerful credential         */
 	struct inode   vfs_inode;          /* normal in-memory inode          */
@@ -84,6 +85,9 @@ struct exofs_i_info {
  */
 #define OBJ_2BCREATED	0	/* object will be created soon*/
 #define OBJ_CREATED	1	/* object has been created on the osd*/
+/* Below are not used atomic but reuse the same i_flags */
+#define OBJ_LAYOUT_IS_GIVEN  2  /* inode has given layouts to clients*/
+#define OBJ_IN_LAYOUT_RECALL 3  /* inode is in the middle of a layout recall*/
 
 static inline int obj_2bcreated(struct exofs_i_info *oi)
 {
@@ -156,6 +160,10 @@ int exofs_set_link(struct inode *, struct exofs_dir_entry *, struct page *,
 
 /* super.c               */
 int exofs_sync_fs(struct super_block *sb, int wait);
+
+/* export.c:                */
+typedef int (exofs_recall_fn)(struct inode *inode);
+int exofs_inode_recall_layout(struct inode *inode, exofs_recall_fn todo);
 
 /*********************
  * operation vectors *
