@@ -299,4 +299,11 @@ extern const struct inode_operations exofs_special_inode_operations;
 extern const struct inode_operations exofs_symlink_inode_operations;
 extern const struct inode_operations exofs_fast_symlink_inode_operations;
 
+/* export.c */
+#ifdef CONFIG_PNFSD
+void exofs_init_export(struct super_block *sb);
+#else
+static inline void exofs_init_export(struct super_block *sb) {}
+#endif
+
 #endif
