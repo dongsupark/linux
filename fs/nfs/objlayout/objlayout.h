@@ -112,6 +112,10 @@ extern void objlayout_read_done(struct objlayout_io_state *state,
 extern void objlayout_write_done(struct objlayout_io_state *state,
 				 ssize_t status, bool sync);
 
+extern int objlayout_get_deviceinfo(struct pnfs_layout_type *pnfslay,
+	struct pnfs_deviceid *d_id, struct pnfs_osd_deviceaddr **deviceaddr);
+extern void objlayout_put_deviceinfo(struct pnfs_osd_deviceaddr *deviceaddr);
+
 /*
  * exported generic objects function vectors
  */
