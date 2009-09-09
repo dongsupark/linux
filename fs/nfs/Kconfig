@@ -104,6 +104,24 @@ config PNFS_OBJLAYOUT
 
 	  If unsure, say N.
 
+config PNFS_PANLAYOUT
+	tristate "Provide support for the Panasas OSD Layout Driver for NFSv4.1 pNFS (EXPERIMENTAL)"
+	depends on PNFS_OBJLAYOUT
+	help
+	  Say M or y here if you want your pNFS client to support the Panasas OSD Layout Driver.
+
+	  If unsure, say N.
+
+config PNFS_BLOCK
+	tristate "Provide a pNFS block client (EXPERIMENTAL)"
+	depends on NFS_FS && NFS_V4_1
+	select MD
+	select BLK_DEV_DM
+	help
+	  Say M or y here if you want your pNfs client to support the block protocol
+
+	  If unsure, say N.
+
 config ROOT_NFS
 	bool "Root file system on NFS"
 	depends on NFS_FS=y && IP_PNP
