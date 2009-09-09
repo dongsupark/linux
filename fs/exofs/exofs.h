@@ -178,4 +178,7 @@ extern const struct inode_operations exofs_special_inode_operations;
 extern const struct inode_operations exofs_symlink_inode_operations;
 extern const struct inode_operations exofs_fast_symlink_inode_operations;
 
+/* export.c */
+extern struct pnfs_export_operations exofs_pnfs_ops;
+
 #endif
