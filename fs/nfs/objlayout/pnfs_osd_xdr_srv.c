@@ -183,3 +183,60 @@ int pnfs_osd_xdr_encode_layout(
 	return 0;
 }
 
+static int _encode_string(u32 **pp, u32 *end, struct nfs4_string *str)
+{
+	u32 *p = *pp;
+
+	if (p + 1 + XDR_QUADLEN(str->len) > end)
+		return -E2BIG;
+	p = xdr_encode_opaque(p, str->data, str->len);
+
+	*pp = p;
+	return 0;
+}
+
+/* struct pnfs_osd_deviceaddr {
+ * 	struct pnfs_osd_targetid	oda_targetid;
+ * 	struct pnfs_osd_targetaddr	oda_targetaddr;
+ * 	u8				oda_lun[8];
+ * 	struct nfs4_string		oda_systemid;
+ * 	struct pnfs_osd_object_cred	oda_root_obj_cred;
+ * 	struct nfs4_string		oda_osdname;
+ * };
+ */
+int pnfs_osd_xdr_encode_deviceaddr(
+	u32 **pp, u32 *end, struct pnfs_osd_deviceaddr *devaddr)
+{
+	u32 *p = *pp;
+	int err;
+
+	if (p + 1 + 1 + sizeof(devaddr->oda_lun)/4 > end)
+		return -E2BIG;
+
+	/* Empty oda_targetid */
+	WRITE32(OBJ_TARGET_ANON);
+
+	/* Empty oda_targetaddr for now */
+	WRITE32(0);
+
+	/* oda_lun */
+	p = xdr_encode_opaque_fixed(p, devaddr->oda_lun,
+				    sizeof(devaddr->oda_lun));
+
+	err = _encode_string(&p, end, &devaddr->oda_systemid);
+	if (err)
+		return err;
+
+	err = pnfs_osd_xdr_encode_object_cred(&p, end,
+					      &devaddr->oda_root_obj_cred);
+	if (err)
+		return err;
+
+	err = _encode_string(&p, end, &devaddr->oda_osdname);
+	if (err)
+		return err;
+
+	*pp = p;
+	return 0;
+}
+
