@@ -3,3 +3,9 @@
 #
 objlayoutdriver-y := pnfs_osd_xdr_cli.o objlayout.o objio_osd.o
 obj-$(CONFIG_PNFS_OBJLAYOUT) += objlayoutdriver.o
+
+#
+# Panasas pNFS Layout Driver kernel module
+#
+panlayoutdriver-y := pnfs_osd_xdr_cli.o objlayout.o panfs_shim.o
+obj-$(CONFIG_PNFS_PANLAYOUT) += panlayoutdriver.o
