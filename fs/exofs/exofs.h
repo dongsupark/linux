@@ -300,4 +300,20 @@ extern const struct inode_operations exofs_special_inode_operations;
 extern const struct inode_operations exofs_symlink_inode_operations;
 extern const struct inode_operations exofs_fast_symlink_inode_operations;
 
+/* export.c */
+typedef int (exofs_recall_fn)(struct inode *inode);
+#ifdef CONFIG_PNFSD
+int exofs_inode_recall_layout(struct inode *inode, enum pnfs_iomode iomode,
+			      exofs_recall_fn todo);
+void exofs_init_export(struct super_block *sb);
+#else
+static inline int exofs_inode_recall_layout(struct inode *inode,
+				enum pnfs_iomode iomode, exofs_recall_fn todo)
+{
+	return todo(inode);
+}
+
+static inline void exofs_init_export(struct super_block *sb) {}
+#endif
+
 #endif
