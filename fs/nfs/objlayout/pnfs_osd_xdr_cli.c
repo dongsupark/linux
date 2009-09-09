@@ -165,3 +165,191 @@ pnfs_osd_xdr_decode_layout(struct pnfs_osd_layout *layout, u32 *p)
 	return layout;
 }
 
+/*
+ * Get Device Information Decoding
+ *
+ * Note: since Device Information is currently done synchronously, most
+ *       of the actual fields are left inside the rpc buffer and are only
+ *       pointed to by the pnfs_osd_deviceaddr members. So the read buffer
+ *       should not be freed while the returned information is in use.
+ */
+
+u32 *__xdr_read_calc_nfs4_string(
+	u32 *p, struct nfs4_string *str, u8 **freespace)
+{
+	u32 len;
+	char *data;
+	bool need_copy;
+
+	READ32(len);
+	data = (char *)p;
+
+	if (data[len]) { /* Not null terminated we'll need extra space */
+		data = *freespace;
+		*freespace += len + 1;
+		need_copy = true;
+	} else {
+		need_copy = false;
+	}
+
+	if (str) {
+		str->len = len;
+		str->data = data;
+		if (need_copy) {
+			memcpy(data, p, len);
+			data[len] = 0;
+		}
+	}
+
+	p += XDR_QUADLEN(len);
+	return p;
+}
+
+u32 *__xdr_read_calc_u8_opaque(
+	u32 *p, struct nfs4_string *str)
+{
+	u32 len;
+
+	READ32(len);
+
+	if (str) {
+		str->len = len;
+		str->data = (char *)p;
+	}
+
+	p += XDR_QUADLEN(len);
+	return p;
+}
+
+/*
+ * struct pnfs_osd_targetid {
+ * 	u32			oti_type;
+ * 	struct nfs4_string	oti_scsi_device_id;
+ * };
+ */
+u32 *__xdr_read_calc_targetid(
+	u32 *p, struct pnfs_osd_targetid* targetid, u8 **freespace)
+{
+	u32 oti_type;
+
+	READ32(oti_type);
+	if (targetid)
+		targetid->oti_type = oti_type;
+
+	switch (oti_type) {
+	case OBJ_TARGET_SCSI_NAME:
+	case OBJ_TARGET_SCSI_DEVICE_ID:
+		p = __xdr_read_calc_u8_opaque(p,
+			targetid ? &targetid->oti_scsi_device_id : NULL);
+	}
+
+	return p;
+}
+
+/*
+ * struct pnfs_osd_net_addr {
+ * 	struct nfs4_string	r_netid;
+ * 	struct nfs4_string	r_addr;
+ * };
+ */
+u32 *__xdr_read_calc_net_addr(
+	u32 *p, struct pnfs_osd_net_addr* netaddr, u8 **freespace)
+{
+
+	p = __xdr_read_calc_nfs4_string(p,
+			netaddr ? &netaddr->r_netid : NULL,
+			freespace);
+
+	p = __xdr_read_calc_nfs4_string(p,
+			netaddr ? &netaddr->r_addr : NULL,
+			freespace);
+
+	return p;
+}
+
+/*
+ * struct pnfs_osd_targetaddr {
+ * 	u32				ota_available;
+ * 	struct pnfs_osd_net_addr	ota_netaddr;
+ * };
+ */
+u32 *__xdr_read_calc_targetaddr(
+	u32 *p, struct pnfs_osd_targetaddr *targetaddr, u8 **freespace)
+{
+	u32 ota_available;
+
+	READ32(ota_available);
+	if (targetaddr)
+		targetaddr->ota_available = ota_available;
+
+	if (ota_available) {
+		p = __xdr_read_calc_net_addr(p,
+				targetaddr ? &targetaddr->ota_netaddr : NULL,
+				freespace);
+	}
+
+	return p;
+}
+
+/*
+ * struct pnfs_osd_deviceaddr {
+ * 	struct pnfs_osd_targetid	oda_targetid;
+ * 	struct pnfs_osd_targetaddr	oda_targetaddr;
+ * 	u8				oda_lun[8];
+ * 	struct nfs4_string		oda_systemid;
+ * 	struct pnfs_osd_object_cred	oda_root_obj_cred;
+ * 	struct nfs4_string		oda_osdname;
+ * };
+ */
+u32 *__xdr_read_calc_deviceaddr(
+	u32 *p, struct pnfs_osd_deviceaddr *deviceaddr, u8 **freespace)
+{
+	p = __xdr_read_calc_targetid(p,
+			deviceaddr ? &deviceaddr->oda_targetid : NULL,
+			freespace);
+
+	p = __xdr_read_calc_targetaddr(p,
+			deviceaddr ? &deviceaddr->oda_targetaddr : NULL,
+			freespace);
+
+	if (deviceaddr)
+		COPYMEM(deviceaddr->oda_lun, sizeof(deviceaddr->oda_lun));
+	else
+		p += XDR_QUADLEN(sizeof(deviceaddr->oda_lun));
+
+	p = __xdr_read_calc_u8_opaque(p,
+			deviceaddr ? &deviceaddr->oda_systemid : NULL);
+
+	if (deviceaddr) {
+		p = pnfs_osd_xdr_decode_object_cred(p,
+				&deviceaddr->oda_root_obj_cred, freespace);
+	} else {
+		*freespace += pnfs_osd_object_cred_incore_sz(p);
+		p += pnfs_osd_object_cred_xdr_sz(p);
+	}
+
+	p = __xdr_read_calc_u8_opaque(p,
+			deviceaddr ? &deviceaddr->oda_osdname : NULL);
+
+	return p;
+}
+
+size_t pnfs_osd_xdr_deviceaddr_incore_sz(u32 *p)
+{
+	u8 *null_freespace = NULL;
+	size_t sz;
+
+	__xdr_read_calc_deviceaddr(p, NULL, &null_freespace);
+	sz = sizeof(struct pnfs_osd_deviceaddr) + (size_t)null_freespace;
+
+	return sz;
+}
+
+void pnfs_osd_xdr_decode_deviceaddr(
+	struct pnfs_osd_deviceaddr *deviceaddr, u32 *p)
+{
+	u8 *freespace = (u8 *)(deviceaddr + 1);
+
+	__xdr_read_calc_deviceaddr(p, deviceaddr, &freespace);
+}
+
