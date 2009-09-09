@@ -246,6 +246,7 @@ int objio_alloc_io_state(struct objlayout_io_state **outp)
 	if (unlikely(!ios))
 		return -ENOMEM;
 
+	ios->ol_state.num_comps = 1;
 	*outp = &ios->ol_state;
 	return 0;
 }
@@ -278,7 +279,7 @@ static bool _is_osd_security_code(int code)
  *    2. On Error: 0 < resid <= total_length (see input)
  */
 static int _check_io_resid(struct osd_request *or,
-	u64 *in_resid, u64 *out_resid)
+	u64 *in_resid, u64 *out_resid, enum pnfs_osd_errno *osd_error)
 {
 	struct osd_sense_info osi = {.key = 0};  /* FIXME: bug in libosd */
 	int ret = osd_req_decode_sense(or, &osi);
@@ -294,19 +295,33 @@ static int _check_io_resid(struct osd_request *or,
 
 	if (osi.additional_code == scsi_invalid_field_in_cdb) {
 		if (osi.cdb_field_offset == OSD_CFO_OBJECT_ID) {
+			*osd_error = PNFS_OSD_ERR_NOT_FOUND;
 			ret = -ENOENT;
 		} else if (osi.cdb_field_offset == OSD_CFO_PERMISSIONS) {
+			*osd_error = PNFS_OSD_ERR_NO_ACCESS;
 			ret = -EACCES;
 		} else {
+			*osd_error = PNFS_OSD_ERR_BAD_CRED;
 			ret = -EINVAL;
 		}
 	} else if (osi.additional_code == osd_quota_error) {
+		*osd_error = PNFS_OSD_ERR_NO_SPACE;
 		ret = -ENOSPC;
 	} else if (_is_osd_security_code(osi.additional_code)) {
+		*osd_error = PNFS_OSD_ERR_BAD_CRED;
 		ret = -EINVAL;
 	} else if (!osi.key) {
+		/* scsi sense is Empty, we currently cannot know if it
+		 * is an out-of-memory or communication error. But try
+		 * anyway
+		 */
+		if (or->async_error == -ENOMEM)
+			*osd_error = PNFS_OSD_ERR_RESOURCE;
+		else
+			*osd_error = PNFS_OSD_ERR_UNREACHABLE;
 		ret = or->async_error;
 	} else {
+		*osd_error = PNFS_OSD_ERR_EIO;
 		ret = -EIO;
 	}
 
@@ -448,8 +463,10 @@ static int _io_rw_pagelist(struct objio_state *ios, bool do_write)
 static ssize_t _read_done_ret(struct osd_request *or, struct objio_state *ios)
 {
 	u64 resid = ios->length;
+	u64 offset;
+	enum pnfs_osd_errno osd_error;
 	ssize_t status;
-	int ret = _check_io_resid(or, &resid, NULL);
+	int ret = _check_io_resid(or, &resid, NULL, &osd_error);
 
 	osd_end_request(or);
 	_io_free(ios);
@@ -458,6 +475,10 @@ static ssize_t _read_done_ret(struct osd_request *or, struct objio_state *ios)
 		status = ios->length;
 	else
 		status = ret;
+
+	offset = ios->ol_state.offset + ios->length - resid;
+	objlayout_io_set_result(&ios->ol_state, 0/*index*/,
+				status, osd_error, offset, resid, false);
 
 	objlayout_read_done(&ios->ol_state, ios->ol_state.sync);
 	return status;
@@ -530,8 +551,10 @@ ssize_t objio_read_pagelist(struct objlayout_io_state *ol_state)
 static ssize_t _write_done_ret(struct osd_request *or, struct objio_state *ios)
 {
 	u64 resid = ios->length;
+	u64 offset;
+	enum pnfs_osd_errno osd_error;
 	ssize_t status;
-	int ret = _check_io_resid(or, NULL, &resid);
+	int ret = _check_io_resid(or, NULL, &resid, &osd_error);
 
 	osd_end_request(or);
 	_io_free(ios);
@@ -544,6 +567,10 @@ static ssize_t _write_done_ret(struct osd_request *or, struct objio_state *ios)
 	} else {
 		status = ret;
 	}
+
+	offset = ios->ol_state.offset + ios->length - resid;
+	objlayout_io_set_result(&ios->ol_state, 0/*index*/,
+				status, osd_error, offset, resid, false);
 
 	objlayout_write_done(&ios->ol_state, ios->ol_state.sync);
 	return status;
