@@ -201,17 +201,37 @@ static int exofs_layout_commit(
 	return 0;
 }
 
+static void exofs_handle_error(struct pnfs_osd_ioerr *ioerr)
+{
+	EXOFS_ERR("exofs_handle_error: errno=%d is_write=%d obj=0x%llx "
+		  "offset=0x%llx length=0x%llx\n",
+		  ioerr->oer_errno, ioerr->oer_iswrite,
+		  _LLU(ioerr->oer_component.oid_object_id),
+		  _LLU(ioerr->oer_comp_offset),
+		  _LLU(ioerr->oer_comp_length));
+}
+
 static int exofs_layout_return(
 	struct inode *inode,
 	struct nfsd4_pnfs_layoutreturn *lrp)
 {
-	/* TODO: Decode the pnfs_osd_ioerr if lrf_body_len > 0 */
+	__be32 *p = lrp->lrf_body;
+	unsigned len = lrp->lrf_body_len / 4;
+
+	EXOFS_DBGMSG("(0x%lx) cookie %p xdr_len %d\n",
+		     inode->i_ino, lrp->lr_cookie, len);
+
+	while (len >= pnfs_osd_ioerr_xdr_sz()) {
+		struct pnfs_osd_ioerr ioerr;
+
+		p = pnfs_osd_xdr_decode_ioerr(&ioerr, p);
+		len -= pnfs_osd_ioerr_xdr_sz();
+		exofs_handle_error(&ioerr);
+	}
 
 	if (lrp->lr_cookie) {
 		struct exofs_i_info *oi = exofs_i(inode);
 		bool in_recall;
-
-		EXOFS_DBGMSG("(0x%lx) last layout\n", inode->i_ino);
 
 		if (lrp->lr_cookie == PNFS_LAST_LAYOUT_NO_RECALLS) {
 			spin_lock(&oi->i_layout_lock);
