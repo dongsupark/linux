@@ -334,6 +334,40 @@ enum {
 		1 + ODA_OSDNAME_MAX,
 };
 
+/* LAYOUTRETURN: I/O Rrror Report */
+
+enum pnfs_osd_errno {
+	PNFS_OSD_ERR_EIO		= 1,
+	PNFS_OSD_ERR_NOT_FOUND		= 2,
+	PNFS_OSD_ERR_NO_SPACE		= 3,
+	PNFS_OSD_ERR_BAD_CRED		= 4,
+	PNFS_OSD_ERR_NO_ACCESS		= 5,
+	PNFS_OSD_ERR_UNREACHABLE	= 6,
+	PNFS_OSD_ERR_RESOURCE		= 7
+};
+
+/*   struct pnfs_osd_ioerr4 {
+ *       pnfs_osd_objid4     oer_component;
+ *       length4             oer_comp_offset;
+ *       length4             oer_comp_length;
+ *       bool                oer_iswrite;
+ *       pnfs_osd_errno4     oer_errno;
+ *   };
+ */
+struct pnfs_osd_ioerr {
+	struct pnfs_osd_objid	oer_component;
+	u64			oer_comp_offset;
+	u64			oer_comp_length;
+	u32			oer_iswrite;
+	u32			oer_errno;
+};
+
+static inline unsigned
+pnfs_osd_ioerr_xdr_sz(void)
+{
+	return pnfs_osd_objid_xdr_sz() + 2 + 2 + 1 + 1;
+}
+
 /* OSD XDR API */
 
 /* Layout helpers */
@@ -361,5 +395,11 @@ extern void pnfs_osd_xdr_decode_deviceaddr(
 /* For Servers */
 extern int pnfs_osd_xdr_encode_deviceaddr(
 	u32 **pp, u32 *end, struct pnfs_osd_deviceaddr *devaddr);
+
+/* osd_ioerror encoding/decoding (layout_return) */
+extern int
+pnfs_osd_xdr_encode_ioerr(struct xdr_stream *xdr, struct pnfs_osd_ioerr *ioerr);
+extern __be32 *
+pnfs_osd_xdr_decode_ioerr(struct pnfs_osd_ioerr *ioerr, __be32 *p);
 
 #endif /* _PANLAYOUT_PNFS_OSD_XDR_H */
