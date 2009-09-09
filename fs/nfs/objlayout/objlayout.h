@@ -63,6 +63,9 @@ struct objlayout_segment {
  * per-inode layout
  */
 struct objlayout {
+	 /* for layout_return */
+	spinlock_t lock;
+	struct list_head err_list;
 };
 
 /*
@@ -83,6 +86,16 @@ struct objlayout_io_state {
 	int status;             /* res */
 	int eof;                /* res */
 	int committed;          /* res */
+
+	/* Error reporting (layout_return) */
+	struct list_head err_list;
+	unsigned num_comps;
+	/* Variable array of error descriptors per device.
+	 * It should contain as many entries as devices in the osd_layout
+	 * that participate in the I/O. It is up to the io_engine to allocate
+	 * needed space. (This member must be kept last).
+	 */
+	struct pnfs_osd_ioerr ioerrs[1];
 };
 
 /*
