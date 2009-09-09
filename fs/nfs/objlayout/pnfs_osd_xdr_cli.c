@@ -353,6 +353,28 @@ void pnfs_osd_xdr_decode_deviceaddr(
 	__xdr_read_calc_deviceaddr(p, deviceaddr, &freespace);
 }
 
+/*
+ * struct pnfs_osd_layoutupdate {
+ * 	u32	dsu_valid;
+ * 	s64	dsu_delta;
+ * 	u32	olu_ioerr_flag;
+ * };
+ */
+int
+pnfs_osd_xdr_encode_layoutupdate(struct xdr_stream *xdr,
+				 struct pnfs_osd_layoutupdate *lou)
+{
+	__be32 *p = xdr_reserve_space(xdr, 16);
+
+	if (!p)
+		return -E2BIG;
+
+	*p++ = cpu_to_be32(lou->dsu_valid);
+	if (lou->dsu_valid)
+		p = xdr_encode_hyper(p, lou->dsu_delta);
+	*p++ = cpu_to_be32(lou->olu_ioerr_flag);
+	return 0;
+}
 
 /*
  * struct pnfs_osd_objid {
