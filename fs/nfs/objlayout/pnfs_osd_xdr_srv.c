@@ -241,6 +241,23 @@ int pnfs_osd_xdr_encode_deviceaddr(
 }
 
 /*
+ * struct pnfs_osd_layoutupdate {
+ * 	u32	dsu_valid;
+ * 	s64	dsu_delta;
+ * 	u32	olu_ioerr_flag;
+ * };
+ */
+__be32 *
+pnfs_osd_xdr_decode_layoutupdate(struct pnfs_osd_layoutupdate *lou, __be32 *p)
+{
+	lou->dsu_valid = be32_to_cpu(*p++);
+	if (lou->dsu_valid)
+		p = xdr_decode_hyper(p, &lou->dsu_delta);
+	lou->olu_ioerr_flag = be32_to_cpu(*p++);
+	return p;
+}
+
+/*
  * struct pnfs_osd_objid {
  * 	struct pnfs_deviceid	oid_device_id;
  * 	u64			oid_partition_id;
