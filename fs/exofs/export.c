@@ -60,6 +60,7 @@ static int exofs_layout_get(
 	struct pnfs_osd_object_cred cred;
 	struct pnfs_osd_layout layout;
 	u32 *p, *start, *end;
+	int in_recall;
 	int err;
 
 	lgp->seg.offset = 0;
@@ -111,11 +112,19 @@ static int exofs_layout_get(
 	lgp->xdr.bytes_written = (p - start) * 4;
 	*start = htonl(lgp->xdr.bytes_written - 4);
 
-	/* TODO: Takes the inode ref here, add to inode's layouts list */
+	spin_lock(&oi->i_layout_lock);
+	in_recall = test_bit(OBJ_IN_LAYOUT_RECALL, &oi->i_flags);
+	if (!in_recall)
+		__set_bit(OBJ_LAYOUT_IS_GIVEN, &oi->i_flags);
+	spin_unlock(&oi->i_layout_lock);
+
+	if (in_recall) {
+		err = -EAGAIN;
+		goto err;
+	}
 
 	EXOFS_DBGMSG("(0x%lx) xdr_bytes=%u\n",
 		     inode->i_ino, lgp->xdr.bytes_written);
-
 	return 0;
 
 err:
@@ -124,31 +133,58 @@ err:
 	return err;
 }
 
-/* This is called under the inode mutex from nfsd4_layoutcommit. If changed
- * then inode mutex must be held, for the hacks done here.
- */
+/* NOTE: inode mutex must NOT be held */
 static int exofs_layout_commit(
 	struct inode *inode,
 	struct nfsd4_pnfs_layoutcommit *lcp)
 {
+	struct exofs_i_info *oi = exofs_i(inode);
 	struct timespec mtime;
 	loff_t i_size;
+	int in_recall;
+
+	/* In case of a recall we ignore the new size and mtime since they
+	 * are going to be changed again by truncate, and since we cannot take
+	 * the inode lock in that case.
+	 */
+	spin_lock(&oi->i_layout_lock);
+	in_recall = test_bit(OBJ_IN_LAYOUT_RECALL, &oi->i_flags);
+	spin_unlock(&oi->i_layout_lock);
+	if (in_recall) {
+		EXOFS_DBGMSG("(0x%lx) commit was called during recall\n",
+			     inode->i_ino);
+		return 0;
+	}
+
+	/* NOTE: I would love to call inode_setattr here
+	 *	 but i cannot since this will cause an eventual vmtruncate,
+	 *	 which will cause a layout_recall. So open code the i_size
+	 *	 and mtime/atime changes under i_mutex.
+	 */
+	mutex_lock_nested(&inode->i_mutex, I_MUTEX_NORMAL);
 
 	if (lcp->lc_mtime.seconds) {
 		mtime.tv_sec = lcp->lc_mtime.seconds;
 		mtime.tv_nsec = lcp->lc_mtime.nseconds;
+
+		/* layout commit may only make time bigger, since there might
+		 * be reordering of the notifications and it might arrive after
+		 * A local change.
+		 * TODO: if mtime > ctime then we know set_attr did an mtime
+		 * in the future. and we can let this update through
+		 */
+		if (0 <= timespec_compare(&mtime, &inode->i_mtime))
+			mtime = inode->i_mtime;
 	} else {
 		mtime = current_fs_time(inode->i_sb);
 	}
+
 	/* TODO: Will below work? since mark_inode_dirty has it's own
 	 *       Time handling
 	 */
 	inode->i_atime = inode->i_mtime = mtime;
 
-/* TODO: exofs does not currently use the osd_xdr part of the layout_commit */
-
 	i_size = i_size_read(inode);
-
 	if (lcp->lc_newoffset) {
 		loff_t new_size = lcp->lc_last_wr + 1;
 
@@ -157,14 +193,9 @@ static int exofs_layout_commit(
 	}
 	/* TODO: else { i_size = osd_get_object_length() } */
 
-	lcp->lc_size_chg = true;
-	lcp->lc_newsize = i_size;
-
 	mark_inode_dirty_sync(inode);
-	/*TODO: We might want to call exofs_write_inode(inode, true);
-	 *      directly, and not wait for the write_back threads
-	 */
 
+	mutex_unlock(&inode->i_mutex);
 	EXOFS_DBGMSG("(0x%lx) i_size=0x%llx lcp->off=0x%llx\n",
 		     inode->i_ino, i_size, lcp->lc_last_wr);
 	return 0;
@@ -176,7 +207,28 @@ static int exofs_layout_return(
 {
 	/* TODO: Decode the pnfs_osd_ioerr if lrf_body_len > 0 */
 
-	/* TODO: When layout_get takes the inode ref put_ref here */
+	if (lrp->lr_cookie) {
+		struct exofs_i_info *oi = exofs_i(inode);
+		bool in_recall;
+
+		EXOFS_DBGMSG("(0x%lx) last layout\n", inode->i_ino);
+
+		if (lrp->lr_cookie == PNFS_LAST_LAYOUT_NO_RECALLS) {
+			spin_lock(&oi->i_layout_lock);
+			in_recall = test_bit(OBJ_IN_LAYOUT_RECALL,
+						   &oi->i_flags);
+			if (!in_recall)
+				__clear_bit(OBJ_LAYOUT_IS_GIVEN, &oi->i_flags);
+			spin_unlock(&oi->i_layout_lock);
+		} else {
+			in_recall = true;
+		}
+
+		/* TODO: how to communicate cookie with the waiter */
+		if (in_recall)
+			wake_up(&oi->i_wq); /* wakeup any recalls */
+	}
+
 	return 0;
 }
 
@@ -235,3 +287,123 @@ struct pnfs_export_operations exofs_pnfs_ops = {
 	.layout_return	= exofs_layout_return,
 	.get_device_info = exofs_get_device_info,
 };
+
+static int is_layout_returned(struct exofs_i_info *oi)
+{
+	struct inode *inode = &oi->vfs_inode;
+	struct nfsd4_pnfs_cb_layout cbl;
+	struct pnfsd_cb_ctl cb_ctl;
+	int layout_given;
+	int status;
+
+	layout_given = test_bit(OBJ_LAYOUT_IS_GIVEN, &oi->i_flags);
+	if (!layout_given)
+		return 1;
+
+	/* We most probably have finished the recall, unless there was an out-
+	 * of-memory condition when sending the recall. For forward progress
+	 * some recalls where sent and some not, resend these that where lost
+	 * before. If cb_layout_recall returns with -ENOENT we know we are
+	 * done for sure.
+	 */
+	memset(&cb_ctl, 0, sizeof(cb_ctl));
+	status = pnfsd_get_cb_op(&cb_ctl);
+	if (unlikely(status)) {
+		EXOFS_ERR("exofs_layout_return: nfsd unloaded!!"
+			  " inode (0x%lx) status=%d\n", inode->i_ino, status);
+		goto err;
+	}
+
+	memset(&cbl, 0, sizeof(cbl));
+	cbl.cbl_recall_type = RECALL_FILE;
+	cbl.cbl_seg.layout_type = LAYOUT_OSD2_OBJECTS;
+	cbl.cbl_seg.iomode = IOMODE_RW;
+	cbl.cbl_seg.length = NFS4_MAX_UINT64;
+	cbl.cbl_cookie = oi;
+
+	status = cb_ctl.cb_op->cb_layout_recall(inode->i_sb, inode, &cbl);
+	pnfsd_put_cb_op(&cb_ctl);
+
+	if (likely(status == -ENOENT)) {
+		spin_lock(&oi->i_layout_lock);
+		__clear_bit(OBJ_LAYOUT_IS_GIVEN, &oi->i_flags);
+		spin_unlock(&oi->i_layout_lock);
+
+		layout_given = 0;
+	} else if (unlikely(status)) {
+		/* Double fault in cb_layout_recall for now I would like to know
+		   and bailout. Perhaps I need retry counts */
+		EXOFS_ERR("exofs_layout_return: Double fault in "
+			  "cb_layout_recall inode (0x%lx) status=%d\n",
+			  inode->i_ino, status);
+		goto err;
+	}
+
+	return !layout_given;
+
+err:
+	/* this will cause wait_event_interruptible below to break with
+	 * an -ERESTARTSY return. If nfsd is able to unload we probably
+	 * should break out of any nfs loops
+	 */
+	restart_syscall();
+	return 0;
+}
+
+int exofs_inode_recall_layout(struct inode *inode, exofs_recall_fn todo)
+{
+	struct exofs_i_info *oi = exofs_i(inode);
+	struct nfsd4_pnfs_cb_layout cbl;
+	struct pnfsd_cb_ctl cb_ctl;
+	int layout_given;
+	int error = 0;
+
+	spin_lock(&oi->i_layout_lock);
+	layout_given = test_bit(OBJ_LAYOUT_IS_GIVEN, &oi->i_flags);
+	__set_bit(OBJ_IN_LAYOUT_RECALL, &oi->i_flags);
+	spin_unlock(&oi->i_layout_lock);
+
+	if (!layout_given)
+		goto exec;
+
+	EXOFS_DBGMSG("(0x%lx) has_layout issue a recall\n", inode->i_ino);
+	memset(&cb_ctl, 0, sizeof(cb_ctl));
+	error = pnfsd_get_cb_op(&cb_ctl);
+	if (error)
+		goto err;
+
+	memset(&cbl, 0, sizeof(cbl));
+	cbl.cbl_recall_type = RECALL_FILE;
+	cbl.cbl_seg.layout_type = LAYOUT_OSD2_OBJECTS;
+	cbl.cbl_seg.iomode = IOMODE_ANY;
+	cbl.cbl_seg.length = NFS4_MAX_UINT64;
+	cbl.cbl_cookie = todo;
+
+	error = cb_ctl.cb_op->cb_layout_recall(inode->i_sb, inode, &cbl);
+	pnfsd_put_cb_op(&cb_ctl);
+
+	switch (error) {
+	case 0:
+	case -EAGAIN:
+		break;
+	case -ENOENT:
+		goto exec;
+	default:
+		goto err;
+	}
+
+	error = wait_event_interruptible(oi->i_wq, is_layout_returned(oi));
+	if (error)
+		goto err;
+
+exec:
+	EXOFS_DBGMSG("(0x%lx) executing todo\n", inode->i_ino);
+	error = todo(inode);
+
+err:
+	spin_lock(&oi->i_layout_lock);
+	__clear_bit(OBJ_IN_LAYOUT_RECALL, &oi->i_flags);
+	spin_unlock(&oi->i_layout_lock);
+	EXOFS_DBGMSG("(0x%lx) return=>%d\n", inode->i_ino, error);
+	return error;
+}
