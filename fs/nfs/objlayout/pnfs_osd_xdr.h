@@ -334,6 +334,26 @@ enum {
 		1 + ODA_OSDNAME_MAX,
 };
 
+/* LAYOUTCOMMIT: layoutupdate */
+
+/*   union pnfs_osd_deltaspaceused4 switch (bool dsu_valid) {
+ *       case TRUE:
+ *           int64_t     dsu_delta;
+ *       case FALSE:
+ *           void;
+ *   };
+ *
+ *   struct pnfs_osd_layoutupdate4 {
+ *       pnfs_osd_deltaspaceused4    olu_delta_space_used;
+ *       bool                        olu_ioerr_flag;
+ *   };
+ */
+struct pnfs_osd_layoutupdate {
+	u32	dsu_valid;
+	s64	dsu_delta;
+	u32	olu_ioerr_flag;
+};
+
 /* LAYOUTRETURN: I/O Rrror Report */
 
 enum pnfs_osd_errno {
@@ -395,6 +415,13 @@ extern void pnfs_osd_xdr_decode_deviceaddr(
 /* For Servers */
 extern int pnfs_osd_xdr_encode_deviceaddr(
 	u32 **pp, u32 *end, struct pnfs_osd_deviceaddr *devaddr);
+
+/* layoutupdate (layout_commit) xdr helpers */
+extern int
+pnfs_osd_xdr_encode_layoutupdate(struct xdr_stream *xdr,
+				 struct pnfs_osd_layoutupdate *lou);
+extern __be32 *
+pnfs_osd_xdr_decode_layoutupdate(struct pnfs_osd_layoutupdate *lou, __be32 *p);
 
 /* osd_ioerror encoding/decoding (layout_return) */
 extern int
