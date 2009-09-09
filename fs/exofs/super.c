@@ -372,6 +372,7 @@ static int exofs_fill_super(struct super_block *sb, void *data, int silent)
 	/* set up operation vectors */
 	sb->s_op = &exofs_sops;
 	sb->s_export_op = &exofs_export_ops;
+	sb->s_pnfs_op = &exofs_pnfs_ops;
 	root = exofs_iget(sb, EXOFS_ROOT_ID - EXOFS_OBJ_OFF);
 	if (IS_ERR(root)) {
 		EXOFS_ERR("ERROR: exofs_iget failed\n");

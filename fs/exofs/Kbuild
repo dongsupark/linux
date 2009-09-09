@@ -13,4 +13,5 @@
 #
 
 exofs-y := osd.o inode.o file.o symlink.o namei.o dir.o super.o
+exofs-y +=  export.o ../nfs/objlayout/pnfs_osd_xdr_srv.o
 obj-$(CONFIG_EXOFS_FS) += exofs.o
