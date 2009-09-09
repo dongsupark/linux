@@ -353,3 +353,57 @@ void pnfs_osd_xdr_decode_deviceaddr(
 	__xdr_read_calc_deviceaddr(p, deviceaddr, &freespace);
 }
 
+
+/*
+ * struct pnfs_osd_objid {
+ * 	struct pnfs_deviceid	oid_device_id;
+ * 	u64			oid_partition_id;
+ * 	u64			oid_object_id;
+ */
+static inline int pnfs_osd_xdr_encode_objid(struct xdr_stream *xdr,
+					    struct pnfs_osd_objid *object_id)
+{
+	__be32 *p;
+
+	p = xdr_reserve_space(xdr, 32);
+	if (!p)
+		return -E2BIG;
+
+	p = xdr_encode_opaque_fixed(p, &object_id->oid_device_id.data,
+				    sizeof(object_id->oid_device_id.data));
+	p = xdr_encode_hyper(p, object_id->oid_partition_id);
+	p = xdr_encode_hyper(p, object_id->oid_object_id);
+
+	return 0;
+}
+
+/*
+ * struct pnfs_osd_ioerr {
+ * 	struct pnfs_osd_objid	oer_component;
+ * 	u64			oer_comp_offset;
+ * 	u64			oer_comp_length;
+ * 	u32			oer_iswrite;
+ * 	u32			oer_errno;
+ * };
+ */
+int pnfs_osd_xdr_encode_ioerr(struct xdr_stream *xdr,
+			      struct pnfs_osd_ioerr *ioerr)
+{
+	__be32 *p;
+	int ret;
+
+	ret = pnfs_osd_xdr_encode_objid(xdr, &ioerr->oer_component);
+	if (ret)
+		return ret;
+
+	p = xdr_reserve_space(xdr, 24);
+	if (!p)
+		return -E2BIG;
+
+	p = xdr_encode_hyper(p, ioerr->oer_comp_offset);
+	p = xdr_encode_hyper(p, ioerr->oer_comp_length);
+	*p++ = cpu_to_be32(ioerr->oer_iswrite);
+	*p   = cpu_to_be32(ioerr->oer_errno);
+
+	return 0;
+}
