@@ -252,6 +252,88 @@ pnfs_osd_layout_incore_sz(u32 *p)
 	return sz;
 }
 
+/* Device Address */
+
+enum pnfs_osd_targetid_type {
+	OBJ_TARGET_ANON = 1,
+	OBJ_TARGET_SCSI_NAME = 2,
+	OBJ_TARGET_SCSI_DEVICE_ID = 3,
+};
+
+/*   union pnfs_osd_targetid4 switch (pnfs_osd_targetid_type4 oti_type) {
+ *       case OBJ_TARGET_SCSI_NAME:
+ *           string              oti_scsi_name<>;
+ *
+ *       case OBJ_TARGET_SCSI_DEVICE_ID:
+ *           opaque              oti_scsi_device_id<>;
+ *
+ *       default:
+ *           void;
+ *   };
+ *
+ *   union pnfs_osd_targetaddr4 switch (bool ota_available) {
+ *       case TRUE:
+ *           netaddr4            ota_netaddr;
+ *       case FALSE:
+ *           void;
+ *   };
+ *
+ *   struct pnfs_osd_deviceaddr4 {
+ *       pnfs_osd_targetid4      oda_targetid;
+ *       pnfs_osd_targetaddr4    oda_targetaddr;
+ *       uint64_t                oda_lun;
+ *       opaque                  oda_systemid<>;
+ *       pnfs_osd_object_cred4   oda_root_obj_cred;
+ *       opaque                  oda_osdname<>;
+ *   };
+ */
+struct pnfs_osd_targetid {
+	u32				oti_type;
+	struct nfs4_string		oti_scsi_device_id;
+};
+
+enum { PNFS_OSD_TARGETID_MAX = 1 + PNFS_OSD_OSDNAME_MAXSIZE / 4 };
+
+/*   struct netaddr4 {
+ *       // see struct rpcb in RFC1833
+ *       string r_netid<>;    // network id
+ *       string r_addr<>;     // universal address
+ *   };
+ */
+struct pnfs_osd_net_addr {
+	struct nfs4_string	r_netid;
+	struct nfs4_string	r_addr;
+};
+
+struct pnfs_osd_targetaddr {
+	u32				ota_available;
+	struct pnfs_osd_net_addr	ota_netaddr;
+};
+
+enum {
+	NETWORK_ID_MAX = 16 / 4,
+	UNIVERSAL_ADDRESS_MAX = 64 / 4,
+	PNFS_OSD_TARGETADDR_MAX = 3 +  NETWORK_ID_MAX + UNIVERSAL_ADDRESS_MAX,
+};
+
+struct pnfs_osd_deviceaddr {
+	struct pnfs_osd_targetid	oda_targetid;
+	struct pnfs_osd_targetaddr	oda_targetaddr;
+	u8				oda_lun[8];
+	struct nfs4_string		oda_systemid;
+	struct pnfs_osd_object_cred	oda_root_obj_cred;
+	struct nfs4_string		oda_osdname;
+};
+
+enum {
+	ODA_OSDNAME_MAX = PNFS_OSD_OSDNAME_MAXSIZE / 4,
+	PNFS_OSD_DEVICEADDR_MAX =
+		PNFS_OSD_TARGETID_MAX + PNFS_OSD_TARGETADDR_MAX +
+		2 /*oda_lun*/ +
+		1 + OSD_SYSTEMID_LEN +
+		1 + ODA_OSDNAME_MAX,
+};
+
 /* OSD XDR API */
 
 /* Layout helpers */
@@ -261,5 +343,23 @@ extern struct pnfs_osd_layout *pnfs_osd_xdr_decode_layout(
 extern int pnfs_osd_xdr_encode_layout(
 	u32 **pp, u32 *end,
 	struct pnfs_osd_layout *layout);
+
+/* Device Info helpers */
+
+/* First pass calculate total size for space needed */
+extern size_t pnfs_osd_xdr_deviceaddr_incore_sz(u32 *p);
+
+/* Note: some strings pointed to inside @deviceaddr might point
+ * to space inside @p. @p should stay valid while @deviceaddr
+ * is in use.
+ * It is assumed that @deviceaddr points to bigger memory of size
+ * calculated in first pass by pnfs_osd_xdr_deviceaddr_incore_sz()
+ */
+extern void pnfs_osd_xdr_decode_deviceaddr(
+	struct pnfs_osd_deviceaddr *deviceaddr, u32 *p);
+
+/* For Servers */
+extern int pnfs_osd_xdr_encode_deviceaddr(
+	u32 **pp, u32 *end, struct pnfs_osd_deviceaddr *devaddr);
 
 #endif /* _PANLAYOUT_PNFS_OSD_XDR_H */
