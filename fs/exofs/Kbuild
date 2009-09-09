@@ -13,4 +13,5 @@
 #
 
 exofs-y := ios.o inode.o file.o symlink.o namei.o dir.o super.o
+exofs-$(CONFIG_PNFSD) +=  export.o
 obj-$(CONFIG_EXOFS_FS) += exofs.o
