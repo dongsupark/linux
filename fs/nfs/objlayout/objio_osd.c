@@ -62,8 +62,84 @@ struct objio_mount_type {
 	spinlock_t dev_list_lock;
 };
 
+struct _dev_ent {
+	struct list_head list;
+	struct pnfs_deviceid d_id;
+	struct osd_dev *od;
+};
+
+static void _dev_list_remove_all(struct objio_mount_type *omt)
+{
+	spin_lock(&omt->dev_list_lock);
+
+	while (!list_empty(&omt->dev_list)) {
+		struct _dev_ent *de = list_entry(omt->dev_list.next,
+				 struct _dev_ent, list);
+
+		list_del_init(&de->list);
+		osduld_put_device(de->od);
+		kfree(de);
+	}
+
+	spin_unlock(&omt->dev_list_lock);
+}
+
+static struct osd_dev *___dev_list_find(struct objio_mount_type *omt,
+	struct pnfs_deviceid *d_id)
+{
+	struct list_head *le;
+
+	list_for_each(le, &omt->dev_list) {
+		struct _dev_ent *de = list_entry(le, struct _dev_ent, list);
+
+		if (0 == memcmp(&de->d_id, d_id, sizeof(*d_id)))
+			return de->od;
+	}
+
+	return NULL;
+}
+
+static struct osd_dev *_dev_list_find(struct objio_mount_type *omt,
+	struct pnfs_deviceid *d_id)
+{
+	struct osd_dev *od;
+
+	spin_lock(&omt->dev_list_lock);
+	od = ___dev_list_find(omt, d_id);
+	spin_unlock(&omt->dev_list_lock);
+	return od;
+}
+
+static int _dev_list_add(struct objio_mount_type *omt,
+	struct pnfs_deviceid *d_id, struct osd_dev *od)
+{
+	struct _dev_ent *de = kzalloc(sizeof(*de), GFP_KERNEL);
+
+	if (!de)
+		return -ENOMEM;
+
+	spin_lock(&omt->dev_list_lock);
+
+	if (___dev_list_find(omt, d_id)) {
+		kfree(de);
+		goto out;
+	}
+
+	de->d_id = *d_id;
+	de->od = od;
+	list_add(&de->list, &omt->dev_list);
+
+out:
+	spin_unlock(&omt->dev_list_lock);
+	return 0;
+}
+
 struct objio_segment {
 	struct pnfs_osd_layout *layout;
+
+	unsigned num_comps;
+	/* variable length */
+	struct osd_dev	*ods[1];
 };
 
 struct objio_state {
@@ -73,21 +149,113 @@ struct objio_state {
 	struct objio_segment *objio_seg;
 };
 
+/* Send and wait for a get_device_info of devices in the layout,
+   then look them up with the osd_initiator library */
+static struct osd_dev *_device_lookup(struct pnfs_layout_type *pnfslay,
+			       struct objio_segment *objio_seg, unsigned comp)
+{
+	struct pnfs_osd_layout *layout = objio_seg->layout;
+	struct pnfs_osd_deviceaddr *deviceaddr;
+	struct pnfs_deviceid *d_id;
+	struct osd_dev *od;
+	struct osd_dev_info odi;
+	struct objio_mount_type *omt = PNFS_MOUNTID(pnfslay)->mountid;
+	int err;
+
+	d_id = &layout->olo_comps[comp].oc_object_id.oid_device_id;
+
+	od = _dev_list_find(omt, d_id);
+	if (od)
+		return od;
+
+	err = objlayout_get_deviceinfo(pnfslay, d_id, &deviceaddr);
+	if (unlikely(err)) {
+		dprintk("%s: objlayout_get_deviceinfo=>%d\n", __func__, err);
+		return ERR_PTR(err);
+	}
+
+	odi.systemid_len = deviceaddr->oda_systemid.len;
+	if (odi.systemid_len > sizeof(odi.systemid)) {
+		err = -EINVAL;
+		goto out;
+	} else if (odi.systemid_len)
+		memcpy(odi.systemid, deviceaddr->oda_systemid.data,
+		       odi.systemid_len);
+	odi.osdname_len	 = deviceaddr->oda_osdname.len;
+	odi.osdname	 = (u8 *)deviceaddr->oda_osdname.data;
+
+	if (!odi.osdname_len && !odi.systemid_len) {
+		err = -ENODEV;
+		goto out;
+	}
+
+	od = osduld_info_lookup(&odi);
+	if (unlikely(IS_ERR(od))) {
+		err = PTR_ERR(od);
+		goto out;
+	}
+
+	_dev_list_add(omt, d_id, od);
+
+out:
+	dprintk("%s: return=%d\n", __func__, err);
+	objlayout_put_deviceinfo(deviceaddr);
+	return err ? ERR_PTR(err) : od;
+}
+
+static int objio_devices_lookup(struct pnfs_layout_type *pnfslay,
+	struct objio_segment *objio_seg)
+{
+	struct pnfs_osd_layout *layout = objio_seg->layout;
+	unsigned i, num_comps = layout->olo_num_comps;
+	int err;
+
+	/* lookup all devices */
+	for (i = 0; i < num_comps; i++) {
+		struct osd_dev *od;
+
+		od = _device_lookup(pnfslay, objio_seg, i);
+		if (unlikely(IS_ERR(od))) {
+			err = PTR_ERR(od);
+			goto out;
+		}
+		objio_seg->ods[i] = od;
+	}
+	objio_seg->num_comps = num_comps;
+	err = 0;
+
+out:
+	dprintk("%s: return=%d\n", __func__, err);
+	return err;
+}
+
 int objio_alloc_lseg(void **outp,
 	struct pnfs_layout_type *pnfslay,
 	struct pnfs_layout_segment *lseg,
 	struct pnfs_osd_layout *layout)
 {
 	struct objio_segment *objio_seg;
+	int err;
 
-	objio_seg = kzalloc(sizeof(*objio_seg), GFP_KERNEL);
+	objio_seg = kzalloc(sizeof(*objio_seg) +
+			(layout->olo_num_comps - 1) * sizeof(objio_seg->ods[0]),
+			GFP_KERNEL);
 	if (!objio_seg)
 		return -ENOMEM;
 
 	objio_seg->layout = layout;
+	err = objio_devices_lookup(pnfslay, objio_seg);
+	if (err)
+		goto free_seg;
 
 	*outp = objio_seg;
 	return 0;
+
+free_seg:
+	dprintk("%s: Error: return %d\n", __func__, err);
+	kfree(objio_seg);
+	*outp = NULL;
+	return err;
 }
 
 void objio_free_lseg(void *p)
@@ -235,11 +403,14 @@ void *objio_init_mt(void)
 	if (!omt)
 		return ERR_PTR(-ENOMEM);
 
+	INIT_LIST_HEAD(&omt->dev_list);
+	spin_lock_init(&omt->dev_list_lock);
 	return omt;
 }
 
 void objio_fini_mt(void *mountid)
 {
+	_dev_list_remove_all(mountid);
 	kfree(mountid);
 }
 
