@@ -767,6 +767,7 @@ nfsd4_cb_recall(struct nfs4_delegation *dp)
 				&nfsd4_cb_recall_ops, dp);
 out:
 	if (status) {
+		kfree(args);
 		put_nfs4_client(clp);
 		nfs4_put_delegation(dp);
 	}
