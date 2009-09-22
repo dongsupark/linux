@@ -4258,8 +4258,6 @@ nfs4_recoverydir(void)
 	return user_recovery_dirname;
 }
 
-#if defined(CONFIG_PNFSD)
-
 /*
  * Called when leasetime is changed.
  *
@@ -4277,6 +4275,8 @@ nfs4_reset_lease(time_t leasetime)
 {
 	user_lease_time = leasetime;
 }
+
+#if defined(CONFIG_PNFSD)
 
 /* Create a layoutrecall structure for each client based on the
  * original structure. */
