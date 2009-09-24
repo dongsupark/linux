@@ -390,6 +390,12 @@ static void nfs41_sequence_done(struct nfs_client *clp,
 		spin_unlock(&clp->cl_lock);
 		return;
 	}
+
+	/* Do not free slot if retried while operation was in progress */
+	if (res->sr_status == -NFS4ERR_DELAY) {
+		dprintk("%s: Operation in progress\n", __func__);
+		return;
+	}
 out:
 	/* The session may be reset by one of the error handlers. */
 	dprintk("%s: Error %d free the slot \n", __func__, res->sr_status);
