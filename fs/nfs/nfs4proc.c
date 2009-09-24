@@ -423,6 +423,12 @@ static void nfs41_sequence_done(struct nfs_client *clp,
 		if (atomic_read(&clp->cl_count) > 1)
 			nfs41_handle_sequence_flag_errors(clp, res->sr_status_flags);
 	}
+
+	/* Do not free slot if retried while operation was in progress */
+	if (res->sr_status == -NFS4ERR_DELAY) {
+		printk("WARNING: %s: Operation in progress: please report to pnfs@linux-nfs.org if you saw this message\n", __func__);
+		return;
+	}
 out:
 	/* The session may be reset by one of the error handlers. */
 	dprintk("%s: Error %d free the slot \n", __func__, res->sr_status);
