@@ -503,7 +503,7 @@ filelayout_set_layout(struct nfs4_filelayout *flo,
 
 	if (fl->num_fh * sizeof(struct nfs_fh) > 2*PAGE_SIZE) {
 		fl->fh_array = vmalloc(fl->num_fh * sizeof(struct nfs_fh));
-		if (!fl->fh_array)
+		if (fl->fh_array)
 			memset(fl->fh_array, 0,
 				fl->num_fh * sizeof(struct nfs_fh));
 	} else {
