@@ -768,12 +768,9 @@ encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 	spin_unlock(&bl->bl_ext_lock);
 
 	dprintk("%s found %i ranges\n", __func__, count);
-	if (count == 0)
-		return 0;
 	/* XDR encode the ranges found */
 	xdr_start = p = xdr_reserve_space(xdr, 8);
 	p++;
-
 	WRITE32(count);
 	list_for_each_entry_safe(lce, save, ranges, bse_node) {
 		p = xdr_reserve_space(xdr, 7 * 4 + sizeof(lce->bse_devid.data));
