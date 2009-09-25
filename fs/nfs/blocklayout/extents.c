@@ -745,9 +745,9 @@ encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 {
 	sector_t start, end;
 	struct pnfs_block_short_extent *lce, *save;
-	LIST_HEAD(ranges);
 	unsigned int count;
-	struct bl_layoutupdate_data *bld;
+	struct bl_layoutupdate_data *bld = arg->layoutdriver_data;
+	struct list_head *ranges = &bld->ranges;
 	__be32 *p, *xdr_start;
 
 	dprintk("%s enter\n", __func__);
@@ -760,7 +760,7 @@ encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 	 * entire block to be marked WRITTEN before it can be added.
 	 */
 	spin_lock(&bl->bl_ext_lock);
-	list_splice_init(&bl->bl_commit, &ranges);
+	list_splice_init(&bl->bl_commit, ranges);
 	count = bl->bl_count;
 	bl->bl_count = 0;
 	/* Want to adjust for possible truncate */
@@ -775,7 +775,7 @@ encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 	p++;
 
 	WRITE32(count);
-	list_for_each_entry_safe(lce, save, &ranges, bse_node) {
+	list_for_each_entry_safe(lce, save, ranges, bse_node) {
 		p = xdr_reserve_space(xdr, 7 * 4 + sizeof(lce->bse_devid.data));
 
 		WRITE_DEVID(&lce->bse_devid);
@@ -786,9 +786,6 @@ encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 	}
 
 	*xdr_start = cpu_to_be32((xdr->p - xdr_start - 1) * 4);
-
-	bld = arg->layoutdriver_data;
-	bld->ranges = ranges;
 	return 0;
 }
 
