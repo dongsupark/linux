@@ -1272,6 +1272,10 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 		/* Can't do anything about it except throw an error. */
 		task->tk_status = -EIO;
 	}
+#ifdef CONFIG_PNFS
+	if (data->pdata.pnfsflags & PNFS_NO_RPC)
+		return 0;
+#endif
 	nfs4_sequence_free_slot(clp, &data->res.seq_res);
 	return 0;
 }

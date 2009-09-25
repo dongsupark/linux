@@ -403,9 +403,12 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 #endif /* CONFIG_PNFS */
 	return;
 out:
+#ifdef CONFIG_PNFS
+	if (data->pdata.pnfsflags & PNFS_NO_RPC)
+		return;
+#endif
 	nfs4_sequence_free_slot(clp, &data->res.seq_res);
 	return;
-
 }
 
 /*
