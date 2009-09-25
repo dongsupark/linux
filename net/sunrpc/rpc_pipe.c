@@ -824,46 +824,6 @@ err_dput:
 }
 EXPORT_SYMBOL_GPL(rpc_mkpipe);
 
-#ifdef CONFIG_SPNFS
-struct dentry *
-rpc_mkpipe_compat(char *path, void *private, struct rpc_pipe_ops *ops,
-		  int flags)
-{
-	struct nameidata nd;
-	struct dentry *dentry;
-	struct inode *dir, *inode;
-	struct rpc_inode *rpci;
-
-	dentry = rpc_lookup_negative(path, &nd);
-	if (IS_ERR(dentry))
-		return dentry;
-	dir = nd.path.dentry->d_inode;
-	inode = rpc_get_inode(dir->i_sb, S_IFSOCK | S_IRUSR | S_IWUSR);
-	if (!inode)
-		goto err_dput;
-	inode->i_ino = iunique(dir->i_sb, 100);
-	inode->i_fop = &rpc_pipe_fops;
-	d_instantiate(dentry, inode);
-	rpci = RPC_I(inode);
-	rpci->private = private;
-	rpci->flags = flags;
-	rpci->ops = ops;
-	fsnotify_create(dir, dentry);
-	dget(dentry);
-out:
-	mutex_unlock(&dir->i_mutex);
-	rpc_release_path(&nd);
-	return dentry;
-err_dput:
-	dput(dentry);
-	dentry = ERR_PTR(-ENOMEM);
-	printk(KERN_WARNING "%s: %s() failed to create pipe %s (errno = %d)\n",
-			__FILE__, __FUNCTION__, path, -ENOMEM);
-	goto out;
-}
-EXPORT_SYMBOL(rpc_mkpipe_compat);
-#endif /* CONFIG_SPNFS */
-
 /**
  * rpc_unlink - remove a pipe
  * @dentry: dentry for the pipe, as returned from rpc_mkpipe

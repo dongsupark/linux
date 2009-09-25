@@ -47,6 +47,7 @@
 #include <linux/socket.h>
 #include <linux/in.h>
 #include <linux/sched.h>
+#include <linux/namei.h>
 
 #include <linux/sunrpc/clnt.h>
 #include <linux/workqueue.h>
@@ -92,19 +93,23 @@ int
 nfsd_spnfs_new(void)
 {
 	struct spnfs *spnfs;
+	struct nameidata nd;
+	char *path = "/var/lib/nfs/rpc_pipefs/nfs"; /* XXX */
+	int rc;
 
 	if (global_spnfs != NULL)
 		return -EEXIST;
+
+	rc = path_lookup(path, 0, &nd);
+	if (rc != 0)
+		return -ENOENT;
 
 	spnfs = kzalloc(sizeof(*spnfs), GFP_KERNEL);
 	if (spnfs == NULL)
 		return -ENOMEM;
 
-	snprintf(spnfs->spnfs_path, sizeof(spnfs->spnfs_path),
-	    "%s/spnfs", "/nfs");
-
-	spnfs->spnfs_dentry = rpc_mkpipe_compat(spnfs->spnfs_path,
-	    spnfs, &spnfs_upcall_ops, 0);
+	spnfs->spnfs_dentry = rpc_mkpipe(nd.path.dentry, "spnfs", spnfs,
+					 &spnfs_upcall_ops, 0);
 	if (IS_ERR(spnfs->spnfs_dentry)) {
 		kfree(spnfs);
 		return -EPIPE;

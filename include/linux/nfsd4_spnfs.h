@@ -300,7 +300,6 @@ struct spnfs_config {
 
 /* pipe mgmt structure.  messages flow through here */
 struct spnfs {
-	char			spnfs_path[48];   /* path to pipe */
 	struct dentry		*spnfs_dentry;    /* dentry for pipe */
 	wait_queue_head_t	spnfs_wq;
 	struct spnfs_msg	spnfs_im;         /* spnfs message */
