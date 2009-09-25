@@ -68,6 +68,7 @@ struct visible_block_device {
 	struct list_head	vi_node;
 	struct block_device	*vi_bdev;
 	int			vi_mapped;
+	int			vi_put_done;
 };
 
 enum blk_vol_type {

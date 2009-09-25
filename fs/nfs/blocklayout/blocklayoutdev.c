@@ -91,6 +91,7 @@ static int alloc_add_disk(struct block_device *blk_dev, struct list_head *dlist)
 	}
 	vis_dev->vi_bdev = blk_dev;
 	vis_dev->vi_mapped = 0;
+	vis_dev->vi_put_done = 0;
 	list_add(&vis_dev->vi_node, dlist);
 	return 0;
 }
@@ -182,7 +183,7 @@ void nfs4_blk_destroy_disk_list(struct list_head *dlist)
 				MAJOR(vis_dev->vi_bdev->bd_dev),
 				MINOR(vis_dev->vi_bdev->bd_dev));
 		list_del(&vis_dev->vi_node);
-		if (!vis_dev->vi_mapped)
+		if (!vis_dev->vi_put_done)
 			nfs4_blkdev_put(vis_dev->vi_bdev);
 		kfree(vis_dev);
 	}
@@ -385,7 +386,10 @@ static int map_sig_to_device(struct pnfs_blk_sig *sig,
 			/* We no longer need to scan this device, and
 			 * we need to "put" it before creating metadevice.
 			 */
-			nfs4_blkdev_put(vis_dev->vi_bdev);
+			if (!vis_dev->vi_put_done) {
+				vis_dev->vi_put_done = 1;
+				nfs4_blkdev_put(vis_dev->vi_bdev);
+			}
 			break;
 		}
 	}
