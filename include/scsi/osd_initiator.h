@@ -72,6 +72,7 @@ struct osd_dev *osduld_info_lookup(const struct osd_dev_info *odi);
 void osduld_put_device(struct osd_dev *od);
 
 const struct osd_dev_info *osduld_device_info(struct osd_dev *od);
+bool osduld_device_same(struct osd_dev *od, const struct osd_dev_info *odi);
 
 /* Add/remove test ioctls from external modules */
 typedef int (do_test_fn)(struct osd_dev *od, unsigned cmd, unsigned long arg);

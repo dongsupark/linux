@@ -280,6 +280,19 @@ const struct osd_dev_info *osduld_device_info(struct osd_dev *od)
 }
 EXPORT_SYMBOL(osduld_device_info);
 
+bool osduld_device_same(struct osd_dev *od, const struct osd_dev_info *odi)
+{
+	struct osd_uld_device *oud = od->file->private_data;
+
+	return (oud->odi.systemid_len == odi->systemid_len) &&
+		_the_same_or_null(oud->odi.systemid, oud->odi.systemid_len,
+				 odi->systemid, odi->systemid_len) &&
+		(oud->odi.osdname_len == odi->osdname_len) &&
+		_the_same_or_null(oud->odi.osdname, oud->odi.osdname_len,
+				  odi->osdname, odi->osdname_len);
+}
+EXPORT_SYMBOL(osduld_device_same);
+
 /*
  * Scsi Device operations
  */

@@ -142,8 +142,8 @@ static int _osd_get_print_system_info(struct osd_dev *od,
 	if (odi->osdname_len) {
 		odi->osdname = kzalloc(odi->osdname_len + 1, GFP_KERNEL);
 		memcpy(odi->osdname, get_attrs[a].val_ptr, odi->osdname_len);
-	} else
-		odi->osdname = NULL;
+	} else /* Avoid NULL for memcmp optimization 0-length is good enough */
+		odi->osdname = odi->systemid;
 	OSD_INFO("OSD_NAME               [%s]\n", odi->osdname);
 	a++;
 
