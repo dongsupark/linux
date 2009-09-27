@@ -323,7 +323,7 @@ objio_free_lseg(void *p)
  * I/O routines
  */
 int
-objio_alloc_io_state(struct objlayout_io_state **outp)
+objio_alloc_io_state(void *seg, struct objlayout_io_state **outp)
 {
 	struct panfs_shim_io_state *p;
 
@@ -412,6 +412,7 @@ panfs_shim_read_done(
 	pan_status_t rc)
 {
 	struct panfs_shim_io_state *state = arg1;
+	ssize_t status;
 
 	dprintk("%s: Begin\n", __func__);
 	if (!res_p)
@@ -419,18 +420,17 @@ panfs_shim_read_done(
 	if (rc == PAN_SUCCESS)
 		rc = res_p->result;
 	if (rc == PAN_SUCCESS) {
-		state->ol_state.status = res_p->length;
+		status = res_p->length;
 		BUG_ON(state->ol_state.status < 0);
 		BUG_ON((pan_stor_len_t)state->ol_state.status !=
 		       state->u.read.res.length);
 	} else {
-		state->ol_state.status = -panfs_export_ops->convert_rc(rc);
-		dprintk("%s: pan_sam_read rc %d: status %d\n",
-			__func__, rc, state->ol_state.status);
+		status = -panfs_export_ops->convert_rc(rc);
+		dprintk("%s: pan_sam_read rc %d: status %Zd\n",
+			__func__, rc, status);
 	}
-	dprintk("%s: Return status %d rc %d\n", __func__,
-		state->ol_state.status, rc);
-	objlayout_read_done(&state->ol_state, true);
+	dprintk("%s: Return status %Zd rc %d\n", __func__, status, rc);
+	objlayout_read_done(&state->ol_state, status, true);
 }
 
 ssize_t
@@ -489,6 +489,7 @@ panfs_shim_write_done(
 	pan_status_t rc)
 {
 	struct panfs_shim_io_state *state = arg1;
+	ssize_t status;
 
 	dprintk("%s: Begin\n", __func__);
 	if (!res_p)
@@ -497,20 +498,19 @@ panfs_shim_write_done(
 		rc = res_p->result;
 	if (rc == PAN_SUCCESS) {
 		state->ol_state.committed = NFS_FILE_SYNC;
-		state->ol_state.status = res_p->length;
+		status = res_p->length;
 		BUG_ON(state->ol_state.status < 0);
 		BUG_ON((pan_stor_len_t)state->ol_state.status !=
 		       state->u.write.res.length);
 		objlayout_add_delta_space_used(&state->ol_state,
 					       res_p->delta_capacity_used);
 	} else {
-		state->ol_state.status = -panfs_export_ops->convert_rc(rc);
-		dprintk("%s: pan_sam_write rc %u: status %d\n",
-			__func__, rc, state->ol_state.status);
+		status = -panfs_export_ops->convert_rc(rc);
+		dprintk("%s: pan_sam_write rc %u: status %Zd\n",
+			__func__, rc, status);
 	}
-	dprintk("%s: Return status %d rc %d\n", __func__,
-		state->ol_state.status, rc);
-	objlayout_write_done(&state->ol_state, true);
+	dprintk("%s: Return status %Zd rc %d\n", __func__, status, rc);
+	objlayout_write_done(&state->ol_state, status, true);
 }
 
 ssize_t

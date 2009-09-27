@@ -137,17 +137,31 @@ out:
 struct objio_segment {
 	struct pnfs_osd_layout *layout;
 
-	/* TODO: per device info (keep in an array) */
-	struct osd_dev	*od;
+	unsigned num_comps;
+	/* variable length */
+	struct osd_dev	*ods[1];
 };
+
+struct objio_state;
+typedef ssize_t (*objio_done_fn)(struct objio_state *ios);
 
 struct objio_state {
 	struct objio_segment *objio_seg;
 
-	/* TODO: per device info (will be an array of) */
+	struct kref kref;
+	objio_done_fn done;
+	void *private;
+
 	unsigned expected_pages;
-	struct bio *bio;
 	unsigned long length;
+
+	/* per_dev points to an array that is allocated at end of
+	 * objio_state
+	 */
+	struct _objio_per_comp {
+		struct bio *bio;
+		struct osd_request *or;
+	} *per_dev;
 
 	/* Generic layer (variable length, keep last) */
 	struct objlayout_io_state ol_state;
@@ -155,26 +169,28 @@ struct objio_state {
 
 /* Send and wait for a get_device_info of devices in the layout,
    then look them up with the osd_initiator library */
-static int objio_devices_lookup(struct pnfs_layout_type *pnfslay,
-	struct objio_segment *objio_seg)
+static struct osd_dev *_device_lookup(struct pnfs_layout_type *pnfslay,
+			       struct objio_segment *objio_seg)
 {
 	struct pnfs_osd_layout *layout = objio_seg->layout;
 	struct pnfs_osd_deviceaddr *deviceaddr;
 	struct pnfs_deviceid *d_id;
+	struct osd_dev *od;
 	struct osd_dev_info odi;
 	struct objio_mount_type *omt = PNFS_MOUNTID(pnfslay)->mountid;
 	int err;
 
-	/* TODO: for_all layout->olo_comps[i] */
 	d_id = &layout->olo_comps[0].oc_object_id.oid_device_id;
 
-	objio_seg->od = _dev_list_find(omt, d_id);
-	if (objio_seg->od)
-		return 0;
+	od = _dev_list_find(omt, d_id);
+	if (od)
+		return od;
 
 	err = objlayout_get_deviceinfo(pnfslay, d_id, &deviceaddr);
-	if (err)
-		return err;
+	if (unlikely(err)) {
+		dprintk("%s: objlayout_get_deviceinfo=>%d\n", __func__, err);
+		return ERR_PTR(err);
+	}
 
 	odi.systemid_len = deviceaddr->oda_systemid.len;
 	if (odi.systemid_len > sizeof(odi.systemid)) {
@@ -191,17 +207,55 @@ static int objio_devices_lookup(struct pnfs_layout_type *pnfslay,
 		goto out;
 	}
 
-	objio_seg->od = osduld_info_lookup(&odi);
-	if (IS_ERR(objio_seg->od)) {
-		err = PTR_ERR(objio_seg->od);
+	od = osduld_info_lookup(&odi);
+	if (unlikely(IS_ERR(od))) {
+		err = PTR_ERR(od);
 		goto out;
 	}
 
-	_dev_list_add(omt, d_id, objio_seg->od);
+	_dev_list_add(omt, d_id, od);
 
 out:
 	dprintk("%s: return=%d\n", __func__, err);
 	objlayout_put_deviceinfo(deviceaddr);
+	return err ? ERR_PTR(err) : od;
+}
+
+static int objio_devices_lookup(struct pnfs_layout_type *pnfslay,
+	struct objio_segment *objio_seg)
+{
+	struct pnfs_osd_layout *layout = objio_seg->layout;
+	unsigned i, num_comps = layout->olo_num_comps;
+	int err;
+
+	/* verify raid structure */
+	/* FIXME: only support very limmited options. .eg Mirror */
+	if ((layout->olo_map.odm_num_comps != num_comps) ||
+	    (layout->olo_map.odm_stripe_unit != PAGE_SIZE) ||
+	    (layout->olo_map.odm_group_width != 0) ||
+	    (layout->olo_map.odm_group_depth != 0) ||
+	    (layout->olo_map.odm_mirror_cnt != num_comps - 1) ||
+	    (layout->olo_map.odm_raid_algorithm != PNFS_OSD_RAID_0)) {
+		err = -ENOTSUPP;
+		goto out;
+	}
+
+	/* lookup all devices */
+	for (i = 0; i < num_comps; i++) {
+		struct osd_dev *od;
+
+		od = _device_lookup(pnfslay, objio_seg);
+		if (unlikely(IS_ERR(od))) {
+			err = PTR_ERR(od);
+			goto out;
+		}
+		objio_seg->ods[i] = od;
+	}
+	objio_seg->num_comps = num_comps;
+	err = 0;
+
+out:
+	dprintk("%s: return=%d\n", __func__, err);
 	return err;
 }
 
@@ -213,7 +267,9 @@ int objio_alloc_lseg(void **outp,
 	struct objio_segment *objio_seg;
 	int err;
 
-	objio_seg = kzalloc(sizeof(*objio_seg), GFP_KERNEL);
+	objio_seg = kzalloc(sizeof(*objio_seg) +
+			(layout->olo_num_comps - 1) * sizeof(objio_seg->ods[0]),
+			GFP_KERNEL);
 	if (!objio_seg)
 		return -ENOMEM;
 
@@ -238,15 +294,23 @@ void objio_free_lseg(void *p)
 	kfree(objio_seg);
 }
 
-int objio_alloc_io_state(struct objlayout_io_state **outp)
+int objio_alloc_io_state(void *seg,
+			 struct objlayout_io_state **outp)
 {
+	struct objio_segment *oseg = seg;
 	struct objio_state *ios;
+	const unsigned first_size = sizeof(*ios) +
+		      (oseg->num_comps - 1) * sizeof(ios->ol_state.ioerrs[0]);
+	const unsigned sec_size = oseg->num_comps * sizeof(*ios->per_dev);
 
-	ios = kzalloc(sizeof(*ios), GFP_KERNEL);
+	dprintk("%s: num_comps=%d\n", __func__, oseg->num_comps);
+	ios = kzalloc(first_size + sec_size, GFP_KERNEL);
 	if (unlikely(!ios))
 		return -ENOMEM;
 
-	ios->ol_state.num_comps = 1;
+	ios->per_dev = ((void *)ios) + first_size;
+
+	ios->ol_state.num_comps = oseg->num_comps;
 	*outp = &ios->ol_state;
 	return 0;
 }
@@ -269,34 +333,25 @@ static bool _is_osd_security_code(int code)
 }
 
 /*
- * _check_io_resid()
+ * _check_or()
  *     Insures consistent results from IO operations. Translate osd
  *     error codes to Linux codes.
- * At input:
- *    *@in_resid and/or *@out_resid contain full requested IO length.
- * At output:
- *    1. If no error @in_resid/@out_resid == Zero.
- *    2. On Error: 0 < resid <= total_length (see input)
  */
-static int _check_io_resid(struct osd_request *or,
-	u64 *in_resid, u64 *out_resid, enum pnfs_osd_errno *osd_error)
+static int _check_or(struct osd_request *or, int *osd_error)
 {
 	struct osd_sense_info osi = {.key = 0};  /* FIXME: bug in libosd */
 	int ret = osd_req_decode_sense(or, &osi);
 
-	if (likely(!ret)) {
-		if (in_resid)
-			*in_resid = 0;
-		if (out_resid)
-			*out_resid = 0;
-
+	if (likely(!ret))
 		return 0;
-	}
 
 	if (osi.additional_code == scsi_invalid_field_in_cdb) {
 		if (osi.cdb_field_offset == OSD_CFO_OBJECT_ID) {
 			*osd_error = PNFS_OSD_ERR_NOT_FOUND;
 			ret = -ENOENT;
+		} else if (osi.cdb_field_offset == OSD_CFO_STARTING_BYTE) {
+			*osd_error = 0;
+			ret = -EFAULT; /* we will recover from this */
 		} else if (osi.cdb_field_offset == OSD_CFO_PERMISSIONS) {
 			*osd_error = PNFS_OSD_ERR_NO_ACCESS;
 			ret = -EACCES;
@@ -325,103 +380,84 @@ static int _check_io_resid(struct osd_request *or,
 		ret = -EIO;
 	}
 
-	if (in_resid) {
-		unsigned resid = or->in.req ? or->in.req->resid_len : 0;
-
-		if (resid)
-			*in_resid = resid;
-	}
-
-	if (out_resid) {
-		unsigned resid = or->out.req ? or->out.req->resid_len : 0;
-
-		if (resid)
-			*out_resid = resid;
-	}
-
 	return ret;
 }
 
-/*
- * Perform a synchronous OSD operation.
- */
-static int _sync_op(struct osd_request *or, uint8_t *credential)
+static int _io_check(struct objio_state *ios, bool is_write)
 {
-	int ret;
+	int last_error = 0;
+	int last_ret = 0;
+	int i;
 
-	ret = osd_finalize_request(or, 0, credential, NULL);
-	if (ret) {
-		dprintk("Faild to osd_finalize_request() => %d\n", ret);
-		return ret;
+	for (i = 0; i <  ios->ol_state.num_comps; i++) {
+		int osd_error;
+		int ret = _check_or(ios->per_dev[i].or, &osd_error);
+
+		if (likely(!ret))
+			continue;
+
+		objlayout_io_set_result(&ios->ol_state, i, osd_error,
+					ios->ol_state.offset, ios->length,
+					is_write);
+		/* TODO: If blocks are passed object-eof, zero pages.
+		if (unlikely(ret == -EFAULT)) {
+		}
+		*/
+
+		if (err_prio(osd_error) >= err_prio(last_error)) {
+			last_error = osd_error;
+			last_ret = ret;
+		}
 	}
 
-	ret = osd_execute_request(or);
-
-	if (ret)
-		dprintk("osd_execute_request() => %d\n", ret);
-	/* osd_req_decode_sense(or, ret); */
-	return ret;
-}
-
-/*
- * Perform an asynchronous OSD operation.
- */
-static int _async_op(struct osd_request *or, osd_req_done_fn *async_done,
-		   void *caller_context, u8 *cred)
-{
-	int ret;
-
-	ret = osd_finalize_request(or, 0, cred, NULL);
-	if (ret) {
-		dprintk("Faild to osd_finalize_request() => %d\n", ret);
-		return ret;
-	}
-
-	ret = osd_execute_request_async(or, async_done, caller_context);
-
-	if (ret)
-		dprintk("osd_execute_request_async() => %d\n", ret);
-	return ret;
+	return last_ret;
 }
 
 
 /*
  * Common IO state helpers.
  */
-static int _io_try_alloc(struct objio_state *ios, bool do_write)
+static struct bio *_try_alloc_bio(unsigned expected_pages,
+				     struct bio *bio_clone, bool do_write)
 {
-	int pages = min_t(unsigned, ios->expected_pages, BIO_MAX_PAGES_KMALLOC);
+	struct bio *bio;
+	int pages = min_t(unsigned, expected_pages, BIO_MAX_PAGES_KMALLOC);
 
-	for (; pages; pages >>= 1) {
-		ios->bio = bio_kmalloc(GFP_KERNEL, pages);
-		if (likely(ios->bio)) {
-			if (do_write) {
-				/* FIXME: bio_set_dir() */
-				ios->bio->bi_rw |= (1 << BIO_RW);
-			}
-			return 0;
-		}
+	BUG_ON(!pages);
+
+	bio = bio_kmalloc(GFP_KERNEL, pages);
+	if (unlikely(!bio))
+		return NULL;
+
+	if (bio_clone) {
+		__bio_clone(bio, bio_clone);
+		bio->bi_bdev = NULL;
+		bio->bi_next = NULL;
+	} else if (do_write) {
+		/* FIXME: bio_set_dir() */
+		bio->bi_rw |= (1 << BIO_RW);
 	}
 
-	return -ENOMEM;
+	return bio;
 }
 
 static void _io_free(struct objio_state *ios)
 {
-	bio_put(ios->bio);
-	ios->bio = NULL;
-}
+	unsigned i;
 
-static int _io_add_page(struct objio_state *ios, struct page *page,
-			unsigned len, unsigned start)
-{
-	int added_len = bio_add_pc_page(osd_request_queue(ios->objio_seg->od),
-					ios->bio, page, len, start);
-	if (unlikely(len != added_len))
-		return -ENOMEM;
+	for (i = 0; i < ios->ol_state.num_comps; i++) {
+		struct _objio_per_comp *per_dev = &ios->per_dev[i];
 
-	ios->length += len;
-	return 0;
+		if (per_dev->or) {
+			osd_end_request(per_dev->or);
+			per_dev->or = NULL;
+		}
+
+		if (per_dev->bio) {
+			bio_put(per_dev->bio);
+			per_dev->bio = NULL;
+		}
+	}
 }
 
 static int _io_rw_pagelist(struct objio_state *ios, bool do_write)
@@ -432,43 +468,121 @@ static int _io_rw_pagelist(struct objio_state *ios, bool do_write)
 	unsigned pgbase = ios->ol_state.pgbase;
 	unsigned nr_pages = ios->ol_state.nr_pages;
 	struct page **pages = ios->ol_state.pages;
+	struct bio *master_bio;
+	unsigned i;
 	int ret;
 
 	ios->objio_seg = objio_seg;
 	ios->expected_pages = nr_pages;
 
-	ret = _io_try_alloc(ios, do_write);
-	if (ret)
-		return ret;
+	master_bio = _try_alloc_bio(ios->expected_pages, NULL, do_write);
+	if (unlikely(!master_bio))
+		return -ENOMEM;
+
+	ios->per_dev[0].bio = master_bio;
 
 	while (count) {
-		unsigned this_count;
+		unsigned this_count, added_len;
 
 		this_count = min(count, PAGE_SIZE - pgbase);
-		ret = _io_add_page(ios, *pages, this_count, pgbase);
-		if (unlikely(ret))
+
+		added_len = bio_add_pc_page(
+			osd_request_queue(ios->objio_seg->ods[0]),
+			master_bio, *pages, this_count, pgbase);
+		if (unlikely(this_count != added_len))
 			break;
 
 		pgbase = 0;
 		++pages;
+		ios->length += this_count;
 		count -= this_count;
 	}
 
-	return ios->length ? 0 : ret;
+	/* this should never happen */
+	WARN_ON(!ios->length);
+
+	ret = 0;
+	if (!do_write)
+		goto out;
+
+	for (i = 1; i < ios->ol_state.num_comps; i++) {
+		struct _objio_per_comp *per_dev = &ios->per_dev[i];
+
+		per_dev->bio = _try_alloc_bio(master_bio->bi_max_vecs,
+					      master_bio, do_write);
+		if (unlikely(!per_dev->bio)) {
+			ret = -ENOMEM;
+			goto out;
+		}
+	}
+
+out:
+	if (unlikely(ret))
+		_io_free(ios);
+
+	return ret;
+}
+
+static ssize_t _sync_done(struct objio_state *ios)
+{
+	struct completion *waiting = ios->private;
+
+	complete(waiting);
+	return 0;
+}
+
+static void _last_io(struct kref *kref)
+{
+	struct objio_state *ios = container_of(kref, struct objio_state, kref);
+
+	ios->done(ios);
+}
+
+static void _done_io(struct osd_request *or, void *p)
+{
+	struct objio_state *ios = p;
+
+	kref_put(&ios->kref, _last_io);
+}
+
+static ssize_t _io_exec(struct objio_state *ios)
+{
+	DECLARE_COMPLETION_ONSTACK(wait);
+	ssize_t status = 0; /* async status */
+	unsigned i;
+	objio_done_fn done = ios->done;
+	bool sync = ios->ol_state.sync;
+
+	if (sync) {
+		ios->done = _sync_done;
+		ios->private = &wait;
+	}
+
+	kref_init(&ios->kref);
+
+	for (i = 0; i < ios->ol_state.num_comps; i++) {
+		kref_get(&ios->kref);
+		osd_execute_request_async(ios->per_dev[i].or, _done_io, ios);
+	}
+
+	kref_put(&ios->kref, _last_io);
+
+	if (sync) {
+		wait_for_completion(&wait);
+		status = done(ios);
+	}
+
+	return status;
 }
 
 /*
  * read
  */
-static ssize_t _read_done_ret(struct osd_request *or, struct objio_state *ios)
+static ssize_t _read_done(struct objio_state *ios)
 {
-	u64 resid = ios->length;
-	u64 offset;
-	enum pnfs_osd_errno osd_error;
 	ssize_t status;
-	int ret = _check_io_resid(or, &resid, NULL, &osd_error);
+	int ret = _io_check(ios, false);
 
-	osd_end_request(or);
 	_io_free(ios);
 
 	if (likely(!ret))
@@ -476,59 +590,52 @@ static ssize_t _read_done_ret(struct osd_request *or, struct objio_state *ios)
 	else
 		status = ret;
 
-	offset = ios->ol_state.offset + ios->length - resid;
-	objlayout_io_set_result(&ios->ol_state, 0/*index*/,
-				status, osd_error, offset, resid, false);
-
-	objlayout_read_done(&ios->ol_state, ios->ol_state.sync);
+	objlayout_read_done(&ios->ol_state, status, ios->ol_state.sync);
 	return status;
-}
-
-static void _read_done(struct osd_request *or, void *p)
-{
-	struct objio_state *ios = p;
-
-	_read_done_ret(or, ios);
 }
 
 static ssize_t _read_exec(struct objio_state *ios)
 {
-	struct osd_request *or = NULL;
-	struct pnfs_osd_object_cred *cred =
-					&ios->objio_seg->layout->olo_comps[0];
-	struct osd_obj_id obj = {cred->oc_object_id.oid_partition_id,
-					cred->oc_object_id.oid_object_id};
-	u8 *caps;
-	int ret;
+	int i, ret;
 
-	or = osd_start_request(ios->objio_seg->od, GFP_KERNEL);
-	if (unlikely(!or)) {
-		ret = -ENOMEM;
-		goto err;
+	/* FIXME: Currently Mirror read from single device */
+	for (i = 0; i < 1; i++) {
+		struct osd_request *or = NULL;
+		struct pnfs_osd_object_cred *cred =
+					&ios->objio_seg->layout->olo_comps[i];
+		struct osd_obj_id obj = {cred->oc_object_id.oid_partition_id,
+					 cred->oc_object_id.oid_object_id};
+		u8 *caps;
+
+		or = osd_start_request(ios->objio_seg->ods[i], GFP_KERNEL);
+		if (unlikely(!or)) {
+			ret = -ENOMEM;
+			goto err;
+		}
+		ios->per_dev[i].or = or;
+
+		osd_req_read(or, &obj, ios->ol_state.offset,
+			     ios->per_dev[i].bio, ios->length);
+		caps = cred->oc_cap.cred;
+
+		ret = osd_finalize_request(or, 0, caps, NULL);
+		if (ret) {
+			dprintk("%s: Faild to osd_finalize_request() => %d\n",
+				__func__, ret);
+			osd_end_request(or);
+			goto err;
+		}
+
+		dprintk("%s: [%d] obj=0x%llx start=0x%llx length=0x%lx\n",
+			  __func__, i, obj.id, _LLU(ios->ol_state.offset),
+			  ios->length);
 	}
 
-	osd_req_read(or, &obj, ios->ol_state.offset, ios->bio, ios->length);
-	caps = cred->oc_cap.cred;
-
-	dprintk("%s obj=0x%llx start=0x%llx length=0x%lx sync=%d\n",
-		  __func__, obj.id, _LLU(ios->ol_state.offset),
-		  ios->length, ios->ol_state.sync);
-
-	if (ios->ol_state.sync) {
-		_sync_op(or, caps);
-		return _read_done_ret(or, ios);
-	}
-
-	ret = _async_op(or, _read_done, ios, caps);
-	if (unlikely(ret))
-		goto err;
-
-	return 0;
+	ios->done = _read_done;
+	return _io_exec(ios); /* In sync mode exec returns the io status */
 
 err:
 	_io_free(ios);
-	if (or)
-		osd_end_request(or);
 	return ret;
 }
 
@@ -548,15 +655,11 @@ ssize_t objio_read_pagelist(struct objlayout_io_state *ol_state)
 /*
  * write
  */
-static ssize_t _write_done_ret(struct osd_request *or, struct objio_state *ios)
+static ssize_t _write_done(struct objio_state *ios)
 {
-	u64 resid = ios->length;
-	u64 offset;
-	enum pnfs_osd_errno osd_error;
 	ssize_t status;
-	int ret = _check_io_resid(or, NULL, &resid, &osd_error);
+	int ret = _io_check(ios, true);
 
-	osd_end_request(or);
 	_io_free(ios);
 
 	if (likely(!ret)) {
@@ -568,59 +671,51 @@ static ssize_t _write_done_ret(struct osd_request *or, struct objio_state *ios)
 		status = ret;
 	}
 
-	offset = ios->ol_state.offset + ios->length - resid;
-	objlayout_io_set_result(&ios->ol_state, 0/*index*/,
-				status, osd_error, offset, resid, false);
-
-	objlayout_write_done(&ios->ol_state, ios->ol_state.sync);
+	objlayout_write_done(&ios->ol_state, status, ios->ol_state.sync);
 	return status;
-}
-
-static void _write_done(struct osd_request *or, void *p)
-{
-	struct objio_state *ios = p;
-
-	_write_done_ret(or, ios);
 }
 
 static int _write_exec(struct objio_state *ios)
 {
-	struct osd_request *or = NULL;
-	struct pnfs_osd_object_cred *cred =
-					&ios->objio_seg->layout->olo_comps[0];
-	struct osd_obj_id obj = {cred->oc_object_id.oid_partition_id,
-					cred->oc_object_id.oid_object_id};
-	u8 *caps;
-	int ret;
+	int i, ret;
 
-	or = osd_start_request(ios->objio_seg->od, GFP_KERNEL);
-	if (unlikely(!or)) {
-		ret = -ENOMEM;
-		goto err;
+	for (i = 0; i < ios->ol_state.num_comps; i++) {
+		struct osd_request *or = NULL;
+		struct pnfs_osd_object_cred *cred =
+					&ios->objio_seg->layout->olo_comps[i];
+		struct osd_obj_id obj = {cred->oc_object_id.oid_partition_id,
+					 cred->oc_object_id.oid_object_id};
+		u8 *caps;
+
+		or = osd_start_request(ios->objio_seg->ods[i], GFP_KERNEL);
+		if (unlikely(!or)) {
+			ret = -ENOMEM;
+			goto err;
+		}
+		ios->per_dev[i].or = or;
+
+		osd_req_write(or, &obj, ios->ol_state.offset,
+			     ios->per_dev[i].bio, ios->length);
+		caps = cred->oc_cap.cred;
+
+		ret = osd_finalize_request(or, 0, caps, NULL);
+		if (ret) {
+			dprintk("%s: Faild to osd_finalize_request() => %d\n",
+				__func__, ret);
+			osd_end_request(or);
+			goto err;
+		}
+
+		dprintk("%s: [%d] obj=0x%llx start=0x%llx length=0x%lx\n",
+			  __func__, i, obj.id, _LLU(ios->ol_state.offset),
+			  ios->length);
 	}
 
-	osd_req_write(or, &obj, ios->ol_state.offset, ios->bio, ios->length);
-	caps = cred->oc_cap.cred;
-
-	dprintk("%s obj=0x%llx start=0x%llx length=0x%lx sync=%d\n",
-		  __func__, obj.id, _LLU(ios->ol_state.offset),
-		  ios->length, ios->ol_state.sync);
-
-	if (ios->ol_state.sync) {
-		_sync_op(or, caps);
-		return _write_done_ret(or, ios);
-	}
-
-	ret = _async_op(or, _write_done, ios, caps);
-	if (unlikely(ret))
-		goto err;
-
-	return 0;
+	ios->done = _write_done;
+	return _io_exec(ios); /* In sync mode exec returns the io->status */
 
 err:
 	_io_free(ios);
-	if (or)
-		osd_end_request(or);
 	return ret;
 }
 

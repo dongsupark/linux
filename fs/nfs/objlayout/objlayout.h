@@ -118,7 +118,7 @@ extern int objio_alloc_lseg(void **outp,
 	struct pnfs_osd_layout *layout);
 extern void objio_free_lseg(void *p);
 
-extern int objio_alloc_io_state(struct objlayout_io_state **outp);
+extern int objio_alloc_io_state(void *seg, struct objlayout_io_state **outp);
 extern void objio_free_io_state(struct objlayout_io_state *state);
 
 extern ssize_t objio_read_pagelist(struct objlayout_io_state *ol_state);
@@ -129,8 +129,9 @@ extern ssize_t objio_write_pagelist(struct objlayout_io_state *ol_state,
  * callback API
  */
 extern void objlayout_io_set_result(struct objlayout_io_state *state,
-	unsigned index, int status, int osd_error,
-	u64 offset, u64 length, bool is_write);
+				    unsigned index, int osd_error,
+				    u64 offset, u64 length, bool is_write);
+extern int err_prio(u32 oer_errno);
 
 static inline void
 objlayout_add_delta_space_used(struct objlayout_io_state *state, s64 space_used)
@@ -149,8 +150,10 @@ objlayout_add_delta_space_used(struct objlayout_io_state *state, s64 space_used)
 	spin_unlock(&objlay->lock);
 }
 
-extern void objlayout_read_done(struct objlayout_io_state *state, bool sync);
-extern void objlayout_write_done(struct objlayout_io_state *state, bool sync);
+extern void objlayout_read_done(struct objlayout_io_state *state,
+				ssize_t status, bool sync);
+extern void objlayout_write_done(struct objlayout_io_state *state,
+				 ssize_t status, bool sync);
 
 extern int objlayout_get_deviceinfo(struct pnfs_layout_type *pnfslay,
 	struct pnfs_deviceid *d_id, struct pnfs_osd_deviceaddr **deviceaddr);

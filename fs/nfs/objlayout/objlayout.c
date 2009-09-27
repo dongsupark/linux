@@ -177,12 +177,13 @@ objlayout_alloc_io_state(struct pnfs_layout_type *pnfs_layout_type,
 			struct pnfs_layout_segment *lseg,
 			void *rpcdata)
 {
+	struct objlayout_segment *objlseg = LSEG_LD_DATA(lseg);
 	struct objlayout_io_state *state;
 	u64 lseg_end_offset;
 	size_t size_nr_pages;
 
 	dprintk("%s: allocating io_state\n", __func__);
-	if (objio_alloc_io_state(&state))
+	if (objio_alloc_io_state(objlseg->internal, &state))
 		return NULL;
 
 	BUG_ON(offset < lseg->range.offset);
@@ -256,19 +257,16 @@ objlayout_iodone(struct objlayout_io_state *state)
  *       (-EAGAIN could be used in case of no forward progress)
  */
 void objlayout_io_set_result(struct objlayout_io_state *state,
-	unsigned index, int status, int osd_error,
+	unsigned index, int osd_error,
 	u64 offset, u64 length, bool is_write)
 {
 	struct pnfs_osd_ioerr *ioerr = &state->ioerrs[index];
 
 	BUG_ON(index >= state->num_comps);
-	state->status = status;
-	if (unlikely(status <= 0)) {
+	if (unlikely(osd_error)) {
 		struct objlayout_segment *objlseg = LSEG_LD_DATA(state->lseg);
 		struct pnfs_osd_layout *layout =
 				(typeof(layout))objlseg->pnfs_osd_layout;
-
-		BUG_ON(!status);
 
 		ioerr->oer_component = layout->olo_comps[index].oc_object_id;
 		ioerr->oer_comp_offset = offset;
@@ -321,13 +319,13 @@ static void _rpc_read_complete(struct work_struct *work)
 }
 
 void
-objlayout_read_done(struct objlayout_io_state *state, bool sync)
+objlayout_read_done(struct objlayout_io_state *state, ssize_t status, bool sync)
 {
-	int status = state->status;
 	int eof = state->eof;
 	struct nfs_read_data *rdata;
 
-	dprintk("%s: Begin status=%d eof=%d\n", __func__, status, eof);
+	state->status = status;
+	dprintk("%s: Begin status=%ld eof=%d\n", __func__, status, eof);
 	rdata = state->rpcdata;
 	rdata->task.tk_status = status;
 	if (status >= 0) {
@@ -410,15 +408,17 @@ static void _rpc_write_complete(struct work_struct *work)
 }
 
 void
-objlayout_write_done(struct objlayout_io_state *state, bool sync)
+objlayout_write_done(struct objlayout_io_state *state, ssize_t status,
+		     bool sync)
 {
 	struct nfs_write_data *wdata;
 
 	dprintk("%s: Begin\n", __func__);
 	wdata = state->rpcdata;
-	wdata->task.tk_status = state->status;
-	if (state->status >= 0) {
-		wdata->res.count = state->status;
+	state->status = status;
+	wdata->task.tk_status = status;
+	if (status >= 0) {
+		wdata->res.count = status;
 		wdata->verf.committed = state->committed;
 		dprintk("%s: Return status %d committed %d\n",
 			__func__, wdata->task.tk_status,
@@ -502,7 +502,7 @@ objlayout_encode_layoutcommit(struct pnfs_layout_type *pnfslay,
 		lou.dsu_delta, lou.olu_ioerr_flag);
 }
 
-static int
+int
 err_prio(u32 oer_errno)
 {
 	static u8 error_priority[] = {
