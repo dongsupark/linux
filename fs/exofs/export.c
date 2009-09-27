@@ -57,42 +57,17 @@ static int exofs_layout_get(
 {
 	struct exofs_i_info *oi = exofs_i(inode);
 	struct exofs_sb_info *sbi = inode->i_sb->s_fs_info;
-	struct pnfs_osd_object_cred cred;
+	struct pnfs_osd_object_cred *creds = NULL;
 	struct pnfs_osd_layout layout;
 	u32 *p, *start, *end;
 	int in_recall;
+	int i;
 	int err;
 
 	lgp->seg.offset = 0;
 	lgp->seg.length = NFS4_MAX_UINT64;
 	lgp->seg.iomode = IOMODE_RW;
 	lgp->return_on_close = true; /* TODO: unused but will be soon */
-
-	/* Fill in a pnfs_osd_layout struct */
-	layout.olo_map.odm_num_comps		= 1;
-	layout.olo_map.odm_stripe_unit		= PAGE_SIZE;
-	layout.olo_map.odm_group_width		= 0;
-	layout.olo_map.odm_group_depth		= 0;
-	layout.olo_map.odm_mirror_cnt		= 0;
-	layout.olo_map.odm_raid_algorithm	= PNFS_OSD_RAID_0;
-
-	set_dev_id(&cred.oc_object_id.oid_device_id, lgp->fsid, SINGLE_DEV_ID);
-	cred.oc_object_id.oid_partition_id	= sbi->s_pid;
-	cred.oc_object_id.oid_object_id		= inode->i_ino + EXOFS_OBJ_OFF;
-	cred.oc_osd_version = osd_dev_is_ver1(sbi->s_dev) ?
-					PNFS_OSD_VERSION_1 :
-					PNFS_OSD_VERSION_2;
-	cred.oc_cap_key_sec = PNFS_OSD_CAP_KEY_SEC_NONE;
-
-	cred.oc_cap_key.cred_len	= 0;
-	cred.oc_cap_key.cred		= NULL;
-
-	cred.oc_cap.cred_len	= OSD_CAP_LEN;
-	cred.oc_cap.cred	= oi->i_cred;
-
-	layout.olo_comps_index = 0;
-	layout.olo_num_comps = 1;
-	layout.olo_comps = &cred;
 
 	/* Now encode the layout */
 	p = start = lgp->xdr.resp->p;
@@ -104,6 +79,37 @@ static int exofs_layout_get(
 		goto err;
 	}
 	p++;
+
+	creds = kcalloc(sbi->s_numdevs, sizeof(*creds), GFP_KERNEL);
+	if (!creds) {
+		err = -ENOMEM;
+		goto err;
+	}
+
+	/* Fill in a pnfs_osd_layout struct */
+	layout.olo_map = sbi->data_map;
+
+	for (i = 0; i < sbi->s_numdevs; i++) {
+		struct pnfs_osd_object_cred *cred = &creds[i];
+
+		set_dev_id(&cred->oc_object_id.oid_device_id, lgp->fsid, i);
+		cred->oc_object_id.oid_partition_id = sbi->s_pid;
+		cred->oc_object_id.oid_object_id = exofs_oi_objno(oi);
+		cred->oc_osd_version = osd_dev_is_ver1(sbi->s_ods[i]) ?
+						PNFS_OSD_VERSION_1 :
+						PNFS_OSD_VERSION_2;
+		cred->oc_cap_key_sec = PNFS_OSD_CAP_KEY_SEC_NONE;
+
+		cred->oc_cap_key.cred_len	= 0;
+		cred->oc_cap_key.cred		= NULL;
+
+		cred->oc_cap.cred_len	= OSD_CAP_LEN;
+		cred->oc_cap.cred	= oi->i_cred;
+	}
+
+	layout.olo_comps_index = 0; /* TODO: Something better on reads */
+	layout.olo_num_comps = sbi->s_numdevs;
+	layout.olo_comps = creds;
 
 	err = pnfs_osd_xdr_encode_layout(&p, end, &layout);
 	if (err)
@@ -125,12 +131,14 @@ static int exofs_layout_get(
 
 	EXOFS_DBGMSG("(0x%lx) xdr_bytes=%u\n",
 		     inode->i_ino, lgp->xdr.bytes_written);
-	return 0;
+out:
+	kfree(creds);
+	return err;
 
 err:
 	EXOFS_DBGMSG("Error: (0x%lx) err=%d at_byte=%zu\n",
 		     inode->i_ino, err, (p - start) * 4);
-	return err;
+	goto out;
 }
 
 /* NOTE: inode mutex must NOT be held */
@@ -257,15 +265,16 @@ int exofs_get_device_info(struct super_block *sb, struct pnfs_devinfo_arg *arg)
 	struct exofs_sb_info *sbi = sb->s_fs_info;
 	struct pnfs_osd_deviceaddr devaddr;
 	const struct osd_dev_info *odi;
+	u64 devno = arg->devid.pnfs_devid;
 	u32 *p, *start, *end;
 	int err;
 
 	memset(&devaddr, 0, sizeof(devaddr));
 
-	if (arg->devid.pnfs_devid != SINGLE_DEV_ID)
+	if (unlikely(devno >= sbi->s_numdevs))
 		return -ENODEV;
 
-	odi = osduld_device_info(sbi->s_dev);
+	odi = osduld_device_info(sbi->s_ods[devno]);
 
 	devaddr.oda_systemid.len = odi->systemid_len;
 	devaddr.oda_systemid.data = (void *)odi->systemid; /* !const cast */
@@ -417,7 +426,6 @@ int exofs_inode_recall_layout(struct inode *inode, exofs_recall_fn todo)
 		goto err;
 
 exec:
-	EXOFS_DBGMSG("(0x%lx) executing todo\n", inode->i_ino);
 	error = todo(inode);
 
 err:

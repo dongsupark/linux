@@ -35,6 +35,8 @@
 #include <linux/time.h>
 #include "common.h"
 
+#include "../nfs/objlayout/pnfs_osd_xdr.h"
+
 #ifndef __EXOFS_H__
 #define __EXOFS_H__
 
@@ -51,11 +53,21 @@
 /* u64 has problems with printk this will cast it to unsigned long long */
 #define _LLU(x) (unsigned long long)(x)
 
+/* FIXME: Use pNFS-object's definition */
+// struct exofs_data_map {
+// 	u32	odm_num_comps;
+// 	u64	odm_stripe_unit;
+// 	u32	odm_group_width;
+// 	u32	odm_group_depth;
+// 	u32	odm_mirror_cnt;
+// 	u32	odm_raid_algorithm;
+// };
+
 /*
  * our extension to the in-memory superblock
  */
 struct exofs_sb_info {
-	struct osd_dev	*s_dev;			/* returned by get_osd_dev    */
+	struct exofs_fscb s_fscb;		/* Written often, pre-allocate*/
 	osd_id		s_pid;			/* partition ID of file system*/
 	int		s_timeout;		/* timeout for OSD operations */
 	uint64_t	s_nextid;		/* highest object ID used     */
@@ -63,7 +75,11 @@ struct exofs_sb_info {
 	spinlock_t	s_next_gen_lock;	/* spinlock for gen # update  */
 	u32		s_next_generation;	/* next gen # to use          */
 	atomic_t	s_curr_pending;		/* number of pending commands */
-	uint8_t		s_cred[OSD_CAP_LEN];	/* all-powerful credential    */
+	uint8_t		s_cred[OSD_CAP_LEN];	/* credential for the fscb    */
+
+	struct pnfs_osd_data_map data_map;	/* Default raid to use        */
+	unsigned	s_numdevs;		/* Num of devices in array    */
+	struct osd_dev	*s_ods[1];		/* Variable length, minimum 1 */
 };
 
 /*
@@ -79,6 +95,50 @@ struct exofs_i_info {
 	uint8_t        i_cred[OSD_CAP_LEN];/* all-powerful credential         */
 	struct inode   vfs_inode;          /* normal in-memory inode          */
 };
+
+static inline osd_id exofs_oi_objno(struct exofs_i_info *oi)
+{
+	return oi->vfs_inode.i_ino + EXOFS_OBJ_OFF;
+}
+
+struct exofs_io_state;
+typedef void (*exofs_io_done_fn)(struct exofs_io_state *or, void *private);
+
+struct exofs_io_state {
+	void			*private;
+	exofs_io_done_fn	done;
+	struct kref		kref;
+
+	struct osd_obj_id	obj;
+	u8			*cred;
+
+	/* read/write IO*/
+	loff_t			offset;
+	unsigned		length;
+	void			*kern_buff;
+	struct bio		*bio;
+
+	/* Attributes */
+	unsigned		in_attr_len;
+	struct osd_attr 	*in_attr;
+	unsigned		out_attr_len;
+	struct osd_attr 	*out_attr;
+
+	bool			force_mirror; /* For meta-data */
+	struct exofs_sb_info	*sbi;
+
+	/* Variable array of size numdevs */
+	unsigned numdevs;
+	struct exofs_per_dev_state {
+		struct osd_request *or;
+	} per_dev[];
+};
+
+static inline unsigned exofs_io_state_size(unsigned numdevs)
+{
+	return sizeof(struct exofs_io_state) +
+		sizeof(struct exofs_per_dev_state) * numdevs;
+}
 
 /*
  * our inode flags
@@ -134,6 +194,31 @@ static inline struct exofs_i_info *exofs_i(struct inode *inode)
 /*************************
  * function declarations *
  *************************/
+
+/* osd.c */
+void exofs_make_credential(u8 cred_a[OSD_CAP_LEN],
+			   const struct osd_obj_id *obj);
+int exofs_read_kern(struct osd_dev *od, u8 *cred, struct osd_obj_id *obj,
+		    u64 offset, void *p, unsigned length);
+
+/* TODO: Temporarly, left for get_attrs (in mirror or single_dev) */
+int exofs_sync_op(struct osd_request *or, int timeout, u8 *cred);
+int extract_attr_from_req(struct osd_request *or, struct osd_attr *attr);
+
+int  exofs_get_io_state(struct exofs_sb_info *sbi, struct exofs_io_state** ios);
+void exofs_put_io_state(struct exofs_io_state *ios);
+
+int exofs_check_io(struct exofs_io_state *ios);
+
+int exofs_sbi_create(struct exofs_sb_info *sbi, struct exofs_io_state *ios);
+int exofs_sbi_remove(struct exofs_sb_info *sbi, struct exofs_io_state *ios);
+int exofs_sbi_write(struct exofs_sb_info *sbi, struct exofs_io_state *ios);
+int exofs_sbi_read(struct exofs_sb_info *sbi, struct exofs_io_state *ios);
+
+int exofs_oi_write(struct exofs_i_info *oi, struct exofs_io_state *ios);
+int exofs_oi_read(struct exofs_i_info *oi, struct exofs_io_state *ios);
+int exofs_oi_truncate(struct exofs_i_info *oi, u64 new_len);
+
 /* inode.c               */
 void exofs_truncate(struct inode *inode);
 int exofs_setattr(struct dentry *, struct iattr *);
@@ -177,6 +262,7 @@ extern const struct file_operations exofs_file_operations;
 
 /* inode.c           */
 extern const struct address_space_operations exofs_aops;
+extern const struct osd_attr g_attr_logical_length;
 
 /* namei.c           */
 extern const struct inode_operations exofs_dir_inode_operations;

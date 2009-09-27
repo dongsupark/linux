@@ -203,49 +203,45 @@ int exofs_sync_fs(struct super_block *sb, int wait)
 {
 	struct exofs_sb_info *sbi;
 	struct exofs_fscb *fscb;
-	struct osd_request *or;
-	struct osd_obj_id obj;
+	struct exofs_io_state *ios;
 	int ret = -ENOMEM;
-
-	fscb = kzalloc(sizeof(struct exofs_fscb), GFP_KERNEL);
-	if (!fscb) {
-		EXOFS_ERR("exofs_write_super: memory allocation failed.\n");
-		return -ENOMEM;
-	}
 
 	lock_super(sb);
 	sbi = sb->s_fs_info;
+	fscb = &sbi->s_fscb;
+
+	/* Note: We only write the changing part of the fscb. .i.e upto the
+	 *       the fscb->s_dev_table_oid member. There is no read-modify-write
+	 *       here.
+	 */
+	memset(fscb, 0, offsetof(struct exofs_fscb, s_dev_table_oid));
 	fscb->s_nextid = cpu_to_le64(sbi->s_nextid);
 	fscb->s_numfiles = cpu_to_le32(sbi->s_numfiles);
 	fscb->s_magic = cpu_to_le16(sb->s_magic);
 	fscb->s_newfs = 0;
+	fscb->s_version = EXOFS_FSCB_VER;
 
-	or = osd_start_request(sbi->s_dev, GFP_KERNEL);
-	if (unlikely(!or)) {
-		EXOFS_ERR("exofs_write_super: osd_start_request failed.\n");
+	ret = exofs_get_io_state(sbi, &ios);
+	if (ret)
 		goto out;
-	}
 
-	obj.partition = sbi->s_pid;
-	obj.id = EXOFS_SUPER_ID;
-	ret = osd_req_write_kern(or, &obj, 0, fscb, sizeof(*fscb));
-	if (unlikely(ret)) {
-		EXOFS_ERR("exofs_write_super: osd_req_write_kern failed.\n");
-		goto out;
-	}
+	ios->obj.id = EXOFS_SUPER_ID;
+	ios->offset = 0;
+	ios->kern_buff = fscb;
+	ios->length = offsetof(struct exofs_fscb, s_dev_table_oid);
+	ios->cred = sbi->s_cred;
 
-	ret = exofs_sync_op(or, sbi->s_timeout, sbi->s_cred);
+	ret = exofs_sbi_write(sbi, ios);
 	if (unlikely(ret)) {
-		EXOFS_ERR("exofs_write_super: exofs_sync_op failed.\n");
+		EXOFS_ERR("%s: exofs_sbi_write failed.\n", __func__);
 		goto out;
 	}
 	sb->s_dirt = 0;
 
 out:
-	if (or)
-		osd_end_request(or);
+	EXOFS_DBGMSG("s_nextid=0x%llx ret=%d\n", _LLU(sbi->s_nextid), ret);
+	exofs_put_io_state(ios);
 	unlock_super(sb);
-	kfree(fscb);
 	return ret;
 }
 
@@ -264,6 +260,20 @@ static void _exofs_print_device(const char *msg, const char *dev_path,
 
 	printk(KERN_NOTICE "exofs: %s %s osd_name-%s pid-0x%llx\n",
 		msg, dev_path ?: "", odi->osdname, _LLU(pid));
+}
+
+void exofs_free_sbi(struct exofs_sb_info *sbi)
+{
+	while (sbi->s_numdevs--) {
+		int i = sbi->s_numdevs;
+		struct osd_dev *od = sbi->s_ods[i];
+
+		if (od) {
+			sbi->s_ods[i] = NULL;
+			osduld_put_device(od);
+		}
+	}
+	kfree(sbi);
 }
 
 /*
@@ -288,10 +298,158 @@ static void exofs_put_super(struct super_block *sb)
 				  msecs_to_jiffies(100));
 	}
 
-	_exofs_print_device("Unmounting", NULL, sbi->s_dev, sbi->s_pid);
-	osduld_put_device(sbi->s_dev);
-	kfree(sb->s_fs_info);
+	_exofs_print_device("Unmounting", NULL, sbi->s_ods[0], sbi->s_pid);
+
+	exofs_free_sbi(sbi);
 	sb->s_fs_info = NULL;
+}
+
+/* @odi is valid only as long as @fscb_dev is valid */
+static int exofs_devs_2_odi(struct exofs_dt_device_info *dt_dev,
+			     struct osd_dev_info *odi)
+{
+	odi->systemid_len = le32_to_cpu(dt_dev->systemid_len);
+	memcpy(odi->systemid, dt_dev->systemid, odi->systemid_len);
+
+	odi->osdname_len = le32_to_cpu(dt_dev->osdname_len);
+	odi->osdname = dt_dev->osdname;
+
+	/* FIXME support long names. Will need a _put function */
+	if (dt_dev->long_name_offset)
+		return -EINVAL;
+
+	/* Make sure osdname is printable!
+	 * mkexofs should give us space for a null-terminator else the
+	 * device-table is invalid.
+	 */
+	if (unlikely(odi->osdname_len >= sizeof(dt_dev->osdname)))
+		odi->osdname_len = sizeof(dt_dev->osdname) - 1;
+	dt_dev->osdname[odi->osdname_len] = 0;
+
+	/* If it's all zeros something is bad we read past end-of-obj */
+	return !(odi->systemid_len || odi->osdname_len);
+}
+
+static int exofs_read_lookup_dev_table(struct exofs_sb_info **psbi,
+				       unsigned table_count)
+{
+	struct exofs_sb_info *sbi = *psbi;
+	struct osd_dev *fscb_od;
+	struct osd_obj_id obj = {.partition = sbi->s_pid,
+				 .id = EXOFS_DEVTABLE_ID};
+	struct exofs_device_table *dt;
+	unsigned table_bytes = table_count * sizeof(dt->dt_dev_table[0]) +
+					     sizeof(*dt);
+	unsigned numdevs, i;
+	int ret;
+
+	dt = kmalloc(table_bytes, GFP_KERNEL);
+	if (unlikely(!dt)) {
+		EXOFS_ERR("ERROR: allocating %x bytes for device table\n",
+			  table_bytes);
+		return -ENOMEM;
+	}
+
+	fscb_od = sbi->s_ods[0];
+	sbi->s_ods[0] = NULL;
+	sbi->s_numdevs = 0;
+	ret = exofs_read_kern(fscb_od, sbi->s_cred, &obj, 0, dt, table_bytes);
+	if (unlikely(ret)) {
+		EXOFS_ERR("ERROR: reading device table\n");
+		goto out;
+	}
+
+	numdevs = le64_to_cpu(dt->dt_num_devices);
+	if (unlikely(!numdevs)) {
+		ret = -EINVAL;
+		goto out;
+	}
+	WARN_ON(table_count != numdevs);
+
+/* FIXME: Hard coded mirror only for now. Should take from dt->dt_data_map */
+	sbi->data_map.odm_num_comps		= numdevs;
+	sbi->data_map.odm_stripe_unit		= PAGE_SIZE;
+	sbi->data_map.odm_group_width		= 0;
+	sbi->data_map.odm_group_depth		= 0;
+	sbi->data_map.odm_mirror_cnt		= numdevs - 1;
+	sbi->data_map.odm_raid_algorithm	= PNFS_OSD_RAID_0;
+
+	if (likely(numdevs > 1)) {
+		unsigned size = numdevs * sizeof(sbi->s_ods[0]);
+
+		sbi = krealloc(sbi, sizeof(*sbi) + size, GFP_KERNEL);
+		if (unlikely(!sbi)) {
+			ret = -ENOMEM;
+			goto out;
+		}
+		memset(&sbi->s_ods[1], 0, size - sizeof(sbi->s_ods[0]));
+		*psbi = sbi;
+	}
+
+	for (i = 0; i < numdevs; i++) {
+		struct exofs_fscb fscb;
+		struct osd_dev_info odi;
+		struct osd_dev *od;
+
+		if (exofs_devs_2_odi(&dt->dt_dev_table[i], &odi)) {
+			EXOFS_ERR("ERROR: Read all-zeros device entry\n");
+			ret = -EINVAL;
+			goto out;
+		}
+
+		printk(KERN_NOTICE "Add device[%d]: osd_name-%s\n",
+		       i, odi.osdname);
+
+		/* On all devices the device table is identical. The user can
+		 * specify any one of the participating devices on the command
+		 * line. We always keep them in device-table order.
+		 */
+		if (fscb_od && osduld_device_same(fscb_od, &odi)) {
+			sbi->s_ods[i] = fscb_od;
+			++sbi->s_numdevs;
+			fscb_od = NULL;
+			continue;
+		}
+
+		od = osduld_info_lookup(&odi);
+		if (unlikely(IS_ERR(od))) {
+			EXOFS_ERR("ERROR: device requested is not found "
+				  "osd_name-%s\n", odi.osdname);
+			ret = PTR_ERR(od);
+			goto out;
+		}
+
+		sbi->s_ods[i] = od;
+		++sbi->s_numdevs;
+
+		/* Read the fscb of the other devices to make sure the FS
+		 * partition is there.
+		 */
+		ret = exofs_read_kern(od, sbi->s_cred, &obj, 0, &fscb,
+				      sizeof(fscb));
+		if (unlikely(ret)) {
+			EXOFS_ERR("ERROR: Malformed participating device "
+				  "error reading fscb osd_name-%s\n",
+				  odi.osdname);
+			goto out;
+		}
+
+		/* TODO: verify other information is correct and FS-uuid
+		 *	 matches. Benny what did you say about device table
+		 *	 generation and old devices?
+		 */
+	}
+
+out:
+	kfree(dt);
+	if (unlikely(!ret && fscb_od)) {
+		EXOFS_ERR(
+		      "ERROR: Bad device-table container device not present\n");
+		osduld_put_device(fscb_od);
+		ret = -EINVAL;
+	}
+
+	return ret;
 }
 
 /*
@@ -302,24 +460,25 @@ static int exofs_fill_super(struct super_block *sb, void *data, int silent)
 	struct inode *root;
 	struct exofs_mountopt *opts = data;
 	struct exofs_sb_info *sbi;	/*extended info                  */
+	struct osd_dev *od;		/* Master device                 */
 	struct exofs_fscb fscb;		/*on-disk superblock info        */
-	struct osd_request *or = NULL;
 	struct osd_obj_id obj;
+	unsigned table_count;
 	int ret;
 
 	sbi = kzalloc(sizeof(*sbi), GFP_KERNEL);
 	if (!sbi)
 		return -ENOMEM;
-	sb->s_fs_info = sbi;
 
 	/* use mount options to fill superblock */
-	sbi->s_dev = osduld_path_lookup(opts->dev_name);
-	if (IS_ERR(sbi->s_dev)) {
-		ret = PTR_ERR(sbi->s_dev);
-		sbi->s_dev = NULL;
+	od = osduld_path_lookup(opts->dev_name);
+	if (IS_ERR(od)) {
+		ret = PTR_ERR(od);
 		goto free_sbi;
 	}
 
+	sbi->s_ods[0] = od;
+	sbi->s_numdevs = 1;
 	sbi->s_pid = opts->pid;
 	sbi->s_timeout = opts->timeout;
 
@@ -333,35 +492,13 @@ static int exofs_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_bdev = NULL;
 	sb->s_dev = 0;
 
-	/* read data from on-disk superblock object */
 	obj.partition = sbi->s_pid;
 	obj.id = EXOFS_SUPER_ID;
 	exofs_make_credential(sbi->s_cred, &obj);
 
-	or = osd_start_request(sbi->s_dev, GFP_KERNEL);
-	if (unlikely(!or)) {
-		if (!silent)
-			EXOFS_ERR(
-			       "exofs_fill_super: osd_start_request failed.\n");
-		ret = -ENOMEM;
+	ret = exofs_read_kern(od, sbi->s_cred, &obj, 0, &fscb, sizeof(fscb));
+	if (unlikely(ret))
 		goto free_sbi;
-	}
-	ret = osd_req_read_kern(or, &obj, 0, &fscb, sizeof(fscb));
-	if (unlikely(ret)) {
-		if (!silent)
-			EXOFS_ERR(
-			       "exofs_fill_super: osd_req_read_kern failed.\n");
-		ret = -ENOMEM;
-		goto free_sbi;
-	}
-
-	ret = exofs_sync_op(or, sbi->s_timeout, sbi->s_cred);
-	if (unlikely(ret)) {
-		if (!silent)
-			EXOFS_ERR("exofs_fill_super: exofs_sync_op failed.\n");
-		ret = -EIO;
-		goto free_sbi;
-	}
 
 	sb->s_magic = le16_to_cpu(fscb.s_magic);
 	sbi->s_nextid = le64_to_cpu(fscb.s_nextid);
@@ -379,7 +516,15 @@ static int exofs_fill_super(struct super_block *sb, void *data, int silent)
 	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
 	spin_lock_init(&sbi->s_next_gen_lock);
 
+	table_count = le64_to_cpu(fscb.s_dev_table_count);
+	if (table_count) {
+		ret = exofs_read_lookup_dev_table(&sbi, table_count);
+		if (unlikely(ret))
+			goto free_sbi;
+	}
+
 	/* set up operation vectors */
+	sb->s_fs_info = sbi;
 	sb->s_op = &exofs_sops;
 	sb->s_export_op = &exofs_export_ops;
 	sb->s_pnfs_op = &exofs_pnfs_ops;
@@ -406,17 +551,16 @@ static int exofs_fill_super(struct super_block *sb, void *data, int silent)
 		goto free_sbi;
 	}
 
-	_exofs_print_device("Mounting", opts->dev_name, sbi->s_dev, sbi->s_pid);
-	ret = 0;
-out:
-	if (or)
-		osd_end_request(or);
-	return ret;
+	_exofs_print_device("Mounting", opts->dev_name, sbi->s_ods[0],
+			    sbi->s_pid);
+	return 0;
 
 free_sbi:
-	osduld_put_device(sbi->s_dev); /* NULL safe */
-	kfree(sbi);
-	goto out;
+	if (sbi->s_ods[0])
+		_exofs_print_device("Unable to mount",
+				    opts->dev_name, sbi->s_ods[0], sbi->s_pid);
+	exofs_free_sbi(sbi);
+	return ret;
 }
 
 /*
@@ -461,7 +605,7 @@ static int exofs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	/* get used/capacity attributes */
 	exofs_make_credential(cred_a, &obj);
 
-	or = osd_start_request(sbi->s_dev, GFP_KERNEL);
+	or = osd_start_request(sbi->s_ods[0], GFP_KERNEL);
 	if (unlikely(!or)) {
 		EXOFS_DBGMSG("exofs_statfs: osd_start_request failed.\n");
 		return -ENOMEM;
