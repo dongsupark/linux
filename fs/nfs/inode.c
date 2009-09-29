@@ -1359,6 +1359,9 @@ struct inode *nfs_alloc_inode(struct super_block *sb)
 static void pnfs_destroy_inode(struct nfs_inode *nfsi)
 {
 #ifdef CONFIG_NFS_V4_1
+	if (!list_empty(&nfsi->layout.segs))
+		pnfs_destroy_layout(nfsi);
+
 	BUG_ON(!list_empty(&nfsi->lo_inodes));
 	BUG_ON(!list_empty(&nfsi->layout.segs));
 	BUG_ON(nfsi->layout.refcount);

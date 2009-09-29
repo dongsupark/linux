@@ -367,6 +367,21 @@ pnfs_layout_release(struct pnfs_layout_type *lo,
 	wake_up_all(&nfsi->lo_waitq);
 }
 
+void
+pnfs_destroy_layout(struct nfs_inode *nfsi)
+{
+	struct pnfs_layout_type *lo;
+	struct nfs4_pnfs_layout_segment range = {
+		.iomode = IOMODE_ANY,
+		.offset = 0,
+		.length = NFS4_MAX_UINT64,
+	};
+
+	lo = get_lock_current_layout(nfsi);
+	pnfs_free_layout(lo, &range);
+	put_unlock_current_layout(lo);
+}
+
 static inline void
 init_lseg(struct pnfs_layout_type *lo, struct pnfs_layout_segment *lseg)
 {

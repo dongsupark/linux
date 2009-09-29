@@ -72,6 +72,7 @@ void pnfs_layout_release(struct pnfs_layout_type *,
 			 struct nfs4_pnfs_layout_segment *range);
 void pnfs_set_layout_stateid(struct pnfs_layout_type *lo,
 			     const nfs4_stateid *stateid);
+void pnfs_destroy_layout(struct nfs_inode *);
 int _pnfs_write_begin(struct inode *inode, struct page *page,
 		      loff_t pos, unsigned len,
 		      struct pnfs_fsdata **fsdata);
