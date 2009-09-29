@@ -1422,6 +1422,9 @@ void nfs_destroy_inode(struct inode *inode)
 	struct nfs_inode *nfsi = NFS_I(inode);
 
 #ifdef CONFIG_PNFS
+	if (!list_empty(&nfsi->layout.segs))
+		pnfs_destroy_layout(nfsi);
+
 	BUG_ON(!list_empty(&nfsi->lo_inodes));
 	BUG_ON(!list_empty(&nfsi->layout.segs));
 	BUG_ON(nfsi->layout.refcount);
