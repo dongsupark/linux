@@ -48,7 +48,8 @@
 #include <linux/in.h>
 #include <linux/sched.h>
 #include <linux/namei.h>
-
+#include <linux/mount.h>
+#include <linux/path.h>
 #include <linux/sunrpc/clnt.h>
 #include <linux/workqueue.h>
 #include <linux/sunrpc/rpc_pipe_fs.h>
@@ -85,27 +86,34 @@ static int spnfs_enabled_at_some_point;
 int
 nfsd_spnfs_new(void)
 {
-	struct spnfs *spnfs;
+	struct spnfs *spnfs = NULL;
+	struct path path;
 	struct nameidata nd;
-	char *path = "/var/lib/nfs/rpc_pipefs/nfs"; /* XXX */
 	int rc;
 
 	if (global_spnfs != NULL)
 		return -EEXIST;
 
-	rc = path_lookup(path, 0, &nd);
-	if (rc != 0)
-		return -ENOENT;
+	path.mnt = rpc_get_mount();
+	if (IS_ERR(path.mnt))
+		return PTR_ERR(path.mnt);
+
+	/* FIXME: do not abuse rpc_pipefs/nfs */
+	rc = vfs_path_lookup(path.mnt->mnt_root, path.mnt, "/nfs", 0, &nd);
+	if (rc)
+		goto err;
 
 	spnfs = kzalloc(sizeof(*spnfs), GFP_KERNEL);
-	if (spnfs == NULL)
-		return -ENOMEM;
+	if (spnfs == NULL){
+		rc = -ENOMEM;
+		goto err;
+	}
 
 	spnfs->spnfs_dentry = rpc_mkpipe(nd.path.dentry, "spnfs", spnfs,
 					 &spnfs_upcall_ops, 0);
 	if (IS_ERR(spnfs->spnfs_dentry)) {
-		kfree(spnfs);
-		return -EPIPE;
+		rc = -EPIPE;
+		goto err;
 	}
 
 	mutex_init(&spnfs->spnfs_lock);
@@ -116,6 +124,10 @@ nfsd_spnfs_new(void)
 	spnfs_enabled_at_some_point = 1;
 
 	return 0;
+err:
+	rpc_put_mount();
+	kfree(spnfs);
+	return rc;
 }
 
 /* again, code it like we're going to remove the global variable */
@@ -127,6 +139,7 @@ nfsd_spnfs_delete(void)
 	if (!spnfs)
 		return;
 	rpc_unlink(spnfs->spnfs_dentry);
+	rpc_put_mount();
 	global_spnfs = NULL;
 	kfree(spnfs);
 }
