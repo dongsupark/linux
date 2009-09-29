@@ -1362,9 +1362,10 @@ static void pnfs_destroy_inode(struct nfs_inode *nfsi)
 	if (!list_empty(&nfsi->layout.segs))
 		pnfs_destroy_layout(nfsi);
 
-	BUG_ON(!list_empty(&nfsi->lo_inodes));
 	BUG_ON(!list_empty(&nfsi->layout.segs));
+if (nfsi->layout.refcount) printk("%s: layout.refcount %d\n", __func__, nfsi->layout.refcount);
 	BUG_ON(nfsi->layout.refcount);
+	BUG_ON(!list_empty(&nfsi->lo_inodes));
 	BUG_ON(nfsi->layout.ld_data);
 #endif /* CONFIG_NFS_V4_1 */
 }
