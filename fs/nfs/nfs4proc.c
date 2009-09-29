@@ -4598,6 +4598,7 @@ struct nfs4_session *nfs4_alloc_session(struct nfs_client *clp)
 	clp->cl_cons_state = NFS_CS_SESSION_INITING;
 
 	tbl = &session->fc_slot_table;
+	tbl->highest_used_slotid = -1;
 	spin_lock_init(&tbl->slot_tbl_lock);
 	rpc_init_wait_queue(&tbl->slot_tbl_waitq, "ForeChannel Slot table");
 
