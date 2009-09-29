@@ -9,12 +9,11 @@
 #include <linux/in.h>
 #include <linux/sched.h>
 #include <linux/exportfs.h>
-
+#include <linux/namei.h>
 #include <linux/sunrpc/clnt.h>
 #include <linux/workqueue.h>
 #include <linux/sunrpc/rpc_pipe_fs.h>
 #include <linux/proc_fs.h>
-
 #include <linux/nfs_fs.h>
 
 #include <linux/nfsd/debug.h>
@@ -39,18 +38,24 @@ int
 nfsd_bl_start(void)
 {
 	bl_comm_t	*bl_comm;
+	struct nameidata nd;
+	char *path = "/var/lib/nfs/rpc_pipefs/nfs"; /* FIXME */
+	int rc;
+
 	dprintk("%s: starting pipe\n", __func__);
 	if (bl_comm_global)
 		return -EEXIST;
+
+	rc = path_lookup(path, 0, &nd);
+	if (rc != 0)
+		return -ENOENT;
 
 	bl_comm = kzalloc(sizeof (*bl_comm), GFP_KERNEL);
 	if (!bl_comm)
 		return -ENOMEM;
 
-	memcpy(bl_comm->pipe_path, "/nfs/pnfs_block",
-	    sizeof (bl_comm->pipe_path));
-	bl_comm->pipe_dentry = rpc_mkpipe_compat(bl_comm->pipe_path,
-	    bl_comm, &bl_upcall_ops, 0);
+	bl_comm->pipe_dentry = rpc_mkpipe(nd.path.dentry, "pnfs_block", bl_comm,
+					 &bl_upcall_ops, 0);
 	if (IS_ERR(bl_comm->pipe_dentry)) {
 		kfree(bl_comm);
 		return -EPIPE;
