@@ -69,7 +69,6 @@ typedef struct bl_comm_msg {
 typedef struct bl_comm {
 	/* ---- protects access to this structure ---- */
 	struct mutex		lock;
-	char			pipe_path[48];
 	/* ---- protects access to rpc pipe ---- */
 	struct mutex		pipe_lock;
 	struct dentry		*pipe_dentry;
