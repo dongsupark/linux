@@ -10,6 +10,8 @@
 #include <linux/sched.h>
 #include <linux/exportfs.h>
 #include <linux/namei.h>
+#include <linux/mount.h>
+#include <linux/path.h>
 #include <linux/sunrpc/clnt.h>
 #include <linux/workqueue.h>
 #include <linux/sunrpc/rpc_pipe_fs.h>
@@ -37,28 +39,36 @@ bl_comm_t	*bl_comm_global;
 int
 nfsd_bl_start(void)
 {
-	bl_comm_t	*bl_comm;
+	bl_comm_t	*bl_comm = NULL;
+	struct path path;
 	struct nameidata nd;
-	char *path = "/var/lib/nfs/rpc_pipefs/nfs"; /* FIXME */
 	int rc;
 
 	dprintk("%s: starting pipe\n", __func__);
 	if (bl_comm_global)
 		return -EEXIST;
 
-	rc = path_lookup(path, 0, &nd);
-	if (rc != 0)
-		return -ENOENT;
+	path.mnt = rpc_get_mount();
+	if (IS_ERR(path.mnt))
+		return PTR_ERR(path.mnt);
+
+	/* FIXME: do not abuse rpc_pipefs/nfs */
+	rc = vfs_path_lookup(path.mnt->mnt_root, path.mnt, "/nfs", 0, &nd);
+	if (rc)
+		goto err;
 
 	bl_comm = kzalloc(sizeof (*bl_comm), GFP_KERNEL);
-	if (!bl_comm)
-		return -ENOMEM;
+	if (!bl_comm) {
+		rc = -ENOMEM;
+		goto err;
+	}
 
+	/* FIXME: rename to "spnfs_block" */
 	bl_comm->pipe_dentry = rpc_mkpipe(nd.path.dentry, "pnfs_block", bl_comm,
 					 &bl_upcall_ops, 0);
 	if (IS_ERR(bl_comm->pipe_dentry)) {
-		kfree(bl_comm);
-		return -EPIPE;
+		rc = -EPIPE;
+		goto err;
 	}
 	dput(bl_comm->pipe_dentry);
 	mutex_init(&bl_comm->lock);
@@ -66,8 +76,11 @@ nfsd_bl_start(void)
 	init_waitqueue_head(&bl_comm->pipe_wq);
 
 	bl_comm_global = bl_comm;
-
 	return 0;
+err:
+	rpc_put_mount();
+	kfree(bl_comm);
+	return rc;
 }
 
 void
@@ -79,6 +92,7 @@ nfsd_bl_stop(void)
 	if (!c)
 		return;
 	rpc_unlink(c->pipe_dentry);
+	rpc_put_mount();
 	bl_comm_global = NULL;
 	kfree(c);
 }
