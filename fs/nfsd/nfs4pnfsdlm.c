@@ -389,3 +389,9 @@ error:
 	res->lg_seg.length = 0;
 	goto exit;
 }
+
+static int
+nfsd4_pnfs_dlm_layouttype(struct super_block *sb)
+{
+	return LAYOUT_NFSV4_1_FILES;
+}
