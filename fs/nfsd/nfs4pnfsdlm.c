@@ -395,3 +395,12 @@ nfsd4_pnfs_dlm_layouttype(struct super_block *sb)
 {
 	return LAYOUT_NFSV4_1_FILES;
 }
+
+/* For use by DLM cluster file systems exported by pNFSD */
+const struct pnfs_export_operations pnfs_dlm_export_ops = {
+	.layout_type = nfsd4_pnfs_dlm_layouttype,
+	.get_device_info = nfsd4_pnfs_dlm_getdevinfo,
+	.get_device_iter = nfsd4_pnfs_dlm_getdeviter,
+	.layout_get = nfsd4_pnfs_dlm_layoutget,
+};
+EXPORT_SYMBOL(pnfs_dlm_export_ops);
