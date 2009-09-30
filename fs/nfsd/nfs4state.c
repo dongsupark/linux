@@ -3465,8 +3465,15 @@ nfs4_preprocess_stateid_op(struct nfsd4_compound_state *cstate,
 		if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
 			status = nfserr_bad_stateid;
 		else
+#ifdef CONFIG_GFS2_FS_LOCKING_DLM
+		{
+			dprintk("%s Don't check DS stateid\n", __func__);
+			return 0;
+		}
+#else /* CONFIG_GFS2_FS_LOCKING_DLM */
 			status = nfs4_preprocess_pnfs_ds_stateid(current_fh,
 								 stateid);
+#endif /* CONFIG_GFS2_FS_LOCKING_DLM */
 		goto out;
 	}
 #endif /* CONFIG_PNFSD */
