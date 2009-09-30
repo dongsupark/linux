@@ -35,6 +35,9 @@
 
 #ifdef CONFIG_PNFSD
 
+/* For use by DLM cluster file systems exported by pNFSD */
+extern const struct pnfs_export_operations pnfs_dlm_export_ops;
+
 int nfsd4_set_pnfs_dlm_device(char *pnfs_dlm_device, int len);
 
 void nfsd4_pnfs_dlm_shutdown(void);
