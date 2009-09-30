@@ -13,6 +13,7 @@
 #include <linux/lockd/lockd.h>
 #include <linux/sunrpc/clnt.h>
 #include <linux/sunrpc/gss_api.h>
+#include <linux/nfsd/nfs4pnfsdlm.h>
 
 #include "idmap.h"
 #include "nfsd.h"
@@ -1518,6 +1519,7 @@ out_free_stat:
 static void __exit exit_nfsd(void)
 {
 	nfsd_export_shutdown();
+	nfsd4_pnfs_dlm_shutdown();
 	nfsd_reply_cache_shutdown();
 	remove_proc_entry("fs/nfs/exports", NULL);
 	remove_proc_entry("fs/nfs", NULL);
