@@ -18,6 +18,7 @@
 #include <linux/mount.h>
 #include <linux/gfs2_ondisk.h>
 #include <linux/slow-work.h>
+#include <linux/nfsd/nfs4pnfsdlm.h>
 
 #include "gfs2.h"
 #include "incore.h"
@@ -1147,6 +1148,9 @@ static int fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_magic = GFS2_MAGIC;
 	sb->s_op = &gfs2_super_ops;
 	sb->s_export_op = &gfs2_export_ops;
+#if defined(CONFIG_PNFSD)
+	sb->s_pnfs_op = &pnfs_dlm_export_ops;
+#endif /* CONFIG_PNFSD */
 	sb->s_xattr = gfs2_xattr_handlers;
 	sb->s_time_gran = 1;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
