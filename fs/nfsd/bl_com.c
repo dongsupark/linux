@@ -70,7 +70,6 @@ nfsd_bl_start(void)
 		rc = -EPIPE;
 		goto err;
 	}
-	dput(bl_comm->pipe_dentry);
 	mutex_init(&bl_comm->lock);
 	mutex_init(&bl_comm->pipe_lock);
 	init_waitqueue_head(&bl_comm->pipe_wq);
