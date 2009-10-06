@@ -356,7 +356,7 @@ put_unlock_current_layout(struct pnfs_layout_type *lo)
 }
 
 void
-pnfs_layout_release(struct pnfs_layout_type *lo,
+pnfs_layout_release(struct pnfs_layout_type *lo, atomic_t *count,
 		    struct nfs4_pnfs_layout_segment *range)
 {
 	struct nfs_inode *nfsi = PNFS_NFS_INODE(lo);
@@ -364,6 +364,7 @@ pnfs_layout_release(struct pnfs_layout_type *lo,
 	spin_lock(&nfsi->lo_lock);
 	if (range)
 		pnfs_free_layout(lo, range);
+	atomic_dec(count);
 	put_unlock_current_layout(lo);
 	wake_up_all(&nfsi->lo_waitq);
 }
@@ -544,8 +545,11 @@ get_layout(struct inode *ino,
 	dprintk("--> %s\n", __func__);
 
 	lgp = kzalloc(sizeof(*lgp), GFP_KERNEL);
-	if (lgp == NULL)
+	if (lgp == NULL) {
+		if (atomic_dec_and_test(&lo->lgetcount))
+			wake_up_all(&PNFS_NFS_INODE(lo)->lo_waitq);
 		return -ENOMEM;
+	}
 	lgp->lo = lo;
 	lgp->args.minlength = PAGE_CACHE_SIZE;
 	lgp->args.maxcount = PNFS_LAYOUT_MAXSIZE;
@@ -654,6 +658,8 @@ pnfs_return_layout_barrier(struct nfs_inode *nfsi,
 			ret = true;
 		}
 	}
+	if (atomic_read(&nfsi->layout.lgetcount))
+		ret = true;
 	spin_unlock(&nfsi->lo_lock);
 
 	dprintk("%s:Return %d\n", __func__, ret);
@@ -672,8 +678,11 @@ return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 	dprintk("--> %s\n", __func__);
 
 	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
-	if (lrp == NULL)
+	if (lrp == NULL) {
+		if (atomic_dec_and_test(&lo->lretcount))
+			wake_up_all(&PNFS_NFS_INODE(lo)->lo_waitq);
 		goto out;
+	}
 	lrp->args.reclaim = 0;
 	lrp->args.layout_type = server->pnfs_curr_ld->id;
 	lrp->args.return_type = type;
@@ -735,6 +744,9 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 			dprintk("%s: no layout segments to return\n", __func__);
 			goto out;
 		}
+
+		/* Matching dec is done in .rpc_release (on non-error paths) */
+		atomic_inc(&lo->lretcount);
 
 		/* unlock w/o put rebalanced by eventual call to
 		 * pnfs_layout_release
@@ -850,6 +862,8 @@ alloc_init_layout(struct inode *ino)
 	seqlock_init(&lo->seqlock);
 	memset(&lo->stateid, 0, NFS4_STATEID_SIZE);
 	lo->refcount = 1;
+	atomic_set(&lo->lgetcount, 0);
+	atomic_set(&lo->lretcount, 0);
 	INIT_LIST_HEAD(&lo->segs);
 	lo->roc_iomode = 0;
 	return lo;
@@ -1008,6 +1022,19 @@ pnfs_find_get_lseg(struct inode *inode,
 	return lseg;
 }
 
+/* Called with spin lock held */
+void drain_layoutreturns(struct pnfs_layout_type *lo)
+{
+	while (atomic_read(&lo->lretcount)) {
+		struct nfs_inode *nfsi = PNFS_NFS_INODE(lo);
+
+		spin_unlock(&nfsi->lo_lock);
+		dprintk("%s: waiting\n", __func__);
+		wait_event(nfsi->lo_waitq, (atomic_read(&lo->lretcount) == 0));
+		spin_lock(&nfsi->lo_lock);
+	}
+}
+
 /* Update the file's layout for the given range and iomode.
  * Layout is retreived from the server if needed.
  * If lsegpp is given, the appropriate layout segment is referenced and
@@ -1095,6 +1122,9 @@ pnfs_update_layout(struct inode *ino,
 		}
 	}
 
+	drain_layoutreturns(lo);
+	/* Matching dec is done in .rpc_release (on non-error paths) */
+	atomic_inc(&lo->lgetcount);
 	/* Lose lock, but not reference, match this with pnfs_layout_release */
 	spin_unlock(&nfsi->lo_lock);
 
