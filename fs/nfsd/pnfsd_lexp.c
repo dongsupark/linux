@@ -117,7 +117,7 @@ pnfsd_lexp_get_device_info(struct super_block *sb,
 	fdev.fl_device_list[0].fl_multipath_list = &daddr;
 
 	/* have nfsd encode the device info */
-	err = arg->func(&arg->xdr, &fdev);
+	err = filelayout_encode_devinfo(&arg->xdr, &fdev);
 out:
 	dprintk("<-- %s: return %d\n", __func__, err);
 	return err;
@@ -171,7 +171,7 @@ static int pnfsd_lexp_layout_get(struct inode *inode, struct pnfs_layoutget_arg 
 	layout->lg_fh_list = fhp;
 
 	/* Call nfsd to encode layout */
-	rc = arg->func(&arg->xdr, layout);
+	rc = filelayout_encode_layout(&arg->xdr, layout);
 exit:
 	kfree(layout);
 	kfree(fhp);
