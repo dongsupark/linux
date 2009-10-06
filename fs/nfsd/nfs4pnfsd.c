@@ -1243,6 +1243,7 @@ lo_recall_per_client(struct nfs4_client *clp,
 	stateid_t lsid;
 	struct nfs4_layoutrecall *pending;
 
+	memset(&lsid, 0, sizeof(lsid));
 	if (!cl_has_layout(clp, cbl, lrfile, &lsid))
 		return -ENOENT;
 
