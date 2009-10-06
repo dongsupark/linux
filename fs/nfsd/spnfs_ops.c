@@ -165,7 +165,7 @@ spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 	}
 
 	/* encode the layoutget body */
-	status = lgp->func(&lgp->xdr, flp);
+	status = filelayout_encode_layout(&lgp->xdr, flp);
 
 layoutget_cleanup:
 	if (flp) {
@@ -510,7 +510,7 @@ spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
 	info->notify_types = 0;
 
 	/* encode the device data */
-	status = info->func(&info->xdr, fldev);
+	status = filelayout_encode_devinfo(&info->xdr, fldev);
 
 getdeviceinfo_out:
 	if (fldev) {
