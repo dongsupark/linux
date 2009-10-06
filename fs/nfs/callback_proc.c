@@ -147,10 +147,7 @@ nfs_layoutrecall_find_inode(struct nfs_client *clp,
 		if (!has_layout(nfsi))
 			continue;
 
-		ino = &nfsi->vfs_inode;
-		spin_lock(&inode_lock);
-		__iget(ino);
-		spin_unlock(&inode_lock);
+		ino = igrab(&nfsi->vfs_inode);
 		dprintk("%s: Found inode=%p\n", __func__, ino);
 		break;
 	}
