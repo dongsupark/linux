@@ -68,12 +68,12 @@ static int pnfs_osd_xdr_encode_data_map(
 	if (p + 7 > end)
 		return -E2BIG;
 
-	WRITE32(data_map->odm_num_comps);
-	WRITE64(data_map->odm_stripe_unit);
-	WRITE32(data_map->odm_group_width);
-	WRITE32(data_map->odm_group_depth);
-	WRITE32(data_map->odm_mirror_cnt);
-	WRITE32(data_map->odm_raid_algorithm);
+	*p++ = cpu_to_be32(data_map->odm_num_comps);
+	p = xdr_encode_hyper(p, data_map->odm_stripe_unit);
+	*p++ = cpu_to_be32(data_map->odm_group_width);
+	*p++ = cpu_to_be32(data_map->odm_group_depth);
+	*p++ = cpu_to_be32(data_map->odm_mirror_cnt);
+	*p++ = cpu_to_be32(data_map->odm_raid_algorithm);
 	*pp = p;
 
 	return 0;
@@ -96,10 +96,10 @@ static inline int pnfs_osd_xdr_encode_objid(
 	if (p + 8 > end)
 		return -E2BIG;
 
-	WRITE64(dev_id->pnfs_fsid);
-	WRITE64(dev_id->pnfs_devid);
-	WRITE64(object_id->oid_partition_id);
-	WRITE64(object_id->oid_object_id);
+	p = xdr_encode_hyper(p, dev_id->pnfs_fsid);
+	p = xdr_encode_hyper(p, dev_id->pnfs_devid);
+	p = xdr_encode_hyper(p, object_id->oid_partition_id);
+	p = xdr_encode_hyper(p, object_id->oid_object_id);
 	*pp = p;
 
 	return 0;
@@ -132,16 +132,15 @@ static int pnfs_osd_xdr_encode_object_cred(
 	if (p + 4 > end)
 		return -E2BIG;
 
-	WRITE32(olo_comp->oc_osd_version);
+	*p++ = cpu_to_be32(olo_comp->oc_osd_version);
 
 	/* No sec for now */
-	WRITE32(PNFS_OSD_CAP_KEY_SEC_NONE);
-	WRITE32(0); /*opaque oc_capability_key<>*/
+	*p++ = cpu_to_be32(PNFS_OSD_CAP_KEY_SEC_NONE);
+	*p++ = cpu_to_be32(0); /*opaque oc_capability_key<>*/
 
-	p = xdr_encode_opaque(p, olo_comp->oc_cap.cred,
-			      olo_comp->oc_cap.cred_len);
+	*pp = xdr_encode_opaque(p, olo_comp->oc_cap.cred,
+				olo_comp->oc_cap.cred_len);
 
-	*pp = p;
 	return 0;
 }
 
@@ -169,8 +168,8 @@ int pnfs_osd_xdr_encode_layout(
 	if (p + 2 > end)
 		return -E2BIG;
 
-	WRITE32(pol->olo_comps_index);
-	WRITE32(pol->olo_num_comps);
+	*p++ = cpu_to_be32(pol->olo_comps_index);
+	*p++ = cpu_to_be32(pol->olo_num_comps);
 
 	for (i = 0; i < pol->olo_num_comps; i++) {
 		err = pnfs_osd_xdr_encode_object_cred(
@@ -214,10 +213,10 @@ int pnfs_osd_xdr_encode_deviceaddr(
 		return -E2BIG;
 
 	/* Empty oda_targetid */
-	WRITE32(OBJ_TARGET_ANON);
+	*p++ = cpu_to_be32(OBJ_TARGET_ANON);
 
 	/* Empty oda_targetaddr for now */
-	WRITE32(0);
+	*p++ = cpu_to_be32(0);
 
 	/* oda_lun */
 	p = xdr_encode_opaque_fixed(p, devaddr->oda_lun,
