@@ -611,12 +611,6 @@ extern __be32 nfsd4_delegreturn(struct svc_rqst *rqstp,
 		struct nfsd4_compound_state *, struct nfsd4_delegreturn *dr);
 extern __be32 nfsd4_renew(struct svc_rqst *rqstp,
 			  struct nfsd4_compound_state *, clientid_t *clid);
-
-#if defined(CONFIG_SPNFS_BLOCK)
-extern int blocklayout_encode_devinfo(struct pnfs_xdr_info *resp, void *device);
-extern int blocklayout_encode_layout(struct pnfs_xdr_info *resp, void *layout);
-#endif /* CONFIG_SPNFS_BLOCK */
-
 #endif
 
 /*
