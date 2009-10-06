@@ -99,6 +99,8 @@ struct posix_acl;
 
 struct pnfs_layout_type {
 	int refcount;
+	atomic_t lretcount;		/* Layoutreturns outstanding */
+	atomic_t lgetcount;		/* Layoutgets outstanding */
 	struct list_head segs;		/* layout segments list */
 	int roc_iomode;			/* iomode to return on close, 0=none */
 	seqlock_t seqlock;		/* Protects the stateid */
