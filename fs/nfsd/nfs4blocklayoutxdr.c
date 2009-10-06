@@ -24,17 +24,16 @@ static int
 bl_encode_simple(struct nfsd4_compoundres *resp, pnfs_blocklayout_devinfo_t *bld,
     u32 *len)
 {
-	ENCODE_HEAD;
-	
-	RESERVE_SPACE(16 + (XDR_QUADLEN(bld->u.simple.bld_sig_len) << 2));
+	__be32 *p = nfsd4_xdr_reserve_space(resp,
+			16 + (XDR_QUADLEN(bld->u.simple.bld_sig_len) << 2));
 
 	*len += 16 + (XDR_QUADLEN(bld->u.simple.bld_sig_len) << 2);
 
-	WRITE32(1);
-	WRITE64(bld->u.simple.bld_offset);
-	WRITE32(bld->u.simple.bld_sig_len);
-	WRITEMEM(bld->u.simple.bld_sig, bld->u.simple.bld_sig_len);
-	ADJUST_ARGS();
+	*p++ = cpu_to_be32(1);
+	p = xdr_encode_hyper(p, bld->u.simple.bld_offset);
+	*p++ = cpu_to_be32(bld->u.simple.bld_sig_len);
+	p = xdr_encode_opaque_fixed(p, bld->u.simple.bld_sig, bld->u.simple.bld_sig_len);
+	resp->p = p;
 	return 0;
 }
 
@@ -42,17 +41,15 @@ static int
 bl_encode_slice(struct nfsd4_compoundres *resp, pnfs_blocklayout_devinfo_t *bld,
     u32 *len)
 {
-	ENCODE_HEAD;
+	__be32 *p = nfsd4_xdr_reserve_space(resp, 32);
 	
-	RESERVE_SPACE(32);
-	
-	WRITE64(bld->u.slice.bld_start);
-	WRITE64(bld->u.slice.bld_len);
+	p = xdr_encode_hyper(p, bld->u.slice.bld_start);
+	p = xdr_encode_hyper(p, bld->u.slice.bld_len);
 
-	WRITE32(bld->u.slice.bld_index);
+	*p++ = cpu_to_be32(bld->u.slice.bld_index);
 	*len += 20;
 
-	ADJUST_ARGS();
+	resp->p = p;
 	return 0;
 }
 
@@ -68,17 +65,17 @@ bl_encode_stripe(struct nfsd4_compoundres *resp, pnfs_blocklayout_devinfo_t *bld
     u32 *len)
 {
 	int	i;
-	ENCODE_HEAD;
+	__be32 *p = nfsd4_xdr_reserve_space(resp,
+					12 + (4 * bld->u.stripe.bld_stripes));
 
-	RESERVE_SPACE(12 + (4 * bld->u.stripe.bld_stripes));
 	*len += 12 + (4 * bld->u.stripe.bld_stripes);
 
-	WRITE64(bld->u.stripe.bld_chunk_size);
-	WRITE32(bld->u.stripe.bld_stripes);
+	p = xdr_encode_hyper(p, bld->u.stripe.bld_chunk_size);
+	*p++ = cpu_to_be32(bld->u.stripe.bld_stripes);
 	for (i = 0; i < bld->u.stripe.bld_stripes; i++)
-		WRITE32(bld->u.stripe.bld_stripe_indexs[i]);
+		*p++ = cpu_to_be32(bld->u.stripe.bld_stripe_indexs[i]);
 
-	ADJUST_ARGS();
+	resp->p = p;
 	return 0;
 }
 
@@ -92,13 +89,13 @@ blocklayout_encode_devinfo(struct pnfs_xdr_info *info, void *v)
 	struct list_head		*volumes	= (struct list_head *)v;
 	pnfs_blocklayout_devinfo_t	*bld;
 	int				status		= 0;
-	ENCODE_HEAD;
+	__be32 *p;
 	
 	info->bytes_written = 0;
 	p = resp->p;
 	p += 2;
 	len += 8;
-	ADJUST_ARGS();
+	resp->p = p;
 	
 	/*
 	 * All simple volumes with their signature are required to be listed
@@ -106,11 +103,10 @@ blocklayout_encode_devinfo(struct pnfs_xdr_info *info, void *v)
 	 */
 	list_for_each_entry(bld, volumes, bld_list) {
 		num_vols++;
-		RESERVE_SPACE(20);
-		WRITE32(bld->bld_type);
+		p = nfsd4_xdr_reserve_space(resp, 20);
+		*p++ = cpu_to_be32(bld->bld_type);
 		len += 4;
-	
-		ADJUST_ARGS();
+		resp->p = p;
 		switch (bld->bld_type) {
 			case PNFS_BLOCK_VOLUME_SIMPLE:
 				status = bl_encode_simple(resp, bld, &len);
@@ -131,12 +127,12 @@ blocklayout_encode_devinfo(struct pnfs_xdr_info *info, void *v)
 		if (status)
 			goto error;
 	}
-	ADJUST_ARGS();
+	resp-p = p;
 
 	/* ---- Fill in the overall length and number of volumes ---- */
 	p = layoutlen_p;
-	WRITE32(len - 4);
-	WRITE32(num_vols);
+	*p++ = cpu_to_be32(len - 4);
+	*p++ = cpu_to_be32(num_vols);
 
 	if (len > info->maxcount)
 		return -ETOOSMALL;
@@ -155,44 +151,44 @@ blocklayout_encode_layout(struct pnfs_xdr_info *info, void *l)
 	u32				*layoutlen_p	= resp->p,
 					len		= 0,
 					extents		= 0;
-	ENCODE_HEAD;
+	__be32 *p;
 	
 	/*
 	 * Save spot for opaque block layout length and number of extents,
 	 * fill-in later.
 	 */
-	RESERVE_SPACE(8);
+	p = nfsd4_xdr_reserve_space(resp, 8);
 	p += 2;
 	len += 8;
-	ADJUST_ARGS();
+	resp->p = p;
 	
 	list_for_each_entry(b, bl_head, bll_list) {
 		extents++;
-		ADJUST_ARGS();
-		RESERVE_SPACE(44);
-		WRITE64(b->bll_vol_id.pnfs_fsid);
-		WRITE64(b->bll_vol_id.pnfs_devid);
+		resp->p = p;
+		p = nfsd4_xdr_reserve_space(resp, 44);
+		p = xdr_encode_hyper(p, b->bll_vol_id.pnfs_fsid);
+		p = xdr_encode_hyper(p, b->bll_vol_id.pnfs_devid);
 		len += sizeof (deviceid_t);
 		
-		WRITE64(b->bll_foff);
+		p = xdr_encode_hyper(p, b->bll_foff);
 		len += sizeof (b->bll_foff);
 		
-		WRITE64(b->bll_len);
+		p = xdr_encode_hyper(p, b->bll_len);
 		len += sizeof (b->bll_len);
 		
-		WRITE64(b->bll_soff);
+		p = xdr_encode_hyper(p, b->bll_soff);
 		len += sizeof (b->bll_soff);
 		
-		WRITE32(b->bll_es);
+		*p++ = cpu_to_be32(b->bll_es);
 		len += sizeof (b->bll_es);
 	}
 	
-	ADJUST_ARGS();
+	resp->p = p;
 	
 	/* ---- Fill in the overall length and number of extents ---- */
 	p = layoutlen_p;
-	WRITE32(len - 4);
-	WRITE32(extents);
+	*p++ = cpu_to_be32(len - 4);
+	*p++ = cpu_to_be32(extents);
 	
 	if (len > info->maxcount)
 		return -ETOOSMALL;
