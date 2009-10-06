@@ -1,6 +1,6 @@
 /*
  *  linux/fs/nfsd/nfs4blocklayoutxdr.c
- *  
+ *
  *
  *  Created by Rick McNeal on 3/31/08.
  *  Copyright 2008 __MyCompanyName__. All rights reserved.
@@ -24,16 +24,15 @@ static int
 bl_encode_simple(struct nfsd4_compoundres *resp, pnfs_blocklayout_devinfo_t *bld,
     u32 *len)
 {
-	__be32 *p = nfsd4_xdr_reserve_space(resp,
-			16 + (XDR_QUADLEN(bld->u.simple.bld_sig_len) << 2));
+	int bytes = 16 + (XDR_QUADLEN(bld->u.simple.bld_sig_len) << 2);
+	__be32 *p = nfsd4_xdr_reserve_space(resp, bytes);
 
-	*len += 16 + (XDR_QUADLEN(bld->u.simple.bld_sig_len) << 2);
+	*len += bytes;
 
 	*p++ = cpu_to_be32(1);
 	p = xdr_encode_hyper(p, bld->u.simple.bld_offset);
 	*p++ = cpu_to_be32(bld->u.simple.bld_sig_len);
-	p = xdr_encode_opaque_fixed(p, bld->u.simple.bld_sig, bld->u.simple.bld_sig_len);
-	resp->p = p;
+	resp->p = xdr_encode_opaque_fixed(p, bld->u.simple.bld_sig, bld->u.simple.bld_sig_len);
 	return 0;
 }
 
@@ -41,8 +40,8 @@ static int
 bl_encode_slice(struct nfsd4_compoundres *resp, pnfs_blocklayout_devinfo_t *bld,
     u32 *len)
 {
-	__be32 *p = nfsd4_xdr_reserve_space(resp, 32);
-	
+	__be32 *p = nfsd4_xdr_reserve_space(resp, 20);
+
 	p = xdr_encode_hyper(p, bld->u.slice.bld_start);
 	p = xdr_encode_hyper(p, bld->u.slice.bld_len);
 
@@ -64,11 +63,10 @@ static int
 bl_encode_stripe(struct nfsd4_compoundres *resp, pnfs_blocklayout_devinfo_t *bld,
     u32 *len)
 {
-	int	i;
-	__be32 *p = nfsd4_xdr_reserve_space(resp,
-					12 + (4 * bld->u.stripe.bld_stripes));
+	int	i, bytes = 12 + (4 * bld->u.stripe.bld_stripes);
+	__be32 *p = nfsd4_xdr_reserve_space(resp, bytes);
 
-	*len += 12 + (4 * bld->u.stripe.bld_stripes);
+	*len += bytes;
 
 	p = xdr_encode_hyper(p, bld->u.stripe.bld_chunk_size);
 	*p++ = cpu_to_be32(bld->u.stripe.bld_stripes);
@@ -90,20 +88,20 @@ blocklayout_encode_devinfo(struct pnfs_xdr_info *info, void *v)
 	pnfs_blocklayout_devinfo_t	*bld;
 	int				status		= 0;
 	__be32 *p;
-	
+
 	info->bytes_written = 0;
-	p = resp->p;
+	p = nfsd4_xdr_reserve_space(resp, 8);
 	p += 2;
 	len += 8;
 	resp->p = p;
-	
+
 	/*
 	 * All simple volumes with their signature are required to be listed
 	 * first.
 	 */
 	list_for_each_entry(bld, volumes, bld_list) {
 		num_vols++;
-		p = nfsd4_xdr_reserve_space(resp, 20);
+		p = nfsd4_xdr_reserve_space(resp, 4);
 		*p++ = cpu_to_be32(bld->bld_type);
 		len += 4;
 		resp->p = p;
@@ -123,11 +121,9 @@ blocklayout_encode_devinfo(struct pnfs_xdr_info *info, void *v)
 			default:
 				BUG();
 		}
-		p = resp->p;
 		if (status)
 			goto error;
 	}
-	resp-p = p;
 
 	/* ---- Fill in the overall length and number of volumes ---- */
 	p = layoutlen_p;
@@ -136,7 +132,7 @@ blocklayout_encode_devinfo(struct pnfs_xdr_info *info, void *v)
 
 	if (len > info->maxcount)
 		return -ETOOSMALL;
-	info->bytes_written = len;	
+	info->bytes_written = len;
 error:
 	return status;
 }
@@ -152,7 +148,7 @@ blocklayout_encode_layout(struct pnfs_xdr_info *info, void *l)
 					len		= 0,
 					extents		= 0;
 	__be32 *p;
-	
+
 	/*
 	 * Save spot for opaque block layout length and number of extents,
 	 * fill-in later.
@@ -161,38 +157,36 @@ blocklayout_encode_layout(struct pnfs_xdr_info *info, void *l)
 	p += 2;
 	len += 8;
 	resp->p = p;
-	
+
 	list_for_each_entry(b, bl_head, bll_list) {
 		extents++;
-		resp->p = p;
 		p = nfsd4_xdr_reserve_space(resp, 44);
 		p = xdr_encode_hyper(p, b->bll_vol_id.pnfs_fsid);
 		p = xdr_encode_hyper(p, b->bll_vol_id.pnfs_devid);
 		len += sizeof (deviceid_t);
-		
+
 		p = xdr_encode_hyper(p, b->bll_foff);
 		len += sizeof (b->bll_foff);
-		
+
 		p = xdr_encode_hyper(p, b->bll_len);
 		len += sizeof (b->bll_len);
-		
+
 		p = xdr_encode_hyper(p, b->bll_soff);
 		len += sizeof (b->bll_soff);
-		
+
 		*p++ = cpu_to_be32(b->bll_es);
 		len += sizeof (b->bll_es);
+		resp->p = p;
 	}
-	
-	resp->p = p;
-	
+
 	/* ---- Fill in the overall length and number of extents ---- */
 	p = layoutlen_p;
 	*p++ = cpu_to_be32(len - 4);
 	*p++ = cpu_to_be32(extents);
-	
+
 	if (len > info->maxcount)
 		return -ETOOSMALL;
-	
+
 	/* ---- update number of bytes written ---- */
 	info->bytes_written = len;
 
