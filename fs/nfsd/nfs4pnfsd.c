@@ -49,7 +49,11 @@ static struct kmem_cache *pnfs_layoutrecall_slab;
  */
 static DEFINE_SPINLOCK(layout_lock);
 
-#define BUG_ON_UNLOCKED_LAYOUT() BUG_ON(!spin_is_locked(&layout_lock))
+#if defined(CONFIG_DEBUG_SPINLOCK) || defined(CONFIG_SMP)
+#  define BUG_ON_UNLOCKED_LAYOUT() BUG_ON(!spin_is_locked(&layout_lock))
+#else
+#  define BUG_ON_UNLOCKED_LAYOUT()
+#endif
 
 void
 nfsd4_free_pnfs_slabs(void)
