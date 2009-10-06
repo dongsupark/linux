@@ -338,12 +338,12 @@ static int spnfs_test_indices_xdr(struct pnfs_xdr_info *info, void *device)
 	struct nfsd4_compoundres *resp = info->resp;
 	struct svc_rqst *rqstp = resp->rqstp;
 	struct xdr_buf *xb = &resp->rqstp->rq_res;
-	ENCODE_HEAD;
+	__be32 *p;
 
-	RESERVE_SPACE(8);
+	p = nfsd4_xdr_reserve_space(resp, 8);
 	p++; /* Fill in length later */
-	WRITE32(fdev->fl_stripeindices_length); /* 1024 */
-	ADJUST_ARGS();
+	*p++ = cpu_to_be32(fdev->fl_stripeindices_length); /* 1024 */
+	resp->p = p;
 
 	xb->head[0].iov_len = (char *)resp->p - (char *)xb->head[0].iov_base;
 	xb->pages = &rqstp->rq_respages[rqstp->rq_resused];
@@ -372,7 +372,7 @@ static void spnfs_set_test_indices(struct pnfs_filelayout_device *fldev,
 	fldev->fl_stripeindices_length = 1024;
 	/* round-robin the data servers device index into the stripe indicie */
 	for (i = 0; i < 1024; i++) {
-		WRITE32(j);
+		*p++ = cpu_to_be32(j);
 		if (j < dev->dscount - 1)
 			j++;
 		else
