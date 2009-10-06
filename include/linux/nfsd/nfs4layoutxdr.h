@@ -129,4 +129,7 @@ typedef struct pnfs_blocklayout_devinfo {
         } u;
 } pnfs_blocklayout_devinfo_t;
 
+extern int blocklayout_encode_devinfo(struct pnfs_xdr_info *resp, void *device);
+extern int blocklayout_encode_layout(struct pnfs_xdr_info *resp, void *layout);
+
 #endif /* NFSD_NFS4LAYOUTXDR_H */
