@@ -232,6 +232,17 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 		err = nfs4_check_client_ready(clp);
 	if (err)
 		goto out_put;
+
+	/* mask out the server's MDS capability flag */
+	clp->cl_exchange_flags &= ~EXCHGID4_FLAG_USE_PNFS_MDS;
+
+	if (!(clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_DS)) {
+		printk(KERN_INFO "ip:port %s is not a pNFS Data Server\n",
+			ds->r_addr);
+		err = -ENODEV;
+		goto out_put;
+	}
+
 	/*
 	 * Set DS lease equal to the MDS lease, renewal is scheduled in
 	 * create_session
