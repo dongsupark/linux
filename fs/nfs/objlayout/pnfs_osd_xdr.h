@@ -42,6 +42,7 @@
 
 #include <linux/nfs_fs.h>
 #include <linux/nfs_page.h>
+#include <linux/exp_xdr.h>
 #include <linux/pnfs_xdr.h>
 #include <scsi/osd_protocol.h>
 
@@ -395,7 +396,7 @@ extern struct pnfs_osd_layout *pnfs_osd_xdr_decode_layout(
 	struct pnfs_osd_layout *layout, u32 *p);
 
 extern int pnfs_osd_xdr_encode_layout(
-	u32 **pp, u32 *end,
+	struct exp_xdr_stream *xdr,
 	struct pnfs_osd_layout *layout);
 
 /* Device Info helpers */
@@ -414,7 +415,7 @@ extern void pnfs_osd_xdr_decode_deviceaddr(
 
 /* For Servers */
 extern int pnfs_osd_xdr_encode_deviceaddr(
-	u32 **pp, u32 *end, struct pnfs_osd_deviceaddr *devaddr);
+	struct exp_xdr_stream *xdr, struct pnfs_osd_deviceaddr *devaddr);
 
 /* layoutupdate (layout_commit) xdr helpers */
 extern int

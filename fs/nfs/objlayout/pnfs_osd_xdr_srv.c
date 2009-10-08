@@ -60,21 +60,20 @@
  * };
  */
 static int pnfs_osd_xdr_encode_data_map(
-	u32 **pp, u32 *end,
+	struct exp_xdr_stream *xdr,
 	struct pnfs_osd_data_map *data_map)
 {
-	u32 *p = *pp;
+	__be32 *p = exp_xdr_reserve_qwords(xdr, 1+2+1+1+1+1);
 
-	if (p + 7 > end)
+	if (!p)
 		return -E2BIG;
 
-	*p++ = cpu_to_be32(data_map->odm_num_comps);
-	p = xdr_encode_hyper(p, data_map->odm_stripe_unit);
-	*p++ = cpu_to_be32(data_map->odm_group_width);
-	*p++ = cpu_to_be32(data_map->odm_group_depth);
-	*p++ = cpu_to_be32(data_map->odm_mirror_cnt);
-	*p++ = cpu_to_be32(data_map->odm_raid_algorithm);
-	*pp = p;
+	p = exp_xdr_encode_u32(p, data_map->odm_num_comps);
+	p = exp_xdr_encode_u64(p, data_map->odm_stripe_unit);
+	p = exp_xdr_encode_u32(p, data_map->odm_group_width);
+	p = exp_xdr_encode_u32(p, data_map->odm_group_depth);
+	p = exp_xdr_encode_u32(p, data_map->odm_mirror_cnt);
+	p = exp_xdr_encode_u32(p, data_map->odm_raid_algorithm);
 
 	return 0;
 }
@@ -87,20 +86,19 @@ static int pnfs_osd_xdr_encode_data_map(
  * };
  */
 static inline int pnfs_osd_xdr_encode_objid(
-	u32 **pp, u32 *end,
+	struct exp_xdr_stream *xdr,
 	struct pnfs_osd_objid *object_id)
 {
-	u32 *p = *pp;
+	__be32 *p = exp_xdr_reserve_qwords(xdr, 2+2+2+2);
 	deviceid_t *dev_id = (deviceid_t *)&object_id->oid_device_id;
 
-	if (p + 8 > end)
+	if (!p)
 		return -E2BIG;
 
-	p = xdr_encode_hyper(p, dev_id->pnfs_fsid);
-	p = xdr_encode_hyper(p, dev_id->pnfs_devid);
-	p = xdr_encode_hyper(p, object_id->oid_partition_id);
-	p = xdr_encode_hyper(p, object_id->oid_object_id);
-	*pp = p;
+	p = exp_xdr_encode_u64(p, dev_id->pnfs_fsid);
+	p = exp_xdr_encode_u64(p, dev_id->pnfs_devid);
+	p = exp_xdr_encode_u64(p, object_id->oid_partition_id);
+	p = exp_xdr_encode_u64(p, object_id->oid_object_id);
 
 	return 0;
 }
@@ -120,26 +118,28 @@ static inline int pnfs_osd_xdr_encode_objid(
  * };
  */
 static int pnfs_osd_xdr_encode_object_cred(
-	u32 **pp, u32 *end, struct pnfs_osd_object_cred *olo_comp)
+	struct exp_xdr_stream *xdr,
+	struct pnfs_osd_object_cred *olo_comp)
 {
-	u32 *p = *pp;
+	__be32 *p;
 	int err;
 
-	err = pnfs_osd_xdr_encode_objid(&p, end, &olo_comp->oc_object_id);
+	err = pnfs_osd_xdr_encode_objid(xdr, &olo_comp->oc_object_id);
 	if (err)
 		return err;
 
-	if (p + 4 > end)
+	p = exp_xdr_reserve_space(xdr, 3*4 + 4+olo_comp->oc_cap.cred_len);
+	if (!p)
 		return -E2BIG;
 
-	*p++ = cpu_to_be32(olo_comp->oc_osd_version);
+	p = exp_xdr_encode_u32(p, olo_comp->oc_osd_version);
 
 	/* No sec for now */
-	*p++ = cpu_to_be32(PNFS_OSD_CAP_KEY_SEC_NONE);
-	*p++ = cpu_to_be32(0); /*opaque oc_capability_key<>*/
+	p = exp_xdr_encode_u32(p, PNFS_OSD_CAP_KEY_SEC_NONE);
+	p = exp_xdr_encode_u32(p, 0); /* opaque oc_capability_key<> */
 
-	*pp = xdr_encode_opaque(p, olo_comp->oc_cap.cred,
-				olo_comp->oc_cap.cred_len);
+	exp_xdr_encode_opaque(p, olo_comp->oc_cap.cred,
+			      olo_comp->oc_cap.cred_len);
 
 	return 0;
 }
@@ -153,44 +153,40 @@ static int pnfs_osd_xdr_encode_object_cred(
  * };
  */
 int pnfs_osd_xdr_encode_layout(
-	u32 **pp, u32 *end,
+	struct exp_xdr_stream *xdr,
 	struct pnfs_osd_layout *pol)
 {
-	u32 *p = *pp;
-
+	__be32 *p;
 	u32 i;
 	int err;
 
-	err = pnfs_osd_xdr_encode_data_map(&p, end, &pol->olo_map);
+	err = pnfs_osd_xdr_encode_data_map(xdr, &pol->olo_map);
 	if (err)
 		return err;
 
-	if (p + 2 > end)
+	p = exp_xdr_reserve_qwords(xdr, 2);
+	if (!p)
 		return -E2BIG;
 
-	*p++ = cpu_to_be32(pol->olo_comps_index);
-	*p++ = cpu_to_be32(pol->olo_num_comps);
+	p = exp_xdr_encode_u32(p, pol->olo_comps_index);
+	p = exp_xdr_encode_u32(p, pol->olo_num_comps);
 
 	for (i = 0; i < pol->olo_num_comps; i++) {
-		err = pnfs_osd_xdr_encode_object_cred(
-					&p, end, &pol->olo_comps[i]);
+		err = pnfs_osd_xdr_encode_object_cred(xdr, &pol->olo_comps[i]);
 		if (err)
 			return err;
 	}
 
-	*pp = p;
 	return 0;
 }
 
-static int _encode_string(u32 **pp, u32 *end, struct nfs4_string *str)
+static int _encode_string(struct exp_xdr_stream *xdr, const struct nfs4_string *str)
 {
-	u32 *p = *pp;
+	__be32 *p = exp_xdr_reserve_space(xdr, 4 + str->len);
 
-	if (p + 1 + XDR_QUADLEN(str->len) > end)
+	if (!p)
 		return -E2BIG;
-	p = xdr_encode_opaque(p, str->data, str->len);
-
-	*pp = p;
+	exp_xdr_encode_opaque(p, str->data, str->len);
 	return 0;
 }
 
@@ -204,38 +200,37 @@ static int _encode_string(u32 **pp, u32 *end, struct nfs4_string *str)
  * };
  */
 int pnfs_osd_xdr_encode_deviceaddr(
-	u32 **pp, u32 *end, struct pnfs_osd_deviceaddr *devaddr)
+	struct exp_xdr_stream *xdr, struct pnfs_osd_deviceaddr *devaddr)
 {
-	u32 *p = *pp;
+	__be32 *p;
 	int err;
 
-	if (p + 1 + 1 + sizeof(devaddr->oda_lun)/4 > end)
+	p = exp_xdr_reserve_space(xdr, 4 + 4 + sizeof(devaddr->oda_lun));
+	if (!p)
 		return -E2BIG;
 
 	/* Empty oda_targetid */
-	*p++ = cpu_to_be32(OBJ_TARGET_ANON);
+	p = exp_xdr_encode_u32(p, OBJ_TARGET_ANON);
 
 	/* Empty oda_targetaddr for now */
-	*p++ = cpu_to_be32(0);
+	p = exp_xdr_encode_u32(p, 0);
 
 	/* oda_lun */
-	p = xdr_encode_opaque_fixed(p, devaddr->oda_lun,
-				    sizeof(devaddr->oda_lun));
+	exp_xdr_encode_bytes(p, devaddr->oda_lun, sizeof(devaddr->oda_lun));
 
-	err = _encode_string(&p, end, &devaddr->oda_systemid);
+	err = _encode_string(xdr, &devaddr->oda_systemid);
 	if (err)
 		return err;
 
-	err = pnfs_osd_xdr_encode_object_cred(&p, end,
+	err = pnfs_osd_xdr_encode_object_cred(xdr,
 					      &devaddr->oda_root_obj_cred);
 	if (err)
 		return err;
 
-	err = _encode_string(&p, end, &devaddr->oda_osdname);
+	err = _encode_string(xdr, &devaddr->oda_osdname);
 	if (err)
 		return err;
 
-	*pp = p;
 	return 0;
 }
 

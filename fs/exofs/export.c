@@ -59,7 +59,7 @@ static int exofs_layout_get(
 	struct exofs_sb_info *sbi = inode->i_sb->s_fs_info;
 	struct pnfs_osd_object_cred *creds = NULL;
 	struct pnfs_osd_layout layout;
-	u32 *p, *start, *end;
+	__be32 *start;
 	int in_recall;
 	int i;
 	int err;
@@ -69,16 +69,12 @@ static int exofs_layout_get(
 	lgp->seg.iomode = IOMODE_RW;
 	lgp->return_on_close = true; /* TODO: unused but will be soon */
 
-	/* Now encode the layout */
-	p = start = lgp->xdr.resp->p;
-	end = start + lgp->xdr.maxcount;
-
 	/* skip opaque size, will be filled-in later */
-	if (p + 1 > end) {
+	start = exp_xdr_reserve_qwords(&lgp->xdr, 1);
+	if (!start) {
 		err = -E2BIG;
 		goto err;
 	}
-	p++;
 
 	creds = kcalloc(sbi->s_numdevs, sizeof(*creds), GFP_KERNEL);
 	if (!creds) {
@@ -111,12 +107,11 @@ static int exofs_layout_get(
 	layout.olo_num_comps = sbi->s_numdevs;
 	layout.olo_comps = creds;
 
-	err = pnfs_osd_xdr_encode_layout(&p, end, &layout);
+	err = pnfs_osd_xdr_encode_layout(&lgp->xdr, &layout);
 	if (err)
 		goto err;
 
-	lgp->xdr.bytes_written = (p - start) * 4;
-	*start = htonl(lgp->xdr.bytes_written - 4);
+	exp_xdr_encode_opaque_len(start, lgp->xdr.p);
 
 	spin_lock(&oi->i_layout_lock);
 	in_recall = test_bit(OBJ_IN_LAYOUT_RECALL, &oi->i_flags);
@@ -129,15 +124,15 @@ static int exofs_layout_get(
 		goto err;
 	}
 
-	EXOFS_DBGMSG("(0x%lx) xdr_bytes=%u\n",
-		     inode->i_ino, lgp->xdr.bytes_written);
+	EXOFS_DBGMSG("(0x%lx) xdr_bytes=%Zu\n",
+		     inode->i_ino, exp_xdr_qbytes(lgp->xdr.p - start));
 out:
 	kfree(creds);
 	return err;
 
 err:
 	EXOFS_DBGMSG("Error: (0x%lx) err=%d at_byte=%zu\n",
-		     inode->i_ino, err, (p - start) * 4);
+		     inode->i_ino, err, exp_xdr_qbytes(lgp->xdr.p - start));
 	goto out;
 }
 
@@ -266,7 +261,7 @@ int exofs_get_device_info(struct super_block *sb, struct pnfs_devinfo_arg *arg)
 	struct pnfs_osd_deviceaddr devaddr;
 	const struct osd_dev_info *odi;
 	u64 devno = arg->devid.pnfs_devid;
-	u32 *p, *start, *end;
+	__be32 *start;
 	int err;
 
 	memset(&devaddr, 0, sizeof(devaddr));
@@ -282,30 +277,25 @@ int exofs_get_device_info(struct super_block *sb, struct pnfs_devinfo_arg *arg)
 	devaddr.oda_osdname.len = odi->osdname_len ;
 	devaddr.oda_osdname.data = (void *)odi->osdname;/* !const cast */
 
-	/* Now encode the device info */
-	p = start = arg->xdr.resp->p;
-	end = start + arg->xdr.maxcount;
-
 	/* skip opaque size, will be filled-in later */
-	if (p + 1 > end) {
+	start = exp_xdr_reserve_qwords(&arg->xdr, 1);
+	if (!start) {
 		err = -E2BIG;
 		goto err;
 	}
-	p++;
 
-	err = pnfs_osd_xdr_encode_deviceaddr(&p, end, &devaddr);
+	err = pnfs_osd_xdr_encode_deviceaddr(&arg->xdr, &devaddr);
 	if (err)
 		goto err;
 
-	arg->xdr.bytes_written = (p - start) * 4;
-	*start = htonl(arg->xdr.bytes_written - 4);
+	exp_xdr_encode_opaque_len(start, arg->xdr.p);
 
-	EXOFS_DBGMSG("xdr_bytes=%u\n", arg->xdr.bytes_written);
+	EXOFS_DBGMSG("xdr_bytes=%Zu\n", exp_xdr_qbytes(arg->xdr.p - start));
 	return 0;
 
 err:
 	EXOFS_DBGMSG("Error: err=%d at_byte=%zu\n",
-		     err, (p - start) * 4);
+		     err, exp_xdr_qbytes(arg->xdr.p - start));
 	return err;
 }
 
