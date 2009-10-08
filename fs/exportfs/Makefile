@@ -5,3 +5,4 @@ obj-$(CONFIG_EXPORTFS) += exportfs.o
 
 exportfs-y				:= expfs.o
 exportfs-$(CONFIG_EXPORTFS_FILE_LAYOUT)	+= nfs4filelayoutxdr.o
+exportfs-$(CONFIG_EXPORTFS_BLOCK_LAYOUT) += nfs4blocklayoutxdr.o
