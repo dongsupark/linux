@@ -52,17 +52,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/nfsd4_spnfs.h>
 #include <linux/nfsd/debug.h>
 #include <linux/nfsd/state.h>
+#include <linux/nfsd/nfsd.h>
+#include <linux/nfsd/xdr4.h>
 #include <linux/nfsd/pnfsd.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 
 /* comment out CONFIG_SPNFS_TEST for non-test behaviour */
-#define CONFIG_SPNFS_TEST 1
-
-#ifdef CONFIG_SPNFS_TEST
-#include <linux/nfsd/nfsd.h>
-#include <linux/nfsd/xdr4.h>
-#endif /* CONFIG_SPNFS_TEST */
+/* #define CONFIG_SPNFS_TEST 1 */
 
 #define	NFSDDBG_FACILITY		NFSDDBG_PNFS
 
@@ -332,9 +329,9 @@ getdeviceiter_out:
  * So rq_respages[rq_resused - 1] contains the rq_res.head and rq_res.tail and
  * rq_respages[rq_resused] contains the rq_res.pages.
  */
-static int spnfs_test_indices_xdr(struct pnfs_xdr_info *info, void *device)
+static int spnfs_test_indices_xdr(struct pnfs_xdr_info *info,
+				  const struct pnfs_filelayout_device *fdev)
 {
-	struct pnfs_filelayout_device *fdev = device;
 	struct nfsd4_compoundres *resp = info->resp;
 	struct svc_rqst *rqstp = resp->rqstp;
 	struct xdr_buf *xb = &resp->rqstp->rq_res;
@@ -424,14 +421,11 @@ spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
 	dev = &res->getdeviceinfo_res.devinfo;
 
 	/* Fill in the device data, i.e., nfs4_1_file_layout_ds_addr4 */
-	fldev = kmalloc(sizeof(struct pnfs_filelayout_device), GFP_KERNEL);
+	fldev = kzalloc(sizeof(struct pnfs_filelayout_device), GFP_KERNEL);
 	if (fldev == NULL) {
 		status = -ENOMEM;
 		goto getdeviceinfo_out;
 	}
-	fldev->fl_stripeindices_list = NULL;
-	fldev->fl_device_list = NULL;
-	fldev->fl_enc_stripe_indices = NULL;
 
 	/*
 	 * Stripe count is the same as data server count for our purposes
