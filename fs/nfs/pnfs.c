@@ -560,9 +560,19 @@ get_layout(struct inode *ino,
 	lgp->args.inode = ino;
 	lgp->lsegpp = lsegpp;
 
-	if (!memcmp(lo->stateid.data, &zero_stateid, NFS4_STATEID_SIZE))
+	if (!memcmp(lo->stateid.data, &zero_stateid, NFS4_STATEID_SIZE)) {
+		struct nfs_open_context *oldctx = ctx;
+
+		if (!oldctx) {
+			ctx = nfs_find_open_context(ino, NULL,
+					(range->iomode == IOMODE_READ) ?
+					FMODE_READ: FMODE_WRITE);
+			BUG_ON(!ctx);
+		}
 		pnfs_layout_from_open_stateid(&lgp->args.stateid, ctx->state);
-	else
+		if (!oldctx)
+			put_nfs_open_context(ctx);
+	} else
 		pnfs_get_layout_stateid(&lgp->args.stateid, lo);
 
 	/* Retrieve layout information from server */
