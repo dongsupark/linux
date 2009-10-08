@@ -199,6 +199,16 @@ extern enum nfsstat4 filelayout_encode_layout(struct exp_xdr_stream *xdr,
 				      const struct pnfs_filelayout_layout *flp);
 #endif /* defined(CONFIG_EXPORTFS_FILE_LAYOUT) */
 
+#if defined(CONFIG_EXPORTFS_FILE_LAYOUT)
+struct list_head;
+
+extern int blocklayout_encode_devinfo(struct exp_xdr_stream *xdr,
+				      const struct list_head *volumes);
+
+extern int blocklayout_encode_layout(struct exp_xdr_stream *xdr,
+				     const struct list_head *layouts);
+#endif /* defined(CONFIG_EXPORTFS_FILE_LAYOUT) */
+
 #if defined(CONFIG_PNFSD)
 #include <linux/module.h>
 
