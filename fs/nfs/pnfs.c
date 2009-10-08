@@ -558,7 +558,6 @@ get_layout(struct inode *ino,
 	lgp->args.lseg.length = max(range->length, lgp->args.minlength);
 	lgp->args.type = server->pnfs_curr_ld->id;
 	lgp->args.inode = ino;
-	lgp->args.ctx = ctx;
 	lgp->lsegpp = lsegpp;
 
 	if (!memcmp(lo->stateid.data, &zero_stateid, NFS4_STATEID_SIZE))

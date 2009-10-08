@@ -37,7 +37,6 @@ struct nfs4_pnfs_layoutget_arg {
 	struct nfs4_pnfs_layout_segment lseg;
 	__u64 minlength;
 	__u32 maxcount;
-	struct nfs_open_context *ctx;
 	nfs4_stateid stateid;
 	struct inode *inode;
 	struct nfs4_sequence_args seq_args;
