@@ -1271,7 +1271,7 @@ pnfs_layout_process(struct nfs4_pnfs_layoutget *lgp)
 			status = -ENOMEM;
 		else
 			status = PTR_ERR(lseg);
-		printk(KERN_ERR "%s: Could not allocate layout: error %d\n",
+		dprintk("%s: Could not allocate layout: error %d\n",
 		       __func__, status);
 		goto out;
 	}
