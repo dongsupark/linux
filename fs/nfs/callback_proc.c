@@ -162,7 +162,7 @@ struct recall_layout_threadargs {
 	struct inode *inode;
 	struct nfs_client *clp;
 	struct completion started;
-	struct cb_pnfs_layoutrecallargs rl;
+	struct cb_pnfs_layoutrecallargs *rl;
 	int result;
 };
 
@@ -178,12 +178,12 @@ static int pnfs_recall_layout(void *data)
 	daemonize("nfsv4-layoutreturn");
 
 	dprintk("%s: recall_type=%d fsid 0x%llx-0x%llx start\n",
-		__func__, args->rl.cbl_recall_type,
-		args->rl.cbl_fsid.major, args->rl.cbl_fsid.minor);
+		__func__, args->rl->cbl_recall_type,
+		args->rl->cbl_fsid.major, args->rl->cbl_fsid.minor);
 
 	clp = args->clp;
 	inode = args->inode;
-	rl = args->rl;
+	rl = *args->rl;
 	args->result = 0;
 	complete(&args->started);
 	args = NULL;
@@ -237,6 +237,7 @@ static int pnfs_async_return_layout(struct nfs_client *clp, struct inode *inode,
 	struct recall_layout_threadargs data = {
 		.clp = clp,
 		.inode = inode,
+		.rl = rl,
 	};
 	struct task_struct *t;
 	int status;
@@ -245,8 +246,6 @@ static int pnfs_async_return_layout(struct nfs_client *clp, struct inode *inode,
 	BUG_ON(inode == NULL);
 
 	dprintk("%s: -->\n", __func__);
-
-	data.rl = *rl;
 
 	init_completion(&data.started);
 	__module_get(THIS_MODULE);
