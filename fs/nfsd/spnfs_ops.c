@@ -500,9 +500,6 @@ spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
 		fldap->r_addr.len = len;
 	}
 
-	/* XXX FIX: this should go through the userspace daemon */
-	info->notify_types = 0;
-
 	/* encode the device data */
 	status = filelayout_encode_devinfo(&info->xdr, fldev);
 
