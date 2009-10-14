@@ -479,8 +479,9 @@ lo_seg_intersecting(struct nfs4_pnfs_layout_segment *l1,
 	       (end2 == NFS4_MAX_UINT64 || end2 > start1);
 }
 
-static void
-pnfs_set_layout_stateid(struct pnfs_layout_type *lo, nfs4_stateid *stateid)
+void
+pnfs_set_layout_stateid(struct pnfs_layout_type *lo,
+			const nfs4_stateid *stateid)
 {
 	write_seqlock(&lo->seqlock);
 	memcpy(lo->stateid.data, stateid->data, sizeof(lo->stateid.data));
