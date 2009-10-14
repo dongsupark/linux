@@ -5431,6 +5431,8 @@ static void nfs4_pnfs_layoutreturn_release(void *calldata)
 		lrp->args.return_type, lrp->lo);
 
 	if (lrp->args.return_type == RECALL_FILE) {
+		if (!lrp->res.lrs_present)
+			pnfs_set_layout_stateid(lrp->lo, &zero_stateid);
 		pnfs_layout_release(lrp->lo, &lrp->lo->lretcount,
 				    &lrp->args.lseg);
 	}

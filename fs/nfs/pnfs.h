@@ -83,6 +83,8 @@ void _pnfs_modify_new_write_request(struct nfs_page *req,
 void _pnfs_direct_init_io(struct inode *inode, struct nfs_open_context *ctx,
 			  size_t count, loff_t loff, int iswrite,
 			  size_t *rwsize, size_t *remaining);
+void pnfs_set_layout_stateid(struct pnfs_layout_type *lo,
+			     const nfs4_stateid *stateid);
 
 #define PNFS_EXISTS_LDIO_OP(srv, opname) ((srv)->pnfs_curr_ld &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops &&	\
