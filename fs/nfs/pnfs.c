@@ -594,17 +594,19 @@ static struct pnfs_layout_segment *
 has_layout_to_return(struct pnfs_layout_type *lo,
 		     struct nfs4_pnfs_layout_segment *range)
 {
-	struct pnfs_layout_segment *lseg = NULL;
+	struct pnfs_layout_segment *out = NULL, *lseg;
 	dprintk("%s:Begin lo %p offset %llu length %llu iomode %d\n",
 		__func__, lo, range->offset, range->length, range->iomode);
 
 	BUG_ON_UNLOCKED_LO(lo);
 	list_for_each_entry (lseg, &lo->segs, fi_list)
-		if (should_free_lseg(lseg, range))
+		if (should_free_lseg(lseg, range)) {
+			out = lseg;
 			break;
+		}
 
-	dprintk("%s:Return lseg=%p\n", __func__, lseg);
-	return lseg;
+	dprintk("%s:Return lseg=%p\n", __func__, out);
+	return out;
 }
 
 static void
