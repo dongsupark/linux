@@ -85,9 +85,6 @@ pnfsd_lexp_get_device_info(struct super_block *sb,
 		goto out;
 	}
 
-	/* FIXME: no notifications yet */
-	arg->notify_types = 0;
-
 	/* count the number of comma-delimited DS IPs */
 	fdev.fl_device_length = 1;
 	fdev.fl_device_list = fl_devices;
