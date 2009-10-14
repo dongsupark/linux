@@ -581,7 +581,7 @@ get_layout(struct inode *ino,
  * READ		RW	false
  */
 static inline int
-free_matching_lseg(struct pnfs_layout_segment *lseg,
+should_free_lseg(struct pnfs_layout_segment *lseg,
 		   struct nfs4_pnfs_layout_segment *range)
 {
 	return (range->iomode == IOMODE_ANY ||
@@ -599,7 +599,7 @@ has_layout_to_return(struct pnfs_layout_type *lo,
 
 	BUG_ON_UNLOCKED_LO(lo);
 	list_for_each_entry (lseg, &lo->segs, fi_list)
-		if (free_matching_lseg(lseg, range))
+		if (should_free_lseg(lseg, range))
 			break;
 
 	dprintk("%s:Return lseg=%p\n", __func__, lseg);
@@ -616,7 +616,7 @@ pnfs_free_layout(struct pnfs_layout_type *lo,
 
 	BUG_ON_UNLOCKED_LO(lo);
 	list_for_each_entry_safe (lseg, next, &lo->segs, fi_list) {
-		if (!free_matching_lseg(lseg, range))
+		if (!should_free_lseg(lseg, range))
 			continue;
 		dprintk("%s: freeing lseg %p iomode %d "
 			"offset %llu length %llu\n", __func__,
@@ -644,7 +644,7 @@ pnfs_return_layout_barrier(struct nfs_inode *nfsi,
 
 	spin_lock(&nfsi->lo_lock);
 	list_for_each_entry (lseg, &nfsi->layout.segs, fi_list) {
-		if (!free_matching_lseg(lseg, range))
+		if (!should_free_lseg(lseg, range))
 			continue;
 		lseg->valid = false;
 		if (!_pnfs_can_return_lseg(lseg)) {
