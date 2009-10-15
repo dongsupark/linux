@@ -51,6 +51,13 @@ struct nfsd4_pnfs_dev_iter_res {
 	u32		gd_eof;		/* response */
 };
 
+/* Arguments for set_device_notify */
+struct pnfs_devnotify_arg {
+	struct nfsd4_pnfs_deviceid dn_devid;	/* request */
+	u32 dn_layout_type;			/* request */
+	u32 dn_notify_types;			/* request/response */
+};
+
 struct nfsd4_layout_seg {
 	u64	clientid;
 	u32	layout_type;
@@ -150,6 +157,9 @@ struct pnfs_export_operations {
 	int (*get_device_iter) (struct super_block *,
 				u32 layout_type,
 				struct nfsd4_pnfs_dev_iter_res *);
+
+	int (*set_device_notify) (struct super_block *,
+				  struct pnfs_devnotify_arg *);
 
 	/* Retrieve and encode a layout for inode onto the xdr stream.
 	 * arg->minlength is the minimum number of accessible bytes required
