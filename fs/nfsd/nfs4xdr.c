@@ -1466,8 +1466,12 @@ nfsd4_decode_getdevinfo(struct nfsd4_compoundargs *argp,
 	READ32(gdev->gd_layout_type);
 	READ32(gdev->gd_maxcount);
 	READ32(num);
-	if (num)
-		READ_BUF(4); /* TODO: for now, just skip notify_types */
+	if (num) {
+		READ_BUF(4);
+		READ32(gdev->gd_notify_types);
+	} else {
+		gdev->gd_notify_types = 0;
+	}
 
 	DECODE_TAIL;
 }
