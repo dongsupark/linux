@@ -14,9 +14,6 @@
 #include <linux/nfsd/state.h>
 #include <linux/nfsd/xdr4.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
-#include <linux/nfsd/debug.h>
-
-#define NFSDDBG_FACILITY	NFSDDBG_PNFS
 
 static int
 bl_encode_simple(struct exp_xdr_stream *xdr, pnfs_blocklayout_devinfo_t *bld)
