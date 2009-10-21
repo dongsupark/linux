@@ -1250,17 +1250,20 @@ static void nfs4_state_manager(struct nfs_client *clp)
 				continue;
 		}
 		/* Initialize or reset the session */
-		if (test_and_clear_bit(NFS4CLNT_SESSION_SETUP, &clp->cl_state)
-		   && nfs4_has_session(clp)) {
+		if (test_bit(NFS4CLNT_SESSION_SETUP, &clp->cl_state)
+		    && nfs4_has_session(clp)) {
 			if (clp->cl_cons_state == NFS_CS_SESSION_INITING)
 				status = nfs4_initialize_session(clp);
 			else
 				status = nfs4_reset_session(clp);
-			if (status) {
-				if (status == -NFS4ERR_STALE_CLIENTID)
-					continue;
+			if (status == -NFS4ERR_STALE_CLIENTID)
+				continue;
+			/* For error case. On success the bit is cleared in
+			 * nfs4_proc_create_session */
+			clear_bit(NFS4CLNT_SESSION_SETUP, &clp->cl_state);
+
+			if (status)
 				goto out_error;
-			}
 		}
 		/* First recover reboot state... */
 		if (test_and_clear_bit(NFS4CLNT_RECLAIM_REBOOT, &clp->cl_state)) {

@@ -4784,6 +4784,9 @@ int nfs4_proc_create_session(struct nfs_client *clp, int reset)
 	if (status)
 		goto out;
 
+	/* Signal nfs41_setup_sequence that the session is ready for use */
+	clear_bit(NFS4CLNT_SESSION_SETUP, &clp->cl_state);
+
 	ptr = (unsigned *)&session->sess_id.data[0];
 	dprintk("%s client>seqid %d sessionid %u:%u:%u:%u\n", __func__,
 		clp->cl_seqid, ptr[0], ptr[1], ptr[2], ptr[3]);
