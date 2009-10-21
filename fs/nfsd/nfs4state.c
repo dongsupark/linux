@@ -279,9 +279,6 @@ unhash_delegation(struct nfs4_delegation *dp)
  */
 
 /* Hash tables for nfs4_clientid state */
-#define CLIENT_HASH_BITS                 4
-#define CLIENT_HASH_SIZE                (1 << CLIENT_HASH_BITS)
-#define CLIENT_HASH_MASK                (CLIENT_HASH_SIZE - 1)
 
 #define clientid_hashval(id) \
 	((id) & CLIENT_HASH_MASK)
@@ -306,7 +303,7 @@ unhash_delegation(struct nfs4_delegation *dp)
 static struct list_head	reclaim_str_hashtbl[CLIENT_HASH_SIZE];
 static int reclaim_str_hashtbl_size = 0;
 static struct list_head	conf_id_hashtbl[CLIENT_HASH_SIZE];
-static struct list_head	conf_str_hashtbl[CLIENT_HASH_SIZE];
+struct list_head	conf_str_hashtbl[CLIENT_HASH_SIZE];
 static struct list_head	unconf_str_hashtbl[CLIENT_HASH_SIZE];
 static struct list_head	unconf_id_hashtbl[CLIENT_HASH_SIZE];
 static struct list_head client_lru;
@@ -4239,87 +4236,3 @@ nfs4_reset_lease(time_t leasetime)
 	user_lease_time = leasetime;
 }
 
-#if defined(CONFIG_PNFSD)
-
-/* Create a layoutrecall structure for each client based on the
- * original structure. */
-int
-create_layout_recall_list(struct list_head *todolist, unsigned *todo_len,
-			  struct nfsd4_pnfs_cb_layout *cbl,
-			  struct nfs4_file *lrfile)
-{
-	struct nfs4_client *clp;
-	unsigned int i, len = 0;
-	int status = 0;
-
-	dprintk("%s: -->\n", __func__);
-
-	/* If client given by fs, just do single client */
-	if (cbl->cbl_seg.clientid) {
-		clp = find_confirmed_client(
-				(clientid_t *)&cbl->cbl_seg.clientid);
-		if (!clp) {
-			status = -ENOENT;
-			dprintk("%s: clientid %llx not found\n", __func__,
-				(unsigned long long)cbl->cbl_seg.clientid);
-			goto out;
-		}
-
-		status = lo_recall_per_client(clp, cbl, lrfile, todolist);
-		if (!status)
-			len++;
-		goto out;
-	}
-
-	/* Check all clients for layout matches */
-	for (i = 0; i < CLIENT_HASH_SIZE; i++)
-		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
-			status = lo_recall_per_client(clp, cbl, lrfile,
-						      todolist);
-			if (!status)
-				len++;
-			else if (status != -ENOENT)
-				goto out;
-		}
-out:
-	*todo_len = len;
-	/* -ENOENT is a good thing don't return it if some recalls are needed */
-	if ((status == -ENOENT) && len)
-		status = 0;
-	dprintk("%s: <-- list len %u status %d\n", __func__, len, status);
-	return status;
-}
-
-/* Create a list of clients to send device notifications. */
-int
-create_device_notify_list(struct list_head *todolist,
-			  struct nfsd4_pnfs_cb_dev_list *ndl)
-{
-	int status = 0, i;
-	struct nfs4_client *clp = NULL;
-	struct nfs4_notify_device *cbnd;
-
-	nfs4_lock_state();
-
-	/* Create notify client list */
-	for (i = 0; i < CLIENT_HASH_SIZE; i++)
-		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
-			if (atomic_read(&clp->cl_deviceref) <= 0)
-				continue;
-			cbnd = kmalloc(sizeof(*cbnd), GFP_KERNEL);
-			if (!cbnd) {
-				status = -ENOMEM;
-				goto out;
-			}
-			cbnd->nd_list = ndl;
-			cbnd->nd_client = clp;
-			list_add(&cbnd->nd_perclnt, todolist);
-			atomic_inc(&clp->cl_count);
-		}
-
-out:
-	nfs4_unlock_state();
-	return status;
-}
-
-#endif  /* CONFIG_PNFSD */
