@@ -34,7 +34,7 @@ extern int pnfs4_proc_layoutreturn(struct nfs4_pnfs_layoutreturn *lrp);
 extern const nfs4_stateid zero_stateid;
 
 int pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
-	size_t count, loff_t pos, enum pnfs_iomode access_type,
+	u64 count, loff_t pos, enum pnfs_iomode access_type,
 	struct pnfs_layout_segment **lsegpp);
 
 int _pnfs_return_layout(struct inode *, struct nfs4_pnfs_layout_segment *,

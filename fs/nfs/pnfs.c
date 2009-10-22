@@ -1055,7 +1055,7 @@ void drain_layoutreturns(struct pnfs_layout_type *lo)
 int
 pnfs_update_layout(struct inode *ino,
 		   struct nfs_open_context *ctx,
-		   size_t count,
+		   u64 count,
 		   loff_t pos,
 		   enum pnfs_iomode iomode,
 		   struct pnfs_layout_segment **lsegpp)
@@ -1521,17 +1521,29 @@ pnfs_update_layout_commit(struct inode *inode,
 {
 	struct nfs_server *nfss = NFS_SERVER(inode);
 	struct nfs_page *nfs_page = nfs_list_entry(head->next);
+	u64 count;
+	loff_t start;
 	int status;
 
 	dprintk("--> %s inode %p layout range: %Zd@%llu\n", __func__, inode,
-		(size_t)(npages * PAGE_SIZE),
-		(u64)((u64)idx_start * PAGE_SIZE));
+		(size_t)(npages * PAGE_CACHE_SIZE),
+		(u64)((u64)idx_start << PAGE_CACHE_SHIFT));
 
 	if (!pnfs_enabled_sb(nfss))
 		return;
+
+	/* COMMIT indicates the whole file with offset = count = 0
+	 * whereas layout segments indicate whole file with offset = 0,
+	 * count = NFS4_MAX_UINT64.
+	 */
+	count = (size_t)npages * PAGE_CACHE_SIZE;
+	start = (loff_t)idx_start <<  PAGE_CACHE_SHIFT;
+	if (start == 0 && count == 0)
+		count = NFS4_MAX_UINT64;
+
 	status = pnfs_update_layout(inode, nfs_page->wb_context,
-				(size_t)npages * PAGE_SIZE,
-				(loff_t)idx_start * PAGE_SIZE,
+				count,
+				start,
 				IOMODE_RW,
 				NULL);
 	dprintk("%s  virt update status %d\n", __func__, status);
@@ -2060,6 +2072,7 @@ pnfs_commit(struct nfs_write_data *data, int sync)
 	struct nfs_page *first, *last, *p;
 	int npages;
 	enum pnfs_try_status trypnfs;
+	u64 count;
 
 	dprintk("%s: Begin\n", __func__);
 
@@ -2072,6 +2085,15 @@ pnfs_commit(struct nfs_write_data *data, int sync)
 		last = p;
 		npages++;
 	}
+	/* COMMIT indicates the whole file with offset = count = 0
+	 * whereas layout segments indicate whole file with offset = 0,
+	 * count = NFS4_MAX_UINT64.
+	 */
+	count = ((npages - 1) << PAGE_CACHE_SHIFT) + first->wb_bytes +
+		(first != last) ? last->wb_bytes : 0;
+	if (first->wb_offset == 0 && count == 0)
+		count = NFS4_MAX_UINT64;
+
 	/* FIXME: we really ought to keep the layout segment that we used
 	   to write the page around for committing it and never ask for a
 	   new one.  If it was recalled we better commit the data first
@@ -2079,9 +2101,7 @@ pnfs_commit(struct nfs_write_data *data, int sync)
 	   either with a new layout or to the MDS */
 	result = pnfs_update_layout(data->inode,
 				    NULL,
-				    ((npages - 1) << PAGE_CACHE_SHIFT) +
-				     first->wb_bytes +
-				     (first != last) ? last->wb_bytes : 0,
+				    count,
 				    first->wb_offset,
 				    IOMODE_RW,
 				    &lseg);
