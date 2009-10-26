@@ -547,8 +547,7 @@ get_layout(struct inode *ino,
 
 	lgp = kzalloc(sizeof(*lgp), GFP_KERNEL);
 	if (lgp == NULL) {
-		if (atomic_dec_and_test(&lo->lgetcount))
-			wake_up_all(&PNFS_NFS_INODE(lo)->lo_waitq);
+		pnfs_layout_release(lo, &lo->lgetcount, NULL);
 		return -ENOMEM;
 	}
 	lgp->lo = lo;
@@ -691,8 +690,8 @@ return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 
 	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
 	if (lrp == NULL) {
-		if (atomic_dec_and_test(&lo->lretcount))
-			wake_up_all(&PNFS_NFS_INODE(lo)->lo_waitq);
+		if (type == RECALL_FILE)
+			pnfs_layout_release(lo, &lo->lretcount, NULL);
 		goto out;
 	}
 	lrp->args.reclaim = 0;
