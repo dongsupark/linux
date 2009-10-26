@@ -690,7 +690,7 @@ return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 
 	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
 	if (lrp == NULL) {
-		if (type == RECALL_FILE)
+		if (lo && (type == RECALL_FILE))
 			pnfs_layout_release(lo, &lo->lretcount, NULL);
 		goto out;
 	}
@@ -699,14 +699,11 @@ return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 	lrp->args.return_type = type;
 	lrp->args.lseg = *range;
 	lrp->args.inode = ino;
-
-	if (lo) {
-		if (stateid)
-			lrp->args.stateid = *stateid;
-		else
-			pnfs_get_layout_stateid(&lrp->args.stateid, lo);
-		lrp->lo = lo;
-	}
+	lrp->lo = lo;
+	if (stateid)
+		lrp->args.stateid = *stateid;
+	else if (lo)
+		pnfs_get_layout_stateid(&lrp->args.stateid, lo);
 
 	status = pnfs4_proc_layoutreturn(lrp);
 out:
@@ -745,15 +742,17 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 		}
 
 		lo = get_lock_current_layout(nfsi);
-		if (!lo) {
-			dprintk("%s: no layout found\n", __func__);
-			goto out;
-		}
-
-		if (!has_layout_to_return(lo, &arg)) {
+		if (lo && !has_layout_to_return(lo, &arg)) {
 			put_unlock_current_layout(lo);
+			lo = NULL;
+		}
+		if (!lo) {
 			dprintk("%s: no layout segments to return\n", __func__);
-			goto out;
+			/* must send the LAYOUTRETURN in response to recall */
+			if (stateid)
+				goto send_return;
+			else
+				goto out;
 		}
 
 		/* Matching dec is done in .rpc_release (on non-error paths) */
@@ -770,7 +769,7 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 				!pnfs_return_layout_barrier(nfsi, &arg));
 		}
 	}
-
+send_return:
 	status = return_layout(ino, &arg, stateid, type, lo);
 out:
 	dprintk("<-- %s status: %d\n", __func__, status);
