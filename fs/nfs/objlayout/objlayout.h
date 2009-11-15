@@ -59,6 +59,14 @@ struct objlayout_segment {
  * per-inode layout
  */
 struct objlayout {
+	 /* for layout_commit */
+	enum osd_delta_space_valid_enum {
+		OBJ_DSU_INIT = 0,
+		OBJ_DSU_VALID,
+		OBJ_DSU_INVALID,
+	} delta_space_valid;
+	s64 delta_space_used;  /* consumed by write ops */
+
 	 /* for layout_return */
 	spinlock_t lock;
 	struct list_head err_list;
@@ -119,6 +127,23 @@ extern ssize_t objio_write_pagelist(struct objlayout_io_state *ol_state,
 extern void objlayout_io_set_result(struct objlayout_io_state *state,
 				    unsigned index, int osd_error,
 				    u64 offset, u64 length, bool is_write);
+
+static inline void
+objlayout_add_delta_space_used(struct objlayout_io_state *state, s64 space_used)
+{
+	struct objlayout *objlay = PNFS_LD_DATA(state->lseg->layout);
+
+	/* If one of the I/Os errored out and the delta_space_used was
+	 * invalid we render the complete report as invalid. Protocol mandate
+	 * the DSU be accurate or not reported.
+	 */
+	spin_lock(&objlay->lock);
+	if (objlay->delta_space_valid != OBJ_DSU_INVALID) {
+		objlay->delta_space_valid = OBJ_DSU_VALID;
+		objlay->delta_space_used += space_used;
+	}
+	spin_unlock(&objlay->lock);
+}
 
 extern void objlayout_read_done(struct objlayout_io_state *state,
 				ssize_t status, bool sync);
