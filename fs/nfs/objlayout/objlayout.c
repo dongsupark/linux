@@ -241,6 +241,7 @@ objlayout_iodone(struct objlayout_io_state *state)
 		struct objlayout *objlay = PNFS_LD_DATA(state->lseg->layout);
 
 		spin_lock(&objlay->lock);
+		objlay->delta_space_valid = OBJ_DSU_INVALID;
 		list_add(&objlay->err_list, &state->err_list);
 		spin_unlock(&objlay->lock);
 	}
@@ -468,6 +469,35 @@ objlayout_write_pagelist(struct pnfs_layout_type *pnfs_layout_type,
 	dprintk("%s: Return status %Zd\n", __func__, status);
 	wdata->pdata.pnfs_error = status;
 	return PNFS_ATTEMPTED;
+}
+
+void
+objlayout_encode_layoutcommit(struct pnfs_layout_type *pnfslay,
+			      struct xdr_stream *xdr,
+			      const struct pnfs_layoutcommit_arg *args)
+{
+	struct objlayout *objlay = PNFS_LD_DATA(pnfslay);
+	struct pnfs_osd_layoutupdate lou;
+	__be32 *start;
+
+	dprintk("%s: Begin\n", __func__);
+
+	spin_lock(&objlay->lock);
+	lou.dsu_valid = (objlay->delta_space_valid == OBJ_DSU_VALID);
+	lou.dsu_delta = objlay->delta_space_used;
+	objlay->delta_space_used = 0;
+	objlay->delta_space_valid = OBJ_DSU_INIT;
+	lou.olu_ioerr_flag = !list_empty(&objlay->err_list);
+	spin_unlock(&objlay->lock);
+
+	start = xdr_reserve_space(xdr, 4);
+
+	BUG_ON(pnfs_osd_xdr_encode_layoutupdate(xdr, &lou));
+
+	*start = cpu_to_be32((xdr->p - start - 1) * 4);
+
+	dprintk("%s: Return delta_space_used %lld err %d\n", __func__,
+		lou.dsu_delta, lou.olu_ioerr_flag);
 }
 
 static int
@@ -755,6 +785,7 @@ struct layoutdriver_io_operations objlayout_io_operations = {
 	.free_layout             = objlayout_free_layout,
 	.alloc_lseg              = objlayout_alloc_lseg,
 	.free_lseg               = objlayout_free_lseg,
+	.encode_layoutcommit	 = objlayout_encode_layoutcommit,
 	.encode_layoutreturn     = objlayout_encode_layoutreturn,
 	.initialize_mountpoint   = objlayout_initialize_mountpoint,
 	.uninitialize_mountpoint = objlayout_uninitialize_mountpoint,
