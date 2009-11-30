@@ -132,7 +132,10 @@ static int get_stripe_unit(int blocksize)
 	return blocksize;
 }
 
-static int pnfsd_lexp_layout_get(struct inode *inode, struct pnfs_layoutget_arg *arg)
+static int pnfsd_lexp_layout_get(struct inode *inode,
+				 struct exp_xdr_stream *xdr,
+				 const struct nfsd4_pnfs_layoutget_arg *arg,
+				 struct nfsd4_pnfs_layoutget_res *res)
 {
 	int rc = 0;
 	struct pnfs_filelayout_layout *layout = NULL;
@@ -140,9 +143,9 @@ static int pnfsd_lexp_layout_get(struct inode *inode, struct pnfs_layoutget_arg 
 
 	dprintk("--> %s: inode=%p\n", __func__, inode);
 
-	arg->seg.layout_type = LAYOUT_NFSV4_FILES;
-	arg->seg.offset = 0;
-	arg->seg.length = NFS4_MAX_UINT64;
+	res->lg_seg.layout_type = LAYOUT_NFSV4_FILES;
+	res->lg_seg.offset = 0;
+	res->lg_seg.length = NFS4_MAX_UINT64;
 
 	layout = kzalloc(sizeof(*layout), GFP_KERNEL);
 	if (layout == NULL) {
@@ -156,8 +159,8 @@ static int pnfsd_lexp_layout_get(struct inode *inode, struct pnfs_layoutget_arg 
 	layout->lg_commit_through_mds = true;
 	layout->lg_stripe_unit = get_stripe_unit(inode->i_sb->s_blocksize);
 	layout->lg_fh_length = 1;
-	layout->device_id.pnfs_fsid = arg->fsid;
-	layout->device_id.pnfs_devid = 1;			/*FSFTEMP*/
+	layout->device_id.fsid = arg->lg_fsid;
+	layout->device_id.devid = 1;				/*FSFTEMP*/
 	layout->lg_first_stripe_index = 0;			/*FSFTEMP*/
 	layout->lg_pattern_offset = 0;
 
@@ -167,12 +170,12 @@ static int pnfsd_lexp_layout_get(struct inode *inode, struct pnfs_layoutget_arg 
 		goto error;
 	}
 
-	memcpy(fhp, arg->fh, sizeof(*fhp));
+	memcpy(fhp, arg->lg_fh, sizeof(*fhp));
 	pnfs_fh_mark_ds(fhp);
 	layout->lg_fh_list = fhp;
 
 	/* Call nfsd to encode layout */
-	rc = filelayout_encode_layout(&arg->xdr, layout);
+	rc = filelayout_encode_layout(xdr, layout);
 exit:
 	kfree(layout);
 	kfree(fhp);
@@ -180,7 +183,7 @@ exit:
 	return rc;
 
 error:
-	arg->seg.length = 0;
+	res->lg_seg.length = 0;
 	goto exit;
 }
 
