@@ -203,7 +203,8 @@ bl_getdeviceiter(struct super_block *sb,
 }
 
 static int
-bl_getdeviceinfo_slice(struct super_block *sb, struct pnfs_devinfo_arg *args)
+bl_getdeviceinfo_slice(struct super_block *sb, struct exp_xdr_stream *xdr,
+		       const struct nfsd4_pnfs_deviceid *devid)
 {
 	pnfs_blocklayout_devinfo_t	*bld_slice_p,
 					*bld_simple_p,
@@ -215,17 +216,17 @@ bl_getdeviceinfo_slice(struct super_block *sb, struct pnfs_devinfo_arg *args)
 	dprintk("--> %s\n", __func__);
 	INIT_LIST_HEAD(&volumes);
 
-	bld_simple_p = bld_simple(&volumes, args->devid.pnfs_devid,
+	bld_simple_p = bld_simple(&volumes, devid->devid,
 				  location++);
 	if (!bld_simple_p)
 		goto out;
-	bld_slice_p = bld_slice(&volumes, args->devid.pnfs_devid, location++,
+	bld_slice_p = bld_slice(&volumes, devid->devid, location++,
 	    bld_simple_p->bld_index_loc);
 
 	if (!bld_slice_p)
 		goto out;
 	
-	status = blocklayout_encode_devinfo(&args->xdr, &volumes);
+	status = blocklayout_encode_devinfo(xdr, &volumes);
 
 out:
 	while (!list_empty(&volumes)) {
@@ -241,7 +242,8 @@ out:
 }
 
 static int
-bl_getdeviceinfo_dm(struct super_block *sb, struct pnfs_devinfo_arg *args)
+bl_getdeviceinfo_dm(struct super_block *sb, struct exp_xdr_stream *xdr,
+		    const struct nfsd4_pnfs_deviceid *devid)
 {
 	pnfs_blocklayout_devinfo_t	*bld		= NULL;
 	int				status		= -EIO,	// default to error
@@ -255,7 +257,7 @@ bl_getdeviceinfo_dm(struct super_block *sb, struct pnfs_devinfo_arg *args)
 	INIT_LIST_HEAD(&volumes);
 	
 	msg.msg_type = PNFS_UPCALL_MSG_DMGET;
-	msg.u.msg_dev = args->devid.pnfs_devid;
+	msg.u.msg_dev = devid->devid;
 	if (bl_upcall(bl_comm_global, &msg, &res)) {
 		dprintk("%s: upcall for DMGET failed\n", __func__);
 		goto out;
@@ -305,7 +307,7 @@ bl_getdeviceinfo_dm(struct super_block *sb, struct pnfs_devinfo_arg *args)
 
 	}
 	list_add_tail(&bld->bld_list, &volumes);
-	status = blocklayout_encode_devinfo(&args->xdr, &volumes);
+	status = blocklayout_encode_devinfo(xdr, &volumes);
 	
 out:
 	while (!list_empty(&volumes)) {
@@ -334,12 +336,14 @@ out:
  * bl_getdeviceinfo -- determine device tree for requested devid
  */
 int
-bl_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *args)
+bl_getdeviceinfo(struct super_block *sb, struct exp_xdr_stream *xdr,
+		 u32 layout_type,
+		 const struct nfsd4_pnfs_deviceid *devid)
 {
-	if (device_slice(args->devid.pnfs_devid) == True)
-		return bl_getdeviceinfo_slice(sb, args);
-	else if (device_dm(args->devid.pnfs_devid) == True)
-		return bl_getdeviceinfo_dm(sb, args);
+	if (device_slice(devid->devid) == True)
+		return bl_getdeviceinfo_slice(sb, xdr, devid);
+	else if (device_dm(devid->devid) == True)
+		return bl_getdeviceinfo_dm(sb, xdr, devid);
 	return -EINVAL;
 }
 
