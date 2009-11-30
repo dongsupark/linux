@@ -310,7 +310,9 @@ struct spnfs {
 struct nfsd4_open;
 
 int spnfs_layout_type(struct super_block *);
-int spnfs_layoutget(struct inode *, struct pnfs_layoutget_arg *);
+int spnfs_layoutget(struct inode *, struct exp_xdr_stream *xdr,
+		    const struct nfsd4_pnfs_layoutget_arg *,
+		    struct nfsd4_pnfs_layoutget_res *);
 int spnfs_layoutcommit(void);
 int spnfs_layoutreturn(struct inode *, struct nfsd4_pnfs_layoutreturn *);
 int spnfs_getdeviceiter(struct super_block *,
