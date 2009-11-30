@@ -83,7 +83,9 @@ int bl_getdeviceiter(struct super_block *, u32 layout_type,
 int bl_getdeviceinfo(struct super_block *, struct exp_xdr_stream *,
 		     u32 layout_type,
 		     const struct nfsd4_pnfs_deviceid *);
-int bl_layoutget(struct inode *, struct pnfs_layoutget_arg *);
+int bl_layoutget(struct inode *, struct exp_xdr_stream *,
+		 const struct nfsd4_pnfs_layoutget_arg *,
+		 struct nfsd4_pnfs_layoutget_res *);
 int bl_layoutcommit(struct inode *, struct nfsd4_pnfs_layoutcommit *);
 int bl_layoutreturn(struct inode *, struct nfsd4_pnfs_layoutreturn *);
 int bl_layoutrecall(struct inode *inode, int type, u64 offset, u64 len);
