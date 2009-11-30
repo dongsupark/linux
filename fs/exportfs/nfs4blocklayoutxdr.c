@@ -145,8 +145,8 @@ blocklayout_encode_layout(struct exp_xdr_stream *xdr,
 		p = exp_xdr_reserve_qwords(xdr, 5 * 2 + 1);
 		if (!p)
 			return -ETOOSMALL;
-		p = exp_xdr_encode_u64(p, b->bll_vol_id.pnfs_fsid);
-		p = exp_xdr_encode_u64(p, b->bll_vol_id.pnfs_devid);
+		p = exp_xdr_encode_u64(p, b->bll_vol_id.fsid);
+		p = exp_xdr_encode_u64(p, b->bll_vol_id.devid);
 		p = exp_xdr_encode_u64(p, b->bll_foff);
 		p = exp_xdr_encode_u64(p, b->bll_len);
 		p = exp_xdr_encode_u64(p, b->bll_soff);
