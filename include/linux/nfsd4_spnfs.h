@@ -314,7 +314,9 @@ int spnfs_layoutget(struct inode *, struct pnfs_layoutget_arg *);
 int spnfs_layoutcommit(void);
 int spnfs_layoutreturn(struct inode *, struct nfsd4_pnfs_layoutreturn *);
 int spnfs_getdeviceiter(struct super_block *, struct pnfs_deviter_arg *);
-int spnfs_getdeviceinfo(struct super_block *, struct pnfs_devinfo_arg *);
+int spnfs_getdeviceinfo(struct super_block *, struct exp_xdr_stream *,
+			u32 layout_type,
+			const struct nfsd4_pnfs_deviceid *);
 int spnfs_setattr(void);
 int spnfs_open(struct inode *, struct nfsd4_open *);
 int spnfs_get_state(struct inode *, struct knfsd_fh *, struct pnfs_get_state *);
