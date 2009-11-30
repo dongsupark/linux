@@ -40,6 +40,7 @@
 #define _LINUX_NFSD_XDR4_H
 
 #include <linux/nfs4.h>
+#include <linux/nfsd/nfsd.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 
 #define NFSD4_MAX_TAGLEN	128
