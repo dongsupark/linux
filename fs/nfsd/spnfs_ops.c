@@ -268,7 +268,9 @@ spnfs_test_layoutrecall(char *path, u64 offset, u64 len)
 }
 
 int
-spnfs_getdeviceiter(struct super_block *sb, struct pnfs_deviter_arg *iter)
+spnfs_getdeviceiter(struct super_block *sb,
+		    u32 layout_type,
+		    struct nfsd4_pnfs_dev_iter_res *gd_res)
 {
 	struct spnfs *spnfs = global_spnfs;   /* XXX keep up the pretence */
 	struct spnfs_msg *im = NULL;
@@ -288,7 +290,8 @@ spnfs_getdeviceiter(struct super_block *sb, struct pnfs_deviter_arg *iter)
 	}
 
 	im->im_type = SPNFS_TYPE_GETDEVICEITER;
-	im->im_args.getdeviceiter_args.cookie = iter->cookie;
+	im->im_args.getdeviceiter_args.cookie = gd_res->gd_cookie;
+	im->im_args.getdeviceiter_args.verf = gd_res->gd_verf;
 
 	/* call function to queue the msg for upcall */
 	status = spnfs_upcall(spnfs, im, res);
@@ -300,12 +303,12 @@ spnfs_getdeviceiter(struct super_block *sb, struct pnfs_deviter_arg *iter)
 	status = res->getdeviceiter_res.status;
 
 	if (res->getdeviceiter_res.eof)
-		iter->eof = 1;
+		gd_res->gd_eof = 1;
 	else {
-		iter->devid = res->getdeviceiter_res.devid;
-		iter->cookie = res->getdeviceiter_res.cookie;
-		iter->verf = res->getdeviceiter_res.verf;
-		iter->eof = 0;
+		gd_res->gd_devid = res->getdeviceiter_res.devid;
+		gd_res->gd_cookie = res->getdeviceiter_res.cookie;
+		gd_res->gd_verf = res->getdeviceiter_res.verf;
+		gd_res->gd_eof = 0;
 	}
 
 getdeviceiter_out:
