@@ -83,7 +83,9 @@ spnfs_layout_type(struct super_block *sb)
 }
 
 int
-spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
+spnfs_layoutget(struct inode *inode, struct exp_xdr_stream *xdr,
+		const struct nfsd4_pnfs_layoutget_arg *lg_arg,
+		struct nfsd4_pnfs_layoutget_res *lg_res)
 {
 	struct spnfs *spnfs = global_spnfs; /* keep up the pretence */
 	struct spnfs_msg *im = NULL;
@@ -117,17 +119,17 @@ spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 	if (status != 0)
 		goto layoutget_cleanup;
 
-	lgp->return_on_close = 0;
+	lg_res->lg_return_on_close = 0;
 #if defined(CONFIG_SPNFS_LAYOUTSEGMENTS)
 	/* if spnfs_use_layoutsegments & layoutsegment_size == 0, use */
 	/* the amount requested by the client.			      */
 	if (spnfs_use_layoutsegments) {
 		if (layoutsegment_size != 0)
-			lgp->seg.length = layoutsegment_size;
+			lg_res->lg_seg.length = layoutsegment_size;
 	} else
-		lgp->seg.length = NFS4_MAX_UINT64;
+		lg_res->lg_seg.length = NFS4_MAX_UINT64;
 #else
-	lgp->seg.length = NFS4_MAX_UINT64;
+	lg_res->lg_seg.length = NFS4_MAX_UINT64;
 #endif /* CONFIG_SPNFS_LAYOUTSEGMENTS */
 
 	flp = kmalloc(sizeof(struct pnfs_filelayout_layout), GFP_KERNEL);
@@ -135,7 +137,7 @@ spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 		status = -ENOMEM;
 		goto layoutget_cleanup;
 	}
-	flp->device_id.fsid = lgp->fsid;
+	flp->device_id.fsid = lg_arg->lg_fsid;
 	flp->device_id.devid = res->layoutget_res.devid;
 	flp->lg_layout_type = 1; /* XXX */
 	flp->lg_stripe_type = res->layoutget_res.stripe_type;
@@ -163,7 +165,7 @@ spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 	}
 
 	/* encode the layoutget body */
-	status = filelayout_encode_layout(&lgp->xdr, flp);
+	status = filelayout_encode_layout(xdr, flp);
 
 layoutget_cleanup:
 	if (flp) {
