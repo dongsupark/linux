@@ -78,7 +78,8 @@ typedef struct bl_comm {
 
 int pnfs_block_enabled(struct inode *, int);
 int bl_layout_type(struct super_block *sb);
-int bl_getdeviceiter(struct super_block *, struct pnfs_deviter_arg *);
+int bl_getdeviceiter(struct super_block *, u32 layout_type,
+		     struct nfsd4_pnfs_dev_iter_res *);
 int bl_getdeviceinfo(struct super_block *, struct pnfs_devinfo_arg *);
 int bl_layoutget(struct inode *, struct pnfs_layoutget_arg *);
 int bl_layoutcommit(struct inode *, struct nfsd4_pnfs_layoutcommit *);

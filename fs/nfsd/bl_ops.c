@@ -25,13 +25,14 @@
 #include <linux/nfsd/state.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 #include <linux/nfsd/debug.h>
-#include <linux/nfsd/pnfsd.h>
 #include <linux/spinlock_types.h>
 #include <linux/dm-ioctl.h>
 #include <asm/uaccess.h>
 #include <linux/falloc.h>
-
 #include <linux/nfsd4_block.h>
+
+#include "pnfsd.h"
+
 #define NFSDDBG_FACILITY	NFSDDBG_PNFS
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -188,19 +189,17 @@ bl_layout_type(struct super_block *sb)
 }
 
 int
-bl_getdeviceiter(struct super_block *sb, struct pnfs_deviter_arg *iter)
+bl_getdeviceiter(struct super_block *sb,
+		 u32 layout_type,
+		 struct nfsd4_pnfs_dev_iter_res *res)
 {
-	int	status = 0;
-	
-	if (iter->cookie)
-		iter->eof	= 1;
-	else {
-		iter->devid	= sb->s_dev;
-		iter->verf	= 1;
-		iter->cookie	= 1;
-		iter->eof	= 0;
-	}
-	return status;
+	res->gd_eof = 1;	
+	if (res->gd_cookie)
+		return -ENOENT;
+	res->gd_devid	= sb->s_dev;
+	res->gd_verf	= 1;
+	res->gd_cookie	= 1;
+	return 0;
 }
 
 static int
@@ -498,8 +497,8 @@ bl_layoutcommit(struct inode *i, struct nfsd4_pnfs_layoutcommit *lcp)
 				    extents, GFP_KERNEL);
 			if (b) {
 				for (i = 0; i < extents; i++) {
-					READ64(b[i].bll_vol_id.pnfs_fsid);
-					READ64(b[i].bll_vol_id.pnfs_devid);
+					READ64(b[i].bll_vol_id.fsid);
+					READ64(b[i].bll_vol_id.devid);
 					READ64(b[i].bll_foff);
 					READ64(b[i].bll_len);
 					READ64(b[i].bll_soff);
@@ -717,7 +716,7 @@ bld_slice(struct list_head *volumes, dev_t devid, int my_loc, int simple_loc)
 		return NULL;
 	}
 	
-	bld->bld_devid.pnfs_devid = devid;
+	bld->bld_devid.devid = devid;
 	bld->bld_index_loc	= my_loc;
 	bld->u.slice.bld_start	= res->u.slice.start * 512LL;
 	bld->u.slice.bld_len	= res->u.slice.length * 512LL;
@@ -812,8 +811,8 @@ layout_cache_iter(bl_layout_rec_t *r, struct list_head *bl_possible,
 				n = bll_alloc(b->bll_foff, b->bll_len,
 				    BLOCK_LAYOUT_NEW, bl_candidates);
 				n->bll_es = PNFS_BLOCK_NONE_DATA;
-				n->bll_vol_id.pnfs_fsid = 0;
-				n->bll_vol_id.pnfs_devid = dev;
+				n->bll_vol_id.fsid = 0;
+				n->bll_vol_id.devid = dev;
 				seg->length += b->bll_len;
 			} else {
 				
@@ -930,7 +929,7 @@ layout_cache_update(bl_layout_rec_t *r, struct list_head *h)
 	}
 	
 	list_for_each_entry(b, h, bll_list) {
-		BUG_ON(!b->bll_vol_id.pnfs_devid);
+		BUG_ON(!b->bll_vol_id.devid);
 		if (b->bll_cache_state == BLOCK_LAYOUT_UPDATE) {
 			boolean_t found = False;
 			list_for_each_entry(c, &r->blr_layouts, bll_list) {
@@ -1204,8 +1203,8 @@ layout_cache_fill_from_list(bl_layout_rec_t *r, struct list_head *h,
 				return False;
 			
 			n->bll_soff = b->bll_soff + seg->offset - b->bll_foff;
-			n->bll_vol_id.pnfs_fsid = 0;
-			n->bll_vol_id.pnfs_devid = b->bll_vol_id.pnfs_devid;
+			n->bll_vol_id.fsid = 0;
+			n->bll_vol_id.devid = b->bll_vol_id.devid;
 			n->bll_es = s;
 			seg->offset += n->bll_len;
 			seg->length -= n->bll_len;
@@ -1226,8 +1225,8 @@ bll_alloc_holey(struct list_head *bl_candidates, u64 offset, u64 length,
 	if (!n)
 		return 0;
 	n->bll_es = PNFS_BLOCK_NONE_DATA;
-	n->bll_vol_id.pnfs_fsid = 0;
-	n->bll_vol_id.pnfs_devid = dev;
+	n->bll_vol_id.fsid = 0;
+	n->bll_vol_id.devid = dev;
 	
 	return n->bll_len;
 }
@@ -1355,8 +1354,8 @@ extents_process(struct fiemap_extent_info *fei, struct list_head *bl_candidates,
 		n->bll_soff = fep->fe_physical;
 		n->bll_es = seg->iomode == IOMODE_READ ?
 		    PNFS_BLOCK_READ_DATA : PNFS_BLOCK_READWRITE_DATA;
-		n->bll_vol_id.pnfs_fsid = 0;
-		n->bll_vol_id.pnfs_devid = dev;
+		n->bll_vol_id.fsid = 0;
+		n->bll_vol_id.devid = dev;
 		seg->length += fep->fe_length;
 		print_bll(n, "New extent");
 		fep_last = fep;
@@ -1622,7 +1621,7 @@ bll_alloc_dup(pnfs_blocklayout_layout_t *b, enum bl_cache_state c,
 	if (n) {
 		n->bll_es			= b->bll_es;
 		n->bll_soff			= b->bll_soff;
-		n->bll_vol_id.pnfs_devid	= b->bll_vol_id.pnfs_devid;
+		n->bll_vol_id.devid		= b->bll_vol_id.devid;
 	}
 	return n;
 }
