@@ -348,7 +348,9 @@ bl_getdeviceinfo(struct super_block *sb, struct exp_xdr_stream *xdr,
 }
 
 int
-bl_layoutget(struct inode *i, struct pnfs_layoutget_arg *args)
+bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
+	     const struct nfsd4_pnfs_layoutget_arg *arg,
+	     struct nfsd4_pnfs_layoutget_res *res)
 {
 	pnfs_blocklayout_layout_t	*b;
 	bl_layout_rec_t			*r;
@@ -359,10 +361,10 @@ bl_layoutget(struct inode *i, struct pnfs_layoutget_arg *args)
 					adj;
 	
 	dprintk("--> %s (inode=[0x%x:%lu], offset=%Lu, len=%Lu, iomode=%d)\n",
-	    __func__, i->i_sb->s_dev, i->i_ino, _2SECTS(args->seg.offset),
-	    _2SECTS(args->seg.length), args->seg.iomode);
+	    __func__, i->i_sb->s_dev, i->i_ino, _2SECTS(res->lg_seg.offset),
+	    _2SECTS(res->lg_seg.length), res->lg_seg.iomode);
 
-	if (args->seg.length == 0) {
+	if (res->lg_seg.length == 0) {
 		printk("%s: request length of 0, error condition\n", __func__);
 		return -EINVAL;
 	}
@@ -374,18 +376,18 @@ bl_layoutget(struct inode *i, struct pnfs_layoutget_arg *args)
 	 * - Second case is were the I/O mode is read-only, but the request is
 	 *   past the end of the file so the request needs to be trimed.
 	 */
-	if ((args->seg.length == NFS4_MAX_UINT64) ||
-	    (((args->seg.offset + args->seg.length) > i->i_size) &&
-	     (args->seg.iomode == IOMODE_READ)))
-		args->seg.length = i->i_size - args->seg.offset;
+	if ((res->lg_seg.length == NFS4_MAX_UINT64) ||
+	    (((res->lg_seg.offset + res->lg_seg.length) > i->i_size) &&
+	     (res->lg_seg.iomode == IOMODE_READ)))
+		res->lg_seg.length = i->i_size - res->lg_seg.offset;
 	
-	adj = (args->seg.offset & 511) ? args->seg.offset & 511 : 0;
-	args->seg.offset -= adj;
-	args->seg.length = (args->seg.length + adj + 511) & ~511;
+	adj = (res->lg_seg.offset & 511) ? res->lg_seg.offset & 511 : 0;
+	res->lg_seg.offset -= adj;
+	res->lg_seg.length = (res->lg_seg.length + adj + 511) & ~511;
 	
-	if (args->seg.iomode != IOMODE_READ)
-		if (i->i_op->fallocate(i, FALLOC_FL_KEEP_SIZE, args->seg.offset,
-		    args->seg.length))
+	if (res->lg_seg.iomode != IOMODE_READ)
+		if (i->i_op->fallocate(i, FALLOC_FL_KEEP_SIZE,
+				       res->lg_seg.offset, res->lg_seg.length))
 			return -EIO;
 		
 	INIT_LIST_HEAD(&bl_possible);
@@ -401,7 +403,7 @@ bl_layoutget(struct inode *i, struct pnfs_layoutget_arg *args)
 	
 	spin_lock(&r->blr_lock);
 	
-	if (layout_cache_fill_from(r, &bl_possible, &args->seg)) {
+	if (layout_cache_fill_from(r, &bl_possible, &res->lg_seg)) {
 		/*
 		 * This will send LAYOUTTRYAGAIN error to the client.
 		 */
@@ -410,10 +412,10 @@ bl_layoutget(struct inode *i, struct pnfs_layoutget_arg *args)
 		goto layoutget_cleanup;
 	}
 	
-	args->return_on_close	= 1;
-	args->seg.length	= 0;
+	res->lg_return_on_close	= 1;
+	res->lg_seg.length	= 0;
 	
-	bl_candidates = layout_cache_iter(r, &bl_possible, &args->seg);
+	bl_candidates = layout_cache_iter(r, &bl_possible, &res->lg_seg);
 	if (!bl_candidates) {
 		status = -ENOMEM;
 		goto layoutget_cleanup;
@@ -427,7 +429,7 @@ bl_layoutget(struct inode *i, struct pnfs_layoutget_arg *args)
 		goto layoutget_cleanup;
 	}
 	
-	status = blocklayout_encode_layout(&args->xdr, bl_candidates);
+	status = blocklayout_encode_layout(xdr, bl_candidates);
 	if (status)
 		dprintk("%s: layoutget xdr routine failed\n", __func__);
 	
@@ -445,8 +447,8 @@ layoutget_cleanup:
 	if (unlikely(status)) {
 		if (del_on_error == True)
 			layout_inode_del(i);
-		args->seg.length = 0;
-		args->seg.offset = 0;
+		res->lg_seg.length = 0;
+		res->lg_seg.offset = 0;
 	}
 	
 	dprintk("<-- %s (rval %d)\n", __func__, status);
