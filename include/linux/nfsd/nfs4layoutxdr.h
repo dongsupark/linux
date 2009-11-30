@@ -96,7 +96,7 @@ enum bl_cache_state {
 
 typedef struct pnfs_blocklayout_layout {
         struct list_head                bll_list;
-        struct pnfs_deviceid            bll_vol_id;
+        struct nfsd4_pnfs_deviceid      bll_vol_id;
         u64                             bll_foff;	// file offset
         u64                             bll_len;
         u64                             bll_soff;	// storage offset
@@ -108,7 +108,7 @@ typedef struct pnfs_blocklayout_layout {
 typedef struct pnfs_blocklayout_devinfo {
         struct list_head                bld_list;
         pnfs_block_volume_type4         bld_type;
-        struct pnfs_deviceid            bld_devid;
+        struct nfsd4_pnfs_deviceid      bld_devid;
         int                             bld_index_loc;
         union {
                 struct {
