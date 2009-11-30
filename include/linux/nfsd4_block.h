@@ -80,7 +80,9 @@ int pnfs_block_enabled(struct inode *, int);
 int bl_layout_type(struct super_block *sb);
 int bl_getdeviceiter(struct super_block *, u32 layout_type,
 		     struct nfsd4_pnfs_dev_iter_res *);
-int bl_getdeviceinfo(struct super_block *, struct pnfs_devinfo_arg *);
+int bl_getdeviceinfo(struct super_block *, struct exp_xdr_stream *,
+		     u32 layout_type,
+		     const struct nfsd4_pnfs_deviceid *);
 int bl_layoutget(struct inode *, struct pnfs_layoutget_arg *);
 int bl_layoutcommit(struct inode *, struct nfsd4_pnfs_layoutcommit *);
 int bl_layoutreturn(struct inode *, struct nfsd4_pnfs_layoutreturn *);
