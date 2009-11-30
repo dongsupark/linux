@@ -54,9 +54,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/nfsd/state.h>
 #include <linux/nfsd/nfsd.h>
 #include <linux/nfsd/xdr4.h>
-#include <linux/nfsd/pnfsd.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
+
+#include "pnfsd.h"
 
 /* comment out CONFIG_SPNFS_TEST for non-test behaviour */
 /* #define CONFIG_SPNFS_TEST 1 */
@@ -134,8 +135,8 @@ spnfs_layoutget(struct inode *inode, struct pnfs_layoutget_arg *lgp)
 		status = -ENOMEM;
 		goto layoutget_cleanup;
 	}
-	flp->device_id.pnfs_fsid = lgp->fsid;
-	flp->device_id.pnfs_devid = res->layoutget_res.devid;
+	flp->device_id.fsid = lgp->fsid;
+	flp->device_id.devid = res->layoutget_res.devid;
 	flp->lg_layout_type = 1; /* XXX */
 	flp->lg_stripe_type = res->layoutget_res.stripe_type;
 	flp->lg_commit_through_mds = 0;
@@ -380,7 +381,9 @@ static void spnfs_set_test_indices(struct pnfs_filelayout_device *fldev,
 #endif /* CONFIG_SPNFS_TEST */
 
 int
-spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
+spnfs_getdeviceinfo(struct super_block *sb, struct exp_xdr_stream *xdr,
+		    u32 layout_type,
+		    const struct nfsd4_pnfs_deviceid *devid)
 {
 	struct spnfs *spnfs = global_spnfs;
 	struct spnfs_msg *im = NULL;
@@ -405,7 +408,7 @@ spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
 
 	im->im_type = SPNFS_TYPE_GETDEVICEINFO;
 	/* XXX FIX: figure out what to do about fsid */
-	im->im_args.getdeviceinfo_args.devid = info->devid.pnfs_devid;
+	im->im_args.getdeviceinfo_args.devid = devid->devid;
 
 	/* call function to queue the msg for upcall */
 	status = spnfs_upcall(spnfs, im, res);
@@ -501,7 +504,7 @@ spnfs_getdeviceinfo(struct super_block *sb, struct pnfs_devinfo_arg *info)
 	}
 
 	/* encode the device data */
-	status = filelayout_encode_devinfo(&info->xdr, fldev);
+	status = filelayout_encode_devinfo(xdr, fldev);
 
 getdeviceinfo_out:
 	if (fldev) {
