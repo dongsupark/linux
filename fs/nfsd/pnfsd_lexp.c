@@ -25,8 +25,9 @@
 #include <linux/sunrpc/svc_xprt.h>
 #include <linux/nfsd/nfsfh.h>
 #include <linux/nfsd/state.h>
-#include <linux/nfsd/pnfsd.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
+
+#include "pnfsd.h"
 
 #define NFSDDBG_FACILITY NFSDDBG_PNFS
 
@@ -43,18 +44,19 @@ pnfsd_lexp_layout_type(struct super_block *sb)
 
 static int
 pnfsd_lexp_get_device_iter(struct super_block *sb,
-			   struct pnfs_deviter_arg *arg)
+			   u32 layout_type,
+			   struct nfsd4_pnfs_dev_iter_res *res)
 {
 	dprintk("--> %s: sb=%p\n", __func__, sb);
 
-	BUG_ON(arg->type != LAYOUT_NFSV4_FILES);
+	BUG_ON(layout_type != LAYOUT_NFSV4_FILES);
 
-	if (arg->cookie == 0) {
-		arg->cookie = 1;
-		arg->verf = 1;
-		arg->devid = 1;
-	} else
-		arg->eof = 1;
+	res->gd_eof = 1;
+	if (res->gd_cookie)
+		return -ENOENT;
+	res->gd_cookie = 1;
+	res->gd_verf = 1;
+	res->gd_devid = 1;
 
 	dprintk("<-- %s: return 0\n", __func__);
 	return 0;
