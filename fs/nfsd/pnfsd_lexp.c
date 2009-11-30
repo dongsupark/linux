@@ -64,7 +64,9 @@ pnfsd_lexp_get_device_iter(struct super_block *sb,
 
 static int
 pnfsd_lexp_get_device_info(struct super_block *sb,
-			   struct pnfs_devinfo_arg *arg)
+			   struct exp_xdr_stream *xdr,
+			   u32 layout_type,
+			   const struct nfsd4_pnfs_deviceid *devid)
 {
 	int err;
 	struct pnfs_filelayout_device fdev;
@@ -76,13 +78,13 @@ pnfsd_lexp_get_device_info(struct super_block *sb,
 
 	dprintk("--> %s: sb=%p\n", __func__, sb);
 
-	BUG_ON(arg->type != LAYOUT_NFSV4_FILES);
+	BUG_ON(layout_type != LAYOUT_NFSV4_FILES);
 
 	memset(&fdev, '\0', sizeof(fdev));
 
-	if (arg->devid.pnfs_devid != 1) {
+	if (devid->devid != 1) {
 		printk(KERN_ERR "%s: WARNING: didn't receive a deviceid of 1 "
-			"(got: 0x%llx)\n", __func__, arg->devid.pnfs_devid);
+			"(got: 0x%llx)\n", __func__, devid->devid);
 		err = -EINVAL;
 		goto out;
 	}
@@ -116,7 +118,7 @@ pnfsd_lexp_get_device_info(struct super_block *sb,
 	fdev.fl_device_list[0].fl_multipath_list = &daddr;
 
 	/* have nfsd encode the device info */
-	err = filelayout_encode_devinfo(&arg->xdr, &fdev);
+	err = filelayout_encode_devinfo(xdr, &fdev);
 out:
 	dprintk("<-- %s: return %d\n", __func__, err);
 	return err;
