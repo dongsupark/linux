@@ -119,12 +119,6 @@ int put_layoutrecall(struct nfs4_layoutrecall *);
 void nomatching_layout(struct nfs4_layoutrecall *);
 void *layoutrecall_done(struct nfs4_layoutrecall *);
 int nfsd4_cb_layout(struct nfs4_layoutrecall *);
-int lo_recall_per_client(struct nfs4_client *,
-			 struct nfsd4_pnfs_cb_layout *, struct nfs4_file *,
-			 struct list_head *todolist);
-int create_layout_recall_list(struct list_head *todolist,
-			      unsigned *todo_len, struct nfsd4_pnfs_cb_layout *,
-			      struct nfs4_file *);
 int nfsd_layout_recall_cb(struct super_block *, struct inode *,
 			  struct nfsd4_pnfs_cb_layout *);
 int nfsd_device_notify_cb(struct super_block *,
@@ -132,7 +126,5 @@ int nfsd_device_notify_cb(struct super_block *,
 int nfsd4_cb_notify_device(struct nfs4_notify_device *);
 void pnfs_set_device_notify(clientid_t *, unsigned int types);
 void pnfs_clear_device_notify(struct nfs4_client *);
-int create_device_notify_list(struct list_head *,
-			      struct nfsd4_pnfs_cb_dev_list *);
 
 #endif /* LINUX_NFSD_PNFSD_H */

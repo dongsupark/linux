@@ -189,12 +189,6 @@ struct nfsd4_sessionid {
 
 #define HEXDIR_LEN     33 /* hex version of 16 byte md5 of cl_name plus '\0' */
 
-#define CLIENT_HASH_BITS                 4
-#define CLIENT_HASH_SIZE                (1 << CLIENT_HASH_BITS)
-#define CLIENT_HASH_MASK                (CLIENT_HASH_SIZE - 1)
-
-extern struct list_head	conf_str_hashtbl[CLIENT_HASH_SIZE];
-
 /*
  * struct nfs4_client - one per client.  Clientids live here.
  * 	o Each nfs4_client is hashed by clientid.
@@ -444,6 +438,7 @@ extern struct nfs4_stateid *find_stateid(stateid_t *, int flags);
 extern struct nfs4_delegation *find_delegation_stateid(struct inode *, stateid_t *);
 extern __be32 nfs4_check_stateid(stateid_t *);
 extern void expire_client_lock(struct nfs4_client *);
+extern int filter_confirmed_clients(int (* func)(struct nfs4_client *, void *), void *);
 
 #if defined(CONFIG_PNFSD)
 extern int nfsd4_init_pnfs_slabs(void);

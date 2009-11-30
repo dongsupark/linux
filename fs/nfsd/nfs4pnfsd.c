@@ -1227,6 +1227,13 @@ void pnfs_expire_client(struct nfs4_client *clp)
 	}
 }
 
+struct create_recall_list_arg {
+	struct nfsd4_pnfs_cb_layout *cbl;
+	struct nfs4_file *lrfile;
+	struct list_head *todolist;
+	unsigned todo_count;
+};
+
 /*
  * look for matching layout for the given client
  * and add a pending layout recall to the todo list
@@ -1234,28 +1241,67 @@ void pnfs_expire_client(struct nfs4_client *clp)
  * returns:
  *   0 if layouts found or negative error.
  */
-int
-lo_recall_per_client(struct nfs4_client *clp,
-		     struct nfsd4_pnfs_cb_layout *cbl,
-		     struct nfs4_file *lrfile,
-		     struct list_head *todolist)
+static int
+lo_recall_per_client(struct nfs4_client *clp, void *p)
 {
 	stateid_t lsid;
 	struct nfs4_layoutrecall *pending;
+	struct create_recall_list_arg *arg = p;
 
 	memset(&lsid, 0, sizeof(lsid));
-	if (!cl_has_layout(clp, cbl, lrfile, &lsid))
-		return -ENOENT;
+	if (!cl_has_layout(clp, arg->cbl, arg->lrfile, &lsid))
+		return 0;
 
 	/* Matching put done by layoutreturn */
-	pending = alloc_init_layoutrecall(cbl, clp, lrfile);
+	pending = alloc_init_layoutrecall(arg->cbl, clp, arg->lrfile);
 	/* out of memory, drain todo queue */
 	if (!pending)
 		return -ENOMEM;
 
 	pending->cb.cbl_sid = lsid;
-	list_add(&pending->clr_perclnt, todolist);
+	list_add(&pending->clr_perclnt, arg->todolist);
+	arg->todo_count++;
 	return 0;
+}
+
+/* Create a layoutrecall structure for each client based on the
+ * original structure. */
+int
+create_layout_recall_list(struct list_head *todolist, unsigned *todo_len,
+			  struct nfsd4_pnfs_cb_layout *cbl,
+			  struct nfs4_file *lrfile)
+{
+	struct nfs4_client *clp;
+	struct create_recall_list_arg arg = {
+		.cbl = cbl,
+		.lrfile = lrfile,
+		.todolist = todolist,
+	};
+	int status = 0;
+
+	dprintk("%s: -->\n", __func__);
+
+	/* If client given by fs, just do single client */
+	if (cbl->cbl_seg.clientid) {
+		clp = find_confirmed_client(
+				(clientid_t *)&cbl->cbl_seg.clientid);
+		if (!clp) {
+			status = -ENOENT;
+			dprintk("%s: clientid %llx not found\n", __func__,
+				(unsigned long long)cbl->cbl_seg.clientid);
+			goto out;
+		}
+
+		status = lo_recall_per_client(clp, &arg);
+	} else {
+		/* Check all clients for layout matches */
+		status = filter_confirmed_clients(lo_recall_per_client, &arg);
+	}
+
+out:
+	*todo_len = arg.todo_count;
+	dprintk("%s: <-- list len %u status %d\n", __func__, *todo_len, status);
+	return status;
 }
 
 /*
@@ -1345,7 +1391,7 @@ spawn_layout_recall(struct super_block *sb, struct list_head *todolist,
 int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 			  struct nfsd4_pnfs_cb_layout *cbl)
 {
-	int status, status2;
+	int status;
 	struct nfs4_file *lrfile = NULL;
 	struct list_head todolist;
 	unsigned todo_len = 0;
@@ -1385,16 +1431,64 @@ int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 		cbl->cbl_cookie = PNFS_LAST_LAYOUT_NO_RECALLS;
 
 	status = create_layout_recall_list(&todolist, &todo_len, cbl, lrfile);
-
-	status2 = spawn_layout_recall(sb, &todolist, todo_len);
-	if (status2)
-		status = status2;
+	if (list_empty(&todolist)) {
+		status = -ENOENT;
+	} else {
+		/* process todolist even if create_layout_recall_list
+		 * returned an error */
+		int status2 = spawn_layout_recall(sb, &todolist, todo_len);
+		if (status2)
+			status = status2;
+	}
 
 err:
 	nfs4_unlock_state();
 	if (lrfile)
 		put_nfs4_file(lrfile);
 	return (todo_len && status) ? -EAGAIN : status;
+}
+
+struct create_device_notify_list_arg {
+	struct list_head *todolist;
+	struct nfsd4_pnfs_cb_dev_list *ndl;
+};
+
+static int
+create_device_notify_per_cl(struct nfs4_client *clp, void *p)
+{
+	struct nfs4_notify_device *cbnd;
+	struct create_device_notify_list_arg *arg = p;
+
+	if (atomic_read(&clp->cl_deviceref) <= 0)
+		return 0;
+
+	cbnd = kmalloc(sizeof(*cbnd), GFP_KERNEL);
+	if (!cbnd)
+		return -ENOMEM;
+
+	cbnd->nd_list = arg->ndl;
+	cbnd->nd_client = clp;
+	list_add(&cbnd->nd_perclnt, arg->todolist);
+	atomic_inc(&clp->cl_count);
+	return 0;
+}
+
+/* Create a list of clients to send device notifications. */
+int
+create_device_notify_list(struct list_head *todolist,
+			  struct nfsd4_pnfs_cb_dev_list *ndl)
+{
+	int status;
+	struct create_device_notify_list_arg arg = {
+		.todolist = todolist,
+		.ndl = ndl,
+	};
+
+	nfs4_lock_state();
+	status = filter_confirmed_clients(create_device_notify_per_cl, &arg);
+	nfs4_unlock_state();
+
+	return status;
 }
 
 /*
@@ -1435,86 +1529,5 @@ int nfsd_device_notify_cb(struct super_block *sb,
 
 	dprintk("NFSD %s: status %d clients %u\n",
 		__func__, status, notify_num);
-	return status;
-}
-
-/* Create a layoutrecall structure for each client based on the
- * original structure. */
-int
-create_layout_recall_list(struct list_head *todolist, unsigned *todo_len,
-			  struct nfsd4_pnfs_cb_layout *cbl,
-			  struct nfs4_file *lrfile)
-{
-	struct nfs4_client *clp;
-	unsigned int i, len = 0;
-	int status = 0;
-
-	dprintk("%s: -->\n", __func__);
-
-	/* If client given by fs, just do single client */
-	if (cbl->cbl_seg.clientid) {
-		clp = find_confirmed_client(
-				(clientid_t *)&cbl->cbl_seg.clientid);
-		if (!clp) {
-			status = -ENOENT;
-			dprintk("%s: clientid %llx not found\n", __func__,
-				(unsigned long long)cbl->cbl_seg.clientid);
-			goto out;
-		}
-
-		status = lo_recall_per_client(clp, cbl, lrfile, todolist);
-		if (!status)
-			len++;
-		goto out;
-	}
-
-	/* Check all clients for layout matches */
-	for (i = 0; i < CLIENT_HASH_SIZE; i++)
-		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
-			status = lo_recall_per_client(clp, cbl, lrfile,
-						      todolist);
-			if (!status)
-				len++;
-			else if (status != -ENOENT)
-				goto out;
-		}
-out:
-	*todo_len = len;
-	/* -ENOENT is a good thing don't return it if some recalls are needed */
-	if ((status == -ENOENT) && len)
-		status = 0;
-	dprintk("%s: <-- list len %u status %d\n", __func__, len, status);
-	return status;
-}
-
-/* Create a list of clients to send device notifications. */
-int
-create_device_notify_list(struct list_head *todolist,
-			  struct nfsd4_pnfs_cb_dev_list *ndl)
-{
-	int status = 0, i;
-	struct nfs4_client *clp = NULL;
-	struct nfs4_notify_device *cbnd;
-
-	nfs4_lock_state();
-
-	/* Create notify client list */
-	for (i = 0; i < CLIENT_HASH_SIZE; i++)
-		list_for_each_entry(clp, &conf_str_hashtbl[i], cl_strhash) {
-			if (atomic_read(&clp->cl_deviceref) <= 0)
-				continue;
-			cbnd = kmalloc(sizeof(*cbnd), GFP_KERNEL);
-			if (!cbnd) {
-				status = -ENOMEM;
-				goto out;
-			}
-			cbnd->nd_list = ndl;
-			cbnd->nd_client = clp;
-			list_add(&cbnd->nd_perclnt, todolist);
-			atomic_inc(&clp->cl_count);
-		}
-
-out:
-	nfs4_unlock_state();
 	return status;
 }

@@ -279,6 +279,9 @@ unhash_delegation(struct nfs4_delegation *dp)
  */
 
 /* Hash tables for nfs4_clientid state */
+#define CLIENT_HASH_BITS                 4
+#define CLIENT_HASH_SIZE                (1 << CLIENT_HASH_BITS)
+#define CLIENT_HASH_MASK                (CLIENT_HASH_SIZE - 1)
 
 #define clientid_hashval(id) \
 	((id) & CLIENT_HASH_MASK)
@@ -303,7 +306,7 @@ unhash_delegation(struct nfs4_delegation *dp)
 static struct list_head	reclaim_str_hashtbl[CLIENT_HASH_SIZE];
 static int reclaim_str_hashtbl_size = 0;
 static struct list_head	conf_id_hashtbl[CLIENT_HASH_SIZE];
-struct list_head	conf_str_hashtbl[CLIENT_HASH_SIZE];
+static struct list_head	conf_str_hashtbl[CLIENT_HASH_SIZE];
 static struct list_head	unconf_str_hashtbl[CLIENT_HASH_SIZE];
 static struct list_head	unconf_id_hashtbl[CLIENT_HASH_SIZE];
 static struct list_head client_lru;
@@ -1010,6 +1013,24 @@ find_unconfirmed_client_by_str(const char *dname, unsigned int hashval,
 			return clp;
 	}
 	return NULL;
+}
+
+int
+filter_confirmed_clients(int (* func)(struct nfs4_client *, void *),
+			 void *arg)
+{
+	struct nfs4_client *clp, *next;
+	int i, status = 0;
+
+	for (i = 0; i < CLIENT_HASH_SIZE; i++)
+		list_for_each_entry_safe (clp, next, &conf_str_hashtbl[i],
+					  cl_strhash) {
+			status = func(clp, arg);
+			if (status)
+				break;
+		}
+
+	return status;
 }
 
 static void
