@@ -54,7 +54,7 @@ struct nfsd4_pnfs_dev_iter_res {
 
 /* Arguments for set_device_notify */
 struct pnfs_devnotify_arg {
-	struct pnfs_deviceid dn_devid;		/* request */
+	struct nfsd4_pnfs_deviceid dn_devid;		/* request */
 	u32 dn_layout_type;			/* request */
 	u32 dn_notify_types;			/* request/response */
 };
@@ -263,7 +263,7 @@ struct nfs4_layoutrecall {
 struct nfsd4_pnfs_cb_dev_item {
 	u32			cbd_notify_type;	/* request */
 	u32			cbd_layout_type;	/* request */
-	struct pnfs_deviceid	cbd_devid;		/* request */
+	struct nfsd4_pnfs_deviceid cbd_devid;		/* request */
 	u32			cbd_immediate;		/* request */
 };
 
