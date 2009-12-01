@@ -474,7 +474,7 @@ nfsd4_get_verifier(struct super_block *sb, nfs4_verifier *verf)
 	u32 *p = (u32 *)verf->data;
 
 #if defined(CONFIG_PNFSD)
-	if (sb->s_pnfs_op->get_verifier) {
+	if (sb->s_pnfs_op && sb->s_pnfs_op->get_verifier) {
 		nfs4_ds_get_verifier(NULL, sb, p);
 		return;
 	}

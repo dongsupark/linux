@@ -588,9 +588,6 @@ nfs4_ds_get_verifier(stateid_t *stateid, struct super_block *sb, u32 *p)
 {
 	struct pnfs_ds_stateid *dsp = NULL;
 
-	if (!sb->s_pnfs_op->get_verifier)
-		return;
-
 	dprintk("pNFSD: %s --> stid %p\n", __func__, stateid);
 
 	ds_lock_state();
