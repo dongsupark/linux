@@ -223,13 +223,13 @@ static void exofs_handle_error(struct pnfs_osd_ioerr *ioerr)
 
 static int exofs_layout_return(
 	struct inode *inode,
-	struct nfsd4_pnfs_layoutreturn *lrp)
+	const struct nfsd4_pnfs_layoutreturn_arg *args)
 {
-	__be32 *p = lrp->lrf_body;
-	unsigned len = lrp->lrf_body_len / 4;
+	__be32 *p = args->lrf_body;
+	unsigned len = exp_xdr_qwords(args->lrf_body_len);
 
 	EXOFS_DBGMSG("(0x%lx) cookie %p xdr_len %d\n",
-		     inode->i_ino, lrp->lr_cookie, len);
+		     inode->i_ino, args->lr_cookie, len);
 
 	while (len >= pnfs_osd_ioerr_xdr_sz()) {
 		struct pnfs_osd_ioerr ioerr;
@@ -239,11 +239,11 @@ static int exofs_layout_return(
 		exofs_handle_error(&ioerr);
 	}
 
-	if (lrp->lr_cookie) {
+	if (args->lr_cookie) {
 		struct exofs_i_info *oi = exofs_i(inode);
 		bool in_recall;
 
-		if (lrp->lr_cookie == PNFS_LAST_LAYOUT_NO_RECALLS) {
+		if (args->lr_cookie == PNFS_LAST_LAYOUT_NO_RECALLS) {
 			spin_lock(&oi->i_layout_lock);
 			in_recall = test_bit(OBJ_IN_LAYOUT_RECALL,
 						   &oi->i_flags);
