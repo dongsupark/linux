@@ -95,7 +95,7 @@ struct list_head *layout_cache_iter(bl_layout_rec_t *r,
     struct list_head *bl_possible, struct nfsd4_layout_seg *seg);
 static void layout_cache_merge(bl_layout_rec_t *r, struct list_head *h);
 static int layout_cache_update(bl_layout_rec_t *r, struct list_head *h);
-static void layout_cache_del(bl_layout_rec_t *r, struct nfsd4_layout_seg *seg);
+static void layout_cache_del(bl_layout_rec_t *r, const struct nfsd4_layout_seg *seg);
 static void print_bll(pnfs_blocklayout_layout_t *b, char *);
 static inline boolean_t layout_cache_fill_from_list(bl_layout_rec_t *r,
     struct list_head *h, struct nfsd4_layout_seg *seg);
@@ -531,7 +531,8 @@ bl_layoutcommit(struct inode *i,
 }
 
 int
-bl_layoutreturn(struct inode *i, struct nfsd4_pnfs_layoutreturn *lrp)
+bl_layoutreturn(struct inode *i,
+		const struct nfsd4_pnfs_layoutreturn_arg *args)
 {
 	int				status	= 0;
 	bl_layout_rec_t			*r;
@@ -541,7 +542,7 @@ bl_layoutreturn(struct inode *i, struct nfsd4_pnfs_layoutreturn *lrp)
 	r = layout_inode_find(i);
 	if (r) {
 		spin_lock(&r->blr_lock);
-		layout_cache_del(r, &lrp->lr_seg);
+		layout_cache_del(r, &args->lr_seg);
 		spin_unlock(&r->blr_lock);
 		dprintk("    ext_size %Lu, i_size %Lu, orig_size %Lu\n",
 		    r->blr_ext_size, i->i_size, r->blr_orig_size);
@@ -1048,14 +1049,15 @@ layout_cache_update(bl_layout_rec_t *r, struct list_head *h)
 }
 
 static void
-layout_cache_del(bl_layout_rec_t *r, struct nfsd4_layout_seg *seg)
+layout_cache_del(bl_layout_rec_t *r, const struct nfsd4_layout_seg *seg_in)
 {
 	struct pnfs_blocklayout_layout	*b,
 					*n;
 	u64				len;
+	struct nfsd4_layout_seg		seg = *seg_in;
 	
 	dprintk("--> %s\n", __func__);
-	if (seg->length == NFS4_MAX_UINT64) {
+	if (seg.length == NFS4_MAX_UINT64) {
 		r->blr_recalled = 0;
 		dprintk("  Fast return of all layouts\n");
 		while (!list_empty(&r->blr_layouts)) {
@@ -1073,7 +1075,7 @@ layout_cache_del(bl_layout_rec_t *r, struct nfsd4_layout_seg *seg)
 
 restart:
 	list_for_each_entry(b, &r->blr_layouts, bll_list) {
-		if (seg->offset == b->bll_foff) {
+		if (seg.offset == b->bll_foff) {
 			/*
 			 * This handle the following three cases:
 			 * (1) return layout matches entire cache layout
@@ -1082,18 +1084,18 @@ restart:
 			 *     into next entry. Varies from #1 in end case.
 			 */
 			dprintk("  match on offsets, %Lu:%Lu\n",
-				_2SECTS(seg->offset), _2SECTS(seg->length));
-			len = MIN(seg->length, b->bll_len);
+				_2SECTS(seg.offset), _2SECTS(seg.length));
+			len = MIN(seg.length, b->bll_len);
 			b->bll_foff	+= len;
 			b->bll_soff	+= len;
 			b->bll_len	-= len;
-			seg->length	-= len;
-			seg->offset	+= len;
+			seg.length	-= len;
+			seg.offset	+= len;
 			if (!b->bll_len) {
 				list_del(&b->bll_list);
 				kfree(b);
 				dprintk("    removing cache line\n");
-				if (!seg->length) {
+				if (!seg.length) {
 					dprintk("    also finished\n");
 					goto complete;
 				}
@@ -1107,32 +1109,32 @@ restart:
 				 */
 				goto restart;
 			}
-			if (!seg->length) {
+			if (!seg.length) {
 				dprintk("    finished, but cache line not"
 					"empty\n");
 				goto complete;
 			}
-		} else if ((seg->offset >= b->bll_foff) &&
-		    (seg->offset < BLL_F_END(b))) {
+		} else if ((seg.offset >= b->bll_foff) &&
+		    (seg.offset < BLL_F_END(b))) {
 			/*
 			 * layout being returned is within this cache line.
 			 */
 			dprintk("  layout %Lu:%Lu within cache line %Lu:%Lu\n",
-				_2SECTS(seg->offset), _2SECTS(seg->length),
+				_2SECTS(seg.offset), _2SECTS(seg.length),
 				_2SECTS(b->bll_foff), _2SECTS(b->bll_len));
-			BUG_ON(!seg->length);
-			if ((seg->offset + seg->length) >= BLL_F_END(b)) {
+			BUG_ON(!seg.length);
+			if ((seg.offset + seg.length) >= BLL_F_END(b)) {
 				/*
 				 * Layout returned starts in the middle of
 				 * cache entry and just need to trim back
 				 * cache to shorter length.
 				 */
 				dprintk("    trim back cache line\n");
-				len = seg->offset - b->bll_foff;
-				seg->offset += b->bll_len - len;
-				seg->length -= b->bll_len - len;
+				len = seg.offset - b->bll_foff;
+				seg.offset += b->bll_len - len;
+				seg.length -= b->bll_len - len;
 				b->bll_len = len;
-				if (!seg->length)
+				if (!seg.length)
 					return;
 			} else {
 				/*
@@ -1140,13 +1142,13 @@ restart:
 				 * chunk is being removed from the middle.
 				 */
 				dprintk("    split cache line\n");
-				len = seg->offset + seg->length;
+				len = seg.offset + seg.length;
 				n = bll_alloc(len,
 					      (b->bll_foff + b->bll_len) - len,
 					      BLOCK_LAYOUT_CACHE, NULL);
 				n->bll_soff = b->bll_soff + len;
 				list_add(&n->bll_list, &b->bll_list);
-				b->bll_len = seg->offset - b->bll_foff;
+				b->bll_len = seg.offset - b->bll_foff;
 				return;
 			}
 		}
