@@ -142,7 +142,8 @@ err:
 /* NOTE: inode mutex must NOT be held */
 static int exofs_layout_commit(
 	struct inode *inode,
-	struct nfsd4_pnfs_layoutcommit *lcp)
+	const struct nfsd4_pnfs_layoutcommit_arg *args,
+	struct nfsd4_pnfs_layoutcommit_res *res)
 {
 	struct exofs_i_info *oi = exofs_i(inode);
 	struct timespec mtime;
@@ -169,9 +170,9 @@ static int exofs_layout_commit(
 	 */
 	mutex_lock_nested(&inode->i_mutex, I_MUTEX_NORMAL);
 
-	if (lcp->lc_mtime.seconds) {
-		mtime.tv_sec = lcp->lc_mtime.seconds;
-		mtime.tv_nsec = lcp->lc_mtime.nseconds;
+	if (args->lc_mtime.seconds) {
+		mtime.tv_sec = args->lc_mtime.seconds;
+		mtime.tv_nsec = args->lc_mtime.nseconds;
 
 		/* layout commit may only make time bigger, since there might
 		 * be reordering of the notifications and it might arrive after
@@ -191,11 +192,14 @@ static int exofs_layout_commit(
 	inode->i_atime = inode->i_mtime = mtime;
 
 	i_size = i_size_read(inode);
-	if (lcp->lc_newoffset) {
-		loff_t new_size = lcp->lc_last_wr + 1;
+	if (args->lc_newoffset) {
+		loff_t new_size = args->lc_last_wr + 1;
 
-		if (i_size < new_size)
+		if (i_size < new_size) {
 			i_size_write(inode, i_size = new_size);
+			res->lc_size_chg = 1;
+			res->lc_newsize = new_size;
+		}
 	}
 	/* TODO: else { i_size = osd_get_object_length() } */
 
@@ -203,7 +207,7 @@ static int exofs_layout_commit(
 
 	mutex_unlock(&inode->i_mutex);
 	EXOFS_DBGMSG("(0x%lx) i_size=0x%llx lcp->off=0x%llx\n",
-		     inode->i_ino, i_size, lcp->lc_last_wr);
+		     inode->i_ino, i_size, args->lc_last_wr);
 	return 0;
 }
 
