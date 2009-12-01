@@ -187,7 +187,7 @@ spnfs_layoutcommit(void)
 
 int
 spnfs_layoutreturn(struct inode *inode,
-		   struct nfsd4_pnfs_layoutreturn *pnfs_layout_return_p)
+		   const struct nfsd4_pnfs_layoutreturn_arg *args)
 {
 	return 0;
 }
