@@ -885,14 +885,14 @@ recall_return_perfect_match(struct nfs4_layoutrecall *clr,
 			    struct nfs4_file *fp,
 			    struct svc_fh *current_fh)
 {
-	if (clr->cb.cbl_seg.iomode != lrp->lr_seg.iomode ||
-	    clr->cb.cbl_recall_type != lrp->lr_return_type)
+	if (clr->cb.cbl_seg.iomode != lrp->args.lr_seg.iomode ||
+	    clr->cb.cbl_recall_type != lrp->args.lr_return_type)
 		return 0;
 
 	return (clr->cb.cbl_recall_type == RECALL_FILE &&
 		clr->clr_file == fp &&
-		clr->cb.cbl_seg.offset == lrp->lr_seg.offset &&
-		clr->cb.cbl_seg.length == lrp->lr_seg.length) ||
+		clr->cb.cbl_seg.offset == lrp->args.lr_seg.offset &&
+		clr->cb.cbl_seg.length == lrp->args.lr_seg.length) ||
 
 		(clr->cb.cbl_recall_type == RECALL_FSID &&
 		 same_fsid(&clr->cb.cbl_fsid, current_fh)) ||
@@ -907,23 +907,23 @@ recall_return_partial_match(struct nfs4_layoutrecall *clr,
 			    struct svc_fh *current_fh)
 {
 	/* iomode matching? */
-	if (clr->cb.cbl_seg.iomode != lrp->lr_seg.iomode &&
+	if (clr->cb.cbl_seg.iomode != lrp->args.lr_seg.iomode &&
 	    clr->cb.cbl_seg.iomode != IOMODE_ANY &&
-	    lrp->lr_seg.iomode != IOMODE_ANY)
+	    lrp->args.lr_seg.iomode != IOMODE_ANY)
 		return 0;
 
 	if (clr->cb.cbl_recall_type == RECALL_ALL ||
-	    lrp->lr_return_type == RETURN_ALL)
+	    lrp->args.lr_return_type == RETURN_ALL)
 		return 1;
 
 	/* fsid matches? */
 	if (clr->cb.cbl_recall_type == RECALL_FSID ||
-	    lrp->lr_return_type == RETURN_FSID)
+	    lrp->args.lr_return_type == RETURN_FSID)
 		return same_fsid(&clr->cb.cbl_fsid, current_fh);
 
 	/* file matches, range overlapping? */
 	return clr->clr_file == fp &&
-	       lo_seg_overlapping(&clr->cb.cbl_seg, &lrp->lr_seg);
+	       lo_seg_overlapping(&clr->cb.cbl_seg, &lrp->args.lr_seg);
 }
 
 int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
@@ -984,7 +984,7 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 	spin_lock(&layout_lock);
 	list_for_each_entry_safe (clr, nextclr, &clp->cl_layoutrecalls,
 				  clr_perclnt) {
-		if (clr->cb.cbl_seg.layout_type != lrp->lr_seg.layout_type)
+		if (clr->cb.cbl_seg.layout_type != lrp->args.lr_seg.layout_type)
 			continue;
 
 		if (recall_return_perfect_match(clr, lrp, fp, current_fh))
@@ -1139,8 +1139,8 @@ void
 nomatching_layout(struct nfs4_layoutrecall *clr)
 {
 	struct nfsd4_pnfs_layoutreturn lr = {
-		.lr_return_type = clr->cb.cbl_recall_type,
-		.lr_seg = clr->cb.cbl_seg,
+		.args.lr_return_type = clr->cb.cbl_recall_type,
+		.args.lr_seg = clr->cb.cbl_seg,
 	};
 	struct inode *inode;
 	void *recall_cookie;
@@ -1204,8 +1204,8 @@ void pnfs_expire_client(struct nfs4_client *clp)
 					struct nfs4_layout, lo_perclnt);
 			inode = igrab(lp->lo_file->fi_inode);
 			memset(&lr, 0, sizeof(lr));
-			lr.lr_return_type = RETURN_FILE;
-			lr.lr_seg = lp->lo_seg;
+			lr.args.lr_return_type = RETURN_FILE;
+			lr.args.lr_seg = lp->lo_seg;
 			empty = list_empty(&lp->lo_file->fi_layouts);
 			BUG_ON(lp->lo_client != clp);
 			dequeue_layout(lp);
