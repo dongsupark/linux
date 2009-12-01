@@ -188,7 +188,9 @@ error:
 }
 
 static int
-pnfsd_lexp_layout_commit(struct inode *inode, struct nfsd4_pnfs_layoutcommit *p)
+pnfsd_lexp_layout_commit(struct inode *inode,
+			 const struct nfsd4_pnfs_layoutcommit_arg *args,
+			 struct nfsd4_pnfs_layoutcommit_res *res)
 {
 	dprintk("%s: (unimplemented)\n", __func__);
 
