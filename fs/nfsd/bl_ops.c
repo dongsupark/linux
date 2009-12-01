@@ -466,7 +466,9 @@ layoutget_cleanup:
  * that notify_change() can be called.
  */
 int
-bl_layoutcommit(struct inode *i, struct nfsd4_pnfs_layoutcommit *lcp)
+bl_layoutcommit(struct inode *i,
+		const struct nfsd4_pnfs_layoutcommit_arg *args,
+		struct nfsd4_pnfs_layoutcommit_res *res)
 {
 	bl_layout_rec_t			*r;
 	int				status	= 0;
@@ -475,21 +477,21 @@ bl_layoutcommit(struct inode *i, struct nfsd4_pnfs_layoutcommit *lcp)
 	dprintk("--> %s (ino [0x%x:%lu])\n", __func__, i->i_sb->s_dev, i->i_ino);
 	r = layout_inode_find(i);
 	if (r) {
-		lw_plus = lcp->lc_last_wr + 1;
-		if (lcp->lc_newoffset) {
+		lw_plus = args->lc_last_wr + 1;
+		if (args->lc_newoffset) {
 			dprintk("  lc_last_wr %Lu\n", lw_plus);
 			if (r->blr_orig_size < lw_plus) {
 				r->blr_orig_size	= lw_plus;
-				lcp->lc_size_chg	= 1;
-				lcp->lc_newsize		= lw_plus;
+				res->lc_size_chg	= 1;
+				res->lc_newsize		= lw_plus;
 			}
 		}
 
-		if (lcp->lc_up_len) {
+		if (args->lc_up_len) {
 			int	extents,
 				i;
 			struct pnfs_blocklayout_layout *b;
-			__be32 *p = lcp->lc_up_layout;
+			__be32 *p = args->lc_up_layout;
 			
 			/*
 			 * Client is returning a set of extents which
@@ -498,7 +500,7 @@ bl_layoutcommit(struct inode *i, struct nfsd4_pnfs_layoutcommit *lcp)
 			 */
 			READ32(extents);
 			dprintk("  Client returning %d extents: data size %d\n",
-			    extents, lcp->lc_up_len);
+			    extents, args->lc_up_len);
 			b = kmalloc(sizeof (struct pnfs_blocklayout_layout) *
 				    extents, GFP_KERNEL);
 			if (b) {
