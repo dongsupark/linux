@@ -3,6 +3,10 @@
 
 #include <linux/nfsacl.h>
 #include <linux/sunrpc/gss_api.h>
+#include <linux/nfs.h>
+#include <linux/nfs3.h>
+#include <linux/nfs4.h>
+#include <linux/sunrpc/sched.h>
 
 /*
  * To change the maximum rsize and wsize supported by the NFS client, adjust
