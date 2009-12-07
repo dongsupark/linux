@@ -9,6 +9,7 @@
 #define __LINUX_POSIX_ACL_H
 
 #include <linux/bug.h>
+#include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/rcupdate.h>
 
