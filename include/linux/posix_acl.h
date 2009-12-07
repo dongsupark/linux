@@ -8,6 +8,7 @@
 #ifndef __LINUX_POSIX_ACL_H
 #define __LINUX_POSIX_ACL_H
 
+#include <linux/fs.h>
 #include <linux/slab.h>
 
 #define ACL_UNDEFINED_ID	(-1)
