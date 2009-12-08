@@ -248,7 +248,7 @@ static unsigned decode_pnfs_layoutrecall_args(struct svc_rqst *rqstp,
 	args->cbl_layoutchanged = ntohl(*p++);
 	args->cbl_recall_type = ntohl(*p++);
 
-	if (likely(args->cbl_recall_type == RECALL_FILE)) {
+	if (likely(args->cbl_recall_type == RETURN_FILE)) {
 		status = decode_fh(xdr, &args->cbl_fh);
 		if (unlikely(status != 0))
 			goto out;
@@ -259,7 +259,7 @@ static unsigned decode_pnfs_layoutrecall_args(struct svc_rqst *rqstp,
 		status = decode_stateid(xdr, &args->cbl_stateid);
 		if (unlikely(status != 0))
 			goto out;
-	} else if (args->cbl_recall_type == RECALL_FSID) {
+	} else if (args->cbl_recall_type == RETURN_FSID) {
 		p = read_buf(xdr, 2 * sizeof(uint64_t));
 		p = xdr_decode_hyper(p, &args->cbl_fsid.major);
 		p = xdr_decode_hyper(p, &args->cbl_fsid.minor);

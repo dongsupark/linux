@@ -132,10 +132,10 @@ nfs_layoutrecall_find_inode(struct nfs_client *clp,
 	list_for_each_entry(nfsi, &clp->cl_lo_inodes, lo_inodes) {
 		dprintk("%s: Searching inode=%lu\n",
 			__func__, nfsi->vfs_inode.i_ino);
-		if (args->cbl_recall_type == RECALL_FILE) {
+		if (args->cbl_recall_type == RETURN_FILE) {
 		    if (nfs_compare_fh(&args->cbl_fh, &nfsi->fh))
 			continue;
-		} else if (args->cbl_recall_type == RECALL_FSID) {
+		} else if (args->cbl_recall_type == RETURN_FSID) {
 			server = NFS_SERVER(&nfsi->vfs_inode);
 			if (server->fsid.major != args->cbl_fsid.major ||
 			    server->fsid.minor != args->cbl_fsid.minor)
@@ -195,11 +195,11 @@ static int pnfs_recall_layout(void *data)
    then return layouts, resume after layoutreturns complete
  */
 
-	if (rl.cbl_recall_type == RECALL_FILE) {
+	if (rl.cbl_recall_type == RETURN_FILE) {
 		status = pnfs_return_layout(inode, &rl.cbl_seg, &rl.cbl_stateid,
-					    RECALL_FILE);
+					    RETURN_FILE);
 		if (status)
-			dprintk("%s RECALL_FILE error: %d\n", __func__, status);
+			dprintk("%s RETURN_FILE error: %d\n", __func__, status);
 		goto out;
 	}
 
@@ -209,7 +209,7 @@ static int pnfs_recall_layout(void *data)
 	/* FIXME: This loop is inefficient, running in O(|s_inodes|^2) */
 	while ((ino = nfs_layoutrecall_find_inode(clp, &rl)) != NULL) {
 		/* XXX need to check status on pnfs_return_layout */
-		pnfs_return_layout(ino, &rl.cbl_seg, NULL, RECALL_FILE);
+		pnfs_return_layout(ino, &rl.cbl_seg, NULL, RETURN_FILE);
 		iput(ino);
 	}
 

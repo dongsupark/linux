@@ -2252,7 +2252,7 @@ pnfs4_proc_setattr(struct dentry *dentry, struct nfs_fattr *fattr,
 
 	if (pnfs_enabled_sb(server) && has_layout(nfsi) &&
 	    pnfs_ld_layoutret_on_setattr(server->pnfs_curr_ld))
-		pnfs_return_layout(inode, NULL, NULL, RECALL_FILE);
+		pnfs_return_layout(inode, NULL, NULL, RETURN_FILE);
 	return nfs4_proc_setattr(dentry, fattr, sattr);
 }
 #endif /* CONFIG_PNFS */
@@ -5436,7 +5436,7 @@ static void nfs4_pnfs_layoutreturn_release(void *calldata)
 	dprintk("--> %s return_type %d lo %p\n", __func__,
 		lrp->args.return_type, lrp->lo);
 
-	if (lrp->lo && (lrp->args.return_type == RECALL_FILE)) {
+	if (lrp->lo && (lrp->args.return_type == RETURN_FILE)) {
 		if (!lrp->res.lrs_present)
 			pnfs_set_layout_stateid(lrp->lo, &zero_stateid);
 		pnfs_layout_release(lrp->lo, &lrp->lo->lretcount,

@@ -39,7 +39,7 @@ int pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 
 int _pnfs_return_layout(struct inode *, struct nfs4_pnfs_layout_segment *,
 			const nfs4_stateid *stateid, /* optional */
-			enum pnfs_layoutrecall_type);
+			enum pnfs_layoutreturn_type);
 void set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id);
 void unmount_pnfs_layoutdriver(struct super_block *sb);
 int pnfs_use_read(struct inode *inode, ssize_t count);
@@ -227,13 +227,13 @@ static inline void pnfs_modify_new_request(struct nfs_page *req,
 static inline int pnfs_return_layout(struct inode *ino,
 				     struct nfs4_pnfs_layout_segment *lseg,
 				     const nfs4_stateid *stateid, /* optional */
-				     enum pnfs_layoutrecall_type type)
+				     enum pnfs_layoutreturn_type type)
 {
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct nfs_server *nfss = NFS_SERVER(ino);
 
 	if (pnfs_enabled_sb(nfss) &&
-	    (type != RECALL_FILE || has_layout(nfsi)))
+	    (type != RETURN_FILE || has_layout(nfsi)))
 		return _pnfs_return_layout(ino, lseg, stateid, type);
 
 	return 0;
