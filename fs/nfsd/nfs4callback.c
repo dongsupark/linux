@@ -328,7 +328,7 @@ encode_cb_layout(struct xdr_stream *xdr, struct nfs4_layoutrecall *clr,
 	WRITE32(clr->cb.cbl_seg.iomode);
 	WRITE32(clr->cb.cbl_layoutchanged);
 	WRITE32(clr->cb.cbl_recall_type);
-	if (unlikely(clr->cb.cbl_recall_type == RECALL_FSID)) {
+	if (unlikely(clr->cb.cbl_recall_type == RETURN_FSID)) {
 		struct nfs4_fsid fsid = clr->cb.cbl_fsid;
 
 		RESERVE_SPACE(16);
@@ -339,7 +339,7 @@ encode_cb_layout(struct xdr_stream *xdr, struct nfs4_layoutrecall *clr,
 			__func__, clr->cb.cbl_seg.layout_type,
 			clr->cb.cbl_seg.iomode, clr->cb.cbl_layoutchanged,
 			clr->cb.cbl_recall_type, fsid.major, fsid.minor);
-	} else if (clr->cb.cbl_recall_type == RECALL_FILE) {
+	} else if (clr->cb.cbl_recall_type == RETURN_FILE) {
 		int len = clr->clr_file->fi_fhlen;
 
 		RESERVE_SPACE(20 + len);

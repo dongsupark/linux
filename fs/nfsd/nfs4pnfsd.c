@@ -586,15 +586,15 @@ is_layout_recalled(struct nfs4_client *clp,
 	list_for_each_entry (clr, &clp->cl_layoutrecalls, clr_perclnt) {
 		if (clr->cb.cbl_seg.layout_type != seg->layout_type)
 			continue;
-		if (clr->cb.cbl_recall_type == RECALL_ALL)
+		if (clr->cb.cbl_recall_type == RETURN_ALL)
 			goto found;
-		if (clr->cb.cbl_recall_type == RECALL_FSID) {
+		if (clr->cb.cbl_recall_type == RETURN_FSID) {
 			if (same_fsid(&clr->cb.cbl_fsid, current_fh))
 				goto found;
 			else
 				continue;
 		}
-		BUG_ON(clr->cb.cbl_recall_type != RECALL_FILE);
+		BUG_ON(clr->cb.cbl_recall_type != RETURN_FILE);
 		if (clr->cb.cbl_seg.clientid == seg->clientid &&
 		    lo_seg_overlapping(&clr->cb.cbl_seg, seg))
 			goto found;
@@ -889,15 +889,15 @@ recall_return_perfect_match(struct nfs4_layoutrecall *clr,
 	    clr->cb.cbl_recall_type != lrp->args.lr_return_type)
 		return 0;
 
-	return (clr->cb.cbl_recall_type == RECALL_FILE &&
+	return (clr->cb.cbl_recall_type == RETURN_FILE &&
 		clr->clr_file == fp &&
 		clr->cb.cbl_seg.offset == lrp->args.lr_seg.offset &&
 		clr->cb.cbl_seg.length == lrp->args.lr_seg.length) ||
 
-		(clr->cb.cbl_recall_type == RECALL_FSID &&
+		(clr->cb.cbl_recall_type == RETURN_FSID &&
 		 same_fsid(&clr->cb.cbl_fsid, current_fh)) ||
 
-		clr->cb.cbl_recall_type == RECALL_ALL;
+		clr->cb.cbl_recall_type == RETURN_ALL;
 }
 
 static int
@@ -912,12 +912,12 @@ recall_return_partial_match(struct nfs4_layoutrecall *clr,
 	    lrp->args.lr_seg.iomode != IOMODE_ANY)
 		return 0;
 
-	if (clr->cb.cbl_recall_type == RECALL_ALL ||
+	if (clr->cb.cbl_recall_type == RETURN_ALL ||
 	    lrp->args.lr_return_type == RETURN_ALL)
 		return 1;
 
 	/* fsid matches? */
-	if (clr->cb.cbl_recall_type == RECALL_FSID ||
+	if (clr->cb.cbl_recall_type == RETURN_FSID ||
 	    lrp->args.lr_return_type == RETURN_FSID)
 		return same_fsid(&clr->cb.cbl_fsid, current_fh);
 
@@ -1123,9 +1123,9 @@ cl_has_layout(struct nfs4_client *clp, struct nfsd4_pnfs_cb_layout *cbl,
 	      struct nfs4_file *lrfile, stateid_t *lsid)
 {
 	switch (cbl->cbl_recall_type) {
-	case RECALL_FILE:
+	case RETURN_FILE:
 		return cl_has_file_layout(clp, lrfile, lsid);
-	case RECALL_FSID:
+	case RETURN_FSID:
 		return cl_has_fsid_layout(clp, &cbl->cbl_fsid);
 	default:
 		return cl_has_any_layout(clp);
@@ -1156,7 +1156,7 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 	dprintk("%s: clp %p fp %p: simulating layout_return\n", __func__,
 		clr->clr_client, clr->clr_file);
 
-	if (clr->cb.cbl_recall_type == RECALL_FILE)
+	if (clr->cb.cbl_recall_type == RETURN_FILE)
 		pnfs_return_file_layouts(clr->clr_client, clr->clr_file, &lr);
 	else
 		pnfs_return_client_layouts(clr->clr_client, &lr,
@@ -1398,10 +1398,10 @@ int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 
 	dprintk("NFSD nfsd_layout_recall_cb: inode %p cbl %p\n", inode, cbl);
 	BUG_ON(!cbl);
-	BUG_ON(cbl->cbl_recall_type != RECALL_FILE &&
-	       cbl->cbl_recall_type != RECALL_FSID &&
-	       cbl->cbl_recall_type != RECALL_ALL);
-	BUG_ON(cbl->cbl_recall_type == RECALL_FILE && !inode);
+	BUG_ON(cbl->cbl_recall_type != RETURN_FILE &&
+	       cbl->cbl_recall_type != RETURN_FSID &&
+	       cbl->cbl_recall_type != RETURN_ALL);
+	BUG_ON(cbl->cbl_recall_type == RETURN_FILE && !inode);
 	BUG_ON(cbl->cbl_seg.iomode != IOMODE_READ &&
 	       cbl->cbl_seg.iomode != IOMODE_RW &&
 	       cbl->cbl_seg.iomode != IOMODE_ANY);
@@ -1420,7 +1420,7 @@ int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 				"nfs4_file not found\n");
 			goto err;
 		}
-		if (cbl->cbl_recall_type == RECALL_FSID)
+		if (cbl->cbl_recall_type == RETURN_FSID)
 			cbl->cbl_fsid = lrfile->fi_fsid;
 	}
 
