@@ -554,13 +554,7 @@ enum pnfs_layouttype {
 	LAYOUT_BLOCK_VOLUME = 3,
 };
 
-/* FIXME: should recall and return types be combined? */
-enum pnfs_layoutrecall_type {
-	RECALL_FILE = 1,
-	RECALL_FSID = 2,
-	RECALL_ALL  = 3
-};
-
+/* used for both layout return and recall */
 enum pnfs_layoutreturn_type {
 	RETURN_FILE = 1,
 	RETURN_FSID = 2,
