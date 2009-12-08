@@ -565,18 +565,18 @@ bl_layoutrecall(struct inode *inode, int type, u64 offset, u64 len)
 	dprintk("--> %s\n", __func__);
 	BUG_ON(!len);
 	switch (type) {
-		case RECALL_FILE:
+		case RETURN_FILE:
 			sb = inode->i_sb;
 			dprintk("  recalling layout [0x%x:%lu], %Lu:%Lu\n",
 			    inode->i_sb->s_dev, inode->i_ino,
 				_2SECTS(offset), _2SECTS(len));
 			break;
-		case RECALL_FSID:
+		case RETURN_FSID:
 			sb = inode->i_sb;
 			dprintk("%s: recalling layout for fsid x (unimplemented)\n",
 				__func__);
 			return 0;
-		case RECALL_ALL:
+		case RETURN_ALL:
 			/*
 			 * XXX figure out how to get a sb since there's no
 			 * inode ptr
