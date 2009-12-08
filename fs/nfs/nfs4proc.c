@@ -1074,6 +1074,17 @@ static struct nfs_open_context *nfs4_state_find_open_context(struct nfs4_state *
 	return ERR_PTR(-ENOENT);
 }
 
+static void pnfs4_layout_reclaim(struct nfs4_state *state)
+{
+#if defined(CONFIG_NFS_V4_1)
+	/* FIXME: send gratuitous layout commits and return with the reclaim
+	 * flag during grace period
+	 */
+	pnfs_return_layout(state->inode, NULL, &state->open_stateid, RETURN_FILE);
+	pnfs_set_layout_stateid(&NFS_I(state->inode)->layout, &zero_stateid);
+#endif /* CONFIG_NFS_V4_1 */
+}
+
 static struct nfs4_opendata *nfs4_open_recoverdata_alloc(struct nfs_open_context *ctx, struct nfs4_state *state)
 {
 	struct nfs4_opendata *opendata;
@@ -1147,6 +1158,7 @@ static int nfs4_open_recover(struct nfs4_opendata *opendata, struct nfs4_state *
 			memcpy(state->stateid.data, state->open_stateid.data, sizeof(state->stateid.data));
 		write_sequnlock(&state->seqlock);
 	}
+	pnfs4_layout_reclaim(state);
 	return 0;
 }
 
@@ -1201,6 +1213,7 @@ static int nfs4_open_reclaim(struct nfs4_state_owner *sp, struct nfs4_state *sta
 		return PTR_ERR(ctx);
 	ret = nfs4_do_open_reclaim(ctx, state);
 	put_nfs_open_context(ctx);
+	pnfs4_layout_reclaim(state);
 	return ret;
 }
 
