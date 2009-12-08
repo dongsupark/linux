@@ -1356,8 +1356,7 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		cr_ses->flags &= ~SESSION4_PERSIST;
 		cr_ses->flags &= ~SESSION4_RDMA;
 
-		if (!(unconf->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_MDS) &&
-		    (unconf->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_DS))
+		if (is_ds_only_session(unconf->cl_exchange_flags))
 			cr_ses->flags &= ~SESSION4_BACK_CHAN;
 
 		if (cr_ses->flags & SESSION4_BACK_CHAN) {
