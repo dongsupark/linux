@@ -343,7 +343,7 @@ static int is_layout_returned(struct exofs_i_info *oi)
 	}
 
 	memset(&cbl, 0, sizeof(cbl));
-	cbl.cbl_recall_type = RECALL_FILE;
+	cbl.cbl_recall_type = RETURN_FILE;
 	cbl.cbl_seg.layout_type = LAYOUT_OSD2_OBJECTS;
 	cbl.cbl_seg.iomode = IOMODE_RW;
 	cbl.cbl_seg.length = NFS4_MAX_UINT64;
@@ -401,7 +401,7 @@ int exofs_inode_recall_layout(struct inode *inode, exofs_recall_fn todo)
 		goto err;
 
 	memset(&cbl, 0, sizeof(cbl));
-	cbl.cbl_recall_type = RECALL_FILE;
+	cbl.cbl_recall_type = RETURN_FILE;
 	cbl.cbl_seg.layout_type = LAYOUT_OSD2_OBJECTS;
 	cbl.cbl_seg.iomode = IOMODE_ANY;
 	cbl.cbl_seg.length = NFS4_MAX_UINT64;
