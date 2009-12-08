@@ -391,7 +391,7 @@ nfsd_setattr(struct svc_rqst *rqstp, struct svc_fh *fhp, struct iattr *iap,
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
 #if defined(CONFIG_SPNFS_BLOCK)
 			if (pnfs_block_enabled(inode, 0)) {
-				err = bl_layoutrecall(inode, RECALL_FILE,
+				err = bl_layoutrecall(inode, RETURN_FILE,
 				    iap->ia_size, inode->i_size - iap->ia_size);
 			}
 #endif /* CONFIG_SPNFS_BLOCK */
