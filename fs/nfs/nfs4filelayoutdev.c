@@ -272,6 +272,9 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 	if (err)
 		goto out_put;
 
+	/* mask out the server's MDS capability flag */
+	clp->cl_exchange_flags &= ~EXCHGID4_FLAG_USE_PNFS_MDS;
+
 	if (!(clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_DS)) {
 		printk(KERN_INFO "ip:port %s is not a pNFS Data Server\n",
 			ds->r_addr);
