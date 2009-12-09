@@ -370,8 +370,7 @@ static struct svc_export *svc_export_update(struct svc_export *new,
 					    struct svc_export *old);
 static struct svc_export *svc_export_lookup(struct svc_export *);
 
-static int check_export(struct inode *inode, int flags, unsigned char *uuid,
-			bool ex_pnfs)
+static int check_export(struct inode *inode, int flags, unsigned char *uuid)
 {
 
 	/* We currently export only dirs and regular files.
@@ -399,14 +398,6 @@ static int check_export(struct inode *inode, int flags, unsigned char *uuid,
 	    !inode->i_sb->s_export_op->fh_to_dentry) {
 		dprintk("exp_export: export of invalid fs type.\n");
 		return -EINVAL;
-	}
-
-	dprintk("%s: s_pnfs_op %p ex_pnfs %d\n", __func__,
-		inode->i_sb->s_pnfs_op, ex_pnfs);
-
-	if (!ex_pnfs) {
-		inode->i_sb->s_pnfs_op = NULL;
-		return 0;
 	}
 
 	if (inode->i_sb->s_pnfs_op &&
@@ -623,7 +614,7 @@ static int svc_export_parse(struct cache_detail *cd, char *mesg, int mlen)
 		}
 
 		err = check_export(exp.ex_path.dentry->d_inode, exp.ex_flags,
-				   exp.ex_uuid, exp.ex_pnfs);
+				   exp.ex_uuid);
 		if (err)
 			goto out4;
 	}
@@ -1065,7 +1056,7 @@ exp_export(struct nfsctl_export *nxp)
 		goto finish;
 	}
 
-	err = check_export(path.dentry->d_inode, nxp->ex_flags, NULL, false);
+	err = check_export(path.dentry->d_inode, nxp->ex_flags, NULL);
 	if (err) goto finish;
 
 	err = -ENOMEM;
