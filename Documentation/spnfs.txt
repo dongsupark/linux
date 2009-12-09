@@ -23,12 +23,13 @@ Get the spNFS kernel from:
 add these options to your .config file
 
 	CONFIG_NETWORK_FILESYSTEMS=y
-	CONFIG_NFS_FS=y
-	CONFIG_NFSD=y
+	CONFIG_NFS_FS=m
+	CONFIG_NFS_V4=y
 	CONFIG_NFS_V4_1=y
-	CONFIG_NFSD_V4_1=y
 	CONFIG_PNFS=y
+	CONFIG_NFSD=m
 	CONFIG_PNFSD=y
+	# CONFIG_PNFSD_LOCAL_EXPORT is not set
 	CONFIG_SPNFS=y
 
 By default, spNFS uses whole-file layouts.  Layout segments can be enabled
@@ -41,6 +42,8 @@ to your .config file.
 Building and installation of kernel+modules is as usual.
 This kernel should be installed and booted on the client, MDS and DSs.
 
+Note that CONFIG_PNFSD_LOCAL_EXPORT must be disabled for spnfs as it
+takes over the pnfs export interface.
 
 Building nfs-utils
 ------------------
