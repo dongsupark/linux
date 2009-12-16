@@ -234,6 +234,7 @@ bl_read_pagelist(struct pnfs_layout_type *lo,
 	struct pnfs_block_extent *be = NULL, *cow_read = NULL;
 	sector_t isect, extent_length = 0;
 	struct parallel_io *par;
+	int pg_index = pgbase >> PAGE_CACHE_SHIFT;
 
 	dprintk("%s enter nr_pages %u offset %lld count %Zd\n", __func__,
 	       nr_pages, f_offset, count);
@@ -259,7 +260,7 @@ bl_read_pagelist(struct pnfs_layout_type *lo,
 
 	isect = (sector_t) (f_offset >> 9);
 	/* Code assumes extents are page-aligned */
-	for (i = 0; i < nr_pages; i++) {
+	for (i = pg_index; i < nr_pages; i++) {
 		if (!extent_length) {
 			/* We've used up the previous extent */
 			put_extent(be);
@@ -271,8 +272,7 @@ bl_read_pagelist(struct pnfs_layout_type *lo,
 			if (!be) {
 				/* Error out this page */
 				bl_done_with_rpage(pages[i], 0);
-				isect += PAGE_CACHE_SIZE >> 9;
-				continue;
+				break;
 			}
 			extent_length = be->be_length -
 				(isect - be->be_f_offset);
@@ -317,6 +317,12 @@ bl_read_pagelist(struct pnfs_layout_type *lo,
 		}
 		isect += PAGE_CACHE_SIZE >> 9;
 		extent_length -= PAGE_CACHE_SIZE >> 9;
+	}
+	if ((isect << 9) >= rdata->inode->i_size) {
+		rdata->res.eof = 1;
+		rdata->res.count = rdata->inode->i_size - f_offset;
+	} else {
+		rdata->res.count = (isect << 9) - f_offset;
 	}
 	put_extent(be);
 	put_extent(cow_read);
@@ -422,7 +428,6 @@ bl_end_par_io_write(void *data)
 
 	/* STUB - ignoring error handling */
 	wdata->task.tk_status = 0;
-	wdata->res.count = wdata->args.count;
 	wdata->verf.committed = NFS_FILE_SYNC;
 	INIT_WORK(&wdata->task.u.tk_work, bl_write_cleanup);
 	schedule_work(&wdata->task.u.tk_work);
@@ -443,6 +448,7 @@ bl_write_pagelist(struct pnfs_layout_type *lo,
 	struct pnfs_block_extent *be = NULL;
 	sector_t isect, extent_length = 0;
 	struct parallel_io *par;
+	int pg_index = pgbase >> PAGE_CACHE_SHIFT;
 
 	dprintk("%s enter, %Zu@%lld\n", __func__, count, offset);
 	if (!test_bit(PG_USE_PNFS, &wdata->req->wb_flags)) {
@@ -469,7 +475,7 @@ bl_write_pagelist(struct pnfs_layout_type *lo,
 	/* At this point, have to be more careful with error handling */
 
 	isect = (sector_t) ((offset & (long)PAGE_CACHE_MASK) >> 9);
-	for (i = 0; i < nr_pages; i++) {
+	for (i = pg_index; i < nr_pages; i++) {
 		if (!extent_length) {
 			/* We've used up the previous extent */
 			put_extent(be);
@@ -480,8 +486,7 @@ bl_write_pagelist(struct pnfs_layout_type *lo,
 			if (!be || !is_writable(be, isect)) {
 				/* FIXME */
 				bl_done_with_wpage(pages[i], 0);
-				isect += PAGE_CACHE_SECTORS;
-				continue;
+				break;
 			}
 			extent_length = be->be_length -
 				(isect - be->be_f_offset);
@@ -508,6 +513,7 @@ bl_write_pagelist(struct pnfs_layout_type *lo,
 		isect += PAGE_CACHE_SIZE >> 9;
 		extent_length -= PAGE_CACHE_SIZE >> 9;
 	}
+	wdata->res.count = (isect << 9) - (offset & (long)PAGE_CACHE_MASK);
 	put_extent(be);
 	bl_submit_bio(WRITE, bio);
 	put_parallel(par);
