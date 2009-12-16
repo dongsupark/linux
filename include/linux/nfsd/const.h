@@ -29,6 +29,7 @@
 #ifdef __KERNEL__
 
 #include <linux/sunrpc/msg_prot.h>
+#include <linux/sunrpc/svc.h>
 
 /*
  * Largest number of bytes we need to allocate for an NFS
