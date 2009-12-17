@@ -424,6 +424,7 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 		return -EINVAL;
 	}
 
+#if !defined(CONFIG_SPNFS)
 	if (inode->i_sb->s_pnfs_op &&
 	    (!inode->i_sb->s_pnfs_op->layout_type ||
 	     !inode->i_sb->s_pnfs_op->get_device_info ||
@@ -431,6 +432,7 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 		dprintk("exp_export: export of invalid fs pnfs export ops.\n");
 		return -EINVAL;
 	}
+#endif /* CONFIG_SPNFS */
 
 #if defined(CONFIG_PNFSD_LOCAL_EXPORT)
 	if (!inode->i_sb->s_pnfs_op)
