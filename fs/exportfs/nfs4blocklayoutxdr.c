@@ -8,11 +8,7 @@
  */
 #include <linux/module.h>
 #include <linux/sunrpc/svc.h>
-#include <linux/nfsd/nfsd.h>
-#include <linux/nfsd/cache.h>
 #include <linux/nfs4.h>
-#include <linux/nfsd/state.h>
-#include <linux/nfsd/xdr4.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 
 static int

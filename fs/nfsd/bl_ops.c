@@ -22,7 +22,6 @@
 #include <linux/nfsd4_spnfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 #include <linux/nfsd/export.h>
-#include <linux/nfsd/state.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 #include <linux/nfsd/debug.h>
 #include <linux/spinlock_types.h>
