@@ -51,13 +51,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <linux/exportfs.h>
 #include <linux/nfsd4_spnfs.h>
 #include <linux/nfsd/debug.h>
-#include <linux/nfsd/state.h>
-#include <linux/nfsd/nfsd.h>
-#include <linux/nfsd/xdr4.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 
+#include "nfsd.h"
 #include "pnfsd.h"
+#include "state.h"
+#include "xdr4.h"
 
 /* comment out CONFIG_SPNFS_TEST for non-test behaviour */
 /* #define CONFIG_SPNFS_TEST 1 */
