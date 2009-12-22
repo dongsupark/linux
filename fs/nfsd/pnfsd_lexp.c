@@ -18,13 +18,7 @@
  * by David M. Richter <richterd@citi.umich.edu>
  */
 
-#if defined(CONFIG_PNFSD_LOCAL_EXPORT)
-
-#include <linux/nfs_fs.h>
-#include <linux/sunrpc/svc.h>
 #include <linux/sunrpc/svc_xprt.h>
-#include <linux/nfsd/nfsfh.h>
-#include <linux/nfsd/state.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 
 #include "pnfsd.h"
@@ -228,5 +222,3 @@ pnfsd_lexp_init(struct inode *inode)
 	dprintk("%s: &pnfsd_lexp_ops=%p\n", __func__, &pnfsd_lexp_ops);
 	inode->i_sb->s_pnfs_op = &pnfsd_lexp_ops;
 }
-
-#endif /* CONFIG_PNFSD_LOCAL_EXPORT */
