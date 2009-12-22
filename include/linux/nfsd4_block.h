@@ -4,7 +4,6 @@
 #include <linux/sunrpc/svc.h>
 #include <linux/sunrpc/svcauth.h>
 #include <linux/nfsd/nfsfh.h>
-#include <linux/nfsd/state.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 
 #define PNFS_BLOCK_SUCCESS		1
