@@ -455,7 +455,7 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 
 #if defined(CONFIG_SPNFS)
 #if defined(CONFIG_SPNFS_BLOCK)
-	if (pnfs_block_enabled(inode, flags)) {
+	if (pnfs_block_enabled(inode, *flags)) {
 		dprintk("set pnfs block export structure... \n");
 		inode->i_sb->s_pnfs_op = &bl_export_ops;
 	} else
