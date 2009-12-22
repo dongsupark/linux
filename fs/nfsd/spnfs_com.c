@@ -39,23 +39,12 @@
  */
 #if defined(CONFIG_SPNFS)
 
-#include <linux/module.h>
-#include <linux/mutex.h>
-#include <linux/init.h>
-#include <linux/types.h>
-#include <linux/slab.h>
-#include <linux/socket.h>
-#include <linux/in.h>
-#include <linux/sched.h>
 #include <linux/namei.h>
 #include <linux/mount.h>
 #include <linux/path.h>
 #include <linux/sunrpc/clnt.h>
-#include <linux/workqueue.h>
 #include <linux/sunrpc/rpc_pipe_fs.h>
-#include <linux/proc_fs.h>
-
-#include <linux/nfs_fs.h>
+#include <linux/nfsd/debug.h>
 
 #include <linux/nfsd4_spnfs.h>
 
