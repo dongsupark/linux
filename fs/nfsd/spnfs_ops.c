@@ -26,37 +26,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ******************************************************************************/
 
-/* DMXXX: includes taken from spnfs_com.c.  Don't need so many: revisit */
-#include <linux/module.h>
-#include <linux/mutex.h>
-#include <linux/init.h>
-#include <linux/types.h>
-#include <linux/slab.h>
-#include <linux/socket.h>
-#include <linux/in.h>
 #include <linux/sched.h>
 #include <linux/file.h>
-#include <linux/fs.h>
 #include <linux/namei.h>
-#include <linux/kthread.h>
-#include <asm/div64.h>
-
-#include <linux/sunrpc/clnt.h>
-#include <linux/workqueue.h>
-#include <linux/sunrpc/rpc_pipe_fs.h>
-
 #include <linux/nfs_fs.h>
-#include <linux/nfs4.h>
-#include <linux/exportfs.h>
 #include <linux/nfsd4_spnfs.h>
 #include <linux/nfsd/debug.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 
-#include "nfsd.h"
 #include "pnfsd.h"
-#include "state.h"
-#include "xdr4.h"
 
 /* comment out CONFIG_SPNFS_TEST for non-test behaviour */
 /* #define CONFIG_SPNFS_TEST 1 */
