@@ -295,7 +295,6 @@ struct spnfs_config {
 
 #if defined(__KERNEL__) && defined(CONFIG_SPNFS)
 
-#include <linux/nfsd/state.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
 
 /* pipe mgmt structure.  messages flow through here */
