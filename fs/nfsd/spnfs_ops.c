@@ -26,7 +26,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ******************************************************************************/
 
-#if defined(CONFIG_SPNFS)
 /* DMXXX: includes taken from spnfs_com.c.  Don't need so many: revisit */
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -877,5 +876,3 @@ spnfs_getfh(int fd, struct nfs_fh *fh)
 	fput(file);
 	return 0;
 }
-
-#endif /* CONFIG_SPNFS */
