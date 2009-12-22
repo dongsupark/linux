@@ -37,8 +37,6 @@
  *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#if defined(CONFIG_SPNFS)
-
 #include <linux/namei.h>
 #include <linux/mount.h>
 #include <linux/path.h>
@@ -535,5 +533,3 @@ spnfs_init_proc(void)
 	return 0;
 }
 #endif /* CONFIG_PROC_FS */
-
-#endif /* CONFIG_SPNFS */
