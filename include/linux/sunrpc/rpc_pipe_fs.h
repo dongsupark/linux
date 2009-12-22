@@ -3,6 +3,7 @@
 
 #ifdef __KERNEL__
 
+#include <linux/fs.h>
 #include <linux/workqueue.h>
 
 struct rpc_pipe_msg {
