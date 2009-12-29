@@ -2296,7 +2296,7 @@ out_acl:
 		if (buflen < 0)		/* length */
 			goto out_resource;
 
-		if (sb && sb->s_pnfs_op)
+		if (sb && sb->s_pnfs_op && sb->s_pnfs_op->layout_type)
 			type = sb->s_pnfs_op->layout_type(sb);
 		if (type) {
 			if ((buflen -= 4) < 0)	/* type */
