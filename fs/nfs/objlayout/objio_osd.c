@@ -322,13 +322,17 @@ int objio_alloc_io_state(void *seg, struct objlayout_io_state **outp)
 	struct objio_state *ios;
 	const unsigned first_size = sizeof(*ios) +
 				objio_seg->num_comps * sizeof(ios->per_dev[0]);
+	const unsigned sec_size = objio_seg->num_comps *
+						sizeof(ios->ol_state.ioerrs[0]);
 
 	dprintk("%s: num_comps=%d\n", __func__, objio_seg->num_comps);
-	ios = kzalloc(first_size, GFP_KERNEL);
+	ios = kzalloc(first_size + sec_size, GFP_KERNEL);
 	if (unlikely(!ios))
 		return -ENOMEM;
 
 	ios->objio_seg = objio_seg;
+	ios->ol_state.ioerrs = ((void *)ios) + first_size;
+	ios->ol_state.num_comps = objio_seg->num_comps;
 
 	*outp = &ios->ol_state;
 	return 0;
@@ -415,6 +419,10 @@ static int _io_check(struct objio_state *ios, bool is_write)
 
 			continue; /* we recovered */
 		}
+		objlayout_io_set_result(&ios->ol_state, i,
+					osd_pri_2_pnfs_err(osi.osd_err_pri),
+					ios->ol_state.offset, ios->length,
+					is_write);
 
 		if (osi.osd_err_pri >= oep) {
 			oep = osi.osd_err_pri;
