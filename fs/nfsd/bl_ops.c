@@ -504,7 +504,7 @@ bl_layoutcommit(struct inode *i,
 				    extents, GFP_KERNEL);
 			if (b) {
 				for (i = 0; i < extents; i++) {
-					READ64(b[i].bll_vol_id.fsid);
+					READ64(b[i].bll_vol_id.sbid);
 					READ64(b[i].bll_vol_id.devid);
 					READ64(b[i].bll_foff);
 					READ64(b[i].bll_len);
@@ -819,7 +819,7 @@ layout_cache_iter(bl_layout_rec_t *r, struct list_head *bl_possible,
 				n = bll_alloc(b->bll_foff, b->bll_len,
 				    BLOCK_LAYOUT_NEW, bl_candidates);
 				n->bll_es = PNFS_BLOCK_NONE_DATA;
-				n->bll_vol_id.fsid = 0;
+				n->bll_vol_id.sbid = 0;
 				n->bll_vol_id.devid = dev;
 				seg->length += b->bll_len;
 			} else {
@@ -1212,7 +1212,7 @@ layout_cache_fill_from_list(bl_layout_rec_t *r, struct list_head *h,
 				return False;
 			
 			n->bll_soff = b->bll_soff + seg->offset - b->bll_foff;
-			n->bll_vol_id.fsid = 0;
+			n->bll_vol_id.sbid = 0;
 			n->bll_vol_id.devid = b->bll_vol_id.devid;
 			n->bll_es = s;
 			seg->offset += n->bll_len;
@@ -1234,7 +1234,7 @@ bll_alloc_holey(struct list_head *bl_candidates, u64 offset, u64 length,
 	if (!n)
 		return 0;
 	n->bll_es = PNFS_BLOCK_NONE_DATA;
-	n->bll_vol_id.fsid = 0;
+	n->bll_vol_id.sbid = 0;
 	n->bll_vol_id.devid = dev;
 	
 	return n->bll_len;
@@ -1363,7 +1363,7 @@ extents_process(struct fiemap_extent_info *fei, struct list_head *bl_candidates,
 		n->bll_soff = fep->fe_physical;
 		n->bll_es = seg->iomode == IOMODE_READ ?
 		    PNFS_BLOCK_READ_DATA : PNFS_BLOCK_READWRITE_DATA;
-		n->bll_vol_id.fsid = 0;
+		n->bll_vol_id.sbid = 0;
 		n->bll_vol_id.devid = dev;
 		seg->length += fep->fe_length;
 		print_bll(n, "New extent");
