@@ -372,7 +372,7 @@ encode_cb_device(struct xdr_stream *xdr, struct nfs4_notify_device *nd,
 		dprintk("%s: nt %d lt %d devid x%llx-x%llx im %d i %d\n",
 			__func__, cbd[i].cbd_notify_type,
 			cbd[i].cbd_layout_type,
-			cbd[i].cbd_devid.fsid,
+			cbd[i].cbd_devid.sbid,
 			cbd[i].cbd_devid.devid,
 			cbd[i].cbd_immediate, i);
 
@@ -387,7 +387,7 @@ encode_cb_device(struct xdr_stream *xdr, struct nfs4_notify_device *nd,
 		else
 			WRITE32(20);
 		WRITE32(cbd[i].cbd_layout_type);
-		WRITE64(cbd[i].cbd_devid.fsid);
+		WRITE64(cbd[i].cbd_devid.sbid);
 		WRITE64(cbd[i].cbd_devid.devid);
 
 		if (cbd[i].cbd_notify_type == NOTIFY_DEVICEID4_CHANGE) {
