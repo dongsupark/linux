@@ -115,7 +115,7 @@ spnfs_layoutget(struct inode *inode, struct exp_xdr_stream *xdr,
 		status = -ENOMEM;
 		goto layoutget_cleanup;
 	}
-	flp->device_id.fsid = lg_arg->lg_fsid;
+	flp->device_id.sbid = lg_arg->lg_sbid;
 	flp->device_id.devid = res->layoutget_res.devid;
 	flp->lg_layout_type = 1; /* XXX */
 	flp->lg_stripe_type = res->layoutget_res.stripe_type;
