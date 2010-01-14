@@ -153,7 +153,7 @@ static int pnfsd_lexp_layout_get(struct inode *inode,
 	layout->lg_commit_through_mds = true;
 	layout->lg_stripe_unit = get_stripe_unit(inode->i_sb->s_blocksize);
 	layout->lg_fh_length = 1;
-	layout->device_id.fsid = arg->lg_fsid;
+	layout->device_id.sbid = arg->lg_sbid;
 	layout->device_id.devid = 1;				/*FSFTEMP*/
 	layout->lg_first_stripe_index = 0;			/*FSFTEMP*/
 	layout->lg_pattern_offset = 0;
