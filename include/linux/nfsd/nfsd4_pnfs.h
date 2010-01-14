@@ -39,7 +39,7 @@
 #include <linux/nfs_xdr.h>
 
 struct nfsd4_pnfs_deviceid {
-	u64	fsid;			/* filesystem ID */
+	u64	sbid;			/* per-superblock unique ID */
 	u64	devid;			/* filesystem-wide unique device ID */
 };
 
@@ -71,7 +71,7 @@ struct nfsd4_layout_seg {
 
 struct nfsd4_pnfs_layoutget_arg {
 	u64			lg_minlength;
-	u64			lg_fsid;
+	u64			lg_sbid;
 	const struct knfsd_fh	*lg_fh;
 };
 

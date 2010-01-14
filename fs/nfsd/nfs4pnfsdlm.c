@@ -356,7 +356,7 @@ static int nfsd4_pnfs_dlm_layoutget(struct inode *inode,
 	layout->lg_commit_through_mds = false;
 	layout->lg_stripe_unit = get_stripe_unit(inode->i_sb->s_blocksize);
 	layout->lg_fh_length = 1;
-	layout->device_id.fsid = args->lg_fsid;
+	layout->device_id.sbid = args->lg_sbid;
 	layout->device_id.devid = 1;                                /*FSFTEMP*/
 	layout->lg_first_stripe_index = index;                      /*FSFTEMP*/
 	layout->lg_pattern_offset = 0;

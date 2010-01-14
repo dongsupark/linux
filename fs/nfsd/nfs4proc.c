@@ -1024,11 +1024,11 @@ nfsd4_getdevinfo(struct svc_rqst *rqstp,
 {
 	struct super_block *sb;
 	struct svc_export *exp = NULL;
-	u32 fsidv = gdp->gd_devid.fsid;
+	u32 fsidv = gdp->gd_devid.sbid;
 	int status;
 
 	dprintk("%s: layout_type %u dev_id %llx:%llx maxcnt %u\n",
-	       __func__, gdp->gd_layout_type, gdp->gd_devid.fsid,
+	       __func__, gdp->gd_layout_type, gdp->gd_devid.sbid,
 	       gdp->gd_devid.devid, gdp->gd_maxcount);
 
 	status = nfserr_inval;

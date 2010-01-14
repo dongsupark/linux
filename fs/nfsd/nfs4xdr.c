@@ -1260,7 +1260,7 @@ nfsd4_decode_getdevinfo(struct nfsd4_compoundargs *argp,
 	DECODE_HEAD;
 
 	READ_BUF(12 + sizeof(struct nfsd4_pnfs_deviceid));
-	READ64(gdev->gd_devid.fsid);
+	READ64(gdev->gd_devid.sbid);
 	READ64(gdev->gd_devid.devid);
 	READ32(gdev->gd_layout_type);
 	READ32(gdev->gd_maxcount);

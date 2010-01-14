@@ -484,7 +484,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 	struct nfs4_layout_state *ls = NULL;
 	struct nfsd4_pnfs_layoutget_arg args = {
 		.lg_minlength = lgp->lg_minlength,
-		.lg_fsid = lgp->lg_fhp->fh_export->ex_fsid,
+		.lg_sbid = lgp->lg_fhp->fh_export->ex_fsid,	/* FIXME: lookup/create sbid */
 		.lg_fh = &lgp->lg_fhp->fh_handle,
 	};
 	struct nfsd4_pnfs_layoutget_res res = {
