@@ -946,7 +946,12 @@ nfsd4_layout_verify(struct super_block *sb, struct svc_export *exp,
 
 	/* check to see if pNFS  is supported. */
 	status = nfserr_layoutunavailable;
-	if (exp->ex_pnfs == 0 || !sb->s_pnfs_op || !sb->s_pnfs_op->layout_type) {
+	if (exp && exp->ex_pnfs == 0) {
+		dprintk("%s: Underlying file system "
+			"is not exported over pNFS\n", __func__);
+		goto out;
+	}
+	if (!sb->s_pnfs_op || !sb->s_pnfs_op->layout_type) {
 		dprintk("%s: Underlying file system "
 			"does not support pNFS\n", __func__);
 		goto out;
