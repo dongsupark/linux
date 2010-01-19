@@ -1028,8 +1028,6 @@ nfsd4_getdevinfo(struct svc_rqst *rqstp,
 		struct nfsd4_pnfs_getdevinfo *gdp)
 {
 	struct super_block *sb;
-	struct svc_export *exp = NULL;
-	u32 fsidv = gdp->gd_devid.sbid;
 	int status;
 
 	dprintk("%s: layout_type %u dev_id %llx:%llx maxcnt %u\n",
@@ -1037,30 +1035,23 @@ nfsd4_getdevinfo(struct svc_rqst *rqstp,
 	       gdp->gd_devid.devid, gdp->gd_maxcount);
 
 	status = nfserr_inval;
-	exp = rqst_exp_find(rqstp, FSID_NUM, &fsidv);
-	dprintk("%s: exp %p\n", __func__, exp);
-	if (IS_ERR(exp)) {
-		status = nfserrno(PTR_ERR(exp));
-		exp = NULL;
+	sb = find_sbid_id(gdp->gd_devid.sbid);
+	dprintk("%s: sb %p\n", __func__, sb);
+	if (!sb) {
+		status = nfserr_noent;
 		goto out;
 	}
-	sb = exp->ex_path.dentry->d_inode->i_sb;
-	dprintk("%s: sb %p\n", __func__, sb);
-	if (!sb)
-		goto out;
 
 	/* Ensure underlying file system supports pNFS and,
 	 * if so, the requested layout type
 	 */
-	status = nfsd4_layout_verify(sb, exp, gdp->gd_layout_type);
+	status = nfsd4_layout_verify(sb, NULL, gdp->gd_layout_type);
 	if (status)
 		goto out;
 
 	/* Set up arguments so device can be retrieved at encode time */
 	gdp->gd_sb = sb;
 out:
-	if (exp)
-		exp_put(exp);
 	return status;
 }
 
