@@ -627,11 +627,15 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 
 	dprintk("NFSD: %s Begin\n", __func__);
 
+#ifdef notyet
 	args.lg_sbid = find_create_sbid(sb);
 	if (!args.lg_sbid) {
 		status = nfserr_layouttrylater;
 		goto out;
 	}
+#else
+	args.lg_sbid = lgp->lg_fhp->fh_export->ex_fsid,	/* FIXME: lookup/create sbid */
+#endif
 
 	can_merge = sb->s_pnfs_op->can_merge_layouts != NULL &&
 		    sb->s_pnfs_op->can_merge_layouts(lgp->lg_seg.layout_type);
