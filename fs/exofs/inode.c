@@ -820,8 +820,9 @@ static inline int exofs_inode_is_fast_symlink(struct inode *inode)
 const struct osd_attr g_attr_logical_length = ATTR_DEF(
 	OSD_APAGE_OBJECT_INFORMATION, OSD_ATTR_OI_LOGICAL_LENGTH, 8);
 
-static int _do_truncate(struct inode *inode, loff_t newsize)
+static int _do_truncate(struct inode *inode, u64 data)
 {
+	loff_t newsize = data;
 	struct exofs_i_info *oi = exofs_i(inode);
 	int ret;
 
@@ -858,7 +859,8 @@ int exofs_setattr(struct dentry *dentry, struct iattr *iattr)
 
 	if ((iattr->ia_valid & ATTR_SIZE) &&
 	    iattr->ia_size != i_size_read(inode)) {
-		error = _do_truncate(inode, iattr->ia_size);
+		error = exofs_inode_recall_layout(inode, IOMODE_ANY,
+						  _do_truncate, iattr->ia_size);
 		if (unlikely(error))
 			return error;
 	}
@@ -971,6 +973,7 @@ static void __oi_init(struct exofs_i_info *oi)
 {
 	init_waitqueue_head(&oi->i_wq);
 	oi->i_flags = 0;
+	spin_lock_init(&oi->i_layout_lock);
 }
 /*
  * Fill in an inode read from the OSD and set it up for use
