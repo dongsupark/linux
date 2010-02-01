@@ -863,7 +863,7 @@ void exofs_truncate(struct inode *inode)
 	if (unlikely(wait_obj_created(oi)))
 		goto fail;
 
-	ret = _do_truncate(inode);
+	ret = exofs_inode_recall_layout(inode, IOMODE_ANY, _do_truncate);
 	if (ret)
 		goto fail;
 
@@ -994,6 +994,7 @@ static void __oi_init(struct exofs_i_info *oi)
 {
 	init_waitqueue_head(&oi->i_wq);
 	oi->i_flags = 0;
+	spin_lock_init(&oi->i_layout_lock);
 }
 /*
  * Fill in an inode read from the OSD and set it up for use
