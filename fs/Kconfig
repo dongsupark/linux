@@ -224,13 +224,11 @@ config EXPORTFS
 	tristate
 
 config EXPORTFS_FILE_LAYOUT
-	bool "Exportfs support for the NFSv4.1 files layout type"
+	bool
 	depends on PNFSD && EXPORTFS
 	help
-	  Say Y here if you want exportfs support for the NFSv4.1
-	  files layout type.
-
-	  If unsure, say N.
+	  Exportfs support for the NFSv4.1 files layout type.
+	  Must be automatically selected by supporting filesystems.
 
 config NFS_ACL_SUPPORT
 	tristate
