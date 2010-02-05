@@ -3166,6 +3166,7 @@ static void nfs4_renew_done(struct rpc_task *task, void *data)
 	if (time_before(clp->cl_last_renewal,timestamp))
 		clp->cl_last_renewal = timestamp;
 	spin_unlock(&clp->cl_lock);
+	nfs4_schedule_state_renewal(clp);
 }
 
 static const struct rpc_call_ops nfs4_renew_ops = {
@@ -5038,6 +5039,8 @@ void nfs41_sequence_call_done(struct rpc_task *task, void *data)
 		}
 	}
 	dprintk("%s rpc_cred %p\n", __func__, task->tk_msg.rpc_cred);
+
+	nfs4_schedule_state_renewal(clp);
 
 	kfree(task->tk_msg.rpc_argp);
 	kfree(task->tk_msg.rpc_resp);
