@@ -418,7 +418,8 @@ static void nfs41_sequence_done(struct nfs_client *clp,
 			clp->cl_last_renewal = timestamp;
 		spin_unlock(&clp->cl_lock);
 		/* Check sequence flags */
-		nfs41_handle_sequence_flag_errors(clp, res->sr_status_flags);
+		if (atomic_read(&clp->cl_count) > 1)
+			nfs41_handle_sequence_flag_errors(clp, res->sr_status_flags);
 	}
 
 	/* Do not free slot if retried while operation was in progress */
@@ -5031,6 +5032,8 @@ void nfs41_sequence_call_done(struct rpc_task *task, void *data)
 
 	if (task->tk_status < 0) {
 		dprintk("%s ERROR %d\n", __func__, task->tk_status);
+		if (atomic_read(&clp->cl_count) == 1)
+			goto out;
 
 		if (_nfs4_async_handle_error(task, NULL, clp, NULL)
 								== -EAGAIN) {
@@ -5040,8 +5043,9 @@ void nfs41_sequence_call_done(struct rpc_task *task, void *data)
 	}
 	dprintk("%s rpc_cred %p\n", __func__, task->tk_msg.rpc_cred);
 
-	nfs4_schedule_state_renewal(clp);
-
+	if (atomic_read(&clp->cl_count) > 1)
+		nfs4_schedule_state_renewal(clp);
+out:
 	kfree(task->tk_msg.rpc_argp);
 	kfree(task->tk_msg.rpc_resp);
 
@@ -5063,9 +5067,15 @@ static void nfs41_sequence_prepare(struct rpc_task *task, void *data)
 	rpc_call_start(task);
 }
 
+static void nfs41_sequence_release(void *calldata)
+{
+	nfs_put_client((struct nfs_client *) calldata);
+}
+
 static const struct rpc_call_ops nfs41_sequence_ops = {
 	.rpc_call_done = nfs41_sequence_call_done,
 	.rpc_call_prepare = nfs41_sequence_prepare,
+	.rpc_release = nfs41_sequence_release,
 };
 
 static int nfs41_proc_async_sequence(struct nfs_client *clp,
@@ -5078,11 +5088,16 @@ static int nfs41_proc_async_sequence(struct nfs_client *clp,
 		.rpc_cred = cred,
 	};
 
+	if (!atomic_inc_not_zero(&clp->cl_count))
+		return -EIO;
 	args = kzalloc(sizeof(*args), GFP_KERNEL);
-	if (!args)
+	if (!args) {
+		nfs_put_client(clp);
 		return -ENOMEM;
+	}
 	res = kzalloc(sizeof(*res), GFP_KERNEL);
 	if (!res) {
+		nfs_put_client(clp);
 		kfree(args);
 		return -ENOMEM;
 	}
