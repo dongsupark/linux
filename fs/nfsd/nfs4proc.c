@@ -1097,18 +1097,11 @@ nfsd4_layoutget(struct svc_rqst *rqstp,
 	if (status)
 		goto out;
 
-	status = nfserr_inval;
+	status = nfserr_badiomode;
 	if (lgp->lg_seg.iomode != IOMODE_READ &&
-	    lgp->lg_seg.iomode != IOMODE_RW &&
-	    lgp->lg_seg.iomode != IOMODE_ANY) {
+	    lgp->lg_seg.iomode != IOMODE_RW) {
 		dprintk("pNFS %s: invalid iomode %d\n", __func__,
 			lgp->lg_seg.iomode);
-		goto out;
-	}
-
-	status = nfserr_badiomode;
-	if (lgp->lg_seg.iomode == IOMODE_ANY) {
-		dprintk("pNFS %s: IOMODE_ANY is not allowed\n", __func__);
 		goto out;
 	}
 
