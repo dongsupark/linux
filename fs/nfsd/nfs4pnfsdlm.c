@@ -334,6 +334,10 @@ static enum nfsstat4 nfsd4_pnfs_dlm_layoutget(struct inode *inode,
 
 	dprintk("%s: LAYOUT_GET\n", __func__);
 
+	/* DLM exported file systems only support layouts for READ */
+	if (res->lg_seg.iomode == IOMODE_RW)
+		return NFS4ERR_BADIOMODE;
+
 	index = dlm_ino_hash(inode);
 	dprintk("%s first stripe index %d i_ino %lu\n", __func__, index,
 		inode->i_ino);
