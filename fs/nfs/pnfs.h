@@ -94,6 +94,12 @@ void _pnfs_direct_init_io(struct inode *inode, struct nfs_open_context *ctx,
 				     (srv)->pnfs_curr_ld->ld_policy_ops && \
 				     (srv)->pnfs_curr_ld->ld_policy_ops->opname)
 
+static inline int lo_fail_bit(u32 iomode)
+{
+	return iomode == IOMODE_RW ?
+			 NFS_INO_RW_LAYOUT_FAILED : NFS_INO_RO_LAYOUT_FAILED;
+}
+
 /* Return true if a layout driver is being used for this mountpoint */
 static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 {
