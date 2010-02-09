@@ -676,23 +676,31 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		res.lg_seg.offset, res.lg_seg.length);
 
 	if (status) {
+		/*
+		 * The allowable error codes for the layout_get pNFS export
+		 * operations vector function (from the file system) can be
+		 * expanded as needed to include other errors defined for
+		 * the RFC 5561 LAYOUTGET operation.
+		 */
 		switch (status) {
-		case -ETOOSMALL:
-			status = nfserr_toosmall;
-			break;
-		case -ENOMEM:
-		case -EAGAIN:
-		case -EINTR:
-			status = nfserr_layouttrylater;
-			break;
-		case -ENOENT:
-			status = nfserr_badlayout;
-			break;
-		case -E2BIG:
-			status = nfserr_toosmall;
+		case nfserr_acces:
+		case nfserr_badiomode:
+			/* No support for LAYOUTIOMODE4_RW layouts */
+		case nfserr_badlayout:
+			/* No layout matching loga_minlength rules */
+		case nfserr_inval:
+		case nfserr_io:
+		case nfserr_layouttrylater:
+		case nfserr_layoutunavailable:
+		case nfserr_locked:
+		case nfserr_nospc:
+		case nfserr_recallconflict:
+		case nfserr_serverfault:
+		case nfserr_toosmall:
+			/* Requested layout to big for loga_maxcount */
 			break;
 		default:
-			status = nfserr_layoutunavailable;
+			BUG();
 		}
 		goto out_freelayout;
 	}
