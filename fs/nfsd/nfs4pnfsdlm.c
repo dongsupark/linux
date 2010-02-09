@@ -316,7 +316,7 @@ static int dlm_ino_hash(struct inode *ino)
 	 */
 	de = nfsd4_find_pnfs_dlm_device(ino->i_sb->s_bdev->bd_disk->disk_name);
 	if (!de)
-		return -EINVAL;
+		return -1;
 	hash_mask = de->num_ds - 1;
 	return ino->i_ino & hash_mask;
 }
