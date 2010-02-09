@@ -199,8 +199,9 @@ struct nfs_inode {
 	struct list_head	lo_inodes;
 
 	unsigned long pnfs_layout_state;
-#define NFS_INO_LAYOUT_FAILED	0	/* get layout failed, stop trying */
-#define NFS_INO_LAYOUT_ALLOC	1	/* bit lock for layout allocation */
+#define NFS_INO_RO_LAYOUT_FAILED 0 	/* get ro layout failed stop trying */
+#define NFS_INO_RW_LAYOUT_FAILED 1 	/* get rw layout failed stop trying */
+#define NFS_INO_LAYOUT_ALLOC     2	/* bit lock for layout allocation */
 	time_t pnfs_layout_suspend;
 	wait_queue_head_t lo_waitq;
 	spinlock_t lo_lock;

@@ -1118,11 +1118,11 @@ pnfs_update_layout(struct inode *ino,
 	}
 
 	/* if get layout already failed once goto out */
-	if (test_bit(NFS_INO_LAYOUT_FAILED, &nfsi->pnfs_layout_state)) {
+	if (test_bit(lo_fail_bit(iomode), &nfsi->pnfs_layout_state)) {
 		if (unlikely(nfsi->pnfs_layout_suspend &&
 		    get_seconds() >= nfsi->pnfs_layout_suspend)) {
 			dprintk("%s: layout_get resumed\n", __func__);
-			clear_bit(NFS_INO_LAYOUT_FAILED,
+			clear_bit(lo_fail_bit(iomode),
 				  &nfsi->pnfs_layout_state);
 			nfsi->pnfs_layout_suspend = 0;
 		} else {
@@ -1246,7 +1246,7 @@ pnfs_get_layout_done(struct nfs4_pnfs_layoutget *lgp, int rpc_status)
 get_out:
 	/* remember that get layout failed and suspend trying */
 	nfsi->pnfs_layout_suspend = suspend;
-	set_bit(NFS_INO_LAYOUT_FAILED, &nfsi->pnfs_layout_state);
+	set_bit(lo_fail_bit(lgp->args.lseg.iomode), &nfsi->pnfs_layout_state);
 	dprintk("%s: layout_get suspended until %ld\n",
 		__func__, suspend);
 out:
