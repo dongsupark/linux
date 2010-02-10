@@ -71,7 +71,7 @@ err:
 	return status;
 }
 
-static int exofs_layout_get(
+static u32 exofs_layout_get(
 	struct inode *inode,
 	struct exp_xdr_stream *xdr,
 	const struct nfsd4_pnfs_layoutget_arg *args,
@@ -84,8 +84,8 @@ static int exofs_layout_get(
 	struct pnfs_osd_layout layout;
 	__be32 *start;
 	bool in_recall;
-	int i;
-	int err;
+	int i, err;
+	u32 nfserr;
 
 	res->lg_seg.offset = 0;
 	res->lg_seg.length = NFS4_MAX_UINT64;
@@ -95,13 +95,13 @@ static int exofs_layout_get(
 	/* skip opaque size, will be filled-in later */
 	start = exp_xdr_reserve_qwords(xdr, 1);
 	if (!start) {
-		err = -E2BIG;
+		nfserr = NFS4ERR_TOOSMALL;
 		goto err;
 	}
 
 	creds = kcalloc(el->s_numdevs, sizeof(*creds), GFP_KERNEL);
 	if (!creds) {
-		err = -ENOMEM;
+		nfserr = NFS4ERR_LAYOUTTRYLATER;
 		goto err;
 	}
 
@@ -134,25 +134,28 @@ static int exofs_layout_get(
 	layout.olo_comps = creds;
 
 	err = pnfs_osd_xdr_encode_layout(xdr, &layout);
-	if (err)
+	if (err) {
+		nfserr = NFS4ERR_TOOSMALL; /* FIXME: Change osd_xdr error codes */
 		goto err;
+	}
 
 	exp_xdr_encode_opaque_len(start, xdr->p);
 
 	spin_lock(&oi->i_layout_lock);
 	in_recall = test_bit(OBJ_IN_LAYOUT_RECALL, &oi->i_flags);
-	if (!in_recall)
+	if (!in_recall) {
 		__set_bit(OBJ_LAYOUT_IS_GIVEN, &oi->i_flags);
+		nfserr = NFS_OK;
+	} else {
+		nfserr = NFS4ERR_RECALLCONFLICT;
+	}
 	spin_unlock(&oi->i_layout_lock);
-
-	if (in_recall)
-		err = -EAGAIN;
 
 err:
 	kfree(creds);
-	EXOFS_DBGMSG("(0x%lx) err=%d xdr_bytes=%zu\n",
-		     inode->i_ino, err, exp_xdr_qbytes(xdr->p - start));
-	return err;
+	EXOFS_DBGMSG("(0x%lx) nfserr=%u xdr_bytes=%zu\n",
+		     inode->i_ino, nfserr, exp_xdr_qbytes(xdr->p - start));
+	return nfserr;
 }
 
 /* NOTE: inode mutex must NOT be held */
