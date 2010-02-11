@@ -321,26 +321,27 @@ static int dlm_ino_hash(struct inode *ino)
 	return ino->i_ino & hash_mask;
 }
 
-static int nfsd4_pnfs_dlm_layoutget(struct inode *inode,
+static u32 nfsd4_pnfs_dlm_layoutget(struct inode *inode,
 			   struct exp_xdr_stream *xdr,
 			   const struct nfsd4_pnfs_layoutget_arg *args,
 			   struct nfsd4_pnfs_layoutget_res *res)
 {
 	struct pnfs_filelayout_layout *layout = NULL;
 	struct knfsd_fh *fhp = NULL;
-	int rc = 0, index;
+	int index;
+	u32 rc = NFS_OK;
 
 	dprintk("%s: LAYOUT_GET\n", __func__);
 
 	/* DLM exported file systems only support layouts for READ */
 	if (res->lg_seg.iomode == IOMODE_RW)
-		return nfserr_badiomode;
+		return NFS4ERR_BADIOMODE;
 
 	index = dlm_ino_hash(inode);
 	dprintk("%s first stripe index %d i_ino %lu\n", __func__, index,
 		inode->i_ino);
 	if (index < 0)
-		return index;
+		return NFS4ERR_LAYOUTUNAVAILABLE;
 
 	res->lg_seg.layout_type = LAYOUT_NFSV4_FILES;
 	/* Always give out whole file layouts */
