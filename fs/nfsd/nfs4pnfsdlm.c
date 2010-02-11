@@ -351,7 +351,7 @@ static int nfsd4_pnfs_dlm_layoutget(struct inode *inode,
 
 	layout = kzalloc(sizeof(*layout), GFP_KERNEL);
 	if (layout == NULL) {
-		rc = -ENOMEM;
+		rc = NFS4ERR_LAYOUTTRYLATER;
 		goto error;
 	}
 
@@ -368,7 +368,7 @@ static int nfsd4_pnfs_dlm_layoutget(struct inode *inode,
 
 	fhp = kmalloc(sizeof(*fhp), GFP_KERNEL);
 	if (fhp == NULL) {
-		rc = -ENOMEM;
+		rc = NFS4ERR_LAYOUTTRYLATER;
 		goto error;
 	}
 
