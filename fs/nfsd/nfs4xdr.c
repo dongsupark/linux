@@ -3510,7 +3510,7 @@ err:
 }
 
 static __be32
-nfsd4_encode_layoutcommit(struct nfsd4_compoundres *resp, int nfserr,
+nfsd4_encode_layoutcommit(struct nfsd4_compoundres *resp, __be32 nfserr,
 			  struct nfsd4_pnfs_layoutcommit *lcp)
 {
 	__be32 *p;
