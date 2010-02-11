@@ -480,17 +480,26 @@ static void _io_free(struct objio_state *ios)
 	}
 }
 
-static void _offset_dev_unit_off(struct objio_state *ios, u64 file_offset,
-			u64 *obj_offset, unsigned *dev, unsigned *unit_off)
-{
-	unsigned stripe_unit = ios->objio_seg->stripe_unit;
-	unsigned stripe_length = stripe_unit * ios->objio_seg->group_width;
-	u64 stripe_no = file_offset;
-	unsigned stripe_mod = do_div(stripe_no, stripe_length);
+struct _striping_info {
+	u64 obj_offset;
+	unsigned dev;
+	unsigned unit_off;
+};
 
-	*unit_off = stripe_mod % stripe_unit;
-	*obj_offset = stripe_no * stripe_unit + *unit_off;
-	*dev = stripe_mod / stripe_unit * ios->objio_seg->mirrors_p1;
+static void _calc_stripe_info(struct objio_state *ios, u64 file_offset,
+			      struct _striping_info *si)
+{
+	u32	stripe_unit = ios->objio_seg->stripe_unit;
+	u32	group_width = ios->objio_seg->group_width;
+	u32	U = stripe_unit * group_width;
+
+	u32	LmodU;
+	u64 	N = div_u64_rem(file_offset, U, &LmodU);
+
+	si->unit_off = LmodU % stripe_unit;
+	si->obj_offset = N * stripe_unit + si->unit_off;
+	si->dev = LmodU / stripe_unit;
+	si->dev *= ios->objio_seg->mirrors_p1;
 }
 
 static int _add_stripe_unit(struct objio_state *ios,  unsigned *cur_pg,
@@ -537,41 +546,54 @@ static int _add_stripe_unit(struct objio_state *ios,  unsigned *cur_pg,
 	return 0;
 }
 
-static int _io_rw_pagelist(struct objio_state *ios)
+static int _prepare_pages(struct objio_state *ios, struct _striping_info *si)
 {
 	u64 length = ios->ol_state.count;
-	u64 offset = ios->ol_state.offset;
 	unsigned stripe_unit = ios->objio_seg->stripe_unit;
+	unsigned mirrors_p1 = ios->objio_seg->mirrors_p1;
+	unsigned dev = si->dev;
 	unsigned comp = 0;
 	unsigned stripes = 0;
 	unsigned cur_pg = 0;
-	int ret;
+	int ret = 0;
 
 	while (length) {
 		struct _objio_per_comp *per_dev = &ios->per_dev[comp];
-		unsigned cur_len, page_off;
+		unsigned cur_len, page_off = 0;
 
 		if (!per_dev->length) {
-			unsigned unit_off;
+			per_dev->dev = dev;
+			if (dev < si->dev) {
+				per_dev->offset = si->obj_offset + stripe_unit -
+								   si->unit_off;
+				cur_len = stripe_unit;
+			} else if (dev == si->dev) {
+				per_dev->offset = si->obj_offset;
+				cur_len = stripe_unit - si->unit_off;
+				page_off = si->unit_off & ~PAGE_MASK;
+				BUG_ON(page_off &&
+				      (page_off != ios->ol_state.pgbase));
+			} else { /* dev > si->dev */
+				per_dev->offset = si->obj_offset - si->unit_off;
+				cur_len = stripe_unit;
+			}
 
-			_offset_dev_unit_off(ios, offset, &per_dev->offset,
-					     &per_dev->dev, &unit_off);
 			stripes++;
-			cur_len = min_t(u64, stripe_unit - unit_off, length);
-			offset += cur_len;
-			page_off = unit_off & ~PAGE_MASK;
-			BUG_ON(page_off != ios->ol_state.pgbase);
+
+			dev += mirrors_p1;
+			dev %= ios->ol_state.num_comps;
 		} else {
-			cur_len = min_t(u64, stripe_unit, length);
-			page_off = 0;
+			cur_len = stripe_unit;
 		}
+		if (cur_len >= length)
+			cur_len = length;
 
 		ret = _add_stripe_unit(ios, &cur_pg, page_off , per_dev,
 				       cur_len);
 		if (unlikely(ret))
 			goto out;
 
-		comp += ios->objio_seg->mirrors_p1;
+		comp += mirrors_p1;
 		comp %= ios->ol_state.num_comps;
 
 		length -= cur_len;
@@ -581,8 +603,16 @@ out:
 	if (!ios->length)
 		return ret;
 
-	ios->numdevs = stripes * ios->objio_seg->mirrors_p1;
+	ios->numdevs = stripes * mirrors_p1;
 	return 0;
+}
+
+static int _io_rw_pagelist(struct objio_state *ios)
+{
+	struct _striping_info si;
+
+	_calc_stripe_info(ios, ios->ol_state.count, &si);
+	return _prepare_pages(ios, &si);
 }
 
 static ssize_t _sync_done(struct objio_state *ios)
