@@ -843,7 +843,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		goto out_unlock;
 
 	if (is_layout_recalled(clp, lgp->lg_fhp, &lgp->lg_seg)) {
-		status = nfserr_recallconflict;
+		nfserr = nfserr_recallconflict;
 		goto out;
 	}
 
