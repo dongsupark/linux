@@ -139,13 +139,13 @@ EXPORT_SYMBOL(filelayout_encode_devinfo);
  * Use linux error codes (not nfs) since these values are being
  * returned to the file system.
  */
-int
+u32
 filelayout_encode_layout(struct exp_xdr_stream *xdr,
 			 const struct pnfs_filelayout_layout *flp)
 {
 	u32 len = 0, nfl_util, fhlen, i;
 	u32 *layoutlen_p;
-	int error;
+	u32 nfserr;
 	__be32 *p;
 
 	dprintk("%s: device_id %llx:%llx fsi %u, numfh %u\n",
@@ -158,7 +158,7 @@ filelayout_encode_layout(struct exp_xdr_stream *xdr,
 	/* Ensure file system added at least one file handle */
 	if (flp->lg_fh_length <= 0) {
 		dprintk("%s: File Layout has no file handles!!\n", __func__);
-		error = -NFS4ERR_LAYOUTUNAVAILABLE;
+		nfserr = NFS4ERR_LAYOUTUNAVAILABLE;
 		goto out;
 	}
 
@@ -166,7 +166,7 @@ filelayout_encode_layout(struct exp_xdr_stream *xdr,
 	 * pattern_offset, number of filehandles */
 	p = layoutlen_p = exp_xdr_reserve_qwords(xdr, 1+2+2+1+1+2+1);
 	if (!p) {
-		error = -ETOOSMALL;
+		nfserr = NFS4ERR_TOOSMALL;
 		goto out;
 	}
 
@@ -199,7 +199,7 @@ filelayout_encode_layout(struct exp_xdr_stream *xdr,
 		fhlen = flp->lg_fh_list[i].fh_size;
 		p = exp_xdr_reserve_space(xdr, 4 + fhlen);
 		if (!p) {
-			error = -ETOOSMALL;
+			nfserr = NFS4ERR_TOOSMALL;
 			goto out;
 		}
 		p = exp_xdr_encode_opaque(p, &flp->lg_fh_list[i].fh_base, fhlen);
@@ -209,10 +209,10 @@ filelayout_encode_layout(struct exp_xdr_stream *xdr,
 	len = (char *)p - (char *)layoutlen_p;
 	exp_xdr_encode_u32(layoutlen_p, len - 4);
 
-	error = 0;
+	nfserr = NFS_OK;
 out:
-	dprintk("%s: End err %d xdrlen %d\n",
-		__func__, error, len);
-	return error;
+	dprintk("%s: End err %u xdrlen %d\n",
+		__func__, nfserr, len);
+	return nfserr;
 }
 EXPORT_SYMBOL(filelayout_encode_layout);
