@@ -605,11 +605,12 @@ merge_layout(struct nfs4_file *fp,
 	return lp;
 }
 
-int
+__be32
 nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		     struct exp_xdr_stream *xdr)
 {
-	int status = nfserr_layouttrylater;
+	u32 status;
+	__be32 nfserr = nfserr_layouttrylater;
 	struct inode *ino = lgp->lg_fhp->fh_dentry->d_inode;
 	struct super_block *sb = ino->i_sb;
 	int can_merge;
@@ -630,7 +631,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 #ifdef notyet
 	args.lg_sbid = find_create_sbid(sb);
 	if (!args.lg_sbid) {
-		status = nfserr_layouttrylater;
+		nfserr = nfserr_layouttrylater;
 		goto out;
 	}
 #else
@@ -670,7 +671,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 	status = sb->s_pnfs_op->layout_get(ino, xdr, &args, &res);
 	nfs4_lock_state();
 
-	dprintk("pNFS %s: post-export status %d "
+	dprintk("pNFS %s: post-export status %u "
 		"iomode %u offset %llu length %llu\n",
 		__func__, status, res.lg_seg.iomode,
 		res.lg_seg.offset, res.lg_seg.length);
@@ -698,7 +699,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		case NFS4ERR_SERVERFAULT:
 		case NFS4ERR_TOOSMALL:
 			/* Requested layout too big for loga_maxcount */
-			status = cpu_to_be32(status);
+			nfserr = cpu_to_be32(status);
 			break;
 		default:
 			BUG();
@@ -725,8 +726,9 @@ out_unlock:
 		put_nfs4_file(fp);
 	nfs4_unlock_state();
 out:
-	dprintk("pNFS %s: lp %p exit status %d\n", __func__, lp, status);
-	return status;
+	dprintk("pNFS %s: lp %p exit nfserr %u\n", __func__, lp,
+		be32_to_cpu(nfserr));
+	return nfserr;
 out_freelayout:
 	free_layout(lp);
 	goto out_unlock;

@@ -3427,7 +3427,7 @@ toosmall:
 
 static __be32
 nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
-		       int nfserr,
+		       __be32 nfserr,
 		       struct nfsd4_pnfs_layoutget *lgp)
 {
 	int maxcount, leadcount;
