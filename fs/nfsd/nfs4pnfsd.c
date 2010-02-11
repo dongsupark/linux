@@ -700,25 +700,6 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 			/* Requested layout too big for loga_maxcount */
 			status = cpu_to_be32(status);
 			break;
-		}
-
-		switch (status) {
-		case nfserr_acces:
-		case nfserr_badiomode:
-			/* No support for LAYOUTIOMODE4_RW layouts */
-		case nfserr_badlayout:
-			/* No layout matching loga_minlength rules */
-		case nfserr_inval:
-		case nfserr_io:
-		case nfserr_layouttrylater:
-		case nfserr_layoutunavailable:
-		case nfserr_locked:
-		case nfserr_nospc:
-		case nfserr_recallconflict:
-		case nfserr_serverfault:
-		case nfserr_toosmall:
-			/* Requested layout to big for loga_maxcount */
-			break;
 		default:
 			BUG();
 		}
