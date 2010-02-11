@@ -150,8 +150,24 @@ struct pnfs_export_operations {
 	 * res->seg - layout segment requested and layout info returned.
 	 * res->fh can be modified the file handle for use on data servers
 	 * res->return_on_close - true if layout to be returned on file close
+	 *
+	 * return one of the following nfs errors:
+	 * NFS_OK			Success
+	 * NFS4ERR_ACCESS		Permission error
+	 * NFS4ERR_BADIOMODE		Server does not support requested iomode
+	 * NFS4ERR_BADLAYOUT		No layout matching loga_minlength rules
+	 * NFS4ERR_INVAL		Parameter other than layout is invalid
+	 * NFS4ERR_IO			I/O error
+	 * NFS4ERR_LAYOUTTRYLATER	Layout may be retrieved later
+	 * NFS4ERR_LAYOUTUNAVAILABLE	Layout unavailable for this file
+	 * NFS4ERR_LOCKED		Lock conflict
+	 * NFS4ERR_NOSPC		Out-of-space error occured
+	 * NFS4ERR_RECALLCONFLICT	Layout currently unavialable due to
+	 *				a conflicting CB_LAYOUTRECALL
+	 * NFS4ERR_SERVERFAULT		Server went bezerk
+	 * NFS4ERR_TOOSMALL		loga_maxcount too small to fit layout
 	 */
-	int (*layout_get) (struct inode *,
+	u32 (*layout_get) (struct inode *,
 			   struct exp_xdr_stream *xdr,
 			   const struct nfsd4_pnfs_layoutget_arg *,
 			   struct nfsd4_pnfs_layoutget_res *);
