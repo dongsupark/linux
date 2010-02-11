@@ -346,7 +346,7 @@ bl_getdeviceinfo(struct super_block *sb, struct exp_xdr_stream *xdr,
 	return -EINVAL;
 }
 
-int
+u32
 bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 	     const struct nfsd4_pnfs_layoutget_arg *arg,
 	     struct nfsd4_pnfs_layoutget_res *res)
@@ -356,8 +356,8 @@ bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 	struct list_head		bl_possible,
 					*bl_candidates	= NULL;
 	boolean_t			del_on_error	= False;
-	int				status		= 0,
-					adj;
+	int				adj;
+	u32				nfserr		= NFS_OK;
 	
 	dprintk("--> %s (inode=[0x%x:%lu], offset=%Lu, len=%Lu, iomode=%d)\n",
 	    __func__, i->i_sb->s_dev, i->i_ino, _2SECTS(res->lg_seg.offset),
@@ -365,7 +365,7 @@ bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 
 	if (res->lg_seg.length == 0) {
 		printk("%s: request length of 0, error condition\n", __func__);
-		return -EINVAL;
+		return NFS4ERR_BADLAYOUT;
 	}
 	
 	/*
@@ -387,14 +387,14 @@ bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 	if (res->lg_seg.iomode != IOMODE_READ)
 		if (i->i_op->fallocate(i, FALLOC_FL_KEEP_SIZE,
 				       res->lg_seg.offset, res->lg_seg.length))
-			return -EIO;
+			return NFS4ERR_IO;
 		
 	INIT_LIST_HEAD(&bl_possible);
 	
 	if ((r = layout_inode_find(i)) == NULL) {
 		if (layout_inode_add(i, &r) == False) {
 			printk("%s: layout_inode_add failed\n", __func__);
-			return -EIO;
+			return NFS4ERR_IO;
 		}
 		del_on_error = True;
 	}
@@ -407,7 +407,7 @@ bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 		 * This will send LAYOUTTRYAGAIN error to the client.
 		 */
 		dprintk("%s: layout_cache_fill_from() failed\n", __func__);
-		status = -EAGAIN;
+		nfserr = NFS4ERR_LAYOUTTRYLATER;
 		goto layoutget_cleanup;
 	}
 	
@@ -416,7 +416,7 @@ bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 	
 	bl_candidates = layout_cache_iter(r, &bl_possible, &res->lg_seg);
 	if (!bl_candidates) {
-		status = -ENOMEM;
+		nfserr = NFS4ERR_LAYOUTTRYLATER;
 		goto layoutget_cleanup;
 	}
 	
@@ -424,12 +424,12 @@ bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 	if (layout_cache_update(r, bl_candidates)) {
 		/* ---- Failed to allocate memory. ---- */
 		dprintk("%s: layout_cache_update() failed\n", __func__);
-		status = -EAGAIN;
+		nfserr = NFS4ERR_LAYOUTTRYLATER;
 		goto layoutget_cleanup;
 	}
 	
-	status = blocklayout_encode_layout(xdr, bl_candidates);
-	if (status)
+	nfserr = blocklayout_encode_layout(xdr, bl_candidates);
+	if (nfserr)
 		dprintk("%s: layoutget xdr routine failed\n", __func__);
 	
 layoutget_cleanup:
@@ -443,15 +443,15 @@ layoutget_cleanup:
 	}
 
 	spin_unlock(&r->blr_lock);
-	if (unlikely(status)) {
+	if (unlikely(nfserr)) {
 		if (del_on_error == True)
 			layout_inode_del(i);
 		res->lg_seg.length = 0;
 		res->lg_seg.offset = 0;
 	}
 	
-	dprintk("<-- %s (rval %d)\n", __func__, status);
-	return status;
+	dprintk("<-- %s (rval %u)\n", __func__, nfserr);
+	return nfserr;
 }
 
 /*
