@@ -683,6 +683,26 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		 * the RFC 5561 LAYOUTGET operation.
 		 */
 		switch (status) {
+		case NFS4ERR_ACCESS:
+		case NFS4ERR_BADIOMODE:
+			/* No support for LAYOUTIOMODE4_RW layouts */
+		case NFS4ERR_BADLAYOUT:
+			/* No layout matching loga_minlength rules */
+		case NFS4ERR_INVAL:
+		case NFS4ERR_IO:
+		case NFS4ERR_LAYOUTTRYLATER:
+		case NFS4ERR_LAYOUTUNAVAILABLE:
+		case NFS4ERR_LOCKED:
+		case NFS4ERR_NOSPC:
+		case NFS4ERR_RECALLCONFLICT:
+		case NFS4ERR_SERVERFAULT:
+		case NFS4ERR_TOOSMALL:
+			/* Requested layout too big for loga_maxcount */
+			status = cpu_to_be32(status);
+			break;
+		}
+
+		switch (status) {
 		case nfserr_acces:
 		case nfserr_badiomode:
 			/* No support for LAYOUTIOMODE4_RW layouts */
