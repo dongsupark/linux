@@ -60,7 +60,7 @@ spnfs_layout_type(struct super_block *sb)
 	return LAYOUT_NFSV4_FILES;
 }
 
-int
+u32
 spnfs_layoutget(struct inode *inode, struct exp_xdr_stream *xdr,
 		const struct nfsd4_pnfs_layoutget_arg *lg_arg,
 		struct nfsd4_pnfs_layoutget_res *lg_res)
@@ -69,17 +69,18 @@ spnfs_layoutget(struct inode *inode, struct exp_xdr_stream *xdr,
 	struct spnfs_msg *im = NULL;
 	union spnfs_msg_res *res = NULL;
 	struct pnfs_filelayout_layout *flp = NULL;
-	int status = 0, i;
+	int status, i;
+	u32 nfserr;
 
 	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
 	if (im == NULL) {
-		status = -ENOMEM;
+		nfserr = NFS4ERR_LAYOUTTRYLATER;
 		goto layoutget_cleanup;
 	}
 
 	res = kmalloc(sizeof(union spnfs_msg_res), GFP_KERNEL);
 	if (res == NULL) {
-		status = -ENOMEM;
+		nfserr = NFS4ERR_LAYOUTTRYLATER;
 		goto layoutget_cleanup;
 	}
 
@@ -90,12 +91,32 @@ spnfs_layoutget(struct inode *inode, struct exp_xdr_stream *xdr,
 	/* call function to queue the msg for upcall */
 	if (spnfs_upcall(spnfs, im, res) != 0) {
 		dprintk("failed spnfs upcall: layoutget\n");
-		status = -EIO;
+		nfserr = NFS4ERR_LAYOUTUNAVAILABLE;
 		goto layoutget_cleanup;
 	}
 	status = res->layoutget_res.status;
-	if (status != 0)
+	if (status != 0) {
+		/* FIXME? until user mode is fixed, translate system error */
+		switch (status) {
+		case -E2BIG:
+		case -ETOOSMALL:
+			nfserr = NFS4ERR_TOOSMALL;
+			break;
+		case -ENOMEM:
+		case -EAGAIN:
+		case -EINTR:
+			nfserr = NFS4ERR_LAYOUTTRYLATER;
+			break;
+		case -ENOENT:
+			nfserr = NFS4ERR_BADLAYOUT;
+			break;
+ 		default:
+			nfserr = NFS4ERR_LAYOUTUNAVAILABLE;
+		}
+		dprintk("spnfs layout_get upcall: status=%d nfserr=%u\n",
+			status, nfserr);
 		goto layoutget_cleanup;
+	}
 
 	lg_res->lg_return_on_close = 0;
 #if defined(CONFIG_SPNFS_LAYOUTSEGMENTS)
@@ -112,7 +133,7 @@ spnfs_layoutget(struct inode *inode, struct exp_xdr_stream *xdr,
 
 	flp = kmalloc(sizeof(struct pnfs_filelayout_layout), GFP_KERNEL);
 	if (flp == NULL) {
-		status = -ENOMEM;
+		nfserr = NFS4ERR_LAYOUTTRYLATER;
 		goto layoutget_cleanup;
 	}
 	flp->device_id.sbid = lg_arg->lg_sbid;
@@ -128,7 +149,7 @@ spnfs_layoutget(struct inode *inode, struct exp_xdr_stream *xdr,
 	flp->lg_fh_list = kmalloc(flp->lg_fh_length * sizeof(struct knfsd_fh),
 				  GFP_KERNEL);
 	if (flp->lg_fh_list == NULL) {
-		status = -ENOMEM;
+		nfserr = NFS4ERR_LAYOUTTRYLATER;
 		goto layoutget_cleanup;
 	}
 	/*
@@ -143,7 +164,7 @@ spnfs_layoutget(struct inode *inode, struct exp_xdr_stream *xdr,
 	}
 
 	/* encode the layoutget body */
-	status = filelayout_encode_layout(xdr, flp);
+	nfserr = filelayout_encode_layout(xdr, flp);
 
 layoutget_cleanup:
 	if (flp) {
@@ -154,7 +175,7 @@ layoutget_cleanup:
 	kfree(im);
 	kfree(res);
 
-	return status;
+	return nfserr;
 }
 
 int
