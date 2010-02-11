@@ -3281,7 +3281,7 @@ out_err:
 /* Encodes the response of get device list.
 */
 static __be32
-nfsd4_encode_getdevlist(struct nfsd4_compoundres *resp, int nfserr,
+nfsd4_encode_getdevlist(struct nfsd4_compoundres *resp, __be32 nfserr,
 			struct nfsd4_pnfs_getdevlist *gdevl)
 {
 	unsigned int dev_count = 0, lead_count;
@@ -3342,7 +3342,7 @@ out_err:
  * gdir_mincount calculation.
  */
 static __be32
-nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, int nfserr,
+nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, __be32 nfserr,
 			struct nfsd4_pnfs_getdevinfo *gdev)
 {
 	struct super_block *sb;
