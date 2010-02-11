@@ -663,42 +663,36 @@ static ssize_t _read_done(struct objio_state *ios)
 
 static int _read_mirrors(struct objio_state *ios, unsigned cur_comp)
 {
+	struct osd_request *or = NULL;
+	struct _objio_per_comp *per_dev = &ios->per_dev[cur_comp];
+	unsigned dev = per_dev->dev;
+	struct pnfs_osd_object_cred *cred =
+			&ios->objio_seg->layout->olo_comps[dev];
+	struct osd_obj_id obj = {
+		.partition = cred->oc_object_id.oid_partition_id,
+		.id = cred->oc_object_id.oid_object_id,
+	};
 	int ret;
 
-	/* FIXME: Currently Mirror read from single/first device only */
-	{
-		struct osd_request *or = NULL;
-		struct _objio_per_comp *per_dev = &ios->per_dev[cur_comp];
-		unsigned dev = per_dev->dev;
-		struct pnfs_osd_object_cred *cred =
-			     &ios->objio_seg->layout->olo_comps[dev];
-		struct osd_obj_id obj = {
-			.partition = cred->oc_object_id.oid_partition_id,
-			.id = cred->oc_object_id.oid_object_id,
-		};
-
-		or = osd_start_request(ios->objio_seg->ods[dev],
-				       GFP_KERNEL);
-		if (unlikely(!or)) {
-			ret = -ENOMEM;
-			goto err;
-		}
-		per_dev->or = or;
-
-		osd_req_read(or, &obj, per_dev->offset, per_dev->bio,
-			     per_dev->length);
-
-		ret = osd_finalize_request(or, 0, cred->oc_cap.cred, NULL);
-		if (ret) {
-			dprintk("%s: Faild to osd_finalize_request() => %d\n",
-				__func__, ret);
-			goto err;
-		}
-
-		dprintk("%s:[%d] dev=%d obj=0x%llx start=0x%llx length=0x%lx\n",
-			  __func__, cur_comp, dev, obj.id,
-			  _LLU(per_dev->offset), per_dev->length);
+	or = osd_start_request(ios->objio_seg->ods[dev], GFP_KERNEL);
+	if (unlikely(!or)) {
+		ret = -ENOMEM;
+		goto err;
 	}
+	per_dev->or = or;
+
+	osd_req_read(or, &obj, per_dev->offset, per_dev->bio, per_dev->length);
+
+	ret = osd_finalize_request(or, 0, cred->oc_cap.cred, NULL);
+	if (ret) {
+		dprintk("%s: Faild to osd_finalize_request() => %d\n",
+			__func__, ret);
+		goto err;
+	}
+
+	dprintk("%s:[%d] dev=%d obj=0x%llx start=0x%llx length=0x%lx\n",
+			__func__, cur_comp, dev, obj.id,
+			_LLU(per_dev->offset), per_dev->length);
 
 err:
 	return ret;
