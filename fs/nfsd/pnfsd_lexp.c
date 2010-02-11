@@ -126,12 +126,12 @@ static int get_stripe_unit(int blocksize)
 	return blocksize;
 }
 
-static int pnfsd_lexp_layout_get(struct inode *inode,
+static u32 pnfsd_lexp_layout_get(struct inode *inode,
 				 struct exp_xdr_stream *xdr,
 				 const struct nfsd4_pnfs_layoutget_arg *arg,
 				 struct nfsd4_pnfs_layoutget_res *res)
 {
-	int rc = 0;
+	u32 rc = NFS_OK;
 	struct pnfs_filelayout_layout *layout = NULL;
 	struct knfsd_fh *fhp = NULL;
 
