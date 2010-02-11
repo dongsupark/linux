@@ -58,9 +58,8 @@ struct exofs_layout {
 	unsigned stripe_unit;
 	unsigned mirrors_p1;
 
-	unsigned group_width; /* Without data integ components */
-	unsigned data_integ; /* 0, 1, or 2 */
-	unsigned group_depth;
+	unsigned group_width;
+	u64	 group_depth;
 	unsigned group_count;
 
 	enum exofs_inode_layout_gen_functions lay_func;
@@ -132,6 +131,7 @@ struct exofs_io_state {
 	struct page		**pages;
 	unsigned		nr_pages;
 	unsigned		pgbase;
+	unsigned		pages_consumed;
 
 	/* Attributes */
 	unsigned		in_attr_len;
