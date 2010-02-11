@@ -205,7 +205,7 @@ struct list_head;
 extern int blocklayout_encode_devinfo(struct exp_xdr_stream *xdr,
 				      const struct list_head *volumes);
 
-extern int blocklayout_encode_layout(struct exp_xdr_stream *xdr,
+extern u32 blocklayout_encode_layout(struct exp_xdr_stream *xdr,
 				     const struct list_head *layouts);
 #endif /* defined(CONFIG_EXPORTFS_FILE_LAYOUT) */
 
