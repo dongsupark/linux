@@ -699,6 +699,8 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		case NFS4ERR_SERVERFAULT:
 		case NFS4ERR_TOOSMALL:
 			/* Requested layout too big for loga_maxcount */
+		case NFS4ERR_WRONG_TYPE:
+			/* Not a regular file */
 			nfserr = cpu_to_be32(status);
 			break;
 		default:

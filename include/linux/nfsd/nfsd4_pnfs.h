@@ -166,6 +166,7 @@ struct pnfs_export_operations {
 	 *				a conflicting CB_LAYOUTRECALL
 	 * NFS4ERR_SERVERFAULT		Server went bezerk
 	 * NFS4ERR_TOOSMALL		loga_maxcount too small to fit layout
+	 * NFS4ERR_WRONG_TYPE		Wrong file type (not a regular file)
 	 */
 	u32 (*layout_get) (struct inode *,
 			   struct exp_xdr_stream *xdr,
