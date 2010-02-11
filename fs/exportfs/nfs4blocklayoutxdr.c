@@ -118,7 +118,7 @@ error:
 }
 EXPORT_SYMBOL_GPL(blocklayout_encode_devinfo);
 
-int
+u32
 blocklayout_encode_layout(struct exp_xdr_stream *xdr,
 			  const struct list_head *bl_head)
 {
@@ -133,14 +133,14 @@ blocklayout_encode_layout(struct exp_xdr_stream *xdr,
 	 */
 	p = exp_xdr_reserve_qwords(xdr, 2);
 	if (!p)
-		return -ETOOSMALL;
+		return NFS4ERR_TOOSMALL;
 	p += 2;
 
 	list_for_each_entry(b, bl_head, bll_list) {
 		extents++;
 		p = exp_xdr_reserve_qwords(xdr, 5 * 2 + 1);
 		if (!p)
-			return -ETOOSMALL;
+			return NFS4ERR_TOOSMALL;
 		p = exp_xdr_encode_u64(p, b->bll_vol_id.sbid);
 		p = exp_xdr_encode_u64(p, b->bll_vol_id.devid);
 		p = exp_xdr_encode_u64(p, b->bll_foff);
@@ -153,6 +153,6 @@ blocklayout_encode_layout(struct exp_xdr_stream *xdr,
 	p = exp_xdr_encode_u32(layoutlen_p, (p - layoutlen_p - 1) * 4);
 	exp_xdr_encode_u32(p, extents);
 
-	return 0;
+	return NFS_OK;
 }
 EXPORT_SYMBOL_GPL(blocklayout_encode_layout);
