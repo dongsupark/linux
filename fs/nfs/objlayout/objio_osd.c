@@ -260,11 +260,6 @@ static int _verify_data_map(struct pnfs_osd_layout *layout)
 	u32 group_width;
 
 /* FIXME: Only raid0 for now. if not go through MDS */
-	if (data_map->odm_num_comps != layout->olo_num_comps) {
-		printk(KERN_ERR "odm_num_comps(%u) != olo_num_comps(%u)\n",
-			  data_map->odm_num_comps, layout->olo_num_comps);
-		return -ENOTSUPP;
-	}
 	if (data_map->odm_raid_algorithm != PNFS_OSD_RAID_0) {
 		printk(KERN_ERR "Only RAID_0 for now\n");
 		return -ENOTSUPP;
@@ -494,6 +489,15 @@ static void _io_free(struct objio_state *ios)
 	}
 }
 
+struct osd_dev * _io_od(struct objio_state *ios, unsigned dev)
+{
+	unsigned min_dev = ios->objio_seg->layout->olo_comps_index;
+	unsigned max_dev = min_dev + ios->ol_state.num_comps;
+
+	BUG_ON(dev < min_dev || max_dev <= dev);
+	return ios->objio_seg->ods[dev - min_dev];
+}
+
 struct _striping_info {
 	u64 obj_offset;
 	u64 group_length;
@@ -543,7 +547,7 @@ static int _add_stripe_unit(struct objio_state *ios,  unsigned *cur_pg,
 {
 	unsigned pg = *cur_pg;
 	struct request_queue *q =
-			osd_request_queue(ios->objio_seg->ods[per_dev->dev]);
+			osd_request_queue(_io_od(ios, per_dev->dev));
 
 	per_dev->length += cur_len;
 
@@ -777,7 +781,7 @@ static int _read_mirrors(struct objio_state *ios, unsigned cur_comp)
 	};
 	int ret;
 
-	or = osd_start_request(ios->objio_seg->ods[dev], GFP_KERNEL);
+	or = osd_start_request(_io_od(ios, dev), GFP_KERNEL);
 	if (unlikely(!or)) {
 		ret = -ENOMEM;
 		goto err;
@@ -876,7 +880,7 @@ static int _write_mirrors(struct objio_state *ios, unsigned cur_comp)
 		struct _objio_per_comp *per_dev = &ios->per_dev[cur_comp];
 		struct bio *bio;
 
-		or = osd_start_request(ios->objio_seg->ods[dev], GFP_KERNEL);
+		or = osd_start_request(_io_od(ios, dev), GFP_KERNEL);
 		if (unlikely(!or)) {
 			ret = -ENOMEM;
 			goto err;
