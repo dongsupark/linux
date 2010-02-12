@@ -898,7 +898,6 @@ objlayout_get_stripesize(struct pnfs_layout_type *pnfslay)
 		default:
 			BUG_ON(1);
 		}
-		n /= (map->odm_mirror_cnt + 1);
 		sz = map->odm_stripe_unit * n;
 		if (sz > maxsz)
 			maxsz = sz;
