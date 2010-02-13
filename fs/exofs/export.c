@@ -71,7 +71,7 @@ err:
 	return status;
 }
 
-static u32 exofs_layout_get(
+static enum nfsstat4 exofs_layout_get(
 	struct inode *inode,
 	struct exp_xdr_stream *xdr,
 	const struct nfsd4_pnfs_layoutget_arg *args,
@@ -85,7 +85,7 @@ static u32 exofs_layout_get(
 	__be32 *start;
 	bool in_recall;
 	int i, err;
-	u32 nfserr;
+	enum nfsstat4 nfserr;
 
 	res->lg_seg.offset = 0;
 	res->lg_seg.length = NFS4_MAX_UINT64;
@@ -145,7 +145,7 @@ static u32 exofs_layout_get(
 	in_recall = test_bit(OBJ_IN_LAYOUT_RECALL, &oi->i_flags);
 	if (!in_recall) {
 		__set_bit(OBJ_LAYOUT_IS_GIVEN, &oi->i_flags);
-		nfserr = NFS_OK;
+		nfserr = NFS4_OK;
 	} else {
 		nfserr = NFS4ERR_RECALLCONFLICT;
 	}
