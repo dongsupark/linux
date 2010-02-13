@@ -346,7 +346,7 @@ bl_getdeviceinfo(struct super_block *sb, struct exp_xdr_stream *xdr,
 	return -EINVAL;
 }
 
-u32
+enum nfsstat4
 bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 	     const struct nfsd4_pnfs_layoutget_arg *arg,
 	     struct nfsd4_pnfs_layoutget_res *res)
@@ -357,7 +357,7 @@ bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 					*bl_candidates	= NULL;
 	boolean_t			del_on_error	= False;
 	int				adj;
-	u32				nfserr		= NFS_OK;
+	enum nfsstat4			nfserr		= NFS4_OK;
 	
 	dprintk("--> %s (inode=[0x%x:%lu], offset=%Lu, len=%Lu, iomode=%d)\n",
 	    __func__, i->i_sb->s_dev, i->i_ino, _2SECTS(res->lg_seg.offset),
