@@ -205,8 +205,8 @@ struct list_head;
 extern int blocklayout_encode_devinfo(struct exp_xdr_stream *xdr,
 				      const struct list_head *volumes);
 
-extern u32 blocklayout_encode_layout(struct exp_xdr_stream *xdr,
-				     const struct list_head *layouts);
+extern enum nfsstat4 blocklayout_encode_layout(struct exp_xdr_stream *xdr,
+					       const struct list_head *layouts);
 #endif /* defined(CONFIG_EXPORTFS_FILE_LAYOUT) */
 
 #if defined(CONFIG_PNFSD)
