@@ -118,7 +118,7 @@ error:
 }
 EXPORT_SYMBOL_GPL(blocklayout_encode_devinfo);
 
-u32
+enum nfsstat4
 blocklayout_encode_layout(struct exp_xdr_stream *xdr,
 			  const struct list_head *bl_head)
 {
@@ -153,6 +153,6 @@ blocklayout_encode_layout(struct exp_xdr_stream *xdr,
 	p = exp_xdr_encode_u32(layoutlen_p, (p - layoutlen_p - 1) * 4);
 	exp_xdr_encode_u32(p, extents);
 
-	return NFS_OK;
+	return NFS4_OK;
 }
 EXPORT_SYMBOL_GPL(blocklayout_encode_layout);
