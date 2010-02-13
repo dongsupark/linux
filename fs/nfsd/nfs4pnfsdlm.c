@@ -321,7 +321,7 @@ static int dlm_ino_hash(struct inode *ino)
 	return ino->i_ino & hash_mask;
 }
 
-static u32 nfsd4_pnfs_dlm_layoutget(struct inode *inode,
+static enum nfsstat4 nfsd4_pnfs_dlm_layoutget(struct inode *inode,
 			   struct exp_xdr_stream *xdr,
 			   const struct nfsd4_pnfs_layoutget_arg *args,
 			   struct nfsd4_pnfs_layoutget_res *res)
@@ -329,7 +329,7 @@ static u32 nfsd4_pnfs_dlm_layoutget(struct inode *inode,
 	struct pnfs_filelayout_layout *layout = NULL;
 	struct knfsd_fh *fhp = NULL;
 	int index;
-	u32 rc = NFS_OK;
+	enum nfsstat4 rc = NFS4_OK;
 
 	dprintk("%s: LAYOUT_GET\n", __func__);
 

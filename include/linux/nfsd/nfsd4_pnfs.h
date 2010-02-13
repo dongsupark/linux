@@ -168,10 +168,10 @@ struct pnfs_export_operations {
 	 * NFS4ERR_TOOSMALL		loga_maxcount too small to fit layout
 	 * NFS4ERR_WRONG_TYPE		Wrong file type (not a regular file)
 	 */
-	u32 (*layout_get) (struct inode *,
-			   struct exp_xdr_stream *xdr,
-			   const struct nfsd4_pnfs_layoutget_arg *,
-			   struct nfsd4_pnfs_layoutget_res *);
+	enum nfsstat4 (*layout_get) (struct inode *,
+				     struct exp_xdr_stream *xdr,
+				     const struct nfsd4_pnfs_layoutget_arg *,
+				     struct nfsd4_pnfs_layoutget_res *);
 
 	/* Commit changes to layout */
 	int (*layout_commit) (struct inode *,
