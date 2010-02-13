@@ -309,9 +309,9 @@ struct spnfs {
 struct nfsd4_open;
 
 int spnfs_layout_type(struct super_block *);
-u32 spnfs_layoutget(struct inode *, struct exp_xdr_stream *xdr,
-		    const struct nfsd4_pnfs_layoutget_arg *,
-		    struct nfsd4_pnfs_layoutget_res *);
+enum nfsstat4 spnfs_layoutget(struct inode *, struct exp_xdr_stream *xdr,
+			      const struct nfsd4_pnfs_layoutget_arg *,
+			      struct nfsd4_pnfs_layoutget_res *);
 int spnfs_layoutcommit(void);
 int spnfs_layoutreturn(struct inode *,
 		       const struct nfsd4_pnfs_layoutreturn_arg *);
