@@ -60,7 +60,7 @@ spnfs_layout_type(struct super_block *sb)
 	return LAYOUT_NFSV4_FILES;
 }
 
-u32
+enum nfsstat4
 spnfs_layoutget(struct inode *inode, struct exp_xdr_stream *xdr,
 		const struct nfsd4_pnfs_layoutget_arg *lg_arg,
 		struct nfsd4_pnfs_layoutget_res *lg_res)
@@ -70,7 +70,7 @@ spnfs_layoutget(struct inode *inode, struct exp_xdr_stream *xdr,
 	union spnfs_msg_res *res = NULL;
 	struct pnfs_filelayout_layout *flp = NULL;
 	int status, i;
-	u32 nfserr;
+	enum nfsstat4 nfserr;
 
 	im = kmalloc(sizeof(struct spnfs_msg), GFP_KERNEL);
 	if (im == NULL) {
