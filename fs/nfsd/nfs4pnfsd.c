@@ -610,7 +610,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		     struct exp_xdr_stream *xdr)
 {
 	u32 status;
-	__be32 nfserr = nfserr_layouttrylater;
+	__be32 nfserr;
 	struct inode *ino = lgp->lg_fhp->fh_dentry->d_inode;
 	struct super_block *sb = ino->i_sb;
 	int can_merge;
@@ -676,37 +676,38 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		__func__, status, res.lg_seg.iomode,
 		res.lg_seg.offset, res.lg_seg.length);
 
-	if (status) {
-		/*
-		 * The allowable error codes for the layout_get pNFS export
-		 * operations vector function (from the file system) can be
-		 * expanded as needed to include other errors defined for
-		 * the RFC 5561 LAYOUTGET operation.
-		 */
-		switch (status) {
-		case NFS4ERR_ACCESS:
-		case NFS4ERR_BADIOMODE:
-			/* No support for LAYOUTIOMODE4_RW layouts */
-		case NFS4ERR_BADLAYOUT:
-			/* No layout matching loga_minlength rules */
-		case NFS4ERR_INVAL:
-		case NFS4ERR_IO:
-		case NFS4ERR_LAYOUTTRYLATER:
-		case NFS4ERR_LAYOUTUNAVAILABLE:
-		case NFS4ERR_LOCKED:
-		case NFS4ERR_NOSPC:
-		case NFS4ERR_RECALLCONFLICT:
-		case NFS4ERR_SERVERFAULT:
-		case NFS4ERR_TOOSMALL:
-			/* Requested layout too big for loga_maxcount */
-		case NFS4ERR_WRONG_TYPE:
-			/* Not a regular file */
-			nfserr = cpu_to_be32(status);
-			break;
-		default:
-			BUG();
-		}
+	/*
+	 * The allowable error codes for the layout_get pNFS export
+	 * operations vector function (from the file system) can be
+	 * expanded as needed to include other errors defined for
+	 * the RFC 5561 LAYOUTGET operation.
+	 */
+	switch (status) {
+	case 0:
+		nfserr = NFS4_OK;
+		break;
+	case NFS4ERR_ACCESS:
+	case NFS4ERR_BADIOMODE:
+		/* No support for LAYOUTIOMODE4_RW layouts */
+	case NFS4ERR_BADLAYOUT:
+		/* No layout matching loga_minlength rules */
+	case NFS4ERR_INVAL:
+	case NFS4ERR_IO:
+	case NFS4ERR_LAYOUTTRYLATER:
+	case NFS4ERR_LAYOUTUNAVAILABLE:
+	case NFS4ERR_LOCKED:
+	case NFS4ERR_NOSPC:
+	case NFS4ERR_RECALLCONFLICT:
+	case NFS4ERR_SERVERFAULT:
+	case NFS4ERR_TOOSMALL:
+		/* Requested layout too big for loga_maxcount */
+	case NFS4ERR_WRONG_TYPE:
+		/* Not a regular file */
+		nfserr = cpu_to_be32(status);
 		goto out_freelayout;
+	default:
+		BUG();
+		nfserr = nfserr_serverfault;
 	}
 
 	lgp->lg_seg = res.lg_seg;
