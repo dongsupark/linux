@@ -3193,6 +3193,13 @@ static int pnfs4_write_done(struct rpc_task *task, struct nfs_write_data *data)
 	struct nfs_client *client = mds_svr->nfs_client;
 	int status = task->tk_status >= 0 ? 0 : task->tk_status;
 
+	/* restore original count after retry? */
+	if (data->pdata.orig_count) {
+		dprintk("%s: restoring original count %u\n", __func__,
+			data->pdata.orig_count);
+		data->args.count = data->pdata.orig_count;
+	}
+
 	if (data->pdata.pnfsflags & PNFS_NO_RPC)
 		return 0;
 

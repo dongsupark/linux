@@ -1082,6 +1082,14 @@ void nfs_write_prepare(struct rpc_task *task, void *calldata)
 #ifdef CONFIG_NFS_V4_1
 	if (data->fldata.ds_nfs_client)
 		clp = data->fldata.ds_nfs_client;
+	else if (data->args.count > NFS_SERVER(data->inode)->wsize) {
+		/* retrying via MDS? */
+		data->pdata.orig_count = data->args.count;
+		data->args.count = NFS_SERVER(data->inode)->wsize;
+		dprintk("%s: trimmed count %u to wsize %u\n", __func__,
+			data->pdata.orig_count, data->args.count);
+	} else
+		data->pdata.orig_count = 0;
 #endif /* CONFIG_NFS_V4_1 */
 
 	if (nfs4_setup_sequence(clp, &data->args.seq_args,
