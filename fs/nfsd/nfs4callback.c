@@ -378,8 +378,9 @@ encode_cb_device(struct xdr_stream *xdr, struct nfs4_notify_device *nd,
 
 		BUG_ON(cbd[i].cbd_notify_type != NOTIFY_DEVICEID4_CHANGE &&
 		       cbd[i].cbd_notify_type != NOTIFY_DEVICEID4_DELETE);
-		RESERVE_SPACE(28);
+		RESERVE_SPACE(32);
 		/* bitmap4         notify_mask; */
+		WRITE32(1);
 		WRITE32(cbd[i].cbd_notify_type);
 		/* opaque     notify_vals<>; */
 		if (cbd[i].cbd_notify_type == NOTIFY_DEVICEID4_CHANGE)
