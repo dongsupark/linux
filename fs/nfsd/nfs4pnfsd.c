@@ -645,20 +645,24 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 	fp = find_alloc_file(ino, lgp->lg_fhp);
 	clp = find_confirmed_client((clientid_t *)&lgp->lg_seg.clientid);
 	dprintk("pNFS %s: fp %p clp %p \n", __func__, fp, clp);
-	if (!fp || !clp)
+	if (!fp || !clp) {
+		nfserr = nfserr_inval;
 		goto out_unlock;
+	}
 
 	/* Check decoded layout stateid */
-	status = nfs4_process_layout_stateid(clp, fp, &lgp->lg_sid, &ls);
-	if (status)
+	nfserr = nfs4_process_layout_stateid(clp, fp, &lgp->lg_sid, &ls);
+	if (nfserr)
 		goto out_unlock;
 
 	/* pre-alloc layout in case we can't merge after we call
 	 * the file system
 	 */
 	lp = alloc_layout();
-	if (!lp)
+	if (!lp) {
+		nfserr = nfserr_layouttrylater;
 		goto out_unlock;
+	}
 
 	dprintk("pNFS %s: pre-export type 0x%x maxcount %Zd "
 		"iomode %u offset %llu length %llu\n",
