@@ -314,7 +314,8 @@ int exofs_get_device_info(struct super_block *sb, struct exp_xdr_stream *xdr,
 
 	exp_xdr_encode_opaque_len(start, xdr->p);
 
-	EXOFS_DBGMSG("xdr_bytes=%Zu\n", exp_xdr_qbytes(xdr->p - start));
+	EXOFS_DBGMSG("xdr_bytes=%Zu devno=%lld osdname-%s\n",
+		     exp_xdr_qbytes(xdr->p - start), devno, odi->osdname);
 	return 0;
 
 err:
