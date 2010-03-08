@@ -72,6 +72,11 @@ static int nfs4_do_fsinfo(struct nfs_server *, struct nfs_fh *, struct nfs_fsinf
 static int nfs4_async_handle_error(struct rpc_task *, const struct nfs_server *, struct nfs4_state *);
 static int _nfs4_proc_lookup(struct inode *dir, const struct qstr *name, struct nfs_fh *fhandle, struct nfs_fattr *fattr);
 static int _nfs4_proc_getattr(struct nfs_server *server, struct nfs_fh *fhandle, struct nfs_fattr *fattr);
+static int
+_nfs4_async_handle_error(struct rpc_task *task,
+			 const struct nfs_server *server,
+			 struct nfs_client *clp, struct nfs4_state *state);
+
 
 /* Prevent leaks of NFSv4 errors into userland */
 static int nfs4_map_errors(int err)
@@ -3160,7 +3165,7 @@ static int pnfs4_read_done(struct rpc_task *task, struct nfs_read_data *data)
 
 	/* FIXME: pass data->args.context->state to nfs4_async_handle_error
 	   like in nfs4_read_done? */
-	if (nfs4_async_handle_error(task, mds_svr, NULL) == -EAGAIN) {
+	if (_nfs4_async_handle_error(task, mds_svr, client, NULL) == -EAGAIN) {
 		nfs_restart_rpc(task, client);
 		dprintk("<-- %s status= %d\n", __func__, -EAGAIN);
 		return -EAGAIN;
@@ -3207,7 +3212,7 @@ static int pnfs4_write_done(struct rpc_task *task, struct nfs_write_data *data)
 	*/
 	/* FIXME: pass data->args.context->state to nfs4_async_handle_error
 	   like in nfs4_write_done? */
-	if (nfs4_async_handle_error(task, mds_svr, NULL) == -EAGAIN) {
+	if (_nfs4_async_handle_error(task, mds_svr, client, NULL) == -EAGAIN) {
 		nfs_restart_rpc(task, client);
 		dprintk("<-- %s status= %d\n", __func__, -EAGAIN);
 		return -EAGAIN;
@@ -3255,7 +3260,7 @@ static int pnfs4_commit_done(struct rpc_task *task, struct nfs_write_data *data)
 
 	nfs41_sequence_done(client, &data->res.seq_res, task->tk_status);
 
-	if (nfs4_async_handle_error(task, mds_svr, NULL) == -EAGAIN) {
+	if (_nfs4_async_handle_error(task, mds_svr, client, NULL) == -EAGAIN) {
 		nfs_restart_rpc(task, client);
 		return -EAGAIN;
 	}
