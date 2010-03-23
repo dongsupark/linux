@@ -107,7 +107,7 @@ config PNFS_PANLAYOUT
 
 config PNFS_BLOCK
 	tristate "Provide a pNFS block client (EXPERIMENTAL)"
-	depends on NFS_FS && PNFS
+	depends on NFS_FS && NFS_V4_1
 	select MD
 	select BLK_DEV_DM
 	help
