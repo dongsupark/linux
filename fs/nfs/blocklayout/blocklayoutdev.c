@@ -375,7 +375,7 @@ static int map_sig_to_device(struct pnfs_blk_sig *sig,
 	struct visible_block_device *vis_dev;
 
 	list_for_each_entry(vis_dev, sdlist, vi_node) {
-		if (vis_dev->vi_mapped)
+		if (vis_dev->vi_mapped || !vis_dev->vi_bdev->bd_disk)
 			continue;
 		mapped = verify_sig(vis_dev->vi_bdev, sig);
 		if (mapped) {
