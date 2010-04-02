@@ -868,7 +868,6 @@ set_to_rw(struct pnfs_block_layout *bl, u64 offset, u64 length)
 				 offset - be->be_f_offset,
 				 PNFS_BLOCK_INVALID_DATA);
 		children[i++] = e1;
-		kref_get(&e1->be_refcnt);
 		print_bl_extent(e1);
 	} else
 		merge1 = e1;
@@ -876,7 +875,6 @@ set_to_rw(struct pnfs_block_layout *bl, u64 offset, u64 length)
 			 min(length, be->be_f_offset + be->be_length - offset),
 			 PNFS_BLOCK_READWRITE_DATA);
 	children[i++] = e2;
-	kref_get(&e2->be_refcnt);
 	print_bl_extent(e2);
 	if (offset + length < be->be_f_offset + be->be_length) {
 		_prep_new_extent(e3, be, e2->be_f_offset + e2->be_length,
@@ -884,7 +882,6 @@ set_to_rw(struct pnfs_block_layout *bl, u64 offset, u64 length)
 				 offset - length,
 				 PNFS_BLOCK_INVALID_DATA);
 		children[i++] = e3;
-		kref_get(&e3->be_refcnt);
 		print_bl_extent(e3);
 	} else
 		merge2 = e3;
