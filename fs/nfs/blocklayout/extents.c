@@ -181,6 +181,7 @@ static int _preload_range(struct my_tree_t *tree, u64 offset, u64 length)
 			break;
 		kfree(storage[i]);
 	}
+	kfree(storage);
 	return status;
 }
 
