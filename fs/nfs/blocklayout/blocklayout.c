@@ -541,10 +541,15 @@ release_extents(struct pnfs_block_layout *bl,
 	spin_unlock(&bl->bl_ext_lock);
 }
 
-/* STUB */
 static void
-release_inval_marks(void)
+release_inval_marks(struct pnfs_inval_markings *marks)
 {
+	struct pnfs_inval_tracking *pos, *temp;
+
+	list_for_each_entry_safe(pos, temp, &marks->im_tree.mtt_stub, it_link) {
+		list_del(&pos->it_link);
+		kfree(pos);
+	}
 	return;
 }
 
@@ -556,7 +561,7 @@ bl_free_layout(void *p)
 
 	dprintk("%s enter\n", __func__);
 	release_extents(bl, NULL);
-	release_inval_marks();
+	release_inval_marks(&bl->bl_inval);
 	kfree(bl);
 	return;
 }
