@@ -40,12 +40,6 @@
 #define INTERNAL_EXISTS    MY_MAX_TAGS
 #define INTERNAL_MASK      ((1 << INTERNAL_EXISTS) - 1)
 
-struct pnfs_inval_tracking {
-	struct list_head it_link;
-	int		 it_sector;
-	int		 it_tags;
-};
-
 /* Returns largest t<=s s.t. t%base==0 */
 static inline sector_t normalize(sector_t s, int base)
 {

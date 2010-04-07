@@ -126,6 +126,12 @@ struct pnfs_inval_markings {
 	sector_t	im_block_size;	/* Server blocksize in sectors */
 };
 
+struct pnfs_inval_tracking {
+	struct list_head it_link;
+	int		 it_sector;
+	int		 it_tags;
+};
+
 /* sector_t fields are all in 512-byte sectors */
 struct pnfs_block_extent {
 	struct kref	be_refcnt;
