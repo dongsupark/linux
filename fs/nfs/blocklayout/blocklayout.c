@@ -348,16 +348,13 @@ static void mark_extents_written(struct pnfs_block_layout *bl,
 	end = (offset + count + PAGE_CACHE_SIZE - 1) & (long)(PAGE_CACHE_MASK);
 	end >>= 9;
 	while (isect < end) {
+		sector_t len;
 		be = find_get_extent(bl, isect, NULL);
 		BUG_ON(!be); /* FIXME */
-		if (be->be_state != PNFS_BLOCK_INVALID_DATA)
-			isect += be->be_length;
-		else {
-			sector_t len;
-			len = min(end, be->be_f_offset + be->be_length) - isect;
+		len = min(end, be->be_f_offset + be->be_length) - isect;
+		if (be->be_state == PNFS_BLOCK_INVALID_DATA)
 			mark_for_commit(be, isect, len); /* What if fails? */
-			isect += len;
-		}
+		isect += len;
 		put_extent(be);
 	}
 }
