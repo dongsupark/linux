@@ -1080,7 +1080,8 @@ static void pnfs4_layout_reclaim(struct nfs4_state *state)
 	/* FIXME: send gratuitous layout commits and return with the reclaim
 	 * flag during grace period
 	 */
-	pnfs_return_layout(state->inode, NULL, &state->open_stateid, RETURN_FILE);
+	pnfs_return_layout(state->inode, NULL, &state->open_stateid,
+			   RETURN_FILE, true);
 	pnfs_set_layout_stateid(&NFS_I(state->inode)->layout, &zero_stateid);
 #endif /* CONFIG_NFS_V4_1 */
 }
@@ -2374,7 +2375,7 @@ pnfs4_proc_setattr(struct dentry *dentry, struct nfs_fattr *fattr,
 
 	if (pnfs_enabled_sb(server) && has_layout(nfsi) &&
 	    pnfs_ld_layoutret_on_setattr(server->pnfs_curr_ld))
-		pnfs_return_layout(inode, NULL, NULL, RETURN_FILE);
+		pnfs_return_layout(inode, NULL, NULL, RETURN_FILE, true);
 	return nfs4_proc_setattr(dentry, fattr, sattr);
 }
 #endif /* CONFIG_NFS_V4_1 */
@@ -5735,7 +5736,7 @@ static const struct rpc_call_ops nfs4_pnfs_layoutreturn_call_ops = {
 	.rpc_release = nfs4_pnfs_layoutreturn_release,
 };
 
-int pnfs4_proc_layoutreturn(struct nfs4_pnfs_layoutreturn *lrp)
+int pnfs4_proc_layoutreturn(struct nfs4_pnfs_layoutreturn *lrp, bool wait)
 {
 	struct inode *ino = lrp->args.inode;
 	struct nfs_server *server = NFS_SERVER(ino);
@@ -5752,7 +5753,7 @@ int pnfs4_proc_layoutreturn(struct nfs4_pnfs_layoutreturn *lrp)
 		.callback_data = lrp,
 		.flags = RPC_TASK_ASYNC,
 	};
-	int status;
+	int status = 0;
 
 	dprintk("--> %s\n", __func__);
 	lrp->res.seq_res.sr_slotid = NFS4_MAX_SLOT_TABLE;
@@ -5761,9 +5762,11 @@ int pnfs4_proc_layoutreturn(struct nfs4_pnfs_layoutreturn *lrp)
 		status = PTR_ERR(task);
 		goto out;
 	}
-	status = nfs4_wait_for_completion_rpc_task(task);
-	if (status == 0)
-		status = task->tk_status;
+	if (wait) {
+		status = nfs4_wait_for_completion_rpc_task(task);
+		if (status == 0)
+			status = task->tk_status;
+	}
 	rpc_put_task(task);
 out:
 	dprintk("<-- %s\n", __func__);

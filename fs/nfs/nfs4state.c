@@ -590,7 +590,7 @@ static void __nfs4_close(struct path *path, struct nfs4_state *state, fmode_t fm
 		struct nfs_inode *nfsi = NFS_I(state->inode);
 
 		if (nfsi->layoutcommit_ctx)
-			pnfs_layoutcommit_inode(state->inode, 0);
+			pnfs_layoutcommit_inode(state->inode, wait);
 		if (has_layout(nfsi) && nfsi->layout.roc_iomode) {
 			struct nfs4_pnfs_layout_segment range;
 
@@ -598,7 +598,7 @@ static void __nfs4_close(struct path *path, struct nfs4_state *state, fmode_t fm
 			range.offset = 0;
 			range.length = NFS4_MAX_UINT64;
 			pnfs_return_layout(state->inode, &range, NULL,
-					   RETURN_FILE);
+					   RETURN_FILE, wait);
 		}
 #endif /* CONFIG_NFS_V4_1 */
 		nfs4_do_close(path, state, wait);

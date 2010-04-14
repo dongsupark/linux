@@ -26,7 +26,7 @@ extern int nfs4_pnfs_getdeviceinfo(struct nfs_server *server,
 				   struct pnfs_device *dev);
 extern int pnfs4_proc_layoutget(struct nfs4_pnfs_layoutget *lgp);
 extern int pnfs4_proc_layoutcommit(struct pnfs_layoutcommit_data *data);
-extern int pnfs4_proc_layoutreturn(struct nfs4_pnfs_layoutreturn *lrp);
+extern int pnfs4_proc_layoutreturn(struct nfs4_pnfs_layoutreturn *lrp, bool wait);
 
 /* pnfs.c */
 extern const nfs4_stateid zero_stateid;
@@ -37,7 +37,7 @@ int pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 
 int _pnfs_return_layout(struct inode *, struct nfs4_pnfs_layout_segment *,
 			const nfs4_stateid *stateid, /* optional */
-			enum pnfs_layoutreturn_type);
+			enum pnfs_layoutreturn_type, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unmount_pnfs_layoutdriver(struct nfs_server *);
 enum pnfs_try_status _pnfs_try_to_write_data(struct nfs_write_data *,
@@ -159,14 +159,15 @@ static inline void pnfs_redirty_request(struct nfs_page *req)
 static inline int pnfs_return_layout(struct inode *ino,
 				     struct nfs4_pnfs_layout_segment *lseg,
 				     const nfs4_stateid *stateid, /* optional */
-				     enum pnfs_layoutreturn_type type)
+				     enum pnfs_layoutreturn_type type,
+				     bool wait)
 {
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct nfs_server *nfss = NFS_SERVER(ino);
 
 	if (pnfs_enabled_sb(nfss) &&
 	    (type != RETURN_FILE || has_layout(nfsi)))
-		return _pnfs_return_layout(ino, lseg, stateid, type);
+		return _pnfs_return_layout(ino, lseg, stateid, type, wait);
 
 	return 0;
 }

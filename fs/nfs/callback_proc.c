@@ -214,7 +214,7 @@ static int pnfs_recall_layout(void *data)
 
 	if (rl.cbl_recall_type == RETURN_FILE) {
 		status = pnfs_return_layout(inode, &rl.cbl_seg, &rl.cbl_stateid,
-					    RETURN_FILE);
+					    RETURN_FILE, true);
 		if (status)
 			dprintk("%s RETURN_FILE error: %d\n", __func__, status);
 		goto out;
@@ -226,12 +226,13 @@ static int pnfs_recall_layout(void *data)
 	/* FIXME: This loop is inefficient, running in O(|s_inodes|^2) */
 	while ((ino = nfs_layoutrecall_find_inode(clp, &rl)) != NULL) {
 		/* XXX need to check status on pnfs_return_layout */
-		pnfs_return_layout(ino, &rl.cbl_seg, NULL, RETURN_FILE);
+		pnfs_return_layout(ino, &rl.cbl_seg, NULL, RETURN_FILE, true);
 		iput(ino);
 	}
 
 	/* send final layoutreturn */
-	status = pnfs_return_layout(inode, &rl.cbl_seg, NULL, rl.cbl_recall_type);
+	status = pnfs_return_layout(inode, &rl.cbl_seg, NULL,
+				    rl.cbl_recall_type, true);
 	if (status)
 		printk(KERN_INFO "%s: ignoring pnfs_return_layout status=%d\n",
 				__func__, status);
