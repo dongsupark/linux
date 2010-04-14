@@ -680,7 +680,8 @@ pnfs_return_layout_barrier(struct nfs_inode *nfsi,
 static int
 return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 	      const nfs4_stateid *stateid, /* optional */
-	      enum pnfs_layoutreturn_type type, struct pnfs_layout_type *lo)
+	      enum pnfs_layoutreturn_type type, struct pnfs_layout_type *lo,
+	      bool wait)
 {
 	struct nfs4_pnfs_layoutreturn *lrp;
 	struct nfs_server *server = NFS_SERVER(ino);
@@ -705,7 +706,7 @@ return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 	else if (lo)
 		pnfs_get_layout_stateid(&lrp->args.stateid, lo);
 
-	status = pnfs4_proc_layoutreturn(lrp);
+	status = pnfs4_proc_layoutreturn(lrp, wait);
 out:
 	dprintk("<-- %s status: %d\n", __func__, status);
 	return status;
@@ -714,7 +715,8 @@ out:
 int
 _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 		    const nfs4_stateid *stateid, /* optional */
-		    enum pnfs_layoutreturn_type type)
+		    enum pnfs_layoutreturn_type type,
+		    bool wait)
 {
 	struct pnfs_layout_type *lo = NULL;
 	struct nfs_inode *nfsi = NFS_I(ino);
@@ -760,7 +762,7 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 		}
 
 		if (nfsi->layoutcommit_ctx) {
-			status = pnfs_layoutcommit_inode(ino, 1);
+			status = pnfs_layoutcommit_inode(ino, wait);
 			if (status) {
 				dprintk("%s: layoutcommit failed, status=%d. "
 					"Returning layout anyway\n",
@@ -770,7 +772,7 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 		}
 	}
 send_return:
-	status = return_layout(ino, &arg, stateid, type, lo);
+	status = return_layout(ino, &arg, stateid, type, lo, wait);
 out:
 	dprintk("<-- %s status: %d\n", __func__, status);
 	return status;
@@ -1697,7 +1699,8 @@ pnfs_writeback_done(struct nfs_write_data *data)
 			.length = data->args.count,
 		};
 		dprintk("%s: retrying\n", __func__);
-		_pnfs_return_layout(data->inode, &range, NULL, RETURN_FILE);
+		_pnfs_return_layout(data->inode, &range, NULL, RETURN_FILE,
+				    true);
 		pnfs_initiate_write(data, NFS_CLIENT(data->inode),
 				    pdata->call_ops, pdata->how);
 	}
@@ -1828,7 +1831,8 @@ pnfs_read_done(struct nfs_read_data *data)
 			.length = data->args.count,
 		};
 		dprintk("%s: retrying\n", __func__);
-		_pnfs_return_layout(data->inode, &range, NULL, RETURN_FILE);
+		_pnfs_return_layout(data->inode, &range, NULL, RETURN_FILE,
+				    true);
 		pnfs_initiate_read(data, NFS_CLIENT(data->inode),
 				   pdata->call_ops);
 	}
@@ -2054,7 +2058,8 @@ pnfs_commit_done(struct nfs_write_data *data)
 			.length = data->args.count,
 		};
 		dprintk("%s: retrying\n", __func__);
-		_pnfs_return_layout(data->inode, &range, NULL, RETURN_FILE);
+		_pnfs_return_layout(data->inode, &range, NULL, RETURN_FILE,
+				    true);
 		pnfs_initiate_commit(data, NFS_CLIENT(data->inode),
 				     pdata->call_ops, pdata->how);
 	}
