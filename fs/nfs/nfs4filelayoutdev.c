@@ -703,55 +703,53 @@ get_device_info(struct filelayout_mount_type *mt,
 		struct pnfs_deviceid *dev_id)
 {
 	struct pnfs_device *pdev = NULL;
-	int maxpages = NFS4_GETDEVINFO_MAXSIZE >> PAGE_SHIFT;
-	struct page *pages[maxpages];
+	u32 max_resp_sz;
+	int max_pages;
+	struct page **pages;
 	struct nfs4_file_layout_dsaddr *dsaddr = NULL;
-	int rc, i, j, minpages = 1;
+	int rc, i;
+	struct nfs_server *server = NFS_SB(mt->fl_sb);
 
-	dprintk("%s mt %p\n", __func__, mt);
+	/*
+	 * Use the session max response size as the basis for setting
+	 * GETDEVICEINFO's maxcount
+	 */
+	max_resp_sz = server->nfs_client->cl_session->fc_attrs.max_resp_sz;
+	max_pages = max_resp_sz >> PAGE_SHIFT;
+	dprintk("%s mt %p max_resp_sz %u max_pages %d\n",
+		__func__, mt, max_resp_sz, max_pages);
+
 	pdev = kzalloc(sizeof(struct pnfs_device), GFP_KERNEL);
 	if (pdev == NULL)
 		return NULL;
 
-	/* First try with 1 page */
-retry_once:
-	dprintk("%s trying minpages %d\n", __func__, minpages);
-	for (i = 0; i < minpages; i++) {
+	pages = kzalloc(max_pages * sizeof(struct page *), GFP_KERNEL);
+	if (pages == NULL) {
+		kfree(pdev);
+		return NULL;
+	}
+	for (i = 0; i < max_pages; i++) {
 		pages[i] = alloc_page(GFP_KERNEL);
 		if (!pages[i])
 			goto out_free;
 	}
 
 	/* set pdev->area */
-	if (minpages == 1)
-		pdev->area = page_address(pages[0]);
-	else if (minpages > 1) {
-		pdev->area = vmap(pages, minpages, VM_MAP, PAGE_KERNEL);
-		if (!pdev->area)
-			goto out_free;
-	}
+	pdev->area = vmap(pages, max_pages, VM_MAP, PAGE_KERNEL);
+	if (!pdev->area)
+		goto out_free;
 
 	memcpy(&pdev->dev_id, dev_id, NFS4_PNFS_DEVICEID4_SIZE);
 	pdev->layout_type = LAYOUT_NFSV4_FILES;
 	pdev->pages = pages;
 	pdev->pgbase = 0;
-	pdev->pglen = PAGE_SIZE * minpages;
+	pdev->pglen = PAGE_SIZE * max_pages;
 	pdev->mincount = 0;
 	/* TODO: Update types when CB_NOTIFY_DEVICEID is available */
 	pdev->dev_notify_types = 0;
 
 	rc = pnfs_callback_ops->nfs_getdeviceinfo(mt->fl_sb, pdev);
-	/* Retry once with the returned mincount if a page was too small */
-	dprintk("%s getdevice info returns %d minpages %d\n", __func__, rc,
-		minpages);
-	if (rc == -ETOOSMALL && minpages == 1) {
-		pdev->area = NULL;
-		minpages = (pdev->mincount + PAGE_SIZE - 1) >> PAGE_SHIFT;
-		if (minpages > 1 && minpages <= maxpages) {
-			__free_page(pages[0]);
-			goto retry_once;
-		}
-	}
+	dprintk("%s getdevice info returns %d\n", __func__, rc);
 	if (rc)
 		goto out_free;
 
@@ -760,10 +758,10 @@ retry_once:
 	 */
 	dsaddr = decode_and_add_device(mt, pdev);
 out_free:
-	if (minpages > 1 && pdev->area != NULL)
+	if (pdev->area != NULL)
 		vunmap(pdev->area);
-	for (j = 0; j < i; j++)
-		__free_page(pages[j]);
+	for (i = 0; i < max_pages; i++)
+		__free_page(pages[i]);
 	kfree(pdev);
 	dprintk("<-- %s dsaddr %p\n", __func__, dsaddr);
 	return dsaddr;

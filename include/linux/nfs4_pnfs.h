@@ -24,12 +24,6 @@ enum pnfs_try_status {
 
 #define NFS4_PNFS_GETDEVLIST_MAXNUM 16
 
-/* NFS4_GETDEVINFO_MAXSIZE is based on file layoutdriver with 4096 stripe
- * indices and 64 multipath data server each with 2 data servers per
- * multipath with ipv4 addresses r_addr and "tcp" r_netid.
- */
-#define NFS4_GETDEVINFO_MAXSIZE (4096 * 6)
-
 /* Per-layout driver specific registration structure */
 struct pnfs_layoutdriver_type {
 	const u32 id;
