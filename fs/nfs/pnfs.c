@@ -998,6 +998,8 @@ pnfs_has_layout(struct pnfs_layout_type *lo,
 				kref_get(&ret->kref);
 			break;
 		}
+		if (cmp_layout(range, &lseg->range) > 0)
+			break;
 	}
 
 	dprintk("%s:Return lseg %p take_ref %d ref %d valid %d\n",
