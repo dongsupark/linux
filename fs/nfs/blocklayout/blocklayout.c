@@ -684,14 +684,6 @@ static void free_blk_mountid(struct block_mount_id *mid)
 	}
 }
 
-/* NFS4_GETDEVINFO_MAXSIZE is based on file layoutdriver with 4096 stripe
- * indices and 64 multipath data server each with 2 data servers per
- * multipath with ipv4 addresses r_addr and "tcp" r_netid.
- *
- * FIXME: follow ace1ebd pnfs: use the session max response size for getdeviceinfo's maxcount
- */
-#define NFS4_GETDEVINFO_MAXSIZE (4096 * 6)
-
 /* This is mostly copied form the filelayout's get_device_info function.
  * It seems much of this should be at the generic pnfs level.
  */
