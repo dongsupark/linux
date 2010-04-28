@@ -36,4 +36,6 @@
 
 #include <linux/nfsd/nfsd4_pnfs.h>
 
+#include "xdr4.h"
+
 #endif /* LINUX_NFSD_PNFSD_H */
