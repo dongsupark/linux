@@ -76,16 +76,10 @@ filelayout_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
 {
 	struct filelayout_mount_type *fl_mt;
 	struct pnfs_mount_type *mt;
-	int status;
 
 	fl_mt = kmalloc(sizeof(struct filelayout_mount_type), GFP_KERNEL);
 	if (!fl_mt)
 		goto error_ret;
-
-	/* Initialize nfs4 file layout specific device list structure */
-	fl_mt->hlist = kmalloc(sizeof(struct nfs4_pnfs_dev_hlist), GFP_KERNEL);
-	if (!fl_mt->hlist)
-		goto cleanup_fl_mt;
 
 	mt = kmalloc(sizeof(struct pnfs_mount_type), GFP_KERNEL);
 	if (!mt)
@@ -94,11 +88,11 @@ filelayout_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
 	fl_mt->fl_sb = sb;
 	mt->mountid = (void *)fl_mt;
 
-	status = nfs4_pnfs_devlist_init(fl_mt->hlist);
-	if (status)
+	if (nfs4_alloc_init_deviceid_cache(NFS_SB(sb)->nfs_client,
+					   nfs4_fl_free_deviceid_callback))
 		goto cleanup_mt;
 
-	dprintk("%s: device list has been initialized successfully\n",
+	dprintk("%s: deviceid cache has been initialized successfully\n",
 		__func__);
 	return mt;
 
@@ -106,11 +100,10 @@ cleanup_mt: ;
 	kfree(mt);
 
 cleanup_fl_mt: ;
-	kfree(fl_mt->hlist);
 	kfree(fl_mt);
 
 error_ret: ;
-	printk(KERN_WARNING "%s: device list could not be initialized\n",
+	printk(KERN_WARNING "%s: deviceid cache could not be initialized\n",
 		__func__);
 
 	return NULL;
@@ -123,13 +116,11 @@ filelayout_uninitialize_mountpoint(struct pnfs_mount_type *mountid)
 {
 	struct filelayout_mount_type *fl_mt = NULL;
 
+	dprintk("--> %s\n", __func__);
 	if (mountid) {
 		fl_mt = (struct filelayout_mount_type *)mountid->mountid;
-
-		if (fl_mt != NULL) {
-			nfs4_pnfs_devlist_destroy(fl_mt->hlist);
-			kfree(fl_mt);
-		}
+		nfs4_put_deviceid_cache(NFS_SB(fl_mt->fl_sb)->nfs_client);
+		kfree(fl_mt);
 		kfree(mountid);
 	}
 	return 0;
@@ -381,8 +372,7 @@ filelayout_check_layout(struct pnfs_layout_type *lo,
 	struct nfs_server *nfss = NFS_SERVER(PNFS_INODE(lo));
 
 	dprintk("--> %s\n", __func__);
-	dsaddr = nfs4_pnfs_device_item_find(FILE_MT(PNFS_INODE(lo))->hlist,
-					     &fl->dev_id);
+	dsaddr = nfs4_pnfs_device_item_find(nfss->nfs_client, &fl->dev_id);
 	if (dsaddr == NULL) {
 		dsaddr = get_device_info(PNFS_INODE(lo), &fl->dev_id);
 		if (dsaddr == NULL) {
@@ -421,13 +411,17 @@ filelayout_check_layout(struct pnfs_layout_type *lo,
 		dprintk("%s Stripe unit (%u) not aligned with rsize %u wsize %u\n",
 			__func__, fl->stripe_unit, nfss->ds_rsize, nfss->ds_wsize);
 	}
+
+	/* reference the device */
+	nfs4_set_layout_deviceid(lseg, &dsaddr->deviceid);
+
 	status = 0;
 out:
 	dprintk("--> %s returns %d\n", __func__, status);
 	return status;
 }
 
-static void filelayout_free_lseg(struct pnfs_layout_segment *lseg);
+static void _filelayout_free_lseg(struct pnfs_layout_segment *lseg);
 static void filelayout_free_fh_array(struct nfs4_filelayout_segment *fl);
 
 /* Decode layout and store in layoutid.  Overwrite any existing layout
@@ -512,6 +506,7 @@ filelayout_alloc_lseg(struct pnfs_layout_type *layoutid,
 	struct pnfs_layout_segment *lseg;
 	int rc;
 
+	dprintk("--> %s\n", __func__);
 	lseg = kzalloc(sizeof(struct pnfs_layout_segment) +
 		       sizeof(struct nfs4_filelayout_segment), GFP_KERNEL);
 	if (!lseg)
@@ -520,7 +515,7 @@ filelayout_alloc_lseg(struct pnfs_layout_type *layoutid,
 	rc = filelayout_set_layout(flo, LSEG_LD_DATA(lseg), lgr);
 
 	if (rc != 0 || filelayout_check_layout(layoutid, lseg)) {
-		filelayout_free_lseg(lseg);
+		_filelayout_free_lseg(lseg);
 		lseg = NULL;
 	}
 	return lseg;
@@ -537,10 +532,19 @@ static void filelayout_free_fh_array(struct nfs4_filelayout_segment *fl)
 }
 
 static void
-filelayout_free_lseg(struct pnfs_layout_segment *lseg)
+_filelayout_free_lseg(struct pnfs_layout_segment *lseg)
 {
 	filelayout_free_fh_array(LSEG_LD_DATA(lseg));
 	kfree(lseg);
+}
+
+static void
+filelayout_free_lseg(struct pnfs_layout_segment *lseg)
+{
+	dprintk("--> %s\n", __func__);
+	nfs4_unset_layout_deviceid(lseg, lseg->deviceid,
+				   nfs4_fl_free_deviceid_callback);
+	_filelayout_free_lseg(lseg);
 }
 
 /*
@@ -618,12 +622,8 @@ filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
 	stripesz = filelayout_get_stripesize(layoutid);
 	dprintk("%s stripesize %Zd\n", __func__, stripesz);
 
-	dsaddr = nfs4_pnfs_device_item_find(FILE_MT(data->inode)->hlist,
-					     &nfslay->dev_id);
-	if (dsaddr == NULL) {
-		data->pdata.pnfs_error = -EIO;
-		goto out;
-	}
+	dsaddr = container_of(data->pdata.lseg->deviceid,
+			      struct nfs4_file_layout_dsaddr, deviceid);
 
 	INIT_LIST_HEAD(&head);
 	INIT_LIST_HEAD(&head2);

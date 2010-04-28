@@ -43,8 +43,7 @@ struct nfs4_pnfs_ds {
 };
 
 struct nfs4_file_layout_dsaddr {
-	struct hlist_node	hash_node;   /* nfs4_pnfs_dev_hlist dev_list */
-	struct pnfs_deviceid	dev_id;
+	struct nfs4_deviceid	deviceid;
 	u32 			stripe_count;
 	u8			*stripe_indices;
 	u32			ds_num;
@@ -86,15 +85,13 @@ struct nfs4_filelayout {
 
 struct filelayout_mount_type {
 	struct super_block *fl_sb;
-	struct nfs4_pnfs_dev_hlist *hlist;
 };
 
 extern struct pnfs_client_operations *pnfs_callback_ops;
 
+extern void nfs4_fl_free_deviceid_callback(struct kref *);
 extern void print_ds(struct nfs4_pnfs_ds *ds);
 char *deviceid_fmt(const struct pnfs_deviceid *dev_id);
-int  nfs4_pnfs_devlist_init(struct nfs4_pnfs_dev_hlist *hlist);
-void nfs4_pnfs_devlist_destroy(struct nfs4_pnfs_dev_hlist *hlist);
 int nfs4_pnfs_dserver_get(struct pnfs_layout_segment *lseg,
 			  loff_t offset,
 			  size_t count,
@@ -102,9 +99,8 @@ int nfs4_pnfs_dserver_get(struct pnfs_layout_segment *lseg,
 u32 filelayout_dserver_get_index(loff_t offset,
 				 struct nfs4_file_layout_dsaddr *di,
 				 struct nfs4_filelayout_segment *layout);
-struct nfs4_file_layout_dsaddr *
-nfs4_pnfs_device_item_find(struct nfs4_pnfs_dev_hlist *hlist,
-			   struct pnfs_deviceid *dev_id);
+extern struct nfs4_file_layout_dsaddr *
+nfs4_pnfs_device_item_find(struct nfs_client *, struct pnfs_deviceid *dev_id);
 struct nfs4_file_layout_dsaddr *
 get_device_info(struct inode *inode, struct pnfs_deviceid *dev_id);
 

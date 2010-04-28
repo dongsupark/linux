@@ -45,6 +45,7 @@
 
 #include <linux/utsname.h>
 #include <linux/vmalloc.h>
+#include <linux/nfs4_pnfs.h>
 #include <linux/pnfs_xdr.h>
 #include "nfs4filelayout.h"
 #include "internal.h"
@@ -98,42 +99,6 @@ deviceid_fmt(const struct pnfs_deviceid *dev_id)
 	return buf;
 }
 
-unsigned long
-_deviceid_hash(const struct pnfs_deviceid *dev_id)
-{
-	unsigned char *cptr = (unsigned char *)dev_id->data;
-	unsigned int nbytes = NFS4_PNFS_DEVICEID4_SIZE;
-	u64 x = 0;
-
-	while (nbytes--) {
-		x *= 37;
-		x += *cptr++;
-	}
-	return x & NFS4_PNFS_DEV_HASH_MASK;
-}
-
-/* Assumes lock is held */
-static inline struct nfs4_file_layout_dsaddr *
-_device_lookup(struct nfs4_pnfs_dev_hlist *hlist,
-	       const struct pnfs_deviceid *dev_id)
-{
-	unsigned long      hash;
-	struct hlist_node *np;
-
-	dprintk("_device_lookup: dev_id=%s\n", deviceid_fmt(dev_id));
-
-	hash = _deviceid_hash(dev_id);
-
-	hlist_for_each(np, &hlist->dev_list[hash]) {
-		struct nfs4_file_layout_dsaddr *dsaddr;
-		dsaddr = hlist_entry(np, struct nfs4_file_layout_dsaddr,
-				  hash_node);
-		if (!memcmp(&dsaddr->dev_id, dev_id, NFS4_PNFS_DEVICEID4_SIZE))
-			return dsaddr;
-	}
-	return NULL;
-}
-
 /* nfs4_ds_cache_lock is held */
 static inline struct nfs4_pnfs_ds *
 _data_server_lookup(u32 ip_addr, u32 port)
@@ -150,22 +115,6 @@ _data_server_lookup(u32 ip_addr, u32 port)
 		}
 	}
 	return NULL;
-}
-
-
-/* Assumes lock is held */
-static inline void
-_device_add(struct nfs4_pnfs_dev_hlist *hlist,
-	    struct nfs4_file_layout_dsaddr *dsaddr)
-{
-	unsigned long      hash;
-
-	dprintk("_device_add: dev_id=%s ds_list:\n",
-		deviceid_fmt(&dsaddr->dev_id));
-	print_ds_list(dsaddr);
-
-	hash = _deviceid_hash(&dsaddr->dev_id);
-	hlist_add_head(&dsaddr->hash_node, &hlist->dev_list[hash]);
 }
 
 /* Create an rpc to the data server defined in 'dev_list' */
@@ -269,118 +218,47 @@ out_put:
 static void
 destroy_ds(struct nfs4_pnfs_ds *ds)
 {
+	dprintk("--> %s\n", __func__);
+	print_ds(ds);
+
 	if (ds->ds_clp)
 		nfs_put_client(ds->ds_clp);
 	kfree(ds);
 }
 
-/* Assumes lock is NOT held */
 static void
-nfs4_pnfs_device_destroy(struct nfs4_file_layout_dsaddr *dsaddr,
-			 struct nfs4_pnfs_dev_hlist *hlist)
+nfs4_fl_free_deviceid(struct nfs4_file_layout_dsaddr *dsaddr)
 {
 	struct nfs4_pnfs_ds *ds;
-	LIST_HEAD(release);
 	int i;
 
-	if (!dsaddr)
-		return;
-
-	dprintk("%s: dev_id=%s\ndev_list:\n", __func__,
-		deviceid_fmt(&dsaddr->dev_id));
-	print_ds_list(dsaddr);
-
-	write_lock(&hlist->dev_lock);
-	hlist_del_init(&dsaddr->hash_node);
+	dprintk("%s: device id=%s\n", __func__,
+		deviceid_fmt(&dsaddr->deviceid.de_id));
 
 	for (i = 0; i < dsaddr->ds_num; i++) {
 		ds = dsaddr->ds_list[i];
 		if (ds != NULL) {
-			/* if we are last user - move to release list */
 			if (atomic_dec_and_lock(&ds->ds_count,
 						&nfs4_ds_cache_lock)) {
 				list_del_init(&ds->ds_node);
 				spin_unlock(&nfs4_ds_cache_lock);
-				list_add(&ds->ds_node, &release);
+				destroy_ds(ds);
 			}
 		}
 	}
-	write_unlock(&hlist->dev_lock);
-	while (!list_empty(&release)) {
-		ds = list_entry(release.next, struct nfs4_pnfs_ds, ds_node);
-		list_del(&ds->ds_node);
-		destroy_ds(ds);
-	}
+	kfree(dsaddr->stripe_indices);
 	kfree(dsaddr);
 }
 
-int
-nfs4_pnfs_devlist_init(struct nfs4_pnfs_dev_hlist *hlist)
-{
-	int i;
-
-	rwlock_init(&hlist->dev_lock);
-
-	for (i = 0; i < NFS4_PNFS_DEV_HASH_SIZE; i++) {
-		INIT_HLIST_HEAD(&hlist->dev_list[i]);
-	}
-
-	return 0;
-}
-
-/* De-alloc all devices for a mount point.  This is called in
- * nfs4_kill_super.
- */
 void
-nfs4_pnfs_devlist_destroy(struct nfs4_pnfs_dev_hlist *hlist)
+nfs4_fl_free_deviceid_callback(struct kref *kref)
 {
-	int i;
+	struct nfs4_deviceid *device =
+		container_of(kref, struct nfs4_deviceid, de_kref);
+	struct nfs4_file_layout_dsaddr *dsaddr =
+		container_of(device, struct nfs4_file_layout_dsaddr, deviceid);
 
-	if (hlist == NULL)
-		return;
-
-	/* No lock held, as synchronization should occur at upper levels */
-	for (i = 0; i < NFS4_PNFS_DEV_HASH_SIZE; i++) {
-		struct hlist_node *np, *next;
-
-		hlist_for_each_safe(np, next, &hlist->dev_list[i]) {
-			struct nfs4_file_layout_dsaddr *dsaddr;
-			dsaddr = hlist_entry(np,
-					     struct nfs4_file_layout_dsaddr,
-					     hash_node);
-			/* nfs4_pnfs_device_destroy grabs hlist->dev_lock */
-			nfs4_pnfs_device_destroy(dsaddr, hlist);
-		}
-	}
-}
-
-/*
- * Add the device to the list of available devices for this mount point.
- * The * rpc client is created during first I/O.
- */
-static int
-nfs4_pnfs_device_add(struct filelayout_mount_type *mt,
-		     struct nfs4_file_layout_dsaddr *dsaddr)
-{
-	struct nfs4_file_layout_dsaddr *tmp_dsaddr;
-	struct nfs4_pnfs_dev_hlist *hlist = mt->hlist;
-
-	dprintk("nfs4_pnfs_device_add\n");
-
-	/* Write lock, do lookup again, and then add device */
-	write_lock(&hlist->dev_lock);
-	tmp_dsaddr = _device_lookup(hlist, &dsaddr->dev_id);
-	if (tmp_dsaddr == NULL)
-		_device_add(hlist, dsaddr);
-	write_unlock(&hlist->dev_lock);
-
-	/* Cleanup, if device was recently added */
-	if (tmp_dsaddr != NULL) {
-		dprintk(" device found, not adding (after creation)\n");
-		nfs4_pnfs_device_destroy(dsaddr, hlist);
-	}
-
-	return 0;
+	nfs4_fl_free_deviceid(dsaddr);
 }
 
 static void
@@ -514,7 +392,8 @@ decode_device(struct inode *ino, struct pnfs_device *pdev)
 	dsaddr->stripe_count = cnt;
 	dsaddr->ds_num = num;
 
-	memcpy(&dsaddr->dev_id, &pdev->dev_id, NFS4_PNFS_DEVICEID4_SIZE);
+	memcpy(&dsaddr->deviceid.de_id, &pdev->dev_id,
+	       NFS4_PNFS_DEVICEID4_SIZE);
 
 	/* Go back an read stripe indices */
 	p = indicesp;
@@ -553,37 +432,40 @@ decode_device(struct inode *ino, struct pnfs_device *pdev)
 			}
 		}
 	}
+	nfs4_init_deviceid_node(&dsaddr->deviceid);
+
 	return dsaddr;
 
 out_err_free:
-	nfs4_pnfs_device_destroy(dsaddr, FILE_MT(ino)->hlist);
+	nfs4_fl_free_deviceid(dsaddr);
 out_err:
 	dprintk("%s ERROR: returning NULL\n", __func__);
 	return NULL;
 }
 
-/* Decode the opaque device specified in 'dev'
- * and add it to the list of available devices for this
- * mount point.
- * Must at some point be followed up with nfs4_pnfs_device_destroy
+/*
+ * Decode the opaque device specified in 'dev'
+ * and add it to the list of available devices.
+ * If the deviceid is already cached, nfs4_add_deviceid will return
+ * a pointer to the cached struct and throw away the new.
  */
 static struct nfs4_file_layout_dsaddr*
 decode_and_add_device(struct inode *inode, struct pnfs_device *dev)
 {
 	struct nfs4_file_layout_dsaddr *dsaddr;
+	struct nfs4_deviceid *d;
 
 	dsaddr = decode_device(inode, dev);
 	if (!dsaddr) {
-		printk(KERN_WARNING "%s: Could not decode device\n",
+		printk(KERN_WARNING "%s: Could not decode or add device\n",
 			__func__);
-		nfs4_pnfs_device_destroy(dsaddr, FILE_MT(inode)->hlist);
 		return NULL;
 	}
 
-	if (nfs4_pnfs_device_add(FILE_MT(inode), dsaddr))
-		return NULL;
+	d = nfs4_add_deviceid(NFS_SERVER(inode)->nfs_client->cl_devid_cache,
+			      &dsaddr->deviceid);
 
-	return dsaddr;
+	return container_of(d, struct nfs4_file_layout_dsaddr, deviceid);
 }
 
 /* Retrieve the information for dev_id, add it to the list
@@ -659,16 +541,15 @@ out_free:
 }
 
 struct nfs4_file_layout_dsaddr *
-nfs4_pnfs_device_item_find(struct nfs4_pnfs_dev_hlist *hlist,
-			   struct pnfs_deviceid *dev_id)
+nfs4_pnfs_device_item_find(struct nfs_client *clp, struct pnfs_deviceid *id)
 {
-	struct nfs4_file_layout_dsaddr *dsaddr;
+	struct nfs4_deviceid *d;
 
-	read_lock(&hlist->dev_lock);
-	dsaddr = _device_lookup(hlist, dev_id);
-	read_unlock(&hlist->dev_lock);
-
-	return dsaddr;
+	d = nfs4_find_deviceid(clp->cl_devid_cache, id);
+	dprintk("%s device id (%s) nfs4_deviceid %p\n", __func__,
+		deviceid_fmt(id), d);
+	return (d == NULL) ? NULL :
+		container_of(d, struct nfs4_file_layout_dsaddr, deviceid);
 }
 
 /* Want res = ((offset / layout->stripe_unit) % dsaddr->stripe_count)
@@ -706,10 +587,8 @@ nfs4_pnfs_dserver_get(struct pnfs_layout_segment *lseg,
 	if (!layout)
 		return 1;
 
-	dsaddr = nfs4_pnfs_device_item_find(FILE_MT(inode)->hlist,
-					    &layout->dev_id);
-	if (dsaddr == NULL)
-		return 1;
+	dsaddr = container_of(lseg->deviceid, struct nfs4_file_layout_dsaddr,
+			      deviceid);
 
 	stripe_idx = filelayout_dserver_get_index(offset, dsaddr, layout);
 
