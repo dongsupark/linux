@@ -3261,9 +3261,11 @@ nfsd4_encode_devlist_iterator(struct nfsd4_compoundres *resp,
 		.gd_verf = gdevl->gd_verf,
 		.gd_eof = 0
 	};
+	u64 sbid;
 
 	dprintk("%s: Begin\n", __func__);
 
+	sbid = find_create_sbid(sb);
 	*dev_count = 0;
 	do {
 		status = sb->s_pnfs_op->get_device_iter(sb,
@@ -3281,7 +3283,7 @@ nfsd4_encode_devlist_iterator(struct nfsd4_compoundres *resp,
 
 		/* Encode device id and layout type */
 		RESERVE_SPACE(sizeof(struct nfsd4_pnfs_deviceid));
-		WRITE64((__be64)gdevl->gd_fhp->fh_export->ex_fsid);
+		WRITE64((__be64)sbid);
 		WRITE64(res.gd_devid);	/* devid minor */
 		ADJUST_ARGS();
 		(*dev_count)++;
