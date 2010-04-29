@@ -192,16 +192,10 @@ pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent)
 
 /* Unitialize a mountpoint in a layout driver */
 void
-unmount_pnfs_layoutdriver(struct super_block *sb)
+unmount_pnfs_layoutdriver(struct nfs_server *nfss)
 {
-	struct nfs_server *server = NFS_SB(sb);
-	if (server->pnfs_curr_ld &&
-	    server->pnfs_curr_ld->ld_io_ops &&
-	    server->pnfs_curr_ld->ld_io_ops->uninitialize_mountpoint) {
-		server->pnfs_curr_ld->ld_io_ops->uninitialize_mountpoint(
-			server->pnfs_mountid);
-		server->pnfs_mountid = NULL;
-	    }
+	if (PNFS_EXISTS_LDIO_OP(nfss, uninitialize_mountpoint))
+		nfss->pnfs_curr_ld->ld_io_ops->uninitialize_mountpoint(nfss);
 }
 
 /*

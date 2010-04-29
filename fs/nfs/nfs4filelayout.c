@@ -112,16 +112,19 @@ error_ret: ;
 /* Uninitialize a mountpoint by destroying its device list.
  */
 int
-filelayout_uninitialize_mountpoint(struct pnfs_mount_type *mountid)
+filelayout_uninitialize_mountpoint(struct nfs_server *nfss)
 {
 	struct filelayout_mount_type *fl_mt = NULL;
 
 	dprintk("--> %s\n", __func__);
-	if (mountid) {
-		fl_mt = (struct filelayout_mount_type *)mountid->mountid;
-		nfs4_put_deviceid_cache(NFS_SB(fl_mt->fl_sb)->nfs_client);
+
+	if (nfss->pnfs_curr_ld && nfss->nfs_client->cl_devid_cache)
+		nfs4_put_deviceid_cache(nfss->nfs_client);
+	if (nfss->pnfs_mountid) {
+		fl_mt = (struct filelayout_mount_type *)
+						nfss->pnfs_mountid->mountid;
 		kfree(fl_mt);
-		kfree(mountid);
+		kfree(nfss->pnfs_mountid);
 	}
 	return 0;
 }

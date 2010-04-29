@@ -182,7 +182,7 @@ struct layoutdriver_io_operations {
 	/* Registration information for a new mounted file system
 	 */
 	struct pnfs_mount_type * (*initialize_mountpoint) (struct super_block *, struct nfs_fh *fh);
-	int (*uninitialize_mountpoint) (struct pnfs_mount_type *mountid);
+	int (*uninitialize_mountpoint) (struct nfs_server *server);
 };
 
 enum layoutdriver_policy_flags {
