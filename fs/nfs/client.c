@@ -904,7 +904,7 @@ static void nfs_server_set_fsinfo(struct nfs_server *server, struct nfs_fsinfo *
 	server->wpages = (server->wsize + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 #ifdef CONFIG_NFS_V4_1
 	/* Save the layout type for use during init of layout driver */
-	server->pnfs_fs_ltype = fsinfo->layoutclass;
+	server->pnfs_fs_ltype = fsinfo->layouttype;
 #endif /* CONFIG_NFS_V4_1 */
 
 	server->wtmult = nfs_block_bits(fsinfo->wtmult, NULL);

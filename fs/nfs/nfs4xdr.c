@@ -4276,7 +4276,7 @@ static int decode_fsinfo(struct xdr_stream *xdr, struct nfs_fsinfo *fsinfo)
 		goto xdr_error;
 	fsinfo->wtpref = fsinfo->wtmax;
 #if defined(CONFIG_NFS_V4_1)
-	status = decode_attr_pnfstype(xdr, bitmap, &fsinfo->layoutclass);
+	status = decode_attr_pnfstype(xdr, bitmap, &fsinfo->layouttype);
 	if (status)
 		goto xdr_error;
 #endif /* CONFIG_NFS_V4_1 */
