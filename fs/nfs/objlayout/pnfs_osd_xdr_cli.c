@@ -150,14 +150,18 @@ pnfs_osd_xdr_decode_layout(struct pnfs_osd_layout *layout, u32 *p)
 	layout->olo_comps = (struct pnfs_osd_object_cred *)(layout + 1);
 	comp = layout->olo_comps;
 	cred = (u8 *)(comp + layout->olo_num_comps);
-	dprintk("%s: layout=%p comps_index=%u num_comps=%u comps=%p\n",
-		__func__, layout, layout->olo_comps_index,
-		layout->olo_num_comps, layout->olo_comps);
+	dprintk("%s: comps_index=%u num_comps=%u\n",
+		__func__, layout->olo_comps_index, layout->olo_num_comps);
 	for (i = 0; i < layout->olo_num_comps; i++) {
 		p = pnfs_osd_xdr_decode_object_cred(p, comp, &cred);
-		dprintk("%s: comp[%d]=%p cap_key_len=%u cap_len=%u\n", __func__,
-			i, comp, comp->oc_cap_key.cred_len,
-			comp->oc_cap.cred_len);
+		dprintk("%s: comp[%d]=dev(%llx:%llx) par=0x%llx obj=0x%llx "
+			"key_len=%u cap_len=%u\n",
+			__func__, i,
+			_DEVID_LO(&comp->oc_object_id.oid_device_id),
+			_DEVID_HI(&comp->oc_object_id.oid_device_id),
+			comp->oc_object_id.oid_partition_id,
+			comp->oc_object_id.oid_object_id,
+			comp->oc_cap_key.cred_len, comp->oc_cap.cred_len);
 		comp++;
 	}
 	dprintk("%s: xdr_size=%Zd end=%p in_core_size=%Zd\n", __func__,
