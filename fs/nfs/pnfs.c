@@ -206,16 +206,14 @@ void
 set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id)
 {
 	struct pnfs_module *mod;
-	struct pnfs_mount_type *mt;
 	struct nfs_server *server = NFS_SB(sb);
 
 	if (server->pnfs_curr_ld)
 		return;
 
 	if (id > 0 && find_pnfs(id, &mod)) {
-		mt = mod->pnfs_ld_type->ld_io_ops->initialize_mountpoint(
-			sb, fh);
-		if (!mt) {
+		if (!mod->pnfs_ld_type->ld_io_ops->initialize_mountpoint(
+			sb, fh)) {
 			printk(KERN_ERR "%s: Error initializing mount point "
 			       "for layout driver %u. ", __func__, id);
 			goto out_err;
@@ -225,7 +223,6 @@ set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id)
 		 * and has taken a reference on the nfs_client cl_devid_cache
 		 */
 		server->pnfs_curr_ld = mod->pnfs_ld_type;
-		server->pnfs_mountid = mt;
 		server->nfs_client->rpc_ops = &pnfs_v4_clientops;
 		dprintk("%s: pNFS module for %u set\n", __func__, id);
 		return;
@@ -235,7 +232,6 @@ set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id)
 out_err:
 	dprintk("Using NFSv4 I/O\n");
 	server->pnfs_curr_ld = NULL;
-	server->pnfs_mountid = NULL;
 	return;
 }
 

@@ -30,13 +30,6 @@ struct pnfs_layoutdriver_type {
 	struct layoutdriver_policy_operations *ld_policy_ops;
 };
 
-/* Layout driver specific identifier for a mount point.  For each mountpoint
- * a reference is stored in the nfs_server structure.
- */
-struct pnfs_mount_type {
-	void *mountid;
-};
-
 struct pnfs_fsdata {
 	int ok_to_use_pnfs;
 	struct pnfs_layout_segment *lseg;
@@ -60,12 +53,6 @@ static inline struct nfs_server *
 PNFS_NFS_SERVER(struct pnfs_layout_type *lo)
 {
 	return NFS_SERVER(PNFS_INODE(lo));
-}
-
-static inline struct pnfs_mount_type *
-PNFS_MOUNTID(struct pnfs_layout_type *lo)
-{
-	return NFS_SERVER(PNFS_INODE(lo))->pnfs_mountid;
 }
 
 static inline void *
@@ -181,7 +168,7 @@ struct layoutdriver_io_operations {
 
 	/* Registration information for a new mounted file system
 	 */
-	struct pnfs_mount_type * (*initialize_mountpoint) (struct super_block *, struct nfs_fh *fh);
+	int (*initialize_mountpoint) (struct super_block *, struct nfs_fh *fh);
 	int (*uninitialize_mountpoint) (struct nfs_server *server);
 };
 
