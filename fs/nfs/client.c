@@ -49,6 +49,7 @@
 #include "iostat.h"
 #include "internal.h"
 #include "fscache.h"
+#include "pnfs.h"
 
 #define NFSDBG_FACILITY		NFSDBG_CLIENT
 
@@ -870,6 +871,20 @@ error:
 }
 
 /*
+ * Initialize the pNFS layout driver and setup pNFS related parameters
+ */
+static void nfs4_init_pnfs(struct nfs_server *server, struct nfs_fsinfo *fsinfo)
+{
+#if defined(CONFIG_NFS_V4_1)
+	struct nfs_client *clp = server->nfs_client;
+
+	if (nfs4_has_session(clp) &&
+	    (clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_MDS))
+		set_pnfs_layoutdriver(server, fsinfo->layouttype);
+#endif /* CONFIG_NFS_V4_1 */
+}
+
+/*
  * Load up the server record from information gained in an fsinfo record
  */
 static void nfs_server_set_fsinfo(struct nfs_server *server, struct nfs_fsinfo *fsinfo)
@@ -902,10 +917,7 @@ static void nfs_server_set_fsinfo(struct nfs_server *server, struct nfs_fsinfo *
 	if (server->wsize > NFS_MAX_FILE_IO_SIZE)
 		server->wsize = NFS_MAX_FILE_IO_SIZE;
 	server->wpages = (server->wsize + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
-#ifdef CONFIG_NFS_V4_1
-	/* Save the layout type for use during init of layout driver */
-	server->pnfs_fs_ltype = fsinfo->layouttype;
-#endif /* CONFIG_NFS_V4_1 */
+	nfs4_init_pnfs(server, fsinfo);
 
 	server->wtmult = nfs_block_bits(fsinfo->wtmult, NULL);
 

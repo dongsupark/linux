@@ -679,13 +679,13 @@ char *layout_name(u32 layouttype)
 
 void show_pnfs(struct seq_file *m, struct nfs_server *server)
 {
-	char *name = layout_name(server->pnfs_fs_ltype);
+	char *name = layout_name(server->pnfs_curr_ld->id);
 
 	seq_printf(m, ",pnfs=");
 	if (name)
 		seq_printf(m, "%s", name);
 	else
-		seq_printf(m, "unknown(%d)", server->pnfs_fs_ltype);
+		seq_printf(m, "unknown(%d)", server->pnfs_curr_ld->id);
 }
 #else  /* CONFIG_NFS_V4_1 */
 void show_pnfs(struct seq_file *m, struct nfs_server *server) {}
@@ -2581,22 +2581,6 @@ out_no_address:
 }
 
 /*
- * Initialize the pNFS layout driver and setup pNFS related parameters
- */
-static void nfs4_init_pnfs(struct super_block *sb, struct nfs_fh *fh)
-{
-#if defined(CONFIG_NFS_V4_1)
-	struct nfs_server *server = NFS_SB(sb);
-	struct nfs_client *clp = server->nfs_client;
-
-	if (nfs4_has_session(clp) &&
-	    (clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_MDS)) {
-		set_pnfs_layoutdriver(sb, fh, server->pnfs_fs_ltype);
-	}
-#endif /* CONFIG_NFS_V4_1 */
-}
-
-/*
  * Get the superblock for the NFS4 root partition
  */
 static int nfs4_remote_get_sb(struct file_system_type *fs_type,
@@ -2662,8 +2646,6 @@ static int nfs4_remote_get_sb(struct file_system_type *fs_type,
 	error = security_sb_set_mnt_opts(s, &data->lsm_opts);
 	if (error)
 		goto error_splat_root;
-
-	nfs4_init_pnfs(s, mntfh);
 
 	s->s_flags |= MS_ACTIVE;
 	mnt->mnt_sb = s;
@@ -2910,8 +2892,6 @@ static int nfs4_xdev_get_sb(struct file_system_type *fs_type, int flags,
 
 	security_sb_clone_mnt_opts(data->sb, s);
 
-	nfs4_init_pnfs(s, data->fh);
-
 	dprintk("<-- nfs4_xdev_get_sb() = 0\n");
 	return 0;
 
@@ -2996,8 +2976,6 @@ static int nfs4_remote_referral_get_sb(struct file_system_type *fs_type,
 	mnt->mnt_root = mntroot;
 
 	security_sb_clone_mnt_opts(data->sb, s);
-
-	nfs4_init_pnfs(s, &mntfh);
 
 	dprintk("<-- nfs4_referral_get_sb() = 0\n");
 	return 0;

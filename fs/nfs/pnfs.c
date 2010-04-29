@@ -203,10 +203,9 @@ unmount_pnfs_layoutdriver(struct nfs_server *nfss)
  * Only one pNFS layout driver is supported.
  */
 void
-set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id)
+set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
 {
 	struct pnfs_module *mod;
-	struct nfs_server *server = NFS_SB(sb);
 
 	if (server->pnfs_curr_ld)
 		return;

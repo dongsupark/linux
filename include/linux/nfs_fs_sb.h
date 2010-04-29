@@ -163,7 +163,6 @@ struct nfs_server {
 #endif
 
 #ifdef CONFIG_NFS_V4_1
-	u32				pnfs_fs_ltype;/* fs_layouttype attr */
 	struct pnfs_layoutdriver_type  *pnfs_curr_ld; /* Active layout driver */
 #endif /* CONFIG_NFS_V4_1 */
 
