@@ -1430,8 +1430,7 @@ void
 pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 		  struct inode *inode,
 		  struct nfs_open_context *ctx,
-		  struct list_head *pages,
-		  size_t *rsize)
+		  struct list_head *pages)
 {
 	struct nfs_server *nfss = NFS_SERVER(inode);
 	size_t count = 0;
@@ -1452,12 +1451,10 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 	if (count > 0 && !below_threshold(inode, count, 0)) {
 		status = pnfs_update_layout(inode, ctx, count,
 						loff, IOMODE_READ, NULL);
-		dprintk("%s *rsize %Zd virt update returned %d\n",
-					__func__, *rsize, status);
+		dprintk("%s virt update returned %d\n", __func__, status);
 		if (status != 0)
 			return;
 
-		*rsize = NFS_SERVER(inode)->ds_rsize;
 		pgio->pg_boundary = pnfs_getboundary(inode);
 		if (pgio->pg_boundary)
 			pnfs_set_pg_test(inode, pgio);
@@ -1465,8 +1462,7 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 }
 
 void
-pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode,
-		       size_t *wsize)
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
 {
 	struct nfs_server *server = NFS_SERVER(inode);
 
@@ -1480,7 +1476,6 @@ pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode,
 	pgio->pg_threshold = pnfs_getthreshold(inode, 1);
 	pgio->pg_boundary = pnfs_getboundary(inode);
 	pnfs_set_pg_test(inode, pgio);
-	*wsize = server->ds_wsize;
 }
 
 /* Retrieve I/O parameters for O_DIRECT.
@@ -1503,9 +1498,9 @@ _pnfs_direct_init_io(struct inode *inode, struct nfs_open_context *ctx,
 		return;
 
 	if (iswrite)
-		rwsize = nfss->ds_wsize;
+		rwsize = nfss->wsize;
 	else
-		rwsize = nfss->ds_rsize;
+		rwsize = nfss->rsize;
 
 	boundary = pnfs_getboundary(inode);
 
@@ -1607,15 +1602,6 @@ pnfs_use_write(struct inode *inode, ssize_t count)
 		return 0;
 
 	return 1; /* use pNFS I/O */
-}
-
-void
-pnfs_set_ds_iosize(struct nfs_server *server)
-{
-	server->ds_wsize = server->wsize;
-	server->ds_rsize = server->rsize;
-	server->ds_rpages = server->rpages;
-	server->ds_wpages = server->wpages;
 }
 
 static int

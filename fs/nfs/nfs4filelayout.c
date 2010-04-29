@@ -407,9 +407,10 @@ filelayout_check_layout(struct pnfs_layout_type *lo,
 		goto out;
 	}
 
-	if (fl->stripe_unit % nfss->ds_rsize || fl->stripe_unit % nfss->ds_wsize) {
-		dprintk("%s Stripe unit (%u) not aligned with rsize %u wsize %u\n",
-			__func__, fl->stripe_unit, nfss->ds_rsize, nfss->ds_wsize);
+	if (fl->stripe_unit % nfss->rsize || fl->stripe_unit % nfss->wsize) {
+		dprintk("%s Stripe unit (%u) not aligned with rsize %u "
+			"wsize %u\n", __func__, fl->stripe_unit, nfss->rsize,
+			nfss->wsize);
 	}
 
 	/* reference the device */
@@ -740,9 +741,9 @@ filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 	if (!pgio->pg_iswrite)
 		goto boundary;
 
-	if (pgio->pg_bsize != NFS_SERVER(pgio->pg_inode)->ds_wsize &&
+	if (pgio->pg_bsize != NFS_SERVER(pgio->pg_inode)->wsize &&
 	    pgio->pg_count > pgio->pg_threshold)
-		pgio->pg_bsize = NFS_SERVER(pgio->pg_inode)->ds_wsize;
+		pgio->pg_bsize = NFS_SERVER(pgio->pg_inode)->wsize;
 
 boundary:
 	if (pgio->pg_boundary == 0)
