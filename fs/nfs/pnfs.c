@@ -864,7 +864,7 @@ alloc_init_layout(struct inode *ino)
 
 	io_ops = NFS_SERVER(ino)->pnfs_curr_ld->ld_io_ops;
 	lo = &NFS_I(ino)->layout;
-	ld_data = io_ops->alloc_layout(NFS_SERVER(ino)->pnfs_mountid, ino);
+	ld_data = io_ops->alloc_layout(ino);
 	if (!ld_data) {
 		printk(KERN_ERR
 			"%s: out of memory: io_ops->alloc_layout failed\n",

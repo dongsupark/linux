@@ -334,7 +334,7 @@ filelayout_write_pagelist(struct pnfs_layout_type *layoutid,
  * inode from now on.
  */
 static void *
-filelayout_alloc_layout(struct pnfs_mount_type *mountid, struct inode *inode)
+filelayout_alloc_layout(struct inode *inode)
 {
 	dprintk("NFS_FILELAYOUT: allocating layout\n");
 	return kzalloc(sizeof(struct nfs4_filelayout), GFP_KERNEL);
