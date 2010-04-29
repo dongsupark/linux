@@ -124,6 +124,13 @@ struct pnfs_osd_objid {
 	u64			oid_object_id;
 };
 
+/* For printout. I use "dev(%llx:%llx)", _DEVID_LO(), _DEVID_HI BE style */
+#define _DEVID_LO(oid_device_id) \
+	(unsigned long long)be64_to_cpup((__be64 *)oid_device_id.data)
+
+#define _DEVID_HI(oid_device_id) \
+	(unsigned long long)be64_to_cpup(((__be64 *)oid_device_id.data) + 1)
+
 static inline int
 pnfs_osd_objid_xdr_sz(void)
 {

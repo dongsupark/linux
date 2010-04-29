@@ -44,12 +44,6 @@
 
 #define NFSDBG_FACILITY         NFSDBG_PNFS
 
-#define _DEVID_LO(oid_device_id) \
-	be64_to_cpup((__be64 *)oid_device_id.data)
-
-#define _DEVID_HI(oid_device_id) \
-	be64_to_cpup(((__be64 *)oid_device_id.data) + 1)
-
 struct pnfs_client_operations *pnfs_client_ops;
 
 /*
