@@ -214,12 +214,6 @@ struct layoutdriver_policy_operations {
 	int (*do_flush)(struct pnfs_layout_segment *lseg, struct nfs_page *req,
 			struct pnfs_fsdata *fsdata);
 
-	/* Retreive the block size of the file system.  If gather_across_stripes == 1,
-	 * then the file system will gather requests into the block size.
-	 * TODO: Where will the layout driver get this info?  It is hard coded in PVFS2.
-	 */
-	ssize_t (*get_blocksize) (struct pnfs_mount_type *);
-
 	/* Read requests under this value are sent to the NFSv4 server */
 	ssize_t (*get_read_threshold) (struct pnfs_layout_type *, struct inode *);
 

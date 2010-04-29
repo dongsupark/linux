@@ -1609,46 +1609,13 @@ pnfs_use_write(struct inode *inode, ssize_t count)
 	return 1; /* use pNFS I/O */
 }
 
-/* Return I/O buffer size for a layout driver
- * This value will determine what size reads and writes
- * will be gathered into and sent to the data servers.
- * blocksize must be a multiple of the page cache size.
- */
-unsigned int
-pnfs_getiosize(struct nfs_server *server)
-{
-	struct pnfs_mount_type *mounttype;
-	struct pnfs_layoutdriver_type *ld;
-
-	mounttype = server->pnfs_mountid;
-	ld = server->pnfs_curr_ld;
-	if (!pnfs_enabled_sb(server) ||
-	    !mounttype ||
-	    !ld->ld_policy_ops ||
-	    !ld->ld_policy_ops->get_blocksize)
-		return 0;
-
-	return ld->ld_policy_ops->get_blocksize(mounttype);
-}
-
 void
 pnfs_set_ds_iosize(struct nfs_server *server)
 {
-	unsigned dssize = pnfs_getiosize(server);
-
-	/* Set buffer size for data servers */
-	if (dssize > 0) {
-		server->ds_rsize = server->ds_wsize =
-			nfs_block_size(dssize, NULL);
-		server->ds_rpages = server->ds_wpages =
-			(server->ds_rsize + PAGE_CACHE_SIZE - 1) >>
-			PAGE_CACHE_SHIFT;
-	} else {
-		server->ds_wsize = server->wsize;
-		server->ds_rsize = server->rsize;
-		server->ds_rpages = server->rpages;
-		server->ds_wpages = server->wpages;
-	}
+	server->ds_wsize = server->wsize;
+	server->ds_rsize = server->rsize;
+	server->ds_rpages = server->rpages;
+	server->ds_wpages = server->wpages;
 }
 
 static int
