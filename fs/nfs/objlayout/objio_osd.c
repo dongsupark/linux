@@ -209,6 +209,8 @@ static struct osd_dev *_device_lookup(struct pnfs_layout_type *pnfslay,
 	odi.osdname	 = (u8 *)deviceaddr->oda_osdname.data;
 
 	if (!odi.osdname_len && !odi.systemid_len) {
+		dprintk("%s: !odi.osdname_len && !odi.systemid_len\n",
+			__func__);
 		err = -ENODEV;
 		goto out;
 	}
@@ -216,6 +218,7 @@ static struct osd_dev *_device_lookup(struct pnfs_layout_type *pnfslay,
 	od = osduld_info_lookup(&odi);
 	if (unlikely(IS_ERR(od))) {
 		err = PTR_ERR(od);
+		dprintk("%s: osduld_info_lookup => %d\n", __func__, err);
 		goto out;
 	}
 
