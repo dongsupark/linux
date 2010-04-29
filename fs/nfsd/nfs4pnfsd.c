@@ -479,7 +479,7 @@ find_sbid_id(u64 id)
 	return sb;
 }
 
-static u64
+u64
 find_create_sbid(struct super_block *sb)
 {
 	struct sbid_tracker *sbid;
