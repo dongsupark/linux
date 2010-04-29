@@ -69,10 +69,10 @@ ssize_t filelayout_get_stripesize(struct pnfs_layout_type *);
 struct layoutdriver_io_operations filelayout_io_operations;
 
 int
-filelayout_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
+filelayout_initialize_mountpoint(struct nfs_client *clp)
 {
 
-	if (nfs4_alloc_init_deviceid_cache(NFS_SB(sb)->nfs_client,
+	if (nfs4_alloc_init_deviceid_cache(clp,
 					   nfs4_fl_free_deviceid_callback)) {
 		printk(KERN_WARNING "%s: deviceid cache could not be "
 			"initialized\n", __func__);

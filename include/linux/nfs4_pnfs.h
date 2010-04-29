@@ -168,7 +168,7 @@ struct layoutdriver_io_operations {
 
 	/* Registration information for a new mounted file system
 	 */
-	int (*initialize_mountpoint) (struct super_block *, struct nfs_fh *fh);
+	int (*initialize_mountpoint) (struct nfs_client *);
 	int (*uninitialize_mountpoint) (struct nfs_server *server);
 };
 

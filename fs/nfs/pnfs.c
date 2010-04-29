@@ -213,7 +213,7 @@ set_pnfs_layoutdriver(struct super_block *sb, struct nfs_fh *fh, u32 id)
 
 	if (id > 0 && find_pnfs(id, &mod)) {
 		if (!mod->pnfs_ld_type->ld_io_ops->initialize_mountpoint(
-			sb, fh)) {
+			server->nfs_client)) {
 			printk(KERN_ERR "%s: Error initializing mount point "
 			       "for layout driver %u. ", __func__, id);
 			goto out_err;
