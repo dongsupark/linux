@@ -575,6 +575,7 @@ filelayout_commit(struct pnfs_layout_type *layoutid, int sync,
 	loff_t file_offset, comp_offset;
 	size_t stripesz, cbytes;
 	int status;
+	enum pnfs_try_status trypnfs = PNFS_ATTEMPTED;
 	struct nfs4_file_layout_dsaddr *dsaddr;
 	u32 idx1, idx2;
 
@@ -674,11 +675,12 @@ out:
 		       data->pdata.pnfs_error);
 
 	/* XXX should we send COMMIT to MDS e.g. not free data and return 1 ? */
-	return PNFS_ATTEMPTED;
+	return trypnfs;
 err_rewind:
 	/* put remaining pages back onto the original data->pages */
 	list_add(&data->pages, &head);
 	list_del_init(&head);
+	trypnfs = PNFS_NOT_ATTEMPTED;
 	goto out;
 }
 
