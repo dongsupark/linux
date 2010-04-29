@@ -273,31 +273,29 @@ nfs4_pnfs_ds_add(struct inode *inode, struct nfs4_pnfs_ds **dsp,
 	if (!ds)
 		return;
 
-	/* Initialize ds */
-	ds->ds_ip_addr = ip_addr;
-	ds->ds_port = port;
-	strncpy(ds->r_addr, r_addr, len);
-	atomic_set(&ds->ds_count, 1);
-	INIT_LIST_HEAD(&ds->ds_node);
-	ds->ds_clp = NULL;
-
 	spin_lock(&nfs4_ds_cache_lock);
 	tmp_ds = _data_server_lookup(ip_addr, port);
 	if (tmp_ds == NULL) {
-		dprintk("%s add new data server ip 0x%x\n", __func__,
-				ds->ds_ip_addr);
+		ds->ds_ip_addr = ip_addr;
+		ds->ds_port = port;
+		strncpy(ds->r_addr, r_addr, len);
+		atomic_set(&ds->ds_count, 1);
+		INIT_LIST_HEAD(&ds->ds_node);
+		ds->ds_clp = NULL;
 		list_add(&ds->ds_node, &nfs4_data_server_cache);
 		*dsp = ds;
+		dprintk("%s add new data server ip 0x%x\n", __func__,
+				ds->ds_ip_addr);
+		spin_unlock(&nfs4_ds_cache_lock);
 	} else {
 		atomic_inc(&tmp_ds->ds_count);
+		*dsp = tmp_ds;
 		dprintk("%s data server found ip 0x%x, inc'ed ds_count to %d\n",
 				__func__, tmp_ds->ds_ip_addr,
 				atomic_read(&tmp_ds->ds_count));
-		*dsp = tmp_ds;
+		spin_unlock(&nfs4_ds_cache_lock);
+		kfree(ds);
 	}
-	spin_unlock(&nfs4_ds_cache_lock);
-	if (tmp_ds != NULL)
-		destroy_ds(ds);
 }
 
 static struct nfs4_pnfs_ds *
