@@ -663,29 +663,13 @@ void show_sessions(struct seq_file *m, struct nfs_server *server) {}
 #endif
 
 #ifdef CONFIG_NFS_V4_1
-char *layout_name(u32 layouttype)
-{
-	switch (layouttype) {
-	case LAYOUT_NFSV4_FILES:
-		return "files";
-	case LAYOUT_OSD2_OBJECTS:
-		return "objects";
-	case LAYOUT_BLOCK_VOLUME:
-		return "blocks";
-	default:
-		return NULL;
-	}
-}
-
 void show_pnfs(struct seq_file *m, struct nfs_server *server)
 {
-	char *name = layout_name(server->pnfs_curr_ld->id);
-
 	seq_printf(m, ",pnfs=");
-	if (name)
-		seq_printf(m, "%s", name);
+	if (server->pnfs_curr_ld)
+		seq_printf(m, "%s", server->pnfs_curr_ld->name);
 	else
-		seq_printf(m, "unknown(%d)", server->pnfs_curr_ld->id);
+		seq_printf(m, "not configured");
 }
 #else  /* CONFIG_NFS_V4_1 */
 void show_pnfs(struct seq_file *m, struct nfs_server *server) {}
