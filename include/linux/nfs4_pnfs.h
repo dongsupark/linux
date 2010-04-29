@@ -331,8 +331,6 @@ extern void nfs4_unset_layout_deviceid(struct pnfs_layout_segment *,
  * E.g., getdeviceinfo, I/O callbacks, etc
  */
 struct pnfs_client_operations {
-	int (*nfs_getdevicelist) (struct super_block *sb, struct nfs_fh *fh,
-				  struct pnfs_devicelist *devlist);
 	int (*nfs_getdeviceinfo) (struct super_block *sb,
 				  struct pnfs_device *dev);
 
