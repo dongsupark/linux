@@ -1372,6 +1372,19 @@ pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
 	pnfs_set_pg_test(inode, pgio);
 }
 
+/* Return I/O buffer size for a layout driver
+ * This value will determine what size reads and writes
+ * will be gathered into and sent to the data servers.
+ * blocksize must be a multiple of the page cache size.
+ */
+unsigned int
+pnfs_getiosize(struct nfs_server *server)
+{
+	if (!PNFS_EXISTS_LDPOLICY_OP(server, get_blocksize))
+		return 0;
+	return server->pnfs_curr_ld->ld_policy_ops->get_blocksize();
+}
+
 static int
 pnfs_call_done(struct pnfs_call_data *pdata, struct rpc_task *task, void *data)
 {
