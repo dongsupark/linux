@@ -680,7 +680,7 @@ int nfs_readpages(struct file *filp, struct address_space *mapping,
 	if (ret == 0)
 		goto read_complete; /* all pages were read */
 
-	pnfs_pageio_init_read(&pgio, inode, desc.ctx, pages);
+	pnfs_pageio_init_read(&pgio, inode, desc.ctx, pages, &rsize);
 	if (rsize < PAGE_CACHE_SIZE)
 		nfs_pageio_init(&pgio, inode, nfs_pagein_multi, rsize, 0);
 	else

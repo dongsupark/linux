@@ -1085,7 +1085,8 @@ void
 pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 		  struct inode *inode,
 		  struct nfs_open_context *ctx,
-		  struct list_head *pages)
+		  struct list_head *pages,
+		  size_t *rsize)
 {
 	struct nfs_server *nfss = NFS_SERVER(inode);
 	size_t count = 0;
@@ -1100,20 +1101,42 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 
 	readahead_range(inode, pages, &loff, &count);
 	pgio->pg_lseg = pnfs_update_layout(inode, ctx, loff, count, IOMODE_READ);
-	if (pgio->pg_lseg)
+	if (pgio->pg_lseg) {
 		pnfs_set_pg_test(inode, pgio);
+		*rsize = NFS_SERVER(inode)->ds_rsize;
+	}
 }
 
 void
-pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode,
+		       size_t *wsize)
 {
 	struct nfs_server *server = NFS_SERVER(inode);
 
 	pgio->pg_iswrite = 1;
 	if (!pnfs_enabled_sb(server))
 		pgio->pg_test = NULL;
-	else
+	else {
 		pnfs_set_pg_test(inode, pgio);
+		*wsize = server->ds_wsize;
+	}
+}
+
+/* Set buffer size for data servers */
+void
+pnfs_set_ds_iosize(struct nfs_server *server)
+{
+	unsigned dssize = 0;
+
+	if (server->pnfs_curr_ld && server->pnfs_curr_ld->get_blocksize)
+		dssize = server->pnfs_curr_ld->get_blocksize();
+	if (dssize)
+		server->ds_rsize = server->ds_wsize =
+			nfs_block_size(dssize, NULL);
+	else {
+		server->ds_wsize = server->wsize;
+		server->ds_rsize = server->rsize;
+	}
 }
 
 static int

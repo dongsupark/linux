@@ -85,7 +85,15 @@ struct pnfs_layoutdriver_type {
 	/* test for nfs page cache coalescing */
 	int (*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
 
-	/* read and write pagelist should return just 0 (to indicate that
+	/* Retreive the block size of the file system.
+	 * If gather_across_stripes == 1, then the file system will gather
+	 * requests into the block size.
+	 * TODO: Where will the layout driver get this info?  It is hard
+	 * coded in PVFS2.
+	 */
+	ssize_t (*get_blocksize) (void);
+
+/* read and write pagelist should return just 0 (to indicate that
 	 * the layout code has taken control) or 1 (to indicate that the
 	 * layout code wishes to fall back to normal nfs.)  If 0 is returned,
 	 * information can be passed back through nfs_data->res and
@@ -250,12 +258,14 @@ void pnfs_cleanup_layoutcommit(struct inode *,
 int pnfs_layoutcommit_inode(struct inode *inode, int sync);
 void pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent);
 void pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx);
-unsigned int pnfs_getiosize(struct nfs_server *server);
+void pnfs_set_ds_iosize(struct nfs_server *server);
 enum pnfs_try_status pnfs_try_to_commit(struct nfs_write_data *,
 					 const struct rpc_call_ops *, int);
 void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *,
-			   struct nfs_open_context *, struct list_head *);
-void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *);
+			   struct nfs_open_context *, struct list_head *,
+			   size_t *);
+void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *,
+			    size_t *);
 bool pnfs_layoutgets_blocked(struct pnfs_layout_hdr *lo, nfs4_stateid *stateid);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
 void pnfs_free_lseg_list(struct list_head *tmp_list);
@@ -451,6 +461,11 @@ static inline void unset_pnfs_layoutdriver(struct nfs_server *s)
 {
 }
 
+static inline void pnfs_set_ds_iosize(struct nfs_server *server)
+{
+	server->ds_wsize = server->ds_rsize = -1;
+}
+
 static inline int pnfs_get_write_status(struct nfs_write_data *data)
 {
 	return 0;
@@ -463,13 +478,15 @@ static inline int pnfs_get_read_status(struct nfs_read_data *data)
 
 static inline void
 pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio, struct inode *ino,
-		      struct nfs_open_context *ctx, struct list_head *pages)
+		      struct nfs_open_context *ctx, struct list_head *pages,
+		      size_t *rsize)
 {
 	pgio->pg_lseg = NULL;
 }
 
 static inline void
-pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *ino)
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *ino,
+		       size_t *wsize)
 {
 	pgio->pg_lseg = NULL;
 }

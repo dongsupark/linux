@@ -165,6 +165,8 @@ struct nfs_server {
 						   that are supported on this
 						   filesystem */
 	struct pnfs_layoutdriver_type  *pnfs_curr_ld; /* Active layout driver */
+	unsigned int			ds_rsize;  /* Data server read size */
+	unsigned int			ds_wsize;  /* Data server write size */
 #endif
 	void (*destroy)(struct nfs_server *);
 
