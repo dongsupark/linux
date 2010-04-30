@@ -156,6 +156,8 @@ struct nfs_server {
 						   that are supported on this
 						   filesystem */
 	struct pnfs_layoutdriver_type  *pnfs_curr_ld; /* Active layout driver */
+	unsigned int			ds_rsize;  /* Data server read size */
+	unsigned int			ds_wsize;  /* Data server write size */
 
 	/* the following fields are protected by nfs_client->cl_lock */
 	struct rb_root		state_owners;
