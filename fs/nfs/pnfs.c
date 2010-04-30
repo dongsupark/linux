@@ -1744,6 +1744,7 @@ out_free:
 /* Callback operations for layout drivers.
  */
 struct pnfs_client_operations pnfs_ops = {
+	.nfs_getdevicelist = nfs4_proc_getdevicelist,
 	.nfs_getdeviceinfo = nfs4_proc_getdeviceinfo,
 	.nfs_readlist_complete = pnfs_read_done,
 	.nfs_writelist_complete = pnfs_writeback_done,
