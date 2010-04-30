@@ -2161,7 +2161,8 @@ nfs4_add_deviceid(struct nfs4_deviceid_cache *c, struct nfs4_deviceid *new)
 EXPORT_SYMBOL(nfs4_add_deviceid);
 
 static int
-nfs4_remove_deviceid(struct nfs4_deviceid_cache *c, long hash)
+nfs4_remove_deviceid(struct nfs4_deviceid_cache *c, long hash,
+		     struct pnfs_deviceid *id)
 {
 	struct nfs4_deviceid *d;
 	struct hlist_node *n;
@@ -2169,6 +2170,8 @@ nfs4_remove_deviceid(struct nfs4_deviceid_cache *c, long hash)
 	dprintk("--> %s hash %ld\n", __func__, hash);
 	spin_lock(&c->dc_lock);
 	hlist_for_each_entry_rcu(d, n, &c->dc_deviceids[hash], de_node) {
+		if (id && memcmp(id, &d->de_id, NFS4_PNFS_DEVICEID4_SIZE))
+			continue;
 		hlist_del_rcu(&d->de_node);
 		spin_unlock(&c->dc_lock);
 		synchronize_rcu();
@@ -2181,6 +2184,15 @@ nfs4_remove_deviceid(struct nfs4_deviceid_cache *c, long hash)
 	return 0;
 }
 
+void
+nfs4_delete_device(struct nfs4_deviceid_cache *c, struct pnfs_deviceid *id)
+{
+	long hash = nfs4_deviceid_hash(id);
+
+	nfs4_remove_deviceid(c, hash, id);
+}
+EXPORT_SYMBOL(nfs4_delete_device);
+
 static void
 nfs4_free_deviceid_cache(struct kref *kref)
 {
@@ -2189,7 +2201,7 @@ nfs4_free_deviceid_cache(struct kref *kref)
 	long i;
 
 	for (i = 0; i < NFS4_DEVICE_ID_HASH_SIZE; i++)
-		while (nfs4_remove_deviceid(cache, i))
+		while (nfs4_remove_deviceid(cache, i, NULL))
 			;
 	kfree(cache);
 }
