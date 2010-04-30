@@ -1485,6 +1485,34 @@ pnfs_update_layout_commit(struct inode *inode,
 	dprintk("%s  virt update status %d\n", __func__, status);
 }
 
+/* Return I/O buffer size for a layout driver
+ * This value will determine what size reads and writes
+ * will be gathered into and sent to the data servers.
+ * blocksize must be a multiple of the page cache size.
+ */
+unsigned int
+pnfs_getiosize(struct nfs_server *server)
+{
+	if (!PNFS_EXISTS_LDPOLICY_OP(server, get_blocksize))
+		return 0;
+	return server->pnfs_curr_ld->ld_policy_ops->get_blocksize();
+}
+
+void
+pnfs_set_ds_iosize(struct nfs_server *server)
+{
+	unsigned dssize = pnfs_getiosize(server);
+
+	/* Set buffer size for data servers */
+	if (dssize > 0) {
+		server->ds_rsize = server->ds_wsize =
+			nfs_block_size(dssize, NULL);
+	} else {
+		server->ds_wsize = server->wsize;
+		server->ds_rsize = server->rsize;
+	}
+}
+
 static int
 pnfs_call_done(struct pnfs_call_data *pdata, struct rpc_task *task, void *data)
 {
