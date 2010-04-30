@@ -1032,7 +1032,7 @@ static void nfs_pageio_init_write(struct nfs_pageio_descriptor *pgio,
 	size_t wsize = NFS_SERVER(inode)->wsize;
 
 #ifdef CONFIG_NFS_V4_1
-	pnfs_pageio_init_write(pgio, inode);
+	pnfs_pageio_init_write(pgio, inode, &wsize);
 #endif /* CONFIG_NFS_V4_1 */
 
 	if (wsize < PAGE_CACHE_SIZE)

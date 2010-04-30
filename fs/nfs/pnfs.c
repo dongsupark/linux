@@ -1328,7 +1328,8 @@ void
 pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 		  struct inode *inode,
 		  struct nfs_open_context *ctx,
-		  struct list_head *pages)
+		  struct list_head *pages,
+		  size_t *rsize)
 {
 	struct nfs_server *nfss = NFS_SERVER(inode);
 	size_t count = 0;
@@ -1351,6 +1352,7 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 		if (!pgio->pg_lseg)
 			return;
 
+		*rsize = NFS_SERVER(inode)->ds_rsize;
 		pgio->pg_boundary = pnfs_getboundary(inode);
 		if (pgio->pg_boundary)
 			pnfs_set_pg_test(inode, pgio);
@@ -1358,7 +1360,8 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 }
 
 void
-pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode,
+		       size_t *wsize)
 {
 	struct nfs_server *server = NFS_SERVER(inode);
 
@@ -1370,6 +1373,7 @@ pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
 	}
 	pgio->pg_boundary = pnfs_getboundary(inode);
 	pnfs_set_pg_test(inode, pgio);
+	*wsize = server->ds_wsize;
 }
 
 /* Return I/O buffer size for a layout driver
@@ -1383,6 +1387,21 @@ pnfs_getiosize(struct nfs_server *server)
 	if (!PNFS_EXISTS_LDPOLICY_OP(server, get_blocksize))
 		return 0;
 	return server->pnfs_curr_ld->ld_policy_ops->get_blocksize();
+}
+
+void
+pnfs_set_ds_iosize(struct nfs_server *server)
+{
+	unsigned dssize = pnfs_getiosize(server);
+
+	/* Set buffer size for data servers */
+	if (dssize > 0) {
+		server->ds_rsize = server->ds_wsize =
+			nfs_block_size(dssize, NULL);
+	} else {
+		server->ds_wsize = server->wsize;
+		server->ds_rsize = server->rsize;
+	}
 }
 
 static int

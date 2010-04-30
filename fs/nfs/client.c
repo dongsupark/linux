@@ -881,8 +881,10 @@ static void nfs4_init_pnfs(struct nfs_server *server, struct nfs_fsinfo *fsinfo)
 	struct nfs_client *clp = server->nfs_client;
 
 	if (nfs4_has_session(clp) &&
-	    (clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_MDS))
+	    (clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_MDS)) {
 		set_pnfs_layoutdriver(server, fsinfo->layouttype);
+		pnfs_set_ds_iosize(server);
+	}
 #endif /* CONFIG_NFS_V4_1 */
 }
 
