@@ -159,6 +159,14 @@ struct pnfs_cb_lrecall_info {
 	struct cb_layoutrecallargs pcl_args;
 };
 
+#define NFS4_PNFS_GETDEVLIST_MAXNUM 16
+
+struct pnfs_devicelist {
+	unsigned int		eof;
+	unsigned int		num_devs;
+	struct nfs4_deviceid	dev_id[NFS4_PNFS_GETDEVLIST_MAXNUM];
+};
+
 /*
  * Device ID RCU cache. A device ID is unique per client ID and layout type.
  */
@@ -211,6 +219,9 @@ extern int pnfs_register_layoutdriver(struct pnfs_layoutdriver_type *);
 extern void pnfs_unregister_layoutdriver(struct pnfs_layoutdriver_type *);
 
 /* nfs4proc.c */
+extern int nfs4_proc_getdevicelist(struct nfs_server *server,
+				   const struct nfs_fh *fh,
+				   struct pnfs_devicelist *devlist);
 extern int nfs4_proc_getdeviceinfo(struct nfs_server *server,
 				   struct pnfs_device *dev);
 extern int nfs4_proc_layoutget(struct nfs4_layoutget *lgp);
