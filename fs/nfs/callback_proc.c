@@ -405,6 +405,59 @@ out:
 	return res;
 }
 
+/* Remove the deviceid(s) from the nfs_client deviceid cache */
+static __be32 pnfs_devicenotify_client(struct nfs_client *clp,
+				       struct cb_devicenotifyargs *args)
+{
+	uint32_t type;
+	int i;
+
+	dprintk("%s: --> clp %p\n", __func__, clp);
+
+	for (i = 0; i < args->ndevs; i++) {
+		struct cb_devicenotifyitem *dev = &args->devs[i];
+		type = dev->cbd_notify_type;
+		if (type == NOTIFY_DEVICEID4_DELETE && clp->cl_devid_cache)
+			nfs4_delete_device(clp->cl_devid_cache,
+					   &dev->cbd_dev_id);
+		else if (type == NOTIFY_DEVICEID4_CHANGE)
+			printk(KERN_ERR "%s: NOTIFY_DEVICEID4_CHANGE "
+					"not supported\n", __func__);
+	}
+	return 0;
+}
+
+__be32 nfs4_callback_devicenotify(struct cb_devicenotifyargs *args,
+				  void *dummy)
+{
+	struct nfs_client *clp;
+	__be32 res = 0;
+	unsigned int num_client = 0;
+
+	dprintk("%s: -->\n", __func__);
+
+	res = __constant_htonl(NFS4ERR_INVAL);
+	clp = nfs_find_client(args->addr, 4);
+	if (clp == NULL) {
+		dprintk("%s: no client for addr %u.%u.%u.%u\n",
+			__func__, NIPQUAD(args->addr));
+		goto out;
+	}
+
+	do {
+		struct nfs_client *prev = clp;
+		num_client++;
+		res = pnfs_devicenotify_client(clp, args);
+		clp = nfs_find_client_next(prev);
+		nfs_put_client(prev);
+	} while (clp != NULL);
+
+out:
+	dprintk("%s: exit with status = %d numclient %u\n",
+		__func__, ntohl(res), num_client);
+	return res;
+}
+
 int nfs41_validate_delegation_stateid(struct nfs_delegation *delegation, const nfs4_stateid *stateid)
 {
 	if (delegation == NULL)

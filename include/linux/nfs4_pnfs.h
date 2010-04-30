@@ -266,6 +266,8 @@ extern void nfs4_set_layout_deviceid(struct pnfs_layout_segment *,
 extern void nfs4_put_unset_layout_deviceid(struct pnfs_layout_segment *,
 				struct nfs4_deviceid *,
 				void (*free_callback)(struct kref *));
+extern void nfs4_delete_device(struct nfs4_deviceid_cache *,
+				struct pnfs_deviceid *);
 
 /* pNFS client callback functions.
  * These operations allow the layout driver to access pNFS client
