@@ -3694,6 +3694,7 @@ _nfs4_async_handle_error(struct rpc_task *task, const struct nfs_server *server,
 			dprintk("%s ERROR %d, Reset session. Exchangeid "
 				"flags 0x%x\n", __func__, task->tk_status,
 				clp->cl_exchange_flags);
+			nfs4_schedule_state_recovery(clp);
 			task->tk_status = 0;
 			return -EAGAIN;
 #endif /* CONFIG_NFS_V4_1 */
