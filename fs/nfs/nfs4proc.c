@@ -5776,8 +5776,8 @@ out:
 /*
  * Retrieve the list of Data Server devices from the MDS.
  */
-static int _nfs4_pnfs_getdevicelist(struct nfs_fh *fh,
-				    struct nfs_server *server,
+static int _nfs4_pnfs_getdevicelist(struct nfs_server *server,
+				    const struct nfs_fh *fh,
 				    struct pnfs_devicelist *devlist)
 {
 	struct nfs4_pnfs_getdevicelist_arg arg = {
@@ -5800,17 +5800,16 @@ static int _nfs4_pnfs_getdevicelist(struct nfs_fh *fh,
 	return status;
 }
 
-int nfs4_pnfs_getdevicelist(struct super_block *sb,
-			    struct nfs_fh *fh,
+int nfs4_pnfs_getdevicelist(struct nfs_server *server,
+			    const struct nfs_fh *fh,
 			    struct pnfs_devicelist *devlist)
 {
 	struct nfs4_exception exception = { };
-	struct nfs_server *server = NFS_SB(sb);
 	int err;
 
 	do {
 		err = nfs4_handle_exception(server,
-				_nfs4_pnfs_getdevicelist(fh, server, devlist),
+				_nfs4_pnfs_getdevicelist(server, fh, devlist),
 				&exception);
 	} while (exception.retry);
 
