@@ -41,7 +41,7 @@ MODULE_AUTHOR("Dean Hildebrand <dhildebz@umich.edu>");
 MODULE_DESCRIPTION("The NFSv4 file layout driver");
 
 static int
-filelayout_set_layoutdriver(struct nfs_server *nfss)
+filelayout_set_layoutdriver(struct nfs_server *nfss, const struct nfs_fh *mntfh)
 {
 	int status = pnfs_alloc_init_deviceid_cache(nfss->nfs_client,
 						nfs4_fl_free_deviceid_callback);
