@@ -71,16 +71,16 @@ struct layoutdriver_io_operations filelayout_io_operations;
 int
 filelayout_initialize_mountpoint(struct nfs_client *clp)
 {
-
-	if (nfs4_alloc_init_deviceid_cache(clp,
-					   nfs4_fl_free_deviceid_callback)) {
+	int status = nfs4_alloc_init_deviceid_cache(clp,
+						nfs4_fl_free_deviceid_callback);
+	if (status) {
 		printk(KERN_WARNING "%s: deviceid cache could not be "
 			"initialized\n", __func__);
-		return 0;
+		return status;
 	}
 	dprintk("%s: deviceid cache has been initialized successfully\n",
 		__func__);
-	return 1;
+	return 0;
 }
 
 /* Uninitialize a mountpoint by destroying its device list.
