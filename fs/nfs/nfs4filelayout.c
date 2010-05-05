@@ -68,9 +68,10 @@ struct pnfs_client_operations *pnfs_callback_ops;
 struct layoutdriver_io_operations filelayout_io_operations;
 
 int
-filelayout_initialize_mountpoint(struct nfs_client *clp)
+filelayout_initialize_mountpoint(struct nfs_server *nfss,
+				 const struct nfs_fh *mntfh)
 {
-	int status = nfs4_alloc_init_deviceid_cache(clp,
+	int status = nfs4_alloc_init_deviceid_cache(nfss->nfs_client,
 						nfs4_fl_free_deviceid_callback);
 	if (status) {
 		printk(KERN_WARNING "%s: deviceid cache could not be "

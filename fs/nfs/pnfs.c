@@ -201,7 +201,8 @@ unmount_pnfs_layoutdriver(struct nfs_server *nfss)
  * Only one pNFS layout driver is supported.
  */
 void
-set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
+set_pnfs_layoutdriver(struct nfs_server *server, const struct nfs_fh *mntfh,
+		      u32 id)
 {
 	struct pnfs_module *mod = NULL;
 
@@ -220,7 +221,7 @@ set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
 
 	server->pnfs_curr_ld = mod->pnfs_ld_type;
 	if (mod->pnfs_ld_type->ld_io_ops->initialize_mountpoint(
-							server->nfs_client)) {
+							server, mntfh)) {
 		printk(KERN_ERR "%s: Error initializing mount point "
 		       "for layout driver %u. ", __func__, id);
 		goto out_err;

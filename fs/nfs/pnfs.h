@@ -42,7 +42,7 @@ void _pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *,
 			const nfs4_stateid *stateid, /* optional */
 			enum pnfs_layoutreturn_type, bool wait);
-void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
+void set_pnfs_layoutdriver(struct nfs_server *, const struct nfs_fh *mntfh, u32 id);
 void unmount_pnfs_layoutdriver(struct nfs_server *);
 enum pnfs_try_status pnfs_try_to_write_data(struct nfs_write_data *,
 					     const struct rpc_call_ops *, int);
