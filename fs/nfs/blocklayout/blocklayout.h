@@ -51,7 +51,6 @@ extern int dm_do_resume(struct dm_ioctl *param);
 extern int dm_table_load(struct dm_ioctl *param, size_t param_size);
 
 struct block_mount_id {
-	struct super_block		*bm_sb;     /* back pointer */
 	spinlock_t			bm_lock;    /* protects list */
 	struct list_head		bm_devlist; /* holds pnfs_block_dev */
 };
@@ -194,7 +193,7 @@ struct bl_layoutupdate_data {
 	struct list_head ranges;
 };
 
-#define BLK_ID(lo)     ((struct block_mount_id *)(PNFS_MOUNTID(lo)->mountid))
+#define BLK_ID(lo) ((struct block_mount_id *)(PNFS_NFS_SERVER(lo)->pnfs_ld_data))
 #define BLK_LSEG2EXT(lseg) ((struct pnfs_block_layout *)lseg->layout->ld_data)
 #define BLK_LO2EXT(lo) ((struct pnfs_block_layout *)lo->ld_data)
 
@@ -246,7 +245,7 @@ uint32_t *blk_overflow(uint32_t *p, uint32_t *end, size_t nbytes);
 /* blocklayoutdev.c */
 struct block_device *nfs4_blkdev_get(dev_t dev);
 int nfs4_blkdev_put(struct block_device *bdev);
-struct pnfs_block_dev *nfs4_blk_decode_device(struct super_block *sb,
+struct pnfs_block_dev *nfs4_blk_decode_device(struct nfs_server *server,
 					      struct pnfs_device *dev,
 					      struct list_head *sdlist);
 int nfs4_blk_process_layoutget(struct pnfs_layout_type *lo,
@@ -254,7 +253,7 @@ int nfs4_blk_process_layoutget(struct pnfs_layout_type *lo,
 int nfs4_blk_create_scsi_disk_list(struct list_head *);
 void nfs4_blk_destroy_disk_list(struct list_head *);
 /* blocklayoutdm.c */
-struct pnfs_block_dev *nfs4_blk_init_metadev(struct super_block *sb,
+struct pnfs_block_dev *nfs4_blk_init_metadev(struct nfs_server *server,
 					     struct pnfs_device *dev);
 int nfs4_blk_flatten(struct pnfs_blk_volume *, int, struct pnfs_block_dev *);
 void free_block_dev(struct pnfs_block_dev *bdev);
