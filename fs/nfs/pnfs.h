@@ -22,7 +22,7 @@
 #include "iostat.h"
 
 /* nfs4proc.c */
-extern int nfs4_pnfs_getdeviceinfo(struct super_block *sb,
+extern int nfs4_pnfs_getdeviceinfo(struct nfs_server *server,
 				   struct pnfs_device *dev);
 extern int pnfs4_proc_layoutget(struct nfs4_pnfs_layoutget *lgp);
 extern int pnfs4_proc_layoutcommit(struct pnfs_layoutcommit_data *data);

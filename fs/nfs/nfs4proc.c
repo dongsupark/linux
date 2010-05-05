@@ -5770,9 +5770,8 @@ out:
 	return status;
 }
 
-int nfs4_pnfs_getdeviceinfo(struct super_block *sb, struct pnfs_device *pdev)
+int nfs4_pnfs_getdeviceinfo(struct nfs_server *server, struct pnfs_device *pdev)
 {
-	struct nfs_server *server = NFS_SB(sb);
 	struct nfs4_pnfs_getdeviceinfo_arg args = {
 		.pdev = pdev,
 	};

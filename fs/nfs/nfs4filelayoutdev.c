@@ -518,7 +518,7 @@ get_device_info(struct inode *inode, struct pnfs_deviceid *dev_id)
 	/* TODO: Update types when CB_NOTIFY_DEVICEID is available */
 	pdev->dev_notify_types = 0;
 
-	rc = pnfs_callback_ops->nfs_getdeviceinfo(inode->i_sb, pdev);
+	rc = pnfs_callback_ops->nfs_getdeviceinfo(server, pdev);
 	dprintk("%s getdevice info returns %d\n", __func__, rc);
 	if (rc)
 		goto out_free;
