@@ -489,9 +489,9 @@ static int decode_blk_volume(uint32_t **pp, uint32_t *end,
  * in dev->dev_addr_buf.
  */
 struct pnfs_block_dev *
-nfs4_blk_decode_device(struct super_block *sb,
-				  struct pnfs_device *dev,
-				  struct list_head *sdlist)
+nfs4_blk_decode_device(struct nfs_server *server,
+		       struct pnfs_device *dev,
+		       struct list_head *sdlist)
 {
 	int num_vols, i, status, count;
 	struct pnfs_blk_volume *vols, **arrays, **arrays_ptr;
@@ -540,7 +540,7 @@ nfs4_blk_decode_device(struct super_block *sb,
 	}
 
 	/* Now use info in vols to create the meta device */
-	rv = nfs4_blk_init_metadev(sb, dev);
+	rv = nfs4_blk_init_metadev(server, dev);
 	if (!rv)
 		goto out;
 	status = nfs4_blk_flatten(vols, num_vols, rv);

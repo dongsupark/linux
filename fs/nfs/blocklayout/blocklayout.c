@@ -564,7 +564,7 @@ bl_free_layout(void *p)
 }
 
 static void *
-bl_alloc_layout(struct pnfs_mount_type *mtype, struct inode *inode)
+bl_alloc_layout(struct inode *inode)
 {
 	struct pnfs_block_layout	*bl;
 
@@ -688,7 +688,7 @@ static void free_blk_mountid(struct block_mount_id *mid)
  * It seems much of this should be at the generic pnfs level.
  */
 static struct pnfs_block_dev *
-nfs4_blk_get_deviceinfo(struct super_block *sb, struct nfs_fh *fh,
+nfs4_blk_get_deviceinfo(struct nfs_server *server, const struct nfs_fh *fh,
 			struct pnfs_deviceid *d_id,
 			struct list_head *sdlist)
 {
@@ -698,7 +698,6 @@ nfs4_blk_get_deviceinfo(struct super_block *sb, struct nfs_fh *fh,
 	int max_pages;
 	struct page **pages = NULL;
 	int i, rc;
-	struct nfs_server *server = NFS_SB(sb);
 
 	/*
 	 * Use the session max response size as the basis for setting
@@ -739,12 +738,12 @@ nfs4_blk_get_deviceinfo(struct super_block *sb, struct nfs_fh *fh,
 	dev->pglen = PAGE_SIZE * max_pages;
 	dev->mincount = 0;
 
-	rc = pnfs_block_callback_ops->nfs_getdeviceinfo(sb, dev);
+	rc = pnfs_block_callback_ops->nfs_getdeviceinfo(server, dev);
 	dprintk("%s getdevice info returns %d\n", __func__, rc);
 	if (rc)
 		goto out_free;
 
-	rv = nfs4_blk_decode_device(sb, dev, sdlist);
+	rv = nfs4_blk_decode_device(server, dev, sdlist);
  out_free:
 	if (dev->area != NULL)
 		vunmap(dev->area);
@@ -759,8 +758,8 @@ nfs4_blk_get_deviceinfo(struct super_block *sb, struct nfs_fh *fh,
 /*
  * Retrieve the list of available devices for the mountpoint.
  */
-static struct pnfs_mount_type *
-bl_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
+static int
+bl_initialize_mountpoint(struct nfs_server *server, const struct nfs_fh *fh)
 {
 	struct block_mount_id *b_mt_id = NULL;
 	struct pnfs_mount_type *mtype = NULL;
@@ -771,21 +770,18 @@ bl_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
 
 	dprintk("%s enter\n", __func__);
 
-	if (NFS_SB(sb)->pnfs_blksize == 0) {
+	if (server->pnfs_blksize == 0) {
 		dprintk("%s Server did not return blksize\n", __func__);
-		return NULL;
+		return -EINVAL;
 	}
 	b_mt_id = kzalloc(sizeof(struct block_mount_id), GFP_KERNEL);
-	if (!b_mt_id)
+	if (!b_mt_id) {
+		status = -ENOMEM;
 		goto out_error;
+	}
 	/* Initialize nfs4 block layout mount id */
-	b_mt_id->bm_sb = sb; /* back pointer to retrieve nfs_server struct */
 	spin_lock_init(&b_mt_id->bm_lock);
 	INIT_LIST_HEAD(&b_mt_id->bm_devlist);
-	mtype = kzalloc(sizeof(struct pnfs_mount_type), GFP_KERNEL);
-	if (!mtype)
-		goto out_error;
-	mtype->mountid = (void *)b_mt_id;
 
 	/* Construct a list of all visible scsi disks that have not been
 	 * claimed.
@@ -799,7 +795,8 @@ bl_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
 		goto out_error;
 	dlist->eof = 0;
 	while (!dlist->eof) {
-		status = pnfs_block_callback_ops->nfs_getdevicelist(sb, fh, dlist);
+		status = pnfs_block_callback_ops->nfs_getdevicelist(
+							server, fh, dlist);
 		if (status)
 			goto out_error;
 		dprintk("%s GETDEVICELIST numdevs=%i, eof=%i\n",
@@ -811,7 +808,7 @@ bl_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
 		 * Construct an LVM meta device from the flat volume topology.
 		 */
 		for (i = 0; i < dlist->num_devs; i++) {
-			bdev = nfs4_blk_get_deviceinfo(sb, fh,
+			bdev = nfs4_blk_get_deviceinfo(server, fh,
 						     &dlist->dev_id[i],
 						     &scsi_disklist);
 			if (!bdev)
@@ -822,30 +819,26 @@ bl_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
 		}
 	}
 	dprintk("%s SUCCESS\n", __func__);
-
+	server->pnfs_ld_data = b_mt_id;
+	status = 0;
  out_return:
 	kfree(dlist);
 	nfs4_blk_destroy_disk_list(&scsi_disklist);
-	return mtype;
+	return status;
 
  out_error:
 	free_blk_mountid(b_mt_id);
 	kfree(mtype);
-	mtype = NULL;
 	goto out_return;
 }
 
 static int
-bl_uninitialize_mountpoint(struct pnfs_mount_type *mtype)
+bl_uninitialize_mountpoint(struct nfs_server *server)
 {
-	struct block_mount_id *b_mt_id = NULL;
+	struct block_mount_id *b_mt_id = server->pnfs_ld_data;
 
 	dprintk("%s enter\n", __func__);
-	if (!mtype)
-		return 0;
-	b_mt_id = (struct block_mount_id *)mtype->mountid;
 	free_blk_mountid(b_mt_id);
-	kfree(mtype);
 	dprintk("%s RETURNS\n", __func__);
 	return 0;
 }
