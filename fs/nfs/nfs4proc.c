@@ -5784,9 +5784,9 @@ int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool issync)
 /*
  * Retrieve the list of Data Server devices from the MDS.
  */
-static int _nfs4_getdevicelist(struct nfs_fh *fh,
-			       struct nfs_server *server,
-			       struct pnfs_devicelist *devlist)
+static int _nfs4_getdevicelist(struct nfs_server *server,
+				    const struct nfs_fh *fh,
+				    struct pnfs_devicelist *devlist)
 {
 	struct nfs4_getdevicelist_args args = {
 		.fh = fh,
@@ -5808,17 +5808,16 @@ static int _nfs4_getdevicelist(struct nfs_fh *fh,
 	return status;
 }
 
-int nfs4_proc_getdevicelist(struct super_block *sb,
-			    struct nfs_fh *fh,
+int nfs4_proc_getdevicelist(struct nfs_server *server,
+			    const struct nfs_fh *fh,
 			    struct pnfs_devicelist *devlist)
 {
 	struct nfs4_exception exception = { };
-	struct nfs_server *server = NFS_SB(sb);
 	int err;
 
 	do {
 		err = nfs4_handle_exception(server,
-				_nfs4_getdevicelist(fh, server, devlist),
+				_nfs4_getdevicelist(server, fh, devlist),
 				&exception);
 	} while (exception.retry);
 

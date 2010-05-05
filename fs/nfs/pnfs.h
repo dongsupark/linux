@@ -21,8 +21,8 @@
 #include "iostat.h"
 
 /* nfs4proc.c */
-extern int nfs4_proc_getdevicelist(struct super_block *sb,
-				   struct nfs_fh *fh,
+extern int nfs4_proc_getdevicelist(struct nfs_server *server,
+				   const struct nfs_fh *fh,
 				   struct pnfs_devicelist *devlist);
 extern int nfs4_proc_getdeviceinfo(struct nfs_server *server,
 				   struct pnfs_device *dev);
