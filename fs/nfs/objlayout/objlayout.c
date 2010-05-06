@@ -56,7 +56,7 @@ struct pnfs_client_operations *pnfs_client_ops;
  * Create a objlayout layout structure for the given inode and return it.
  */
 static void *
-objlayout_alloc_layout(struct pnfs_mount_type *mountid, struct inode *inode)
+objlayout_alloc_layout(struct inode *inode)
 {
 	struct objlayout *objlay;
 
@@ -706,7 +706,7 @@ int objlayout_get_deviceinfo(struct pnfs_layout_type *pnfslay,
 	pd.mincount = 0;
 
 	sb = PNFS_INODE(pnfslay)->i_sb;
-	err = pnfs_client_ops->nfs_getdeviceinfo(sb, &pd);
+	err = pnfs_client_ops->nfs_getdeviceinfo(PNFS_NFS_SERVER(pnfslay), &pd);
 	dprintk("%s nfs_getdeviceinfo returned %d\n", __func__, err);
 	if (err)
 		goto err_out;
@@ -744,36 +744,32 @@ void objlayout_put_deviceinfo(struct pnfs_osd_deviceaddr *deviceaddr)
  * Return the pnfs_mount_type structure so the
  * pNFS_client can refer to the mount point later on.
  */
-static struct pnfs_mount_type *
-objlayout_initialize_mountpoint(struct super_block *sb, struct nfs_fh *fh)
+static int
+objlayout_initialize_mountpoint(struct nfs_server *server,
+				const struct nfs_fh *mntfh)
 {
-	struct pnfs_mount_type *mt;
+	void *data;
 
-	mt = kzalloc(sizeof(*mt), GFP_KERNEL);
-	if (!mt)
-		return NULL;
-
-	mt->mountid = objio_init_mt();
-	if (IS_ERR(mt->mountid)) {
+	data = objio_init_mt();
+	if (IS_ERR(data)) {
 		printk(KERN_INFO "%s: objlayout lib not ready err=%ld\n",
-		       __func__, PTR_ERR(mt->mountid));
-		kfree(mt);
-		return NULL;
+		       __func__, PTR_ERR(data));
+		return PTR_ERR(data);
 	}
+	server->pnfs_ld_data = data;
 
-	dprintk("%s: Return %p\n", __func__, mt);
-	return mt;
+	dprintk("%s: Return data=%p\n", __func__, data);
+	return 0;
 }
 
 /*
  * Uninitialize a mountpoint
  */
 static int
-objlayout_uninitialize_mountpoint(struct pnfs_mount_type *mt)
+objlayout_uninitialize_mountpoint(struct nfs_server *server)
 {
-	dprintk("%s: Begin %p\n", __func__, mt);
-	objio_fini_mt(mt->mountid);
-	kfree(mt);
+	dprintk("%s: Begin %p\n", __func__, server->pnfs_ld_data);
+	objio_fini_mt(server->pnfs_ld_data);
 	return 0;
 }
 

@@ -183,7 +183,7 @@ static struct osd_dev *_device_lookup(struct pnfs_layout_type *pnfslay,
 	struct pnfs_deviceid *d_id;
 	struct osd_dev *od;
 	struct osd_dev_info odi;
-	struct objio_mount_type *omt = PNFS_MOUNTID(pnfslay)->mountid;
+	struct objio_mount_type *omt = PNFS_NFS_SERVER(pnfslay)->pnfs_ld_data;
 	int err;
 
 	d_id = &layout->olo_comps[comp].oc_object_id.oid_device_id;
@@ -1015,7 +1015,7 @@ objlayout_get_stripesize(struct pnfs_layout_type *pnfslay)
  * Get the max [rw]size
  */
 static ssize_t
-objlayout_get_blocksize(struct pnfs_mount_type *mountid)
+objlayout_get_blocksize(void)
 {
 	ssize_t sz = BIO_MAX_PAGES_KMALLOC * PAGE_SIZE;
 
