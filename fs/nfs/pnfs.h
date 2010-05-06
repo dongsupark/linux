@@ -78,6 +78,9 @@ int _pnfs_write_begin(struct inode *inode, struct page *page,
 		      loff_t pos, unsigned len,
 		      struct pnfs_layout_segment *lseg,
 		      struct pnfs_fsdata **fsdata);
+int _pnfs_write_end(struct inode *inode, struct page *page,
+		    loff_t pos, unsigned len, unsigned copied,
+		    struct pnfs_layout_segment *lseg);
 
 #define PNFS_EXISTS_LDIO_OP(srv, opname) ((srv)->pnfs_curr_ld &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops &&	\
@@ -137,6 +140,19 @@ static inline int pnfs_write_begin(struct file *filp, struct page *page,
 		status = _pnfs_write_begin(inode, page, pos, len, lseg,
 					   (struct pnfs_fsdata **) fsdata);
 	return status;
+}
+
+static inline int pnfs_write_end(struct file *filp, struct page *page,
+				 loff_t pos, unsigned len, unsigned copied,
+				 struct pnfs_layout_segment *lseg)
+{
+	struct inode *inode = filp->f_dentry->d_inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	if (PNFS_EXISTS_LDIO_OP(nfss, write_end))
+		return _pnfs_write_end(inode, page, pos, len, copied, lseg);
+	else
+		return 0;
 }
 
 static inline void pnfs_write_end_cleanup(struct file *filp, void *fsdata)
@@ -263,6 +279,13 @@ static inline int pnfs_write_begin(struct file *filp, struct page *page,
 				   void **fsdata)
 {
 	*fsdata = NULL;
+	return 0;
+}
+
+static inline int pnfs_write_end(struct file *filp, struct page *page,
+				 loff_t pos, unsigned len, unsigned copied,
+				 struct pnfs_layout_segment *lseg)
+{
 	return 0;
 }
 

@@ -1641,6 +1641,20 @@ out:
 	return status;
 }
 
+/* Return 0 on succes, negative on failure */
+/* CAREFUL - what happens if copied < len??? */
+int _pnfs_write_end(struct inode *inode, struct page *page,
+		    loff_t pos, unsigned len, unsigned copied,
+		    struct pnfs_layout_segment *lseg)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	int status;
+
+	status = nfss->pnfs_curr_ld->ld_io_ops->write_end(inode, page,
+						pos, len, copied, lseg);
+	return status;
+}
+
 /* pNFS Commit callback function for all layout drivers */
 static void
 pnfs_commit_done(struct nfs_write_data *data)
