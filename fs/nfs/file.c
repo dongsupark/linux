@@ -466,8 +466,12 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 	}
 
 	lseg = nfs4_pull_lseg_from_fsdata(file, fsdata);
+	status = pnfs_write_end(file, page, pos, len, copied, lseg);
+	if (status)
+		goto out;
 	status = nfs_updatepage(file, page, offset, copied, lseg);
 
+ out:
 	unlock_page(page);
 	page_cache_release(page);
 	pnfs_write_end_cleanup(file, fsdata);
