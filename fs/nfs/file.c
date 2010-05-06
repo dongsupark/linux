@@ -433,8 +433,7 @@ start:
 
 	ret = nfs_flush_incompatible(file, page);
 	if (ret) {
-		unlock_page(page);
-		page_cache_release(page);
+		goto out_err;
 	} else if (!once_thru &&
 		   nfs_want_read_modify_write(file, page, pos, len)) {
 		once_thru = 1;
@@ -442,7 +441,17 @@ start:
 		page_cache_release(page);
 		if (!ret)
 			goto start;
+	} else {
+		ret = pnfs_write_begin(file, page, pos, len, fsdata);
+		if (ret)
+			goto out_err;
 	}
+	return ret;
+
+ out_err:
+	unlock_page(page);
+	page_cache_release(page);
+	*pagep = NULL;
 	return ret;
 }
 
@@ -482,6 +491,7 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 
 	unlock_page(page);
 	page_cache_release(page);
+	pnfs_write_end_cleanup(fsdata);
 
 	if (status < 0)
 		return status;
