@@ -654,7 +654,7 @@ panlayout_get_stripesize(struct pnfs_layout_type *pnfslay)
  * Get the max [rw]size
  */
 static ssize_t
-panlayout_get_blocksize(struct pnfs_mount_type *mountid)
+panlayout_get_blocksize(void)
 {
 	ssize_t sz = (PANLAYOUT_MAX_STRIPE_WIDTH-1) *
 		      PANLAYOUT_DEF_STRIPE_UNIT *
