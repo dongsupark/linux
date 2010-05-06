@@ -160,6 +160,7 @@ struct nfs_server {
 
 #ifdef CONFIG_NFS_V4_1
 	struct pnfs_layoutdriver_type  *pnfs_curr_ld; /* Active layout driver */
+	void			       *pnfs_ld_data; /* Per-mount data */
 	unsigned int			ds_rsize;  /* Data server read size */
 	unsigned int			ds_wsize;  /* Data server write size */
 #endif /* CONFIG_NFS_V4_1 */
