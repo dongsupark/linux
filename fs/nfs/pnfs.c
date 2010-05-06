@@ -2225,10 +2225,8 @@ pnfs_layoutcommit_inode(struct inode *inode, int sync)
 		return -ENOMEM;
 
 	spin_lock(&nfsi->lo_lock);
-	if (!nfsi->layoutcommit_ctx) {
-		pnfs_layoutcommit_free(data);
+	if (!nfsi->layoutcommit_ctx)
 		goto out_unlock;
-	}
 
 	data->args.inode = inode;
 	data->cred  = nfsi->layoutcommit_ctx->cred;
@@ -2255,6 +2253,7 @@ out:
 	dprintk("%s end (err:%d)\n", __func__, status);
 	return status;
 out_unlock:
+	pnfs_layoutcommit_free(data);
 	spin_unlock(&nfsi->lo_lock);
 	goto out;
 }
