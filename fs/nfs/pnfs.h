@@ -75,8 +75,6 @@ int _pnfs_write_begin(struct inode *inode, struct page *page,
 		      struct pnfs_fsdata **fsdata);
 int _pnfs_do_flush(struct inode *inode, struct nfs_page *req,
 		   struct pnfs_fsdata *fsdata);
-void _pnfs_modify_new_write_request(struct nfs_page *req,
-				    struct pnfs_fsdata *fsdata);
 void _pnfs_direct_init_io(struct inode *inode, struct nfs_open_context *ctx,
 			  size_t count, loff_t loff, int iswrite,
 			  size_t *rwsize, size_t *remaining);
@@ -204,14 +202,6 @@ static inline void pnfs_redirty_request(struct nfs_page *req)
 	clear_bit(PG_USE_PNFS, &req->wb_flags);
 }
 
-static inline void pnfs_modify_new_request(struct nfs_page *req,
-					   void *fsdata)
-{
-	if (fsdata)
-		_pnfs_modify_new_write_request(req, fsdata);
-	/* Should we do something (like set PG_USE_PNFS) if !fsdata ? */
-}
-
 static inline int pnfs_return_layout(struct inode *ino,
 				     struct nfs4_pnfs_layout_segment *lseg,
 				     const nfs4_stateid *stateid, /* optional */
@@ -298,11 +288,6 @@ static inline void pnfs_write_end_cleanup(void *fsdata)
 }
 
 static inline void pnfs_redirty_request(struct nfs_page *req)
-{
-}
-
-static inline void pnfs_modify_new_request(struct nfs_page *req,
-					   void *fsdata)
 {
 }
 
