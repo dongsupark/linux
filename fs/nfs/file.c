@@ -412,6 +412,9 @@ start:
 	if (ret) {
 		unlock_page(page);
 		page_cache_release(page);
+		*pagep = NULL;
+		*fsdata = NULL;
+		goto out;
 	} else if (!once_thru &&
 		   nfs_want_read_modify_write(file, page, pos, len)) {
 		once_thru = 1;
@@ -420,7 +423,7 @@ start:
 		if (!ret)
 			goto start;
 	}
-	*fsdata = lseg;
+	ret = pnfs_write_begin(file, page, pos, len, lseg, fsdata);
  out:
 	if (ret) {
 		put_lseg(lseg);
@@ -435,7 +438,7 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 {
 	unsigned offset = pos & (PAGE_CACHE_SIZE - 1);
 	int status;
-	struct pnfs_layout_segment *lseg = fsdata;
+	struct pnfs_layout_segment *lseg;
 
 	dfprintk(PAGECACHE, "NFS: write_end(%s/%s(%ld), %u@%lld)\n",
 		file->f_path.dentry->d_parent->d_name.name,
@@ -462,10 +465,12 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 			zero_user_segment(page, pglen, PAGE_CACHE_SIZE);
 	}
 
+	lseg = nfs4_pull_lseg_from_fsdata(file, fsdata);
 	status = nfs_updatepage(file, page, offset, copied, lseg);
 
 	unlock_page(page);
 	page_cache_release(page);
+	pnfs_write_end_cleanup(file, fsdata);
 	put_lseg(lseg);
 
 	if (status < 0)
