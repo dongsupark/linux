@@ -64,6 +64,7 @@ void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *,
 			   size_t *);
 void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *,
 			    size_t *);
+void pnfs_free_fsdata(struct pnfs_fsdata *fsdata);
 void pnfs_get_layout_done(struct nfs4_layoutget *, int rpc_status);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
 void pnfs_layout_release(struct pnfs_layout_hdr *, struct pnfs_layout_range *range);
@@ -73,6 +74,10 @@ void pnfs_destroy_layout(struct nfs_inode *);
 void pnfs_destroy_all_layouts(struct nfs_client *);
 void put_layout(struct inode *inode);
 void pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo);
+int _pnfs_write_begin(struct inode *inode, struct page *page,
+		      loff_t pos, unsigned len,
+		      struct pnfs_layout_segment *lseg,
+		      struct pnfs_fsdata **fsdata);
 
 #define PNFS_EXISTS_LDIO_OP(srv, opname) ((srv)->pnfs_curr_ld &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops &&	\
@@ -116,6 +121,32 @@ static inline int
 pnfs_layout_roc_iomode(struct nfs_inode *nfsi)
 {
 	return nfsi->layout->roc_iomode;
+}
+
+static inline int pnfs_write_begin(struct file *filp, struct page *page,
+				   loff_t pos, unsigned len,
+				   struct pnfs_layout_segment *lseg,
+				   void **fsdata)
+{
+	struct inode *inode = filp->f_dentry->d_inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	int status = 0;
+
+	*fsdata = lseg;
+	if (lseg && PNFS_EXISTS_LDIO_OP(nfss, write_begin))
+		status = _pnfs_write_begin(inode, page, pos, len, lseg,
+					   (struct pnfs_fsdata **) fsdata);
+	return status;
+}
+
+static inline void pnfs_write_end_cleanup(struct file *filp, void *fsdata)
+{
+	if (fsdata) {
+		struct nfs_server *nfss = NFS_SERVER(filp->f_dentry->d_inode);
+
+		if (PNFS_EXISTS_LDIO_OP(nfss, write_begin))
+			pnfs_free_fsdata(fsdata);
+	}
 }
 
 static inline int pnfs_return_layout(struct inode *ino,
@@ -167,6 +198,17 @@ static inline int pnfs_use_rpc(struct nfs_server *nfss)
 	return 1;
 }
 
+static inline struct pnfs_layout_segment *
+nfs4_pull_lseg_from_fsdata(struct file *filp, void *fsdata)
+{
+	if (fsdata) {
+		struct nfs_server *nfss = NFS_SERVER(filp->f_dentry->d_inode);
+
+		if (PNFS_EXISTS_LDIO_OP(nfss, write_begin))
+			return ((struct pnfs_fsdata *) fsdata)->lseg;
+	}
+	return fsdata;
+}
 #else  /* CONFIG_NFS_V4_1 */
 
 static inline void pnfs_destroy_all_layouts(struct nfs_client *clp)
@@ -215,6 +257,19 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 	return PNFS_NOT_ATTEMPTED;
 }
 
+static inline int pnfs_write_begin(struct file *filp, struct page *page,
+				   loff_t pos, unsigned len,
+				   struct pnfs_layout_segment *lseg,
+				   void **fsdata)
+{
+	*fsdata = NULL;
+	return 0;
+}
+
+static inline void pnfs_write_end_cleanup(struct file *filp, void *fsdata)
+{
+}
+
 static inline int pnfs_get_write_status(struct nfs_write_data *data)
 {
 	return 0;
@@ -254,6 +309,12 @@ static inline int pnfs_return_layout(struct inode *ino,
 				     bool wait)
 {
 	return 0;
+}
+
+static inline struct pnfs_layout_segment *
+nfs4_pull_lseg_from_fsdata(struct file *filp, void *fsdata)
+{
+	return NULL;
 }
 
 #endif /* CONFIG_NFS_V4_1 */

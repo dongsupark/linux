@@ -29,6 +29,10 @@ struct pnfs_layoutdriver_type {
 	struct layoutdriver_policy_operations *ld_policy_ops;
 };
 
+struct pnfs_fsdata {
+	struct pnfs_layout_segment *lseg;
+};
+
 #if defined(CONFIG_NFS_V4_1)
 
 static inline struct nfs_inode *
@@ -130,6 +134,9 @@ struct layoutdriver_io_operations {
 	(*read_pagelist) (struct nfs_read_data *nfs_data, unsigned nr_pages);
 	enum pnfs_try_status
 	(*write_pagelist) (struct nfs_write_data *nfs_data, unsigned nr_pages, int how);
+	int (*write_begin) (struct pnfs_layout_segment *lseg, struct page *page,
+			    loff_t pos, unsigned count,
+			    struct pnfs_fsdata *fsdata);
 
 	/* Consistency ops */
 	/* 2 problems:
