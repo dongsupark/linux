@@ -2799,9 +2799,6 @@ static void nfs4_kill_super(struct super_block *sb)
 	dprintk("--> %s\n", __func__);
 	nfs_super_return_all_delegations(sb);
 	kill_anon_super(sb);
-#ifdef CONFIG_NFS_V4_1
-	unmount_pnfs_layoutdriver(server);
-#endif
 	nfs_fscache_release_super_cookie(sb);
 	nfs_free_server(server);
 	dprintk("<-- %s\n", __func__);

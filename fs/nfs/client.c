@@ -884,6 +884,14 @@ static void nfs4_init_pnfs(struct nfs_server *server, struct nfs_fsinfo *fsinfo)
 #endif /* CONFIG_NFS_V4_1 */
 }
 
+static void nfs4_uninit_pnfs(struct nfs_server *server)
+{
+#if defined(CONFIG_NFS_V4_1)
+	if (nfs4_has_session(server->nfs_client))
+		unmount_pnfs_layoutdriver(server);
+#endif /* CONFIG_NFS_V4_1 */
+}
+
 /*
  * Load up the server record from information gained in an fsinfo record
  */
@@ -1039,6 +1047,7 @@ void nfs_free_server(struct nfs_server *server)
 {
 	dprintk("--> nfs_free_server()\n");
 
+	nfs4_uninit_pnfs(server);
 	spin_lock(&nfs_client_lock);
 	list_del(&server->client_link);
 	list_del(&server->master_link);
