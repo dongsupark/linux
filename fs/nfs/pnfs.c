@@ -725,16 +725,6 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 		arg.length = ~0;
 	}
 	if (type == RETURN_FILE) {
-		if (nfsi->layoutcommit_ctx) {
-			status = pnfs_layoutcommit_inode(ino, 1);
-			if (status) {
-				dprintk("%s: layoutcommit failed, status=%d. "
-					"Returning layout anyway\n",
-					__func__, status);
-				status = 0;
-			}
-		}
-
 		lo = get_lock_current_layout(nfsi);
 		if (lo && !has_layout_to_return(lo, &arg)) {
 			put_unlock_current_layout(lo);
@@ -761,6 +751,16 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 			dprintk("%s: waiting\n", __func__);
 			wait_event(nfsi->lo_waitq,
 				!pnfs_return_layout_barrier(nfsi, &arg));
+		}
+
+		if (nfsi->layoutcommit_ctx) {
+			status = pnfs_layoutcommit_inode(ino, 1);
+			if (status) {
+				dprintk("%s: layoutcommit failed, status=%d. "
+					"Returning layout anyway\n",
+					__func__, status);
+				status = 0;
+			}
 		}
 	}
 send_return:
