@@ -697,9 +697,6 @@ filelayout_get_stripesize(struct pnfs_layout_type *layoutid)
 /*
  * filelayout_pg_test(). Called by nfs_can_coalesce_requests()
  *
- * For writes which come from the flush daemon, set the bsize on the fly.
- * reads set the bsize in pnfs_pageio_init_read.
- *
  * return 1 :  coalesce page
  * return 0 :  don't coalesce page
  */
@@ -709,13 +706,6 @@ filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 {
 	u64 p_stripe, r_stripe;
 
-	if (!pgio->pg_iswrite)
-		goto boundary;
-
-	if (pgio->pg_bsize != NFS_SERVER(pgio->pg_inode)->wsize)
-		pgio->pg_bsize = NFS_SERVER(pgio->pg_inode)->wsize;
-
-boundary:
 	if (pgio->pg_boundary == 0)
 		return 1;
 	p_stripe = (u64)prev->wb_index << PAGE_CACHE_SHIFT;
