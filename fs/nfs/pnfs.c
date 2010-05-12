@@ -211,6 +211,7 @@ set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
 		return;
 
 	if (id > 0 && find_pnfs(id, &mod)) {
+		server->pnfs_curr_ld = mod->pnfs_ld_type;
 		if (mod->pnfs_ld_type->ld_io_ops->initialize_mountpoint(
 			server->nfs_client)) {
 			printk(KERN_ERR "%s: Error initializing mount point "
@@ -221,7 +222,6 @@ set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
 		 * Layout driver succeeded in initializing mountpoint
 		 * and has taken a reference on the nfs_client cl_devid_cache
 		 */
-		server->pnfs_curr_ld = mod->pnfs_ld_type;
 		server->nfs_client->rpc_ops = &pnfs_v4_clientops;
 		dprintk("%s: pNFS module for %u set\n", __func__, id);
 		return;
