@@ -1412,7 +1412,7 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 	/* Calculate the total read-ahead count */
 	readahead_range(inode, pages, &loff, &count);
 
-	if (count > 0 && !below_threshold(inode, count, 0)) {
+	if (count > 0) {
 		status = pnfs_update_layout(inode, ctx, count,
 						loff, IOMODE_READ, NULL);
 		dprintk("%s virt update returned %d\n", __func__, status);
