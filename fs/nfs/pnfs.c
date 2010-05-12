@@ -1834,7 +1834,7 @@ _pnfs_try_to_read_data(struct nfs_read_data *data,
 
 	dprintk("--> %s\n", __func__);
 	/* Only create an rpc request if utilizing NFSv4 I/O */
-	if (!pnfs_use_read(ino, data->args.count) ||
+	if (!pnfs_enabled_sb(nfss) ||
 	    !nfss->pnfs_curr_ld->ld_io_ops->read_pagelist) {
 		dprintk("<-- %s: not using pnfs\n", __func__);
 		return PNFS_NOT_ATTEMPTED;
