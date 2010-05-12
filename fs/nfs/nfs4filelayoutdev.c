@@ -126,7 +126,8 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 	};
 	struct sockaddr_in	sin;
 	struct rpc_clnt 	*mds_clnt = mds_srv->client;
-	struct nfs_client 	*clp;
+	struct nfs_client	*clp = mds_srv->nfs_client;
+	struct sockaddr		*mds_addr;
 	char			ip_addr[16];
 	int			addrlen;
 	int err = 0;
@@ -138,6 +139,23 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 	sin.sin_addr.s_addr = ds->ds_ip_addr;
 	sin.sin_port = ds->ds_port;
 
+	/*
+	 * If this DS is also the MDS, use the MDS session only if the
+	 * MDS exchangeid flags show the EXCHGID4_FLAG_USE_PNFS_DS pNFS role.
+	 */
+	mds_addr = (struct sockaddr *)&clp->cl_addr;
+	if (nfs_sockaddr_cmp((struct sockaddr *)&sin, mds_addr)) {
+		if (!(clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_DS)) {
+			printk(KERN_INFO "ip:port %s is not a pNFS Data "
+				"Server\n", ds->r_addr);
+			err = -ENODEV;
+		} else {
+			atomic_inc(&clp->cl_count);
+			ds->ds_clp = clp;
+			dprintk("%s Using MDS Session for DS\n", __func__);
+		}
+		goto out;
+	}
 	/* Set timeout to the mds rpc clnt value.
 	 * XXX - find the correct authflavor....
 	 *

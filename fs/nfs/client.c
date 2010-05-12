@@ -348,7 +348,7 @@ static int nfs_sockaddr_match_ipaddr(const struct sockaddr *sa1,
  * Test if two socket addresses represent the same actual socket,
  * by comparing (only) relevant fields, including the port number.
  */
-static int nfs_sockaddr_cmp(const struct sockaddr *sa1,
+int nfs_sockaddr_cmp(const struct sockaddr *sa1,
 			    const struct sockaddr *sa2)
 {
 	if (sa1->sa_family != sa2->sa_family)
@@ -362,6 +362,7 @@ static int nfs_sockaddr_cmp(const struct sockaddr *sa1,
 	}
 	return 0;
 }
+EXPORT_SYMBOL(nfs_sockaddr_cmp);
 
 /*
  * Find a client by IP address and protocol version
