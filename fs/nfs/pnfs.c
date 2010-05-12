@@ -1855,7 +1855,7 @@ _pnfs_try_to_write_data(struct nfs_write_data *data,
 
 	dprintk("--> %s\n", __func__);
 	/* Only create an rpc request if utilizing NFSv4 I/O */
-	if (!pnfs_use_write(ino, data->args.count) ||
+	if (!pnfs_enabled_sb(nfss) ||
 	    !nfss->pnfs_curr_ld->ld_io_ops->write_pagelist) {
 		dprintk("<-- %s: not using pnfs\n", __func__);
 		return PNFS_NOT_ATTEMPTED;
