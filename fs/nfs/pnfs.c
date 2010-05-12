@@ -1455,7 +1455,6 @@ _pnfs_direct_init_io(struct inode *inode, struct nfs_open_context *ctx,
 	unsigned int rwsize;
 
 	if (count <= 0 ||
-	    below_threshold(inode, count, iswrite) ||
 	    pnfs_update_layout(inode, ctx, count, loff, IOMODE_READ, NULL))
 		return;
 
