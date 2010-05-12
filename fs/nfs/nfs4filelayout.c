@@ -712,8 +712,7 @@ filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 	if (!pgio->pg_iswrite)
 		goto boundary;
 
-	if (pgio->pg_bsize != NFS_SERVER(pgio->pg_inode)->wsize &&
-	    pgio->pg_count > pgio->pg_threshold)
+	if (pgio->pg_bsize != NFS_SERVER(pgio->pg_inode)->wsize)
 		pgio->pg_bsize = NFS_SERVER(pgio->pg_inode)->wsize;
 
 boundary:
