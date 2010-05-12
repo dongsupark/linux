@@ -173,17 +173,15 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 
 	clp = tmp.nfs_client;
 
-	/* Set exchange id and create session flags and setup session */
+	/* Ask for only the EXCHGID4_FLAG_USE_PNFS_DS pNFS role */
 	dprintk("%s EXCHANGE_ID for clp %p\n", __func__, clp);
 	clp->cl_exchange_flags = EXCHGID4_FLAG_USE_PNFS_DS;
+
 	err = nfs4_recover_expired_lease(clp);
 	if (!err)
 		err = nfs4_check_client_ready(clp);
 	if (err)
 		goto out_put;
-
-	/* mask out the server's MDS capability flag */
-	clp->cl_exchange_flags &= ~EXCHGID4_FLAG_USE_PNFS_MDS;
 
 	if (!(clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_DS)) {
 		printk(KERN_INFO "ip:port %s is not a pNFS Data Server\n",
@@ -191,6 +189,12 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 		err = -ENODEV;
 		goto out_put;
 	}
+
+	/*
+	 * Mask the (possibly) returned EXCHGID4_FLAG_USE_PNFS_MDS pNFS role
+	 * The is_ds_only_session depends on this.
+	 */
+	clp->cl_exchange_flags &= ~EXCHGID4_FLAG_USE_PNFS_MDS;
 
 	/*
 	 * Set DS lease equal to the MDS lease, renewal is scheduled in
