@@ -40,9 +40,6 @@ int _pnfs_return_layout(struct inode *, struct nfs4_pnfs_layout_segment *,
 			enum pnfs_layoutreturn_type);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unmount_pnfs_layoutdriver(struct nfs_server *);
-int pnfs_use_read(struct inode *inode, ssize_t count);
-int pnfs_use_ds_io(struct list_head *, struct inode *, int);
-int pnfs_use_write(struct inode *inode, ssize_t count);
 enum pnfs_try_status _pnfs_try_to_write_data(struct nfs_write_data *,
 					     const struct rpc_call_ops *, int);
 enum pnfs_try_status _pnfs_try_to_read_data(struct nfs_read_data *,

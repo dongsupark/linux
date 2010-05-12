@@ -1272,49 +1272,6 @@ out:
 	return status;
 }
 
-size_t
-pnfs_getthreshold(struct inode *inode, int iswrite)
-{
-	struct nfs_server *nfss = NFS_SERVER(inode);
-	struct nfs_inode *nfsi = NFS_I(inode);
-	ssize_t threshold = 0;
-
-	if (!pnfs_enabled_sb(nfss) ||
-	    !nfss->pnfs_curr_ld->ld_policy_ops)
-		goto out;
-
-	if (iswrite && nfss->pnfs_curr_ld->ld_policy_ops->get_write_threshold) {
-		threshold = nfss->pnfs_curr_ld->ld_policy_ops->
-				get_write_threshold(&nfsi->layout, inode);
-		goto out;
-	}
-
-	if (!iswrite && nfss->pnfs_curr_ld->ld_policy_ops->get_read_threshold) {
-		threshold = nfss->pnfs_curr_ld->ld_policy_ops->
-				get_read_threshold(&nfsi->layout, inode);
-	}
-out:
-	return threshold;
-}
-
-/*
- * Ask the layout driver for the request size at which pNFS should be used
- * or standard NFSv4 I/O.  Writing directly to the NFSv4 server can
- * improve performance through its singularity and async behavior to
- * the underlying parallel file system.
- */
-static int
-below_threshold(struct inode *inode, size_t req_size, int iswrite)
-{
-	ssize_t threshold;
-
-	threshold = pnfs_getthreshold(inode, iswrite);
-	if ((ssize_t)req_size <= threshold)
-		return 1;
-	else
-		return 0;
-}
-
 void
 readahead_range(struct inode *inode, struct list_head *pages, loff_t *offset,
 		size_t *count)
@@ -1508,61 +1465,6 @@ pnfs_update_layout_commit(struct inode *inode,
 				IOMODE_RW,
 				NULL);
 	dprintk("%s  virt update status %d\n", __func__, status);
-}
-
-/* This is utilized in the paging system to determine if
- * it should use the NFSv4 or pNFS read path.
- * If count < 0, we do not check the I/O size.
- */
-int
-pnfs_use_read(struct inode *inode, ssize_t count)
-{
-	struct nfs_server *nfss = NFS_SERVER(inode);
-
-	/* Use NFSv4 I/O if there is no layout driver OR
-	 * count is below the threshold.
-	 */
-	if (!pnfs_enabled_sb(nfss) ||
-	    (count >= 0 && below_threshold(inode, count, 0)))
-		return 0;
-
-	return 1; /* use pNFS I/O */
-}
-
-/* Called only from pnfs4 nfs_rpc_ops => a layout driver is loaded */
-int
-pnfs_use_ds_io(struct list_head *head, struct inode *inode, int io)
-{
-	struct nfs_page	*req;
-	struct list_head *pos, *tmp;
-	int count = 0;
-
-	list_for_each_safe(pos, tmp, head) {
-		req = nfs_list_entry(head->next);
-		count += req->wb_bytes;
-	}
-	if (count >= 0 && below_threshold(inode, count, io))
-		return 0;
-	return 1; /* use pNFS data server I/O */
-}
-
-/* This is utilized in the paging system to determine if
- * it should use the NFSv4 or pNFS write path.
- * If count < 0, we do not check the I/O size.
- */
-int
-pnfs_use_write(struct inode *inode, ssize_t count)
-{
-	struct nfs_server *nfss = NFS_SERVER(inode);
-
-	/* Use NFSv4 I/O if there is no layout driver OR
-	 * count is below the threshold.
-	 */
-	if (!pnfs_enabled_sb(nfss) ||
-	    (count >= 0 && below_threshold(inode, count, 1)))
-		return 0;
-
-	return 1; /* use pNFS I/O */
 }
 
 static int

@@ -182,12 +182,6 @@ struct layoutdriver_policy_operations {
 
 	/* test for nfs page cache coalescing */
 	int (*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
-
-	/* Read requests under this value are sent to the NFSv4 server */
-	ssize_t (*get_read_threshold) (struct pnfs_layout_type *, struct inode *);
-
-	/* Write requests under this value are sent to the NFSv4 server */
-	ssize_t (*get_write_threshold) (struct pnfs_layout_type *, struct inode *);
 };
 
 /* Should the full nfs rpc cleanup code be used after io */
