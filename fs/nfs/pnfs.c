@@ -1874,7 +1874,7 @@ _pnfs_try_to_commit(struct nfs_write_data *data,
 {
 	struct inode *inode = data->inode;
 
-	if (!pnfs_use_write(inode, -1)) {
+	if (!pnfs_enabled_sb(NFS_SERVER(inode))) {
 		dprintk("%s: Not using pNFS I/O\n", __func__);
 		return PNFS_NOT_ATTEMPTED;
 	} else {
