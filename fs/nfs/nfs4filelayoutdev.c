@@ -128,8 +128,6 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 	struct rpc_clnt 	*mds_clnt = mds_srv->client;
 	struct nfs_client	*clp = mds_srv->nfs_client;
 	struct sockaddr		*mds_addr;
-	char			ip_addr[16];
-	int			addrlen;
 	int err = 0;
 
 	dprintk("--> %s ip:port %s au_flavor %d\n", __func__,
@@ -156,32 +154,16 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 		}
 		goto out;
 	}
-	/* Set timeout to the mds rpc clnt value.
-	 * XXX - find the correct authflavor....
-	 *
-	 * Fake a client ipaddr (used for sessionid) with hostname
-	 * Use hostname since it might be more unique than ipaddr (which
-	 * could be set to the loopback 127.0.0/1.1
-	 *
-	 * XXX: Should sessions continue to use the cl_ipaddr field?
-	 */
-	addrlen = strnlen(utsname()->nodename, sizeof(utsname()->nodename));
-	if (addrlen > sizeof(ip_addr))
-		addrlen = sizeof(ip_addr);
-	memcpy(ip_addr, utsname()->nodename, addrlen);
-
-	/* XXX need a non-nfs_client struct interface to set up
-	 * data server sessions
-	 *
-	 * tmp: nfs4_set_client sets the nfs_server->nfs_client.
-	 *
-	 * We specify a retrans and timeout interval equual to MDS. ??
+	/*
+	 * Set a retrans, timeout interval, and authflavor equual to the MDS
+	 * values. Use the MDS nfs_client cl_ipaddr field so as to use the
+	 * same co_ownerid as the MDS.
 	 */
 	err = nfs4_set_client(&tmp,
 			      mds_srv->nfs_client->cl_hostname,
 			      (struct sockaddr *)&sin,
 			      sizeof(struct sockaddr),
-			      ip_addr,
+			      mds_srv->nfs_client->cl_ipaddr,
 			      mds_clnt->cl_auth->au_flavor,
 			      IPPROTO_TCP,
 			      mds_clnt->cl_xprt->timeout,
