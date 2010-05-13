@@ -852,7 +852,7 @@ static ssize_t _write_done(struct objio_state *ios)
 	if (likely(!ret)) {
 		/* FIXME: should be based on the OSD's persistence model
 		 * See OSD2r05 Section 4.13 Data persistence model */
-		ios->ol_state.committed = NFS_FILE_SYNC;
+		ios->ol_state.committed = NFS_UNSTABLE; //NFS_FILE_SYNC;
 		status = ios->length;
 	} else {
 		status = ret;
