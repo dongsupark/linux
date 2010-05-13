@@ -287,15 +287,30 @@ objlayout_io_set_result(struct objlayout_io_state *state, unsigned index,
 	}
 }
 
+static void _rpc_commit_complete(struct work_struct *work)
+{
+	struct rpc_task *task;
+	struct nfs_write_data *wdata;
+
+	dprintk("%s enter\n", __func__);
+	task = container_of(work, struct rpc_task, u.tk_work);
+	wdata = container_of(task, struct nfs_write_data, task);
+
+	pnfs_client_ops->nfs_commit_complete(wdata);
+}
+
 /*
  * Commit data remotely on OSDs
  */
 enum pnfs_try_status
 objlayout_commit(struct pnfs_layout_type *pnfslay,
 		 int sync,
-		 struct nfs_write_data *data)
+		 struct nfs_write_data *wdata)
 {
 	int status = PNFS_ATTEMPTED;
+
+	INIT_WORK(&wdata->task.u.tk_work, _rpc_commit_complete);
+	schedule_work(&wdata->task.u.tk_work);
 	dprintk("%s: Return %d\n", __func__, status);
 	return status;
 }
