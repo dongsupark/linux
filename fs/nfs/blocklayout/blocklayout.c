@@ -765,7 +765,7 @@ bl_initialize_mountpoint(struct nfs_server *server, const struct nfs_fh *fh)
 	struct pnfs_mount_type *mtype = NULL;
 	struct pnfs_devicelist *dlist = NULL;
 	struct pnfs_block_dev *bdev;
-	LIST_HEAD(scsi_disklist);
+	LIST_HEAD(block_disklist);
 	int status, i;
 
 	dprintk("%s enter\n", __func__);
@@ -783,10 +783,10 @@ bl_initialize_mountpoint(struct nfs_server *server, const struct nfs_fh *fh)
 	spin_lock_init(&b_mt_id->bm_lock);
 	INIT_LIST_HEAD(&b_mt_id->bm_devlist);
 
-	/* Construct a list of all visible scsi disks that have not been
+	/* Construct a list of all visible block disks that have not been
 	 * claimed.
 	 */
-	status =  nfs4_blk_create_scsi_disk_list(&scsi_disklist);
+	status =  nfs4_blk_create_block_disk_list(&block_disklist);
 	if (status < 0)
 		goto out_error;
 
@@ -804,13 +804,13 @@ bl_initialize_mountpoint(struct nfs_server *server, const struct nfs_fh *fh)
 		/* For each device returned in dlist, call GETDEVICEINFO, and
 		 * decode the opaque topology encoding to create a flat
 		 * volume topology, matching VOLUME_SIMPLE disk signatures
-		 * to disks in the visible scsi disk list.
+		 * to disks in the visible block disk list.
 		 * Construct an LVM meta device from the flat volume topology.
 		 */
 		for (i = 0; i < dlist->num_devs; i++) {
 			bdev = nfs4_blk_get_deviceinfo(server, fh,
 						     &dlist->dev_id[i],
-						     &scsi_disklist);
+						     &block_disklist);
 			if (!bdev)
 				goto out_error;
 			spin_lock(&b_mt_id->bm_lock);
@@ -823,7 +823,7 @@ bl_initialize_mountpoint(struct nfs_server *server, const struct nfs_fh *fh)
 	status = 0;
  out_return:
 	kfree(dlist);
-	nfs4_blk_destroy_disk_list(&scsi_disklist);
+	nfs4_blk_destroy_disk_list(&block_disklist);
 	return status;
 
  out_error:

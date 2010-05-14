@@ -32,15 +32,14 @@
 #include <linux/module.h>
 #include <linux/buffer_head.h> /* __bread */
 
-#include <scsi/scsi.h>
-#include <scsi/scsi_device.h>
-#include <scsi/scsi_host.h>
+#include <linux/genhd.h>
+#include <linux/blkdev.h>
 
 #include "blocklayout.h"
 
 #define NFSDBG_FACILITY         NFSDBG_PNFS_LD
 
-#define MAX_VOLS  256  /* Maximum number of SCSI disks.  Totally arbitrary */
+#define MAX_VOLS  256  /* Maximum number of block disks.  Totally arbitrary */
 
 uint32_t *blk_overflow(uint32_t *p, uint32_t *end, size_t nbytes)
 {
@@ -78,7 +77,7 @@ int nfs4_blkdev_put(struct block_device *bdev)
 	return blkdev_put(bdev, FMODE_READ);
 }
 
-/* Add a visible, claimed (by us!) scsi disk to the device list */
+/* Add a visible, claimed (by us!) block disk to the device list */
 static int alloc_add_disk(struct block_device *blk_dev, struct list_head *dlist)
 {
 	struct visible_block_device *vis_dev;
@@ -96,17 +95,16 @@ static int alloc_add_disk(struct block_device *blk_dev, struct list_head *dlist)
 	return 0;
 }
 
-/* Walk the list of scsi_devices. Add disks that can be opened and claimed
+/* Walk the list of block_devices. Add disks that can be opened and claimed
  * to the device list
  */
 static int
-nfs4_blk_add_scsi_disk(struct Scsi_Host *shost,
+nfs4_blk_add_block_disk(struct device *cdev,
 		       int index, struct list_head *dlist)
 {
 	static char *claim_ptr = "I belong to pnfs block driver";
 	struct block_device *bdev;
 	struct gendisk *gd;
-	struct scsi_device *sdev;
 	unsigned int major, minor, ret = 0;
 	dev_t dev;
 
@@ -115,62 +113,49 @@ nfs4_blk_add_scsi_disk(struct Scsi_Host *shost,
 		dprintk("%s MAX_VOLS hit\n", __func__);
 		return -ENOSPC;
 	}
-	dprintk("%s 1 \n", __func__);
-	index--;
-	shost_for_each_device(sdev, shost) {
-		dprintk("%s 2\n", __func__);
-		/* Need to do this check before bumping index */
-		if (sdev->type != TYPE_DISK)
-			continue;
-		dprintk("%s 3 index %d \n", __func__, index);
-		if (++index >= MAX_VOLS) {
-			scsi_device_put(sdev);
-			break;
-		}
-		major = (!(index >> 4) ? SCSI_DISK0_MAJOR :
-			 SCSI_DISK1_MAJOR-1 + (index  >> 4));
-		minor =  ((index << 4) & 255);
+	gd = dev_to_disk(cdev);
+	if (gd == NULL || get_capacity(gd) == 0 ||
+	    (gd->flags & GENHD_FL_SUPPRESS_PARTITION_INFO)) /* Skip ramdisks */
+		goto out;
 
-		dprintk("%s SCSI device %d:%d \n", __func__, major, minor);
-
-		dev = MKDEV(major, minor);
-		bdev = nfs4_blkdev_get(dev);
-		if (!bdev) {
-			dprintk("%s: failed to open device %d:%d\n",
-					__func__, major, minor);
-			continue;
-		}
-		gd = bdev->bd_disk;
-
-		dprintk("%s 4\n", __func__);
-
-		if (bd_claim(bdev, claim_ptr)) {
-			dprintk("%s: failed to claim device %d:%d\n",
-				__func__, gd->major, gd->first_minor);
-			blkdev_put(bdev, FMODE_READ);
-			continue;
-		}
-
-		ret = alloc_add_disk(bdev, dlist);
-		if (ret < 0)
-			goto out_err;
-		dprintk("%s ADDED DEVICE capacity %ld, bd_block_size %d\n",
-					__func__,
-					(unsigned long)get_capacity(gd),
-					bdev->bd_block_size);
-
+	dev = cdev->devt;
+	major = MAJOR(dev);
+	minor = MINOR(dev);
+	bdev = nfs4_blkdev_get(dev);
+	if (!bdev) {
+		dprintk("%s: failed to open device %d:%d\n",
+			__func__, major, minor);
+		goto out;
 	}
+
+	if (bd_claim(bdev, claim_ptr)) {
+		dprintk("%s: failed to claim device %d:%d\n",
+			 __func__, major, minor);
+		blkdev_put(bdev, FMODE_READ);
+		goto out;
+	}
+
+	ret = alloc_add_disk(bdev, dlist);
+	if (ret < 0)
+		goto out_err;
 	index++;
+	dprintk("%s ADDED DEVICE %d:%d capacity %ld, bd_block_size %d\n",
+		__func__, major, minor,
+		(unsigned long)get_capacity(gd),
+		bdev->bd_block_size);
+
+out:
 	dprintk("%s returns index %d \n", __func__, index);
 	return index;
 
 out_err:
-	dprintk("%s Can't add disk to list. ERROR: %d\n", __func__, ret);
+	dprintk("%s Can't add disk %d:%d to list. ERROR: %d\n",
+			__func__, major, minor, ret);
 	nfs4_blkdev_put(bdev);
 	return ret;
 }
 
-/* Destroy the temporary scsi disk list */
+/* Destroy the temporary block disk list */
 void nfs4_blk_destroy_disk_list(struct list_head *dlist)
 {
 	struct visible_block_device *vis_dev;
@@ -189,20 +174,18 @@ void nfs4_blk_destroy_disk_list(struct list_head *dlist)
 	}
 }
 
-struct nfs4_blk_scsi_disk_list_ctl {
+struct nfs4_blk_block_disk_list_ctl {
 	struct list_head *dlist;
 	int index;
 };
 
-static int nfs4_blk_iter_scsi_disk_list(struct device *cdev, void *data)
+static int nfs4_blk_iter_block_disk_list(struct device *cdev, void *data)
 {
-	struct Scsi_Host *shost;
-	struct nfs4_blk_scsi_disk_list_ctl *lc = data;
+	struct nfs4_blk_block_disk_list_ctl *lc = data;
 	int ret;
 
 	dprintk("%s enter\n", __func__);
-	shost = class_to_shost(cdev);
-	ret = nfs4_blk_add_scsi_disk(shost, lc->index, lc->dlist);
+	ret = nfs4_blk_add_block_disk(cdev, lc->index, lc->dlist);
 	dprintk("%s 1 ret %d\n", __func__, ret);
 	if (ret >= 0) {
 		lc->index = ret;
@@ -212,22 +195,21 @@ static int nfs4_blk_iter_scsi_disk_list(struct device *cdev, void *data)
 }
 
 /*
- * Create a temporary list of all SCSI disks host can see, and that have not
+ * Create a temporary list of all block disks host can see, and that have not
  * yet been claimed.
- * shost_class: list of all registered scsi_hosts
+ * block_class: list of all registered block disks.
  * returns -errno on error, and #of devices found on success.
- * XXX Loosely emulate scsi_host_lookup from scsi/host.c
 */
-int nfs4_blk_create_scsi_disk_list(struct list_head *dlist)
+int nfs4_blk_create_block_disk_list(struct list_head *dlist)
 {
-	struct nfs4_blk_scsi_disk_list_ctl lc = {
+	struct nfs4_blk_block_disk_list_ctl lc = {
 		.dlist = dlist,
 		.index = 0,
 	};
 
 	dprintk("%s enter\n", __func__);
-	return class_for_each_device(&shost_class, NULL,
-				     &lc, nfs4_blk_iter_scsi_disk_list);
+	return class_for_each_device(&block_class, NULL,
+				     &lc, nfs4_blk_iter_block_disk_list);
 }
 /* We are given an array of XDR encoded array indices, each of which should
  * refer to a previously decoded device.  Translate into a list of pointers
@@ -361,7 +343,7 @@ out_err:
 
 /*
  * map_sig_to_device()
- * Given a signature, walk the list of visible scsi disks searching for
+ * Given a signature, walk the list of visible block disks searching for
  * a match. Returns True if mapping was done, False otherwise.
  *
  * While we're at it, fill in the vol->bv_size.
