@@ -44,7 +44,6 @@
 #define SetPagePnfsErr(page)	set_bit(PG_pnfserr, &(page)->flags)
 #define ClearPagePnfsErr(page)	clear_bit(PG_pnfserr, &(page)->flags)
 
-extern struct class shost_class; /* exported from drivers/scsi/hosts.c */
 extern int dm_dev_create(struct dm_ioctl *param); /* from dm-ioctl.c */
 extern int dm_dev_remove(struct dm_ioctl *param); /* from dm-ioctl.c */
 extern int dm_do_resume(struct dm_ioctl *param);
@@ -250,7 +249,7 @@ struct pnfs_block_dev *nfs4_blk_decode_device(struct nfs_server *server,
 					      struct list_head *sdlist);
 int nfs4_blk_process_layoutget(struct pnfs_layout_type *lo,
 			       struct nfs4_pnfs_layoutget_res *lgr);
-int nfs4_blk_create_scsi_disk_list(struct list_head *);
+int nfs4_blk_create_block_disk_list(struct list_head *);
 void nfs4_blk_destroy_disk_list(struct list_head *);
 /* blocklayoutdm.c */
 struct pnfs_block_dev *nfs4_blk_init_metadev(struct nfs_server *server,
