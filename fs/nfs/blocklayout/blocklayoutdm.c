@@ -257,7 +257,7 @@ static int nfs4_blk_resolve(int root, struct pnfs_blk_volume *vols,
  * Create an LVM dm device table that represents the volume topology returned
  * by GETDEVICELIST or GETDEVICEINFO.
  *
- * vols:  topology with VOLUME_SIMPLEs mapped to visable scsi disks.
+ * vols:  topology with VOLUME_SIMPLEs mapped to visable block disks.
  * size:  number of volumes in vols.
  */
 int nfs4_blk_flatten(struct pnfs_blk_volume *vols, int size,
