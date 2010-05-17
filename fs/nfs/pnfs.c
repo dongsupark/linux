@@ -1497,6 +1497,24 @@ pnfs_call_done(struct pnfs_call_data *pdata, struct rpc_task *task, void *data)
  * cleanup.
  */
 static void
+pnfs_write_retry(struct work_struct *work)
+{
+	struct rpc_task *task;
+	struct nfs_write_data *wdata;
+	struct nfs4_pnfs_layout_segment range;
+
+	dprintk("%s enter\n", __func__);
+	task = container_of(work, struct rpc_task, u.tk_work);
+	wdata = container_of(task, struct nfs_write_data, task);
+	range.iomode = IOMODE_RW;
+	range.offset = wdata->args.offset;
+	range.length = wdata->args.count;
+	_pnfs_return_layout(wdata->inode, &range, NULL, RETURN_FILE, true);
+	pnfs_initiate_write(wdata, NFS_CLIENT(wdata->inode),
+			    wdata->pdata.call_ops, wdata->pdata.how);
+}
+
+static void
 pnfs_writeback_done(struct nfs_write_data *data)
 {
 	struct pnfs_call_data *pdata = &data->pdata;
@@ -1516,16 +1534,8 @@ pnfs_writeback_done(struct nfs_write_data *data)
 	}
 
 	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
-		struct nfs4_pnfs_layout_segment range = {
-			.iomode = IOMODE_RW,
-			.offset = data->args.offset,
-			.length = data->args.count,
-		};
-		dprintk("%s: retrying\n", __func__);
-		_pnfs_return_layout(data->inode, &range, NULL, RETURN_FILE,
-				    true);
-		pnfs_initiate_write(data, NFS_CLIENT(data->inode),
-				    pdata->call_ops, pdata->how);
+		INIT_WORK(&data->task.u.tk_work, pnfs_write_retry);
+		queue_work(nfsiod_workqueue, &data->task.u.tk_work);
 	}
 }
 
@@ -1641,6 +1651,24 @@ out:
  * read_pagelist is done
  */
 static void
+pnfs_read_retry(struct work_struct *work)
+{
+	struct rpc_task *task;
+	struct nfs_read_data *rdata;
+	struct nfs4_pnfs_layout_segment range;
+
+	dprintk("%s enter\n", __func__);
+	task = container_of(work, struct rpc_task, u.tk_work);
+	rdata = container_of(task, struct nfs_read_data, task);
+	range.iomode = IOMODE_RW;
+	range.offset = rdata->args.offset;
+	range.length = rdata->args.count;
+	_pnfs_return_layout(rdata->inode, &range, NULL, RETURN_FILE, true);
+	pnfs_initiate_read(rdata, NFS_CLIENT(rdata->inode),
+			   rdata->pdata.call_ops);
+}
+
+static void
 pnfs_read_done(struct nfs_read_data *data)
 {
 	struct pnfs_call_data *pdata = &data->pdata;
@@ -1648,16 +1676,8 @@ pnfs_read_done(struct nfs_read_data *data)
 	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
 
 	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
-		struct nfs4_pnfs_layout_segment range = {
-			.iomode = IOMODE_ANY,
-			.offset = data->args.offset,
-			.length = data->args.count,
-		};
-		dprintk("%s: retrying\n", __func__);
-		_pnfs_return_layout(data->inode, &range, NULL, RETURN_FILE,
-				    true);
-		pnfs_initiate_read(data, NFS_CLIENT(data->inode),
-				   pdata->call_ops);
+		INIT_WORK(&data->task.u.tk_work, pnfs_read_retry);
+		queue_work(nfsiod_workqueue, &data->task.u.tk_work);
 	}
 }
 
