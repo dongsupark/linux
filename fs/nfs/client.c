@@ -888,7 +888,7 @@ static void nfs4_init_pnfs(struct nfs_server *server, struct nfs_fsinfo *fsinfo)
 static void nfs4_uninit_pnfs(struct nfs_server *server)
 {
 #if defined(CONFIG_NFS_V4_1)
-	if (nfs4_has_session(server->nfs_client))
+	if (server->nfs_client && nfs4_has_session(server->nfs_client))
 		unmount_pnfs_layoutdriver(server);
 #endif /* CONFIG_NFS_V4_1 */
 }
