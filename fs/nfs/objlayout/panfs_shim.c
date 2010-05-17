@@ -663,18 +663,6 @@ panlayout_get_blocksize(void)
 	return sz;
 }
 
-/*
- * Get the I/O threshold
- */
-static ssize_t
-panlayout_get_io_threshold(struct pnfs_layout_type *layoutid,
-			   struct inode *inode)
-{
-	ssize_t sz = -1;
-	dprintk("%s: Return %Zd\n", __func__, sz);
-	return sz;
-}
-
 static struct layoutdriver_policy_operations panlayout_policy_operations = {
 /*
  * Don't gather across stripes, but rather gather (coalesce) up to
@@ -686,8 +674,6 @@ static struct layoutdriver_policy_operations panlayout_policy_operations = {
 				 PNFS_LAYOUTRET_ON_SETATTR,
 	.get_stripesize        = panlayout_get_stripesize,
 	.get_blocksize         = panlayout_get_blocksize,
-	.get_read_threshold    = panlayout_get_io_threshold,
-	.get_write_threshold   = panlayout_get_io_threshold,
 };
 
 #define PNFS_LAYOUT_PANOSD (NFS4_PNFS_PRIVATE_LAYOUT | LAYOUT_OSD2_OBJECTS)
