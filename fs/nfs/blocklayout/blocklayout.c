@@ -1105,13 +1105,6 @@ bl_get_stripesize(struct pnfs_layout_type *lo)
 	return 0;
 }
 
-static ssize_t
-bl_get_io_threshold(struct pnfs_layout_type *lo, struct inode *inode)
-{
-	dprintk("%s enter\n", __func__);
-	return 0;
-}
-
 /* This is called by nfs_can_coalesce_requests via nfs_pageio_do_add_request.
  * Should return False if there is a reason requests can not be coalesced,
  * otherwise, should default to returning True.
@@ -1162,8 +1155,6 @@ static struct layoutdriver_io_operations blocklayout_io_operations = {
 
 static struct layoutdriver_policy_operations blocklayout_policy_operations = {
 	.get_stripesize			= bl_get_stripesize,
-	.get_read_threshold		= bl_get_io_threshold,
-	.get_write_threshold		= bl_get_io_threshold,
 	.pg_test			= bl_pg_test,
 	.do_flush			= bl_do_flush,
 };
