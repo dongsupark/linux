@@ -80,6 +80,12 @@ has_layout(struct nfs_inode *nfsi)
 	return nfsi->layout.ld_data != NULL;
 }
 
+static inline bool
+layoutcommit_needed(struct nfs_inode *nfsi)
+{
+	return nfsi->lo_cred != NULL;
+}
+
 #endif /* CONFIG_NFS_V4_1 */
 
 struct pnfs_layout_segment {

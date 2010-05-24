@@ -1490,7 +1490,7 @@ static int nfs_commit_inode(struct inode *inode, int how)
 					nfs_wait_bit_killable,
 					TASK_KILLABLE);
 #ifdef CONFIG_NFS_V4_1
-		if (may_wait && NFS_I(inode)->layoutcommit_ctx) {
+		if (may_wait && layoutcommit_needed(NFS_I(inode))) {
 			error = pnfs_layoutcommit_inode(inode, 1);
 			if (error < 0)
 				return error;

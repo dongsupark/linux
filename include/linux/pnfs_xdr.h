@@ -86,7 +86,6 @@ struct pnfs_layoutcommit_data {
 	bool is_sync;
 	struct rpc_cred *cred;
 	struct nfs_fattr fattr;
-	struct nfs_open_context *ctx;
 	struct pnfs_layoutcommit_arg args;
 	struct pnfs_layoutcommit_res res;
 	int status;

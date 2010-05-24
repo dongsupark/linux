@@ -1110,7 +1110,7 @@ static int nfs_update_inode(struct inode *inode, struct nfs_fattr *fattr)
 	/*
 	 * file needs layout commit, server attributes may be stale
 	 */
-	if (nfsi->layoutcommit_ctx && nfsi->change_attr >= fattr->change_attr) {
+	if (layoutcommit_needed(nfsi) && nfsi->change_attr >= fattr->change_attr) {
 		dprintk("NFS: %s: layoutcommit is needed for file %s/%ld\n",
 			__func__, inode->i_sb->s_id, inode->i_ino);
 		return 0;
@@ -1331,7 +1331,7 @@ static void pnfs_alloc_init_inode(struct nfs_inode *nfsi)
 	nfsi->pnfs_layout_state = 0;
 	memset(&nfsi->layout.stateid, 0, NFS4_STATEID_SIZE);
 	nfsi->layout.roc_iomode = 0;
-	nfsi->layoutcommit_ctx = NULL;
+	nfsi->lo_cred = NULL;
 	nfsi->pnfs_write_begin_pos = 0;
 	nfsi->pnfs_write_end_pos = 0;
 #endif /* CONFIG_NFS_V4_1 */
