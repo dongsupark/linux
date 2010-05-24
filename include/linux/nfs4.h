@@ -564,7 +564,7 @@ enum state_protect_how4 {
 };
 
 enum pnfs_layouttype {
-	LAYOUT_NFSV4_FILES  = 1,
+	LAYOUT_NFSV4_1_FILES  = 1,
 	LAYOUT_OSD2_OBJECTS = 2,
 	LAYOUT_BLOCK_VOLUME = 3,
 };
