@@ -1553,6 +1553,7 @@ int nfs_write_inode(struct inode *inode, struct writeback_control *wbc)
  */
 int nfs_wb_all(struct inode *inode)
 {
+	int ret;
 	struct writeback_control wbc = {
 		.sync_mode = WB_SYNC_ALL,
 		.nr_to_write = LONG_MAX,
@@ -1560,7 +1561,12 @@ int nfs_wb_all(struct inode *inode)
 		.range_end = LLONG_MAX,
 	};
 
-	return sync_inode(inode, &wbc);
+	ret = sync_inode(inode, &wbc);
+#ifdef CONFIG_NFS_V4_1
+	if (!ret && layoutcommit_needed(NFS_I(inode)))
+		ret = pnfs_layoutcommit_inode(inode, 1);
+#endif
+	return ret;
 }
 
 int nfs_wb_page_cancel(struct inode *inode, struct page *page)
