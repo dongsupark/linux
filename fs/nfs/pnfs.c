@@ -145,21 +145,19 @@ find_pnfs(u32 id, struct pnfs_module **module) {
 	return 0;
 }
 
-/* Set context to indicate we require a layoutcommit
+/* Set lo_cred to indicate we require a layoutcommit
  * If we don't even have a layout, we don't need to commit it.
  */
 void
 pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx)
 {
-	dprintk("%s: has_layout=%d layoutcommit_ctx=%p ctx=%p\n", __func__,
-		has_layout(nfsi), nfsi->layoutcommit_ctx, ctx);
+	dprintk("%s: has_layout=%d ctx=%p\n", __func__, has_layout(nfsi), ctx);
 	spin_lock(&nfsi->lo_lock);
-	if (has_layout(nfsi) && !nfsi->layoutcommit_ctx) {
-		nfsi->layoutcommit_ctx = get_nfs_open_context(ctx);
+	if (has_layout(nfsi) && !layoutcommit_needed(nfsi)) {
+		nfsi->lo_cred = get_rpccred(ctx->state->owner->so_cred);
 		nfsi->change_attr++;
 		spin_unlock(&nfsi->lo_lock);
-		dprintk("%s: Set layoutcommit_ctx=%p\n", __func__,
-			nfsi->layoutcommit_ctx);
+		dprintk("%s: Set layoutcommit\n", __func__);
 		return;
 	}
 	spin_unlock(&nfsi->lo_lock);
@@ -761,7 +759,7 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 				!pnfs_return_layout_barrier(nfsi, &arg));
 		}
 
-		if (nfsi->layoutcommit_ctx) {
+		if (layoutcommit_needed(nfsi)) {
 			status = pnfs_layoutcommit_inode(ino, wait);
 			if (status) {
 				dprintk("%s: layoutcommit failed, status=%d. "
@@ -2144,16 +2142,9 @@ pnfs_layoutcommit_done(struct pnfs_layoutcommit_data *data)
 
 	dprintk("%s: (status %d)\n", __func__, data->status);
 
-	/* TODO: For now, set an error in the open context (just like
-	 * if a commit failed) We may want to do more, much more, like
-	 * replay all writes through the NFSv4
-	 * server, or something.
-	 */
-	if (data->status < 0) {
+	if (data->status < 0)
 		printk(KERN_ERR "%s, Layoutcommit Failed! = %d\n",
 		       __func__, data->status);
-		data->ctx->error = data->status;
-	}
 
 	/* TODO: Maybe we should avoid this by allowing the layout driver
 	 * to directly xdr its layout on the wire.
@@ -2163,9 +2154,7 @@ pnfs_layoutcommit_done(struct pnfs_layoutcommit_data *data)
 							&nfsi->layout,
 							&data->args,
 							data->status);
-
-	/* release the open_context acquired in pnfs_writeback_done */
-	put_nfs_open_context(data->ctx);
+	put_rpccred(data->cred);
 }
 
 /*
@@ -2230,24 +2219,27 @@ pnfs_layoutcommit_inode(struct inode *inode, int sync)
 		return -ENOMEM;
 
 	spin_lock(&nfsi->lo_lock);
-	if (!nfsi->layoutcommit_ctx)
+	if (!layoutcommit_needed(nfsi))
 		goto out_unlock;
 
 	data->args.inode = inode;
-	data->cred  = nfsi->layoutcommit_ctx->cred;
-	data->ctx = nfsi->layoutcommit_ctx;
+	data->cred = nfsi->lo_cred;
 
 	/* Set up layout commit args*/
 	status = pnfs_layoutcommit_setup(data, sync);
-	if (status)
-		goto out_unlock;
 
 	/* Clear layoutcommit properties in the inode so
 	 * new lc info can be generated
 	 */
 	nfsi->pnfs_write_begin_pos = 0;
 	nfsi->pnfs_write_end_pos = 0;
-	nfsi->layoutcommit_ctx = NULL;
+	nfsi->lo_cred = NULL;
+
+	if (status) {
+		/* The layout driver failed to setup the layoutcommit */
+		put_rpccred(data->cred);
+		goto out_unlock;
+	}
 
 	/* release lock on pnfs layoutcommit attrs */
 	spin_unlock(&nfsi->lo_lock);

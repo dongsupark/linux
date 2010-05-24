@@ -100,6 +100,12 @@ has_layout(struct nfs_inode *nfsi)
 	return nfsi->layout.ld_data != NULL;
 }
 
+static inline bool
+layoutcommit_needed(struct nfs_inode *nfsi)
+{
+	return nfsi->lo_cred != NULL;
+}
+
 struct pnfs_layout_segment {
 	struct list_head fi_list;
 	struct nfs4_pnfs_layout_segment range;
