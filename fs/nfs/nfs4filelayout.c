@@ -746,8 +746,8 @@ struct layoutdriver_policy_operations filelayout_policy_operations = {
 };
 
 struct pnfs_layoutdriver_type filelayout_type = {
-	.id = LAYOUT_NFSV4_FILES,
-	.name = "LAYOUT_NFSV4_FILES",
+	.id = LAYOUT_NFSV4_1_FILES,
+	.name = "LAYOUT_NFSV4_1_FILES",
 	.ld_io_ops = &filelayout_io_operations,
 	.ld_policy_ops = &filelayout_policy_operations,
 };

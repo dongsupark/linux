@@ -514,7 +514,7 @@ get_device_info(struct inode *inode, struct pnfs_deviceid *dev_id)
 		goto out_free;
 
 	memcpy(&pdev->dev_id, dev_id, NFS4_PNFS_DEVICEID4_SIZE);
-	pdev->layout_type = LAYOUT_NFSV4_FILES;
+	pdev->layout_type = LAYOUT_NFSV4_1_FILES;
 	pdev->pages = pages;
 	pdev->pgbase = 0;
 	pdev->pglen = PAGE_SIZE * max_pages;
