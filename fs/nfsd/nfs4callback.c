@@ -264,6 +264,7 @@ encode_cb_recall(struct xdr_stream *xdr, struct nfs4_delegation *dp,
 	RESERVE_SPACE(4);
 	WRITE32(OP_CB_RECALL);
 	encode_stateid(xdr, &dp->dl_stateid);
+	RESERVE_SPACE(8 + (XDR_QUADLEN(len) << 2));
 	WRITE32(0); /* truncate optimization not implemented */
 	WRITE32(len);
 	WRITEMEM(&dp->dl_fh.fh_base, len);
