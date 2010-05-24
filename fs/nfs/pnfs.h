@@ -77,6 +77,8 @@ void _pnfs_direct_init_io(struct inode *inode, struct nfs_open_context *ctx,
 				     (srv)->pnfs_curr_ld->ld_policy_ops && \
 				     (srv)->pnfs_curr_ld->ld_policy_ops->opname)
 
+#define LAYOUT_NFSV4_1_FILES_MODULE "nfslayoutdriver"
+
 static inline int lo_fail_bit(u32 iomode)
 {
 	return iomode == IOMODE_RW ?

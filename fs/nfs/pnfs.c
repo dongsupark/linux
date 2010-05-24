@@ -203,12 +203,24 @@ unmount_pnfs_layoutdriver(struct nfs_server *nfss)
 void
 set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
 {
-	struct pnfs_module *mod;
+	struct pnfs_module *mod = NULL;
 
 	if (server->pnfs_curr_ld)
 		return;
 
-	if (id > 0 && find_pnfs(id, &mod)) {
+	if (!find_pnfs(id, &mod)) {
+		switch (id) {
+		case LAYOUT_NFSV4_1_FILES:
+			request_module(LAYOUT_NFSV4_1_FILES_MODULE);
+			break;
+		default:
+			goto out_not_found;
+		};
+
+		find_pnfs(id, &mod);
+	}
+
+	if (mod) {
 		server->pnfs_curr_ld = mod->pnfs_ld_type;
 		if (mod->pnfs_ld_type->ld_io_ops->initialize_mountpoint(
 			server->nfs_client)) {
@@ -225,6 +237,7 @@ set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
 		return;
 	}
 
+out_not_found:
 	dprintk("%s: No pNFS module found for %u. ", __func__, id);
 out_err:
 	dprintk("Using NFSv4 I/O\n");
