@@ -57,7 +57,7 @@ extern struct spnfs *global_spnfs;
 int
 spnfs_layout_type(struct super_block *sb)
 {
-	return LAYOUT_NFSV4_FILES;
+	return LAYOUT_NFSV4_1_FILES;
 }
 
 enum nfsstat4
@@ -218,7 +218,7 @@ spnfs_layoutrecall(struct inode *inode, int type, u64 offset, u64 len)
 	}
 
 	lr.cbl_recall_type = type;
-	lr.cbl_seg.layout_type = LAYOUT_NFSV4_FILES;
+	lr.cbl_seg.layout_type = LAYOUT_NFSV4_1_FILES;
 	lr.cbl_seg.clientid = 0;
 	lr.cbl_seg.offset = offset;
 	lr.cbl_seg.length = len;
