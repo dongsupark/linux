@@ -171,7 +171,7 @@ static int nfsd4_pnfs_dlm_getdeviter(struct super_block *sb,
 				     u32 layout_type,
 				     struct nfsd4_pnfs_dev_iter_res *res)
 {
-	if (layout_type != LAYOUT_NFSV4_FILES) {
+	if (layout_type != LAYOUT_NFSV4_1_FILES) {
 		printk(KERN_ERR "%s: ERROR: layout type isn't 'file' "
 			"(type: %x)\n", __func__, layout_type);
 		return -ENOTSUPP;
@@ -199,7 +199,7 @@ static int nfsd4_pnfs_dlm_getdevinfo(struct super_block *sb,
 	char   *bufp;
 
 	err = -ENOTSUPP;
-	if (layout_type != LAYOUT_NFSV4_FILES) {
+	if (layout_type != LAYOUT_NFSV4_1_FILES) {
 		dprintk("%s: ERROR: layout type isn't 'file' "
 			"(type: %x)\n", __func__, layout_type);
 		return err;
@@ -343,7 +343,7 @@ static enum nfsstat4 nfsd4_pnfs_dlm_layoutget(struct inode *inode,
 	if (index < 0)
 		return NFS4ERR_LAYOUTUNAVAILABLE;
 
-	res->lg_seg.layout_type = LAYOUT_NFSV4_FILES;
+	res->lg_seg.layout_type = LAYOUT_NFSV4_1_FILES;
 	/* Always give out whole file layouts */
 	res->lg_seg.offset = 0;
 	res->lg_seg.length = NFS4_MAX_UINT64;
@@ -357,7 +357,7 @@ static enum nfsstat4 nfsd4_pnfs_dlm_layoutget(struct inode *inode,
 	}
 
 	/* Set file layout response args */
-	layout->lg_layout_type = LAYOUT_NFSV4_FILES;
+	layout->lg_layout_type = LAYOUT_NFSV4_1_FILES;
 	layout->lg_stripe_type = STRIPE_SPARSE;
 	layout->lg_commit_through_mds = false;
 	layout->lg_stripe_unit = get_stripe_unit(inode->i_sb->s_blocksize);
@@ -392,7 +392,7 @@ error:
 static int
 nfsd4_pnfs_dlm_layouttype(struct super_block *sb)
 {
-	return LAYOUT_NFSV4_FILES;
+	return LAYOUT_NFSV4_1_FILES;
 }
 
 /* For use by DLM cluster file systems exported by pNFSD */
