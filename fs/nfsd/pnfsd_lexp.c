@@ -31,7 +31,7 @@ size_t pnfs_lexp_addr_len;
 static int
 pnfsd_lexp_layout_type(struct super_block *sb)
 {
-	int ret = LAYOUT_NFSV4_FILES;
+	int ret = LAYOUT_NFSV4_1_FILES;
 	dprintk("<-- %s: return %d\n", __func__, ret);
 	return ret;
 }
@@ -43,7 +43,7 @@ pnfsd_lexp_get_device_iter(struct super_block *sb,
 {
 	dprintk("--> %s: sb=%p\n", __func__, sb);
 
-	BUG_ON(layout_type != LAYOUT_NFSV4_FILES);
+	BUG_ON(layout_type != LAYOUT_NFSV4_1_FILES);
 
 	res->gd_eof = 1;
 	if (res->gd_cookie)
@@ -72,7 +72,7 @@ pnfsd_lexp_get_device_info(struct super_block *sb,
 
 	dprintk("--> %s: sb=%p\n", __func__, sb);
 
-	BUG_ON(layout_type != LAYOUT_NFSV4_FILES);
+	BUG_ON(layout_type != LAYOUT_NFSV4_1_FILES);
 
 	memset(&fdev, '\0', sizeof(fdev));
 
@@ -138,7 +138,7 @@ pnfsd_lexp_layout_get(struct inode *inode,
 
 	dprintk("--> %s: inode=%p\n", __func__, inode);
 
-	res->lg_seg.layout_type = LAYOUT_NFSV4_FILES;
+	res->lg_seg.layout_type = LAYOUT_NFSV4_1_FILES;
 	res->lg_seg.offset = 0;
 	res->lg_seg.length = NFS4_MAX_UINT64;
 
@@ -149,7 +149,7 @@ pnfsd_lexp_layout_get(struct inode *inode,
 	}
 
 	/* Set file layout response args */
-	layout->lg_layout_type = LAYOUT_NFSV4_FILES;
+	layout->lg_layout_type = LAYOUT_NFSV4_1_FILES;
 	layout->lg_stripe_type = STRIPE_SPARSE;
 	layout->lg_commit_through_mds = true;
 	layout->lg_stripe_unit = get_stripe_unit(inode->i_sb->s_blocksize);
