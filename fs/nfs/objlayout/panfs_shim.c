@@ -421,9 +421,7 @@ panfs_shim_read_done(
 		rc = res_p->result;
 	if (rc == PAN_SUCCESS) {
 		status = res_p->length;
-		BUG_ON(state->ol_state.status < 0);
-		BUG_ON((pan_stor_len_t)state->ol_state.status !=
-		       state->u.read.res.length);
+		WARN_ON(status < 0);
 	} else {
 		status = -panfs_export_ops->convert_rc(rc);
 		dprintk("%s: pan_sam_read rc %d: status %Zd\n",
@@ -499,9 +497,8 @@ panfs_shim_write_done(
 	if (rc == PAN_SUCCESS) {
 		state->ol_state.committed = NFS_FILE_SYNC;
 		status = res_p->length;
-		BUG_ON(state->ol_state.status < 0);
-		BUG_ON((pan_stor_len_t)state->ol_state.status !=
-		       state->u.write.res.length);
+		WARN_ON(status < 0);
+
 		objlayout_add_delta_space_used(&state->ol_state,
 					       res_p->delta_capacity_used);
 	} else {
