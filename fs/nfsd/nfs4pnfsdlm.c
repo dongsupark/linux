@@ -46,12 +46,15 @@ struct dlm_device_entry {
 };
 
 static struct dlm_device_entry *
-nfsd4_find_pnfs_dlm_device(char *disk_name)
+_nfsd4_find_pnfs_dlm_device(char *disk_name)
 {
 	struct dlm_device_entry *dlm_pdev;
 
+	dprintk("--> %s  disk name %s\n", __func__, disk_name);
 	spin_lock(&dlm_device_list_lock);
 	list_for_each_entry(dlm_pdev, &dlm_device_list, dlm_dev_list) {
+		dprintk("%s Look for dlm_pdev %s\n", __func__,
+			dlm_pdev->disk_name);
 		if (!memcmp(dlm_pdev->disk_name, disk_name, strlen(disk_name))) {
 			spin_unlock(&dlm_device_list_lock);
 			return dlm_pdev;
@@ -59,6 +62,39 @@ nfsd4_find_pnfs_dlm_device(char *disk_name)
 	}
 	spin_unlock(&dlm_device_list_lock);
 	return NULL;
+}
+
+static struct dlm_device_entry *
+nfsd4_find_pnfs_dlm_device(struct super_block *sb) {
+	char dname[BDEVNAME_SIZE];
+
+	bdevname(sb->s_bdev, dname);
+	return _nfsd4_find_pnfs_dlm_device(dname);
+}
+
+ssize_t
+nfsd4_get_pnfs_dlm_device_list(char *buf, ssize_t buflen)
+{
+	char *pos = buf;
+	ssize_t size = 0;
+	struct dlm_device_entry *dlm_pdev;
+	int ret = -EINVAL;
+
+	spin_lock(&dlm_device_list_lock);
+	list_for_each_entry(dlm_pdev, &dlm_device_list, dlm_dev_list)
+	{
+		int advanced;
+		advanced = snprintf(pos, buflen - size, "%s:%s\n", dlm_pdev->disk_name, dlm_pdev->ds_list);
+		if (advanced >= buflen - size)
+			goto out;
+		size += advanced;
+		pos += advanced;
+	}
+	ret = size;
+
+out:
+	spin_unlock(&dlm_device_list_lock);
+	return ret;
 }
 
 /*
@@ -124,7 +160,7 @@ nfsd4_set_pnfs_dlm_device(char *pnfs_dlm_device, int len)
 	dprintk("%s disk_name %s num_ds %d ds_list %s\n", __func__,
 		new->disk_name, new->num_ds, new->ds_list);
 
-	found = nfsd4_find_pnfs_dlm_device(new->disk_name);
+	found = _nfsd4_find_pnfs_dlm_device(new->disk_name);
 	if (found) {
 		/* FIXME: should compare found->ds_list with new->ds_list
 		 * and if it is different, kick off a CB_NOTIFY change
@@ -218,7 +254,7 @@ static int nfsd4_pnfs_dlm_getdevinfo(struct super_block *sb,
 	/*
 	 * If the DS list has not been established, return -EINVAL
 	 */
-	dlm_pdev = nfsd4_find_pnfs_dlm_device(sb->s_bdev->bd_disk->disk_name);
+	dlm_pdev = nfsd4_find_pnfs_dlm_device(sb);
 	if (!dlm_pdev) {
 		dprintk("%s: DEBUG: disk %s Not Found\n", __func__,
 			sb->s_bdev->bd_disk->disk_name);
@@ -315,7 +351,7 @@ static int dlm_ino_hash(struct inode *ino)
 	/* If can't find the inode block device in the pnfs_dlm_deivce list
 	 * then don't hand out a layout
 	 */
-	de = nfsd4_find_pnfs_dlm_device(ino->i_sb->s_bdev->bd_disk->disk_name);
+	de = nfsd4_find_pnfs_dlm_device(ino->i_sb);
 	if (!de)
 		return -1;
 	hash_mask = de->num_ds - 1;
