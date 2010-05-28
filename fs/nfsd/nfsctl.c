@@ -1090,7 +1090,9 @@ static ssize_t __write_pnfs_dlm_device(struct file *file, char *buf,
 			return ret;
 
 		ret = nfsd4_set_pnfs_dlm_device(pnfs_dlm_device, len);
-	}
+	} else
+		return nfsd4_get_pnfs_dlm_device_list(buf, SIMPLE_TRANSACTION_LIMIT);
+
 	return ret <= 0 ? ret : strlen(buf);
 }
 
