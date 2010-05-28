@@ -42,6 +42,8 @@ int nfsd4_set_pnfs_dlm_device(char *pnfs_dlm_device, int len);
 
 void nfsd4_pnfs_dlm_shutdown(void);
 
+ssize_t nfsd4_get_pnfs_dlm_device_list(char *buf, ssize_t buflen);
+
 #else /* CONFIG_PNFSD */
 
 static inline void nfsd4_pnfs_dlm_shutdown(void)
