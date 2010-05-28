@@ -62,6 +62,31 @@ nfsd4_find_pnfs_dlm_device(char *disk_name)
 	return NULL;
 }
 
+ssize_t
+nfsd4_get_pnfs_dlm_device_list(char *buf, ssize_t buflen)
+{
+	char *pos = buf;
+	ssize_t size = 0;
+	struct dlm_device_entry *dlm_pdev;
+	int ret = -EINVAL;
+
+	spin_lock(&dlm_device_list_lock);
+	list_for_each_entry(dlm_pdev, &dlm_device_list, dlm_dev_list)
+	{
+		int advanced;
+		advanced = snprintf(pos, buflen - size, "%s:%s\n", dlm_pdev->disk_name, dlm_pdev->ds_list);
+		if (advanced >= buflen - size)
+			goto out;
+		size += advanced;
+		pos += advanced;
+	}
+	ret = size;
+
+out:
+	spin_unlock(&dlm_device_list_lock);
+	return ret;
+}
+
 /*
  * pnfs_dlm_device string format:
  *     block-device-path:<ds1 ipv4 address>,<ds2 ipv4 address>
