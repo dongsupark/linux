@@ -53,7 +53,7 @@ nfsd4_find_pnfs_dlm_device(char *disk_name)
 
 	spin_lock(&dlm_device_list_lock);
 	list_for_each_entry(dlm_pdev, &dlm_device_list, dlm_dev_list) {
-		if (memcmp(dlm_pdev->disk_name, disk_name, strlen(disk_name))) {
+		if (!memcmp(dlm_pdev->disk_name, disk_name, strlen(disk_name))) {
 			spin_unlock(&dlm_device_list_lock);
 			return dlm_pdev;
 		}
