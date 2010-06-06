@@ -1028,14 +1028,14 @@ static void nfsd4_cb_layout_done(struct rpc_task *task, void *calldata)
 	printk("%s: clp %p cb_client %p fp %p failed with status %d\n",
 	       __func__,
 	       clp,
-	       clp->cl_cb_conn.cb_client,
+	       clp->cl_cb_client,
 	       clr->clr_file,
 	       task->tk_status);
 
 	switch (task->tk_status) {
 	case -EIO:
 		/* Network partition? */
-		atomic_set(&clp->cl_cb_conn.cb_set, 0);
+		atomic_set(&clp->cl_cb_set, 0);
 		warn_no_callback_path(clp, task->tk_status);
 		/* FIXME:
 		 * The pnfs standard states that we need to only expire
@@ -1068,7 +1068,7 @@ int
 nfsd4_cb_layout(struct nfs4_layoutrecall *clr)
 {
 	struct nfs4_client *clp = clr->clr_client;
-	struct rpc_clnt *clnt = clp->cl_cb_conn.cb_client;
+	struct rpc_clnt *clnt = clp->cl_cb_client;
 	struct nfs4_rpc_args *args;
 	struct rpc_message msg = {
 		.rpc_proc = &nfs4_cb_procedures[NFSPROC4_CLNT_CB_LAYOUT],
@@ -1111,12 +1111,12 @@ static void nfsd4_cb_device_done(struct rpc_task *task, void *calldata)
 	dprintk("%s: clp %p cb_client %p: status %d\n",
 	       __func__,
 	       clp,
-	       clp->cl_cb_conn.cb_client,
+	       clp->cl_cb_client,
 	       task->tk_status);
 
 	if (task->tk_status == -EIO) {
 		/* Network partition? */
-		atomic_set(&clp->cl_cb_conn.cb_set, 0);
+		atomic_set(&clp->cl_cb_set, 0);
 		warn_no_callback_path(clp, task->tk_status);
 	}
 }
@@ -1133,7 +1133,7 @@ int
 nfsd4_cb_notify_device(struct nfs4_notify_device *cbnd)
 {
 	struct nfs4_client *clp = cbnd->nd_client;
-	struct rpc_clnt *clnt = clp->cl_cb_conn.cb_client;
+	struct rpc_clnt *clnt = clp->cl_cb_client;
 	struct nfs4_rpc_args *args;
 	struct rpc_message msg = {
 		.rpc_proc = &nfs4_cb_procedures[NFSPROC4_CLNT_CB_DEVICE],

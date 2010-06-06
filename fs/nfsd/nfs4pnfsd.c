@@ -1496,9 +1496,9 @@ spawn_layout_recall(struct super_block *sb, struct list_head *todolist,
 		list_del_init(&pending->clr_perclnt);
 		dprintk("%s: clp %p cb_client %p fp %p\n", __func__,
 			pending->clr_client,
-			pending->clr_client->cl_cb_conn.cb_client,
+			pending->clr_client->cl_cb_client,
 			pending->clr_file);
-		if (unlikely(!pending->clr_client->cl_cb_conn.cb_client)) {
+		if (unlikely(!pending->clr_client->cl_cb_client)) {
 			printk(KERN_INFO
 				"%s: clientid %08x/%08x has no callback path\n",
 				__func__,
