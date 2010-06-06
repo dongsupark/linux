@@ -1616,7 +1616,6 @@ create_device_notify_per_cl(struct nfs4_client *clp, void *p)
 	cbnd->nd_list = arg->ndl;
 	cbnd->nd_client = clp;
 	list_add(&cbnd->nd_perclnt, arg->todolist);
-	atomic_inc(&clp->cl_count);
 	return 0;
 }
 
@@ -1667,7 +1666,6 @@ int nfsd_device_notify_cb(struct super_block *sb,
 		list_del_init(&cbnd->nd_perclnt);
 		status2 = nfsd4_cb_notify_device(cbnd);
 		pnfs_clear_device_notify(cbnd->nd_client);
-		put_nfs4_client(cbnd->nd_client);
 		if (status2)
 			status = status2;
 		notify_num++;
