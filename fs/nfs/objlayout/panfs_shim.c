@@ -126,32 +126,59 @@ panfs_shim_conv_pnfs_osd_data_map(
 	int status = -EINVAL;
 	struct pnfs_osd_data_map *lo_map = &layout->olo_map;
 
-	if (!layout->olo_num_comps)
+	if (!layout->olo_num_comps) {
+		dprintk("%s: !!layout.n_comps(%u)\n", __func__,
+			layout->olo_num_comps);
 		goto err;
+	}
 
 	switch (lo_map->odm_raid_algorithm) {
 	case PNFS_OSD_RAID_0:
 		if (layout->olo_num_comps != lo_map->odm_num_comps ||
-		    layout->olo_comps_index)
+		    layout->olo_comps_index) {
+			dprintk("%s: !!PNFS_OSD_RAID_0 "
+				"layout.n_comps(%u) map.n_comps(%u) "
+				"comps_index(%u)\n", __func__,
+				layout->olo_num_comps,
+				lo_map->odm_num_comps,
+				layout->olo_comps_index);
 			goto err;
+		}
 		status = panfs_shim_conv_raid01(layout, lo_map, hdr);
 		break;
 
 	case PNFS_OSD_RAID_5:
 		if (!lo_map->odm_group_width) {
 			if (layout->olo_num_comps != lo_map->odm_num_comps ||
-			    layout->olo_comps_index)
+			    layout->olo_comps_index) {
+				dprintk("%s: !!PNFS_OSD_RAID_5 !group_width "
+					"layout.n_comps(%u)!=map.n_comps(%u) "
+					"|| comps_index(%u)\n", __func__,
+					layout->olo_num_comps,
+					lo_map->odm_num_comps,
+					layout->olo_comps_index);
 				goto err;
+			}
 		} else if ((layout->olo_num_comps != lo_map->odm_num_comps &&
 			    layout->olo_num_comps > lo_map->odm_group_width) ||
-			   (layout->olo_comps_index % lo_map->odm_group_width))
+			   (layout->olo_comps_index % lo_map->odm_group_width)){
+				dprintk("%s: !!PNFS_OSD_RAID_5 group_width(%u) "
+					"layout.n_comps(%u) map.n_comps(%u) "
+					"comps_index(%u)\n", __func__,
+					lo_map->odm_group_width,
+					layout->olo_num_comps,
+					lo_map->odm_num_comps,
+					layout->olo_comps_index);
 				goto err;
+			}
 		status = panfs_shim_conv_raid5(layout, lo_map, hdr);
 		break;
 
 	case PNFS_OSD_RAID_4:
 	case PNFS_OSD_RAID_PQ:
 	default:
+		dprintk("%s: !!PNFS_OSD_RAID_(%d)\n", __func__,
+			lo_map->odm_raid_algorithm);
 		goto err;
 	}
 
@@ -495,7 +522,8 @@ panfs_shim_write_done(
 	if (rc == PAN_SUCCESS)
 		rc = res_p->result;
 	if (rc == PAN_SUCCESS) {
-		state->ol_state.committed = NFS_FILE_SYNC;
+/*		state->ol_state.committed = NFS_FILE_SYNC;*/
+		state->ol_state.committed = NFS_UNSTABLE;
 		status = res_p->length;
 		WARN_ON(status < 0);
 
