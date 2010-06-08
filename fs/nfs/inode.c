@@ -1106,7 +1106,6 @@ static int nfs_update_inode(struct inode *inode, struct nfs_fattr *fattr)
 			!test_bit(NFS_INO_MOUNTPOINT, &nfsi->flags))
 		server->fsid = fattr->fsid;
 
-#ifdef CONFIG_NFS_V4_1
 	/*
 	 * file needs layout commit, server attributes may be stale
 	 */
@@ -1115,7 +1114,6 @@ static int nfs_update_inode(struct inode *inode, struct nfs_fattr *fattr)
 			__func__, inode->i_sb->s_id, inode->i_ino);
 		return 0;
 	}
-#endif /* CONFIG_NFS_V4_1 */
 	/*
 	 * Update the read time so we don't revalidate too often.
 	 */

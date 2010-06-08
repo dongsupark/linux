@@ -93,6 +93,14 @@ layoutcommit_needed(struct nfs_inode *nfsi)
 	return nfsi->lo_cred != NULL;
 }
 
+#else /* CONFIG_NFS_V4_1 */
+
+static inline bool
+layoutcommit_needed(struct nfs_inode *nfsi)
+{
+	return 0;
+}
+
 #endif /* CONFIG_NFS_V4_1 */
 
 struct pnfs_layout_segment {
