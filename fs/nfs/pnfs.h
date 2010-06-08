@@ -373,6 +373,10 @@ static inline int pnfs_use_rpc(struct nfs_server *nfss)
 	return 1;
 }
 
+static inline int pnfs_layoutcommit_inode(struct inode *inode, int sync)
+{
+	return 0;
+}
 #endif /* CONFIG_NFS_V4_1 */
 
 #endif /* FS_NFS_PNFS_H */

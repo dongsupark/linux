@@ -1494,13 +1494,6 @@ static int nfs_commit_inode(struct inode *inode, int how)
 			wait_on_bit(&NFS_I(inode)->flags, NFS_INO_COMMIT,
 					nfs_wait_bit_killable,
 					TASK_KILLABLE);
-#ifdef CONFIG_NFS_V4_1
-		if (may_wait && layoutcommit_needed(NFS_I(inode))) {
-			error = pnfs_layoutcommit_inode(inode, 1);
-			if (error < 0)
-				return error;
-		}
-#endif /* CONFIG_NFS_V4_1 */
 	} else
 		nfs_commit_clear_lock(NFS_I(inode));
 out:
@@ -1550,7 +1543,18 @@ static int nfs_commit_unstable_pages(struct inode *inode, struct writeback_contr
 
 int nfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
-	return nfs_commit_unstable_pages(inode, wbc);
+	int ret;
+	ret = nfs_commit_unstable_pages(inode, wbc);
+	if (ret >= 0 && layoutcommit_needed(NFS_I(inode))) {
+		int err, sync = wbc->sync_mode;
+
+		if (wbc->nonblocking || wbc->for_background)
+			sync = 0;
+		err = pnfs_layoutcommit_inode(inode, sync);
+		if (err < 0)
+			ret = err;
+	}
+	return ret;
 }
 
 /*
@@ -1567,10 +1571,6 @@ int nfs_wb_all(struct inode *inode)
 	};
 
 	ret = sync_inode(inode, &wbc);
-#ifdef CONFIG_NFS_V4_1
-	if (!ret && layoutcommit_needed(NFS_I(inode)))
-		ret = pnfs_layoutcommit_inode(inode, 1);
-#endif
 	return ret;
 }
 
