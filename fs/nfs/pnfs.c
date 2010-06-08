@@ -770,10 +770,10 @@ _pnfs_return_layout(struct inode *ino, struct nfs4_pnfs_layout_segment *range,
 		if (layoutcommit_needed(nfsi)) {
 			status = pnfs_layoutcommit_inode(ino, wait);
 			if (status) {
+				/* Return layout even if layoutcommit fails */
 				dprintk("%s: layoutcommit failed, status=%d. "
 					"Returning layout anyway\n",
 					__func__, status);
-				status = 0;
 			}
 		}
 	}
