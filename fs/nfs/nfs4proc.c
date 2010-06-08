@@ -5629,6 +5629,9 @@ pnfs_layoutcommit_rpc_done(struct rpc_task *task, void *calldata)
 	pnfs_layoutcommit_done(data);
 
 	nfs4_sequence_done(server, &data->res.seq_res, task->tk_status);
+
+	if (nfs4_async_handle_error(task, server, NULL) == -EAGAIN)
+		nfs_restart_rpc(task, server->nfs_client);
 }
 
 static void pnfs_layoutcommit_release(void *lcdata)
