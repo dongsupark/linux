@@ -469,7 +469,7 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 	status = pnfs_write_end(file, page, pos, len, copied, lseg);
 	if (status)
 		goto out;
-	status = nfs_updatepage(file, page, offset, copied, lseg);
+	status = nfs_updatepage(file, page, offset, copied, lseg, fsdata);
 
  out:
 	unlock_page(page);
@@ -599,7 +599,7 @@ static int nfs_vm_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 	ret = VM_FAULT_LOCKED;
 	if (nfs_flush_incompatible(filp, page, NULL) == 0 &&
-	    nfs_updatepage(filp, page, 0, pagelen, NULL) == 0)
+	    nfs_updatepage(filp, page, 0, pagelen, NULL, NULL) == 0)
 		goto out;
 
 	ret = VM_FAULT_SIGBUS;
