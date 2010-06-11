@@ -1048,8 +1048,12 @@ bl_write_end_cleanup(struct file *filp, struct pnfs_fsdata *fsdata)
 	sector_t *pos;
 	struct address_space *mapping = filp->f_mapping;
 	struct pnfs_fsdata *fake_data;
+	struct pnfs_layout_segment *lseg;
 
 	if (!fsdata)
+		return;
+	lseg = fsdata->lseg;
+	if (!lseg)
 		return;
 	pos = fsdata->private;
 	if (!pos)
@@ -1079,7 +1083,8 @@ bl_write_end_cleanup(struct file *filp, struct pnfs_fsdata *fsdata)
 				unlock_page(page);
 				continue;
 			}
-			fake_data->ok_to_use_pnfs = 1;
+			get_lseg(lseg);
+			fake_data->lseg = lseg;
 			fake_data->bypass_eof = 1;
 			mapping->a_ops->write_end(filp, mapping,
 						  index << PAGE_CACHE_SHIFT,
