@@ -86,6 +86,9 @@ layoutcommit_needed(struct nfs_inode *nfsi)
 	       test_bit(NFS_INO_LAYOUTCOMMIT, &nfsi->layout->state);
 }
 
+extern void put_lseg(struct pnfs_layout_segment *lseg);
+extern void get_lseg(struct pnfs_layout_segment *lseg);
+
 #else /* CONFIG_NFS_V4_1 */
 
 static inline bool

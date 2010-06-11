@@ -34,7 +34,6 @@ extern int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool wait);
 /* pnfs.c */
 extern const nfs4_stateid zero_stateid;
 
-void put_lseg(struct pnfs_layout_segment *lseg);
 void _pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 	loff_t pos, u64 count, enum pnfs_iomode access_type,
 	struct pnfs_layout_segment **lsegpp);
@@ -95,11 +94,6 @@ static inline int lo_fail_bit(u32 iomode)
 {
 	return iomode == IOMODE_RW ?
 			 NFS_INO_RW_LAYOUT_FAILED : NFS_INO_RO_LAYOUT_FAILED;
-}
-
-static inline void get_lseg(struct pnfs_layout_segment *lseg)
-{
-	kref_get(&lseg->kref);
 }
 
 /* Return true if a layout driver is being used for this mountpoint */
