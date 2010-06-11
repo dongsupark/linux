@@ -239,6 +239,7 @@ extern int nfs4_proc_layoutcommit(struct nfs4_layoutcommit_data *data,
 extern int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool wait);
 
 /* pnfs.c */
+void get_lseg(struct pnfs_layout_segment *lseg);
 void put_lseg(struct pnfs_layout_segment *lseg);
 struct pnfs_layout_segment *
 pnfs_has_layout(struct pnfs_layout_hdr *lo, struct pnfs_layout_range *range);
@@ -300,11 +301,6 @@ static inline void pnfs_invalidate_layout_stateid(struct pnfs_layout_hdr *lo)
 	write_seqlock(&lo->seqlock);
 	clear_bit(NFS_LAYOUT_STATEID_SET, &lo->state);
 	write_sequnlock(&lo->seqlock);
-}
-
-static inline void get_lseg(struct pnfs_layout_segment *lseg)
-{
-	kref_get(&lseg->kref);
 }
 
 /* Return true if a layout driver is being used for this mountpoint */

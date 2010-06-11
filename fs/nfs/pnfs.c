@@ -324,6 +324,12 @@ put_lseg(struct pnfs_layout_segment *lseg)
 }
 EXPORT_SYMBOL_GPL(put_lseg);
 
+void get_lseg(struct pnfs_layout_segment *lseg)
+{
+	kref_get(&lseg->kref);
+}
+EXPORT_SYMBOL_GPL(get_lseg);
+
 static inline u64
 end_offset(u64 start, u64 len)
 {
