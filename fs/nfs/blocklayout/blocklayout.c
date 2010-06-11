@@ -1027,17 +1027,12 @@ bl_write_begin(struct pnfs_layout_segment *lseg, struct page *page, loff_t pos,
 /* CAREFUL - what happens if copied < count??? */
 static int
 bl_write_end(struct inode *inode, struct page *page, loff_t pos,
-	     unsigned count, unsigned copied, struct pnfs_fsdata *fsdata)
+	     unsigned count, unsigned copied, struct pnfs_layout_segment *lseg)
 {
-	dprintk("%s enter, %u@%lld, %i\n", __func__, count, pos,
-		fsdata ? fsdata->ok_to_use_pnfs : -1);
+	dprintk("%s enter, %u@%lld, lseg=%p\n", __func__, count, pos, lseg);
 	print_page(page);
-	if (fsdata) {
-		if (fsdata->ok_to_use_pnfs) {
-			dprintk("%s using pnfs\n", __func__);
-			SetPageUptodate(page);
-		}
-	}
+	if (lseg)
+		SetPageUptodate(page);
 	return 0;
 }
 
