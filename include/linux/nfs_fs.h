@@ -507,7 +507,7 @@ extern int  nfs_flush_incompatible(struct file *file, struct page *page,
 				   struct pnfs_layout_segment *lseg);
 extern int  nfs_updatepage(struct file *, struct page *,
 			   unsigned int offset, unsigned int count,
-			   struct pnfs_layout_segment *lseg);
+			   struct pnfs_layout_segment *lseg, void *fsdata);
 extern int nfs_writeback_done(struct rpc_task *, struct nfs_write_data *);
 
 /*

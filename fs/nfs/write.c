@@ -681,7 +681,8 @@ out:
 
 static int nfs_writepage_setup(struct nfs_open_context *ctx, struct page *page,
 			       unsigned int offset, unsigned int count,
-			       struct pnfs_layout_segment *lseg)
+			       struct pnfs_layout_segment *lseg,
+			       void *fsdata)
 {
 	struct nfs_page	*req;
 
@@ -746,7 +747,7 @@ static int nfs_write_pageuptodate(struct page *page, struct inode *inode)
  */
 int nfs_updatepage(struct file *file, struct page *page,
 		   unsigned int offset, unsigned int count,
-		   struct pnfs_layout_segment *lseg)
+		   struct pnfs_layout_segment *lseg, void *fsdata)
 {
 	struct nfs_open_context *ctx = nfs_file_open_context(file);
 	struct inode	*inode = page->mapping->host;
@@ -771,7 +772,7 @@ int nfs_updatepage(struct file *file, struct page *page,
 		offset = 0;
 	}
 
-	status = nfs_writepage_setup(ctx, page, offset, count, lseg);
+	status = nfs_writepage_setup(ctx, page, offset, count, lseg, fsdata);
 	if (status < 0)
 		nfs_set_pageerror(page);
 
