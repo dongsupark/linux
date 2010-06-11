@@ -366,6 +366,13 @@ put_lseg(struct pnfs_layout_segment *lseg)
 }
 EXPORT_SYMBOL_GPL(put_lseg);
 
+void get_lseg(struct pnfs_layout_segment *lseg)
+{
+	atomic_inc(&lseg->pls_refcount);
+	smp_mb__after_atomic_inc();
+}
+EXPORT_SYMBOL_GPL(get_lseg);
+
 static inline u64
 end_offset(u64 start, u64 len)
 {

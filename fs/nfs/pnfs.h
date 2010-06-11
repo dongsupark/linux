@@ -257,6 +257,7 @@ extern int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool wait);
 
 /* pnfs.c */
 void get_layout_hdr(struct pnfs_layout_hdr *lo);
+void get_lseg(struct pnfs_layout_segment *lseg);
 void put_lseg(struct pnfs_layout_segment *lseg);
 bool should_free_lseg(struct pnfs_layout_range *lseg_range,
 		      struct pnfs_layout_range *recall_range);
@@ -319,12 +320,6 @@ static inline int lo_fail_bit(u32 iomode)
 {
 	return iomode == IOMODE_RW ?
 			 NFS_LAYOUT_RW_FAILED : NFS_LAYOUT_RO_FAILED;
-}
-
-static inline void get_lseg(struct pnfs_layout_segment *lseg)
-{
-	atomic_inc(&lseg->pls_refcount);
-	smp_mb__after_atomic_inc();
 }
 
 /* Return true if a layout driver is being used for this mountpoint */
