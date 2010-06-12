@@ -1032,8 +1032,7 @@ static struct layoutdriver_policy_operations objlayout_policy_operations = {
  *
  * FIXME: change interface to use merge_align, merge_count
  */
-	.flags                 = PNFS_LAYOUTGET_ON_OPEN |
-				 PNFS_LAYOUTRET_ON_SETATTR,
+	.flags                 = PNFS_LAYOUTRET_ON_SETATTR,
 	.get_stripesize        = objlayout_get_stripesize,
 	.get_blocksize         = objlayout_get_blocksize,
 };
