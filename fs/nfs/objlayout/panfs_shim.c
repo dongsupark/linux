@@ -695,8 +695,7 @@ static struct layoutdriver_policy_operations panlayout_policy_operations = {
  *
  * FIXME: change interface to use merge_align, merge_count
  */
-	.flags                 = PNFS_LAYOUTGET_ON_OPEN |
-				 PNFS_LAYOUTRET_ON_SETATTR,
+	.flags                 = PNFS_LAYOUTRET_ON_SETATTR,
 	.get_stripesize        = panlayout_get_stripesize,
 	.get_blocksize         = panlayout_get_blocksize,
 };
