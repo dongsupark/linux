@@ -648,6 +648,7 @@ static struct pnfs_layoutdriver_type filelayout_type = {
 	.id = LAYOUT_NFSV4_1_FILES,
 	.name = "LAYOUT_NFSV4_1_FILES",
 	.owner = THIS_MODULE,
+	.flags                   = PNFS_USE_RPC_CODE,
 	.initialize_mountpoint   = filelayout_initialize_mountpoint,
 	.uninitialize_mountpoint = filelayout_uninitialize_mountpoint,
 	.alloc_lseg              = filelayout_alloc_lseg,
