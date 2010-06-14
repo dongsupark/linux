@@ -25,6 +25,7 @@
 #include <linux/nfsd/debug.h>
 #include <linux/nfsd/nfs4pnfsdlm.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
+#include <linux/sunrpc/clnt.h>
 
 #include "nfsfh.h"
 #include "nfsd.h"
@@ -97,6 +98,24 @@ out:
 	return ret;
 }
 
+bool nfsd4_validate_pnfs_dlm_device(char *ds_list, int *num_ds)
+{
+	char *start = ds_list;
+
+	*num_ds = 0;
+
+	while (*start) {
+		struct sockaddr_storage tempAddr;
+		int ipLen = strcspn(start, ",");
+
+		if (!rpc_pton(start, ipLen, (struct sockaddr *)&tempAddr, sizeof(tempAddr)))
+			return false;
+		(*num_ds)++;
+		start += ipLen + 1;
+	}
+	return true;
+}
+
 /*
  * pnfs_dlm_device string format:
  *     block-device-path:<ds1 ipv4 address>,<ds2 ipv4 address>
@@ -150,12 +169,10 @@ nfsd4_set_pnfs_dlm_device(char *pnfs_dlm_device, int len)
 		goto out_free;
 	memcpy(new->ds_list, bufp, len);
 
-	/* count the number of comma-delimited DS IPs */
-	new->num_ds = 1;
-	while ((bufp = strchr(bufp, ',')) != NULL) {
-		new->num_ds++;
-		bufp++;
-	}
+
+	/*  validate the ips */
+	if (!nfsd4_validate_pnfs_dlm_device(new->ds_list, &(new->num_ds)))
+		goto out_free;
 
 	dprintk("%s disk_name %s num_ds %d ds_list %s\n", __func__,
 		new->disk_name, new->num_ds, new->ds_list);
