@@ -211,6 +211,9 @@ filelayout_read_pagelist(struct nfs_read_data *data, unsigned nr_pages)
 	/* Perform an asynchronous read */
 	nfs_initiate_read(data, ds->ds_clp->cl_rpcclient,
 			  &filelayout_read_call_ops);
+
+	data->pdata.pnfs_error = 0;
+
 	return PNFS_ATTEMPTED;
 }
 
@@ -252,6 +255,8 @@ filelayout_write_pagelist(struct nfs_write_data *data, unsigned nr_pages, int sy
 	 */
 	nfs_initiate_write(data, ds->ds_clp->cl_rpcclient,
 			   &filelayout_write_call_ops, sync);
+
+	data->pdata.pnfs_error = 0;
 	return PNFS_ATTEMPTED;
 }
 
@@ -604,6 +609,7 @@ filelayout_commit(struct nfs_write_data *data, int sync)
 	}
 	kfree(clone_list);
 	kfree(ds_page_list);
+	data->pdata.pnfs_error = 0;
 	return PNFS_ATTEMPTED;
 
  mem_error:
