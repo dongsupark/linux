@@ -153,6 +153,14 @@ static inline int pnfs_get_read_status(struct nfs_read_data *data)
 	return data->pdata.pnfs_error;
 }
 
+static inline int pnfs_use_rpc(struct nfs_server *nfss)
+{
+	if (pnfs_enabled_sb(nfss))
+		return pnfs_ld_use_rpc_code(nfss->pnfs_curr_ld);
+
+	return 1;
+}
+
 #else  /* CONFIG_NFS_V4_1 */
 
 static inline void pnfs_destroy_all_layouts(struct nfs_client *clp)
@@ -209,6 +217,11 @@ static inline int pnfs_get_write_status(struct nfs_write_data *data)
 static inline int pnfs_get_read_status(struct nfs_read_data *data)
 {
 	return 0;
+}
+
+static inline int pnfs_use_rpc(struct nfs_server *nfss)
+{
+	return 1;
 }
 
 static inline int pnfs_layoutcommit_inode(struct inode *inode, int sync)
