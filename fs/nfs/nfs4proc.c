@@ -3060,6 +3060,9 @@ static int nfs4_read_done(struct rpc_task *task, struct nfs_read_data *data)
 	dprintk("--> %s\n", __func__);
 
 #ifdef CONFIG_NFS_V4_1
+	if (data->pdata.pnfsflags & PNFS_NO_RPC)
+		return 0;
+
 	/* Is this a DS session */
 	if (data->fldata.ds_nfs_client) {
 		dprintk("%s DS read\n", __func__);
@@ -3112,6 +3115,9 @@ static int nfs4_write_done(struct rpc_task *task, struct nfs_write_data *data)
 		data->args.count = data->pdata.orig_count;
 	}
 
+	if (data->pdata.pnfsflags & PNFS_NO_RPC)
+		return 0;
+
 	/* Is this a DS session */
 	if (data->fldata.ds_nfs_client) {
 		dprintk("%s DS write\n", __func__);
@@ -3163,6 +3169,9 @@ static int nfs4_commit_done(struct rpc_task *task, struct nfs_write_data *data)
 	struct nfs_client *client = server->nfs_client;
 
 #ifdef CONFIG_NFS_V4_1
+	if (data->pdata.pnfsflags & PNFS_NO_RPC)
+		return 0;
+
 	/* Is this a DS session */
 	if (data->fldata.ds_nfs_client) {
 		dprintk("%s DS commit\n", __func__);

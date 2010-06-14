@@ -63,8 +63,11 @@ enum {
 };
 
 enum layoutdriver_policy_flags {
+	/* Should the full nfs rpc cleanup code be used after io */
+	PNFS_USE_RPC_CODE		= 1 << 0,
+
 	/* Should the pNFS client commit and return the layout upon a setattr */
-	PNFS_LAYOUTRET_ON_SETATTR	= 1 << 0,
+	PNFS_LAYOUTRET_ON_SETATTR	= 1 << 1,
 };
 
 /* Per-layout driver specific registration structure */
@@ -294,6 +297,14 @@ pnfs_ld_layoutret_on_setattr(struct inode *inode)
 		PNFS_LAYOUTRET_ON_SETATTR;
 }
 
+static inline bool pnfs_use_rpc(struct nfs_server *nfss)
+{
+	if (pnfs_enabled_sb(nfss))
+		return nfss->pnfs_curr_ld->flags & PNFS_USE_RPC_CODE;
+
+	return true;
+}
+
 /* Should the pNFS client commit and return the layout on close
  */
 static inline int
@@ -399,6 +410,11 @@ static inline bool
 pnfs_ld_layoutret_on_setattr(struct inode *inode)
 {
 	return false;
+}
+
+static inline bool pnfs_use_rpc(struct nfs_server *nfss)
+{
+	return true;
 }
 
 static inline int

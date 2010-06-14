@@ -1124,16 +1124,24 @@ pnfs_call_done(struct pnfs_call_data *pdata, struct rpc_task *task, void *data)
 	pdata->call_ops->rpc_call_done(task, data);
 	if (pdata->pnfs_error == -EAGAIN || task->tk_status == -EAGAIN)
 		return -EAGAIN;
-	/*
-	 * just restore original rpc call ops
-	 * rpc_release will be called later by the rpc scheduling layer.
-	 */
-	task->tk_ops = pdata->call_ops;
+	if (pdata->pnfsflags & PNFS_NO_RPC) {
+		pdata->call_ops->rpc_release(data);
+	} else {
+		/*
+		 * just restore original rpc call ops
+		 * rpc_release will be called later by the rpc scheduling layer.
+		 */
+		task->tk_ops = pdata->call_ops;
+	}
 	return 0;
 }
 
 /* Post-write completion function
  * Invoked by all layout drivers when write_pagelist is done.
+ *
+ * NOTE: callers set data->pnfsflags PNFS_NO_RPC
+ * so that the NFS cleanup routines perform only the page cache
+ * cleanup.
  */
 static void
 pnfs_write_retry(struct work_struct *work)
@@ -1159,6 +1167,18 @@ pnfs_writeback_done(struct nfs_write_data *data)
 	struct pnfs_call_data *pdata = &data->pdata;
 
 	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
+
+	/* update last write offset and need layout commit
+	 * for non-files layout types (files layout calls
+	 * pnfs4_write_done for this)
+	 */
+	if ((pdata->pnfsflags & PNFS_NO_RPC) &&
+	    data->task.tk_status >= 0 && data->res.count > 0) {
+		struct nfs_inode *nfsi = NFS_I(data->inode);
+
+		pnfs_update_last_write(nfsi, data->args.offset, data->res.count);
+		pnfs_need_layoutcommit(nfsi, data->args.context);
+	}
 
 	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
 		INIT_WORK(&data->task.u.tk_work, pnfs_write_retry);
@@ -1206,12 +1226,15 @@ pnfs_try_to_write_data(struct nfs_write_data *wdata,
 
 	get_lseg(lseg);
 
+	if (!pnfs_use_rpc(nfss))
+		wdata->pdata.pnfsflags |= PNFS_NO_RPC;
 	wdata->pdata.lseg = lseg;
 	trypnfs = nfss->pnfs_curr_ld->write_pagelist(wdata,
 		nfs_page_array_len(wdata->args.pgbase, wdata->args.count),
 		how);
 
 	if (trypnfs == PNFS_NOT_ATTEMPTED) {
+		wdata->pdata.pnfsflags &= ~PNFS_NO_RPC;
 		wdata->pdata.lseg = NULL;
 		put_lseg(lseg);
 		_pnfs_clear_lseg_from_pages(&wdata->pages);
@@ -1279,10 +1302,13 @@ pnfs_try_to_read_data(struct nfs_read_data *rdata,
 
 	get_lseg(lseg);
 
+	if (!pnfs_use_rpc(nfss))
+		rdata->pdata.pnfsflags |= PNFS_NO_RPC;
 	rdata->pdata.lseg = lseg;
 	trypnfs = nfss->pnfs_curr_ld->read_pagelist(rdata,
 		nfs_page_array_len(rdata->args.pgbase, rdata->args.count));
 	if (trypnfs == PNFS_NOT_ATTEMPTED) {
+		rdata->pdata.pnfsflags &= ~PNFS_NO_RPC;
 		rdata->pdata.lseg = NULL;
 		put_lseg(lseg);
 		_pnfs_clear_lseg_from_pages(&rdata->pages);
@@ -1325,6 +1351,8 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 
 	dprintk("%s: Begin\n", __func__);
 
+	if (!pnfs_use_rpc(nfss))
+		data->pdata.pnfsflags |= PNFS_NO_RPC;
 	/* We need to account for possibility that
 	 * each nfs_page can point to a different lseg (or be NULL).
 	 * For the immediate case of whole-file-only layouts, we at
@@ -1337,9 +1365,10 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 	data->pdata.how = sync;
 	data->pdata.lseg = NULL;
 	trypnfs = nfss->pnfs_curr_ld->commit(data, sync);
-	if (trypnfs == PNFS_NOT_ATTEMPTED)
+	if (trypnfs == PNFS_NOT_ATTEMPTED) {
+		data->pdata.pnfsflags &= ~PNFS_NO_RPC;
 		_pnfs_clear_lseg_from_pages(&data->pages);
-	else
+	} else
 		nfs_inc_stats(inode, NFSIOS_PNFS_COMMIT);
 	dprintk("%s End (trypnfs:%d)\n", __func__, trypnfs);
 	return trypnfs;
