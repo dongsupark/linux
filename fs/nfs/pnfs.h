@@ -319,6 +319,16 @@ layoutcommit_needed(struct nfs_inode *nfsi)
 	       test_bit(NFS_LAYOUT_NEED_LCOMMIT, &nfsi->layout->plh_flags);
 }
 
+static inline int pnfs_get_write_status(struct nfs_write_data *data)
+{
+	return data->pdata.pnfs_error;
+}
+
+static inline int pnfs_get_read_status(struct nfs_read_data *data)
+{
+	return data->pdata.pnfs_error;
+}
+
 #else  /* CONFIG_NFS_V4_1 */
 
 static inline void pnfs_destroy_all_layouts(struct nfs_client *clp)
@@ -407,6 +417,16 @@ static inline void set_pnfs_layoutdriver(struct nfs_server *s, u32 id)
 
 static inline void unset_pnfs_layoutdriver(struct nfs_server *s)
 {
+}
+
+static inline int pnfs_get_write_status(struct nfs_write_data *data)
+{
+	return 0;
+}
+
+static inline int pnfs_get_read_status(struct nfs_read_data *data)
+{
+	return 0;
 }
 
 static inline void

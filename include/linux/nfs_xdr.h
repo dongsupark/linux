@@ -1065,6 +1065,7 @@ struct pnfs_call_data {
 	struct pnfs_layout_segment *lseg;
 	const struct rpc_call_ops *call_ops;
 	u32			orig_count;	/* for retry via MDS */
+	int			pnfs_error;
 	u8			how;		/* for FLUSH_STABLE */
 };
 

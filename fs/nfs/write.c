@@ -860,7 +860,7 @@ int pnfs_initiate_write(struct nfs_write_data *data,
 {
 	if (data->req->wb_lseg &&
 	    (pnfs_try_to_write_data(data, call_ops, how) == PNFS_ATTEMPTED))
-		return 0;
+		return pnfs_get_write_status(data);
 
 	return nfs_initiate_write(data, clnt, call_ops, how);
 }
@@ -1263,6 +1263,9 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 				 */
 				argp->stable = NFS_FILE_SYNC;
 			}
+#ifdef CONFIG_NFS_V4_1
+			data->pdata.pnfs_error = -EAGAIN;
+#endif /* CONFIG_NFS_V4_1 */
 			nfs_restart_rpc(task, server->nfs_client);
 			return -EAGAIN;
 		}
@@ -1352,7 +1355,8 @@ int pnfs_initiate_commit(struct nfs_write_data *data,
 {
 	if (pnfs &&
 	    (pnfs_try_to_commit(data, &nfs_commit_ops, how) == PNFS_ATTEMPTED))
-		return 0;
+		return pnfs_get_write_status(data);
+
 	return nfs_initiate_commit(data, clnt, &nfs_commit_ops, how);
 }
 

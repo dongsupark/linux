@@ -1147,6 +1147,7 @@ pnfs_try_to_write_data(struct nfs_write_data *wdata,
 	struct pnfs_layout_segment *lseg = wdata->req->wb_lseg;
 
 	wdata->pdata.call_ops = call_ops;
+	wdata->pdata.pnfs_error = 0;
 	wdata->pdata.how = how;
 
 	dprintk("%s: Writing ino:%lu %u@%llu (how %d)\n", __func__,
@@ -1185,6 +1186,7 @@ pnfs_try_to_read_data(struct nfs_read_data *rdata,
 	enum pnfs_try_status trypnfs;
 
 	rdata->pdata.call_ops = call_ops;
+	rdata->pdata.pnfs_error = 0;
 
 	dprintk("%s: Reading ino:%lu %u@%llu\n",
 		__func__, inode->i_ino, rdata->args.count, rdata->args.offset);
@@ -1223,6 +1225,7 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 	 * This will be done by passing the buck to the layout driver.
 	 */
 	data->pdata.call_ops = call_ops;
+	data->pdata.pnfs_error = 0;
 	data->pdata.how = sync;
 	data->pdata.lseg = NULL;
 	trypnfs = nfss->pnfs_curr_ld->commit(data, sync);
