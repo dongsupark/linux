@@ -265,6 +265,15 @@ extern void nfs4_put_unset_layout_deviceid(struct pnfs_layout_segment *,
 struct pnfs_client_operations {
 	int (*nfs_getdeviceinfo) (struct nfs_server *,
 				  struct pnfs_device *dev);
+
+	/* Post read callback. */
+	void (*nfs_readlist_complete) (struct nfs_read_data *nfs_data);
+
+	/* Post write callback. */
+	void (*nfs_writelist_complete) (struct nfs_write_data *nfs_data);
+
+	/* Post commit callback. */
+	void (*nfs_commit_complete) (struct nfs_write_data *nfs_data);
 	void (*nfs_return_layout) (struct inode *);
 };
 
