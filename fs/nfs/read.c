@@ -206,7 +206,7 @@ int pnfs_initiate_read(struct nfs_read_data *data, struct rpc_clnt *clnt,
 {
 	if (data->req->wb_lseg &&
 	    (pnfs_try_to_read_data(data, call_ops) == PNFS_ATTEMPTED))
-		return 0;
+		return pnfs_get_read_status(data);
 
 	return nfs_initiate_read(data, clnt, call_ops);
 }
@@ -402,6 +402,9 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 	argp->offset += resp->count;
 	argp->pgbase += resp->count;
 	argp->count -= resp->count;
+#ifdef CONFIG_NFS_V4_1
+	data->pdata.pnfs_error = -EAGAIN;
+#endif /* CONFIG_NFS_V4_1 */
 	nfs_restart_rpc(task, clp);
 }
 

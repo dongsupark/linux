@@ -143,6 +143,16 @@ static inline void pnfs_update_layout(struct inode *ino,
 	}
 }
 
+static inline int pnfs_get_write_status(struct nfs_write_data *data)
+{
+	return data->pdata.pnfs_error;
+}
+
+static inline int pnfs_get_read_status(struct nfs_read_data *data)
+{
+	return data->pdata.pnfs_error;
+}
+
 #else  /* CONFIG_NFS_V4_1 */
 
 static inline void pnfs_destroy_all_layouts(struct nfs_client *clp)
