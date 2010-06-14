@@ -1116,6 +1116,57 @@ pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
 		pnfs_set_pg_test(inode, pgio);
 }
 
+static int
+pnfs_call_done(struct pnfs_call_data *pdata, struct rpc_task *task, void *data)
+{
+	put_lseg(pdata->lseg);
+	pdata->lseg = NULL;
+	pdata->call_ops->rpc_call_done(task, data);
+	if (pdata->pnfs_error == -EAGAIN || task->tk_status == -EAGAIN)
+		return -EAGAIN;
+	/*
+	 * just restore original rpc call ops
+	 * rpc_release will be called later by the rpc scheduling layer.
+	 */
+	task->tk_ops = pdata->call_ops;
+	return 0;
+}
+
+/* Post-write completion function
+ * Invoked by all layout drivers when write_pagelist is done.
+ */
+static void
+pnfs_write_retry(struct work_struct *work)
+{
+	struct rpc_task *task;
+	struct nfs_write_data *wdata;
+	struct pnfs_layout_range range;
+
+	dprintk("%s enter\n", __func__);
+	task = container_of(work, struct rpc_task, u.tk_work);
+	wdata = container_of(task, struct nfs_write_data, task);
+	range.iomode = IOMODE_RW;
+	range.offset = wdata->args.offset;
+	range.length = wdata->args.count;
+	_pnfs_return_layout(wdata->inode, &range, true);
+	pnfs_initiate_write(wdata, NFS_CLIENT(wdata->inode),
+			    wdata->pdata.call_ops, wdata->pdata.how);
+}
+
+void
+pnfs_writeback_done(struct nfs_write_data *data)
+{
+	struct pnfs_call_data *pdata = &data->pdata;
+
+	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
+
+	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
+		INIT_WORK(&data->task.u.tk_work, pnfs_write_retry);
+		queue_work(nfsiod_workqueue, &data->task.u.tk_work);
+	}
+}
+EXPORT_SYMBOL_GPL(pnfs_writeback_done);
+
 static void _pnfs_clear_lseg_from_pages(struct list_head *head)
 {
 	struct nfs_page *req;
@@ -1171,6 +1222,41 @@ pnfs_try_to_write_data(struct nfs_write_data *wdata,
 	return trypnfs;
 }
 
+/* Post-read completion function.  Invoked by all layout drivers when
+ * read_pagelist is done
+ */
+static void
+pnfs_read_retry(struct work_struct *work)
+{
+	struct rpc_task *task;
+	struct nfs_read_data *rdata;
+	struct pnfs_layout_range range;
+
+	dprintk("%s enter\n", __func__);
+	task = container_of(work, struct rpc_task, u.tk_work);
+	rdata = container_of(task, struct nfs_read_data, task);
+	range.iomode = IOMODE_RW;
+	range.offset = rdata->args.offset;
+	range.length = rdata->args.count;
+	_pnfs_return_layout(rdata->inode, &range, true);
+	pnfs_initiate_read(rdata, NFS_CLIENT(rdata->inode),
+			   rdata->pdata.call_ops);
+}
+
+void
+pnfs_read_done(struct nfs_read_data *data)
+{
+	struct pnfs_call_data *pdata = &data->pdata;
+
+	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
+
+	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
+		INIT_WORK(&data->task.u.tk_work, pnfs_read_retry);
+		queue_work(nfsiod_workqueue, &data->task.u.tk_work);
+	}
+}
+EXPORT_SYMBOL_GPL(pnfs_read_done);
+
 /*
  * Call the appropriate parallel I/O subsystem read function.
  * If no I/O device driver exists, or one does match the returned
@@ -1206,6 +1292,28 @@ pnfs_try_to_read_data(struct nfs_read_data *rdata,
 	dprintk("%s End (trypnfs:%d)\n", __func__, trypnfs);
 	return trypnfs;
 }
+
+/* pNFS Commit callback function for all layout drivers */
+void
+pnfs_commit_done(struct nfs_write_data *data)
+{
+	struct pnfs_call_data *pdata = &data->pdata;
+
+	dprintk("%s: Begin (status %d)\n", __func__, data->task.tk_status);
+
+	if (pnfs_call_done(pdata, &data->task, data) == -EAGAIN) {
+		struct pnfs_layout_range range = {
+			.iomode = IOMODE_RW,
+			.offset = data->args.offset,
+			.length = data->args.count,
+		};
+		dprintk("%s: retrying\n", __func__);
+		_pnfs_return_layout(data->inode, &range, true);
+		pnfs_initiate_commit(data, NFS_CLIENT(data->inode),
+				     pdata->call_ops, pdata->how, 1);
+	}
+}
+EXPORT_SYMBOL_GPL(pnfs_commit_done);
 
 enum pnfs_try_status
 pnfs_try_to_commit(struct nfs_write_data *data,
