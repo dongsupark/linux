@@ -230,6 +230,9 @@ void pnfs_destroy_all_layouts(struct nfs_client *);
 void put_layout_hdr(struct inode *inode);
 void pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo,
 			     struct nfs4_state *open_state);
+void pnfs_read_done(struct nfs_read_data *);
+void pnfs_writeback_done(struct nfs_write_data *);
+void pnfs_commit_done(struct nfs_write_data *);
 
 static inline bool
 has_layout(struct nfs_inode *nfsi)
