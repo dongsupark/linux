@@ -42,7 +42,7 @@
 #include <scsi/osd_initiator.h>
 #include "objlayout.h"
 
-#define NFSDBG_FACILITY         NFSDBG_PNFS
+#define NFSDBG_FACILITY         NFSDBG_PNFS_LD
 
 struct pnfs_client_operations *pnfs_client_ops;
 
