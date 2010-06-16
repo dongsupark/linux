@@ -48,7 +48,7 @@
 
 #include "objlayout.h"
 
-#define NFSDBG_FACILITY         NFSDBG_PNFS
+#define NFSDBG_FACILITY         NFSDBG_PNFS_LD
 
 #define _LLU(x) ((unsigned long long)x)
 
