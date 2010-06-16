@@ -46,7 +46,7 @@
 
 #include <linux/panfs_shim_api.h>
 
-#define NFSDBG_FACILITY         NFSDBG_PNFS
+#define NFSDBG_FACILITY         NFSDBG_PNFS_LD
 
 struct panfs_export_operations *panfs_export_ops;
 
