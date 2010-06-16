@@ -3421,8 +3421,8 @@ nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, __be32 nfserr,
 
 	nfserr = sb->s_pnfs_op->get_device_info(sb, &xdr, gdev->gd_layout_type,
 						&gdev->gd_devid);
-	if (nfserr) {
-	}
+	if (nfserr)
+		goto err;
 
 	/* The file system should never write 0 bytes without
 	 * returning an error
