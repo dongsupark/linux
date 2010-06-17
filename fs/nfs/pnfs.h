@@ -102,6 +102,10 @@ struct pnfs_layoutdriver_type {
 	enum pnfs_try_status
 	(*commit) (struct nfs_write_data *nfs_data, int how);
 
+	void (*encode_layoutcommit) (struct pnfs_layout_hdr *layoutid,
+				     struct xdr_stream *xdr,
+				     const struct nfs4_layoutcommit_args *args);
+
 	void (*encode_layoutreturn) (struct pnfs_layout_hdr *layoutid,
 				     struct xdr_stream *xdr,
 				     const struct nfs4_layoutreturn_args *args);

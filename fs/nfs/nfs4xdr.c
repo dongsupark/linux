@@ -1866,6 +1866,7 @@ encode_layoutget(struct xdr_stream *xdr,
 
 static int
 encode_layoutcommit(struct xdr_stream *xdr,
+		    struct inode *inode,
 		    const struct nfs4_layoutcommit_args *args,
 		    struct compound_hdr *hdr)
 {
@@ -1894,8 +1895,13 @@ encode_layoutcommit(struct xdr_stream *xdr,
 	p = reserve_space(xdr, 4);
 	*p = cpu_to_be32(args->layout_type);
 
-	p = reserve_space(xdr, 4);
-	xdr_encode_opaque(p, NULL, 0);
+	if (NFS_SERVER(inode)->pnfs_curr_ld->encode_layoutcommit) {
+		NFS_SERVER(inode)->pnfs_curr_ld->encode_layoutcommit(
+			NFS_I(inode)->layout, xdr, args);
+	} else {
+		p = reserve_space(xdr, 4);
+		xdr_encode_opaque(p, NULL, 0);
+	}
 
 	hdr->nops++;
 	hdr->replen += decode_layoutcommit_maxsz;
@@ -1937,6 +1943,23 @@ encode_layoutreturn(struct xdr_stream *xdr,
 	hdr->nops++;
 	hdr->replen += decode_layoutreturn_maxsz;
 }
+#else /* CONFIG_NFS_V4_1 */
+static int
+encode_layoutcommit(struct xdr_stream *xdr,
+		    struct inode *inode,
+		    const struct nfs4_layoutcommit_args *args,
+		    struct compound_hdr *hdr)
+{
+	return 0;
+}
+
+static void
+encode_layoutreturn(struct xdr_stream *xdr,
+		    const struct nfs4_layoutreturn_args *args,
+		    struct compound_hdr *hdr)
+{
+}
+
 #endif /* CONFIG_NFS_V4_1 */
 
 /*
@@ -2812,6 +2835,8 @@ static int nfs4_xdr_enc_layoutcommit(struct rpc_rqst *req, uint32_t *p,
 				     struct nfs4_layoutcommit_args *args)
 {
 	struct xdr_stream xdr;
+	struct nfs4_layoutcommit_data *data =
+		container_of(args, struct nfs4_layoutcommit_data, args);
 	struct compound_hdr hdr = {
 		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
 	};
@@ -2820,7 +2845,7 @@ static int nfs4_xdr_enc_layoutcommit(struct rpc_rqst *req, uint32_t *p,
 	encode_compound_hdr(&xdr, req, &hdr);
 	encode_sequence(&xdr, &args->seq_args, &hdr);
 	encode_putfh(&xdr, args->fh, &hdr);
-	encode_layoutcommit(&xdr, args, &hdr);
+	encode_layoutcommit(&xdr, data->args.inode, args, &hdr);
 	encode_getfattr(&xdr, args->bitmask, &hdr);
 	encode_nops(&hdr);
 	return 0;
