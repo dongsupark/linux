@@ -1044,6 +1044,12 @@ static void nfsd4_cb_layout_done(struct rpc_task *task, void *calldata)
 		 */
 		expire_client_lock(clp);
 		break;
+	case -NFS4ERR_DELAY:
+		/* Pole the client until it's done with the layout */
+		rpc_delay(task, HZ/100); /* 10 mili-seconds */
+		task->tk_status = 0;
+		rpc_restart_call(task);
+		break;
 	case -NFS4ERR_NOMATCHING_LAYOUT:
 		nomatching_layout(clr);
 	}
