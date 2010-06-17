@@ -1340,23 +1340,21 @@ nfsd4_create_session(struct svc_rqst *rqstp,
 		cs_slot->sl_seqid++; /* from 0 to 1 */
 		move_to_confirmed(unconf);
 
-		if (cr_ses->flags & SESSION4_BACK_CHAN) {
-			unconf->cl_cb_conn.cb_xprt = rqstp->rq_xprt;
-			svc_xprt_get(rqstp->rq_xprt);
-			rpc_copy_addr(
-				(struct sockaddr *)&unconf->cl_cb_conn.cb_addr,
-				sa);
-			unconf->cl_cb_conn.cb_addrlen = svc_addr_len(sa);
-			unconf->cl_cb_conn.cb_minorversion =
-				cstate->minorversion;
-			unconf->cl_cb_conn.cb_prog = cr_ses->callback_prog;
-			unconf->cl_cb_seq_nr = 1;
-			nfsd4_probe_callback(unconf, &unconf->cl_cb_conn);
-		}
 		conf = unconf;
 	} else {
 		status = nfserr_stale_clientid;
 		goto out;
+	}
+
+	if (cr_ses->flags & SESSION4_BACK_CHAN) {
+		conf->cl_cb_conn.cb_xprt = rqstp->rq_xprt;
+		svc_xprt_get(rqstp->rq_xprt);
+		rpc_copy_addr((struct sockaddr *)&conf->cl_cb_conn.cb_addr, sa);
+		conf->cl_cb_conn.cb_addrlen = svc_addr_len(sa);
+		conf->cl_cb_conn.cb_minorversion = cstate->minorversion;
+		conf->cl_cb_conn.cb_prog = cr_ses->callback_prog;
+		conf->cl_cb_seq_nr = 1;
+		nfsd4_probe_callback(conf, &conf->cl_cb_conn);
 	}
 
 	/*
