@@ -150,6 +150,9 @@ struct layoutdriver_io_operations {
 	void (*encode_layoutcommit) (struct pnfs_layout_hdr *layoutid,
 				     struct xdr_stream *xdr,
 				     const struct nfs4_layoutcommit_args *args);
+	void (*cleanup_layoutcommit) (struct pnfs_layout_hdr *layoutid,
+				      struct nfs4_layoutcommit_args *args,
+				      int status);
 	void (*encode_layoutreturn) (struct pnfs_layout_hdr *layoutid,
 				struct xdr_stream *xdr,
 				const struct nfs4_layoutreturn_args *args);

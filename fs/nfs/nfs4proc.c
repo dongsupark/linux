@@ -5593,10 +5593,11 @@ static void nfs4_layoutcommit_release(void *lcdata)
 	struct nfs4_layoutcommit_data *data =
 		(struct nfs4_layoutcommit_data *)lcdata;
 
+	put_rpccred(data->cred);
+	pnfs_cleanup_layoutcommit(lcdata);
+	pnfs_layoutcommit_free(lcdata);
 	/* Matched by get_layout in pnfs_layoutcommit_inode */
 	put_layout(data->args.inode);
-	put_rpccred(data->cred);
-	pnfs_layoutcommit_free(lcdata);
 }
 
 static const struct rpc_call_ops nfs4_layoutcommit_ops = {
