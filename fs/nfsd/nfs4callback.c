@@ -1042,7 +1042,6 @@ static void nfsd4_cb_layout_done(struct rpc_task *task, void *calldata)
 		 * the client after at-least "lease time" .eg lease-time * 2
 		 * when failing to communicate a recall
 		 */
-		expire_client_lock(clp);
 		break;
 	case -NFS4ERR_DELAY:
 		/* Pole the client until it's done with the layout */
