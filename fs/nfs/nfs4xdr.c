@@ -1878,8 +1878,13 @@ encode_layoutcommit(struct xdr_stream *xdr,
 	p = reserve_space(xdr, 4);
 	*p = cpu_to_be32(args->layout_type);
 
-	p = reserve_space(xdr, 4);
-	xdr_encode_opaque(p, NULL, 0);
+	if (NFS_SERVER(args->inode)->pnfs_curr_ld->encode_layoutcommit) {
+		NFS_SERVER(args->inode)->pnfs_curr_ld->encode_layoutcommit(
+			NFS_I(args->inode)->layout, xdr, args);
+	} else {
+		p = reserve_space(xdr, 4);
+		xdr_encode_opaque(p, NULL, 0);
+	}
 
 	hdr->nops++;
 	hdr->replen += decode_layoutcommit_maxsz;
