@@ -5570,6 +5570,7 @@ static void nfs4_layoutcommit_release(void *lcdata)
 	struct nfs4_layoutcommit_data *data =
 		(struct nfs4_layoutcommit_data *)lcdata;
 
+	pnfs_cleanup_layoutcommit(lcdata);
 	/* Matched by get_layout in pnfs_layoutcommit_inode */
 	put_layout_hdr(data->args.inode);
 	put_rpccred(data->cred);
