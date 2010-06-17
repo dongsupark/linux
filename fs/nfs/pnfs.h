@@ -109,9 +109,15 @@ struct pnfs_layoutdriver_type {
 				     struct xdr_stream *xdr,
 				     const struct nfs4_layoutreturn_args *args);
 
+	int (*setup_layoutcommit) (struct pnfs_layout_hdr *layoutid,
+				   struct nfs4_layoutcommit_args *args);
+
 	void (*encode_layoutcommit) (struct pnfs_layout_hdr *layoutid,
 				     struct xdr_stream *xdr,
 				     const struct nfs4_layoutcommit_args *args);
+
+	void (*cleanup_layoutcommit) (struct pnfs_layout_hdr *layoutid,
+				      struct nfs4_layoutcommit_data *data);
 };
 
 struct pnfs_layout_hdr {
@@ -170,6 +176,8 @@ enum pnfs_try_status pnfs_try_to_write_data(struct nfs_write_data *,
 enum pnfs_try_status pnfs_try_to_read_data(struct nfs_read_data *,
 					    const struct rpc_call_ops *);
 bool pnfs_generic_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev, struct nfs_page *req);
+void pnfs_cleanup_layoutcommit(struct inode *,
+			       struct nfs4_layoutcommit_data *);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
 void pnfs_free_lseg_list(struct list_head *tmp_list);
 void pnfs_destroy_layout(struct nfs_inode *);

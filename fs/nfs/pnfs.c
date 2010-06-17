@@ -1176,6 +1176,19 @@ pnfs_try_to_read_data(struct nfs_read_data *rdata,
 	return trypnfs;
 }
 
+void pnfs_cleanup_layoutcommit(struct inode *inode,
+			       struct nfs4_layoutcommit_data *data)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	/* TODO: Maybe we should avoid this by allowing the layout driver
+	* to directly xdr its layout on the wire.
+	*/
+	if (nfss->pnfs_curr_ld->cleanup_layoutcommit)
+		nfss->pnfs_curr_ld->cleanup_layoutcommit(
+					NFS_I(inode)->layout, data);
+}
+
 /*
  * Currently there is only one (whole file) write lseg.
  */
@@ -1277,6 +1290,14 @@ pnfs_layoutcommit_inode(struct inode *inode, bool sync)
 	data->res.fattr = &data->fattr;
 	data->args.lastbytewritten = end_pos - 1;
 	data->res.server = NFS_SERVER(inode);
+
+	/* Call layout driver to set the arguments */
+	if (NFS_SERVER(inode)->pnfs_curr_ld->setup_layoutcommit) {
+		status = NFS_SERVER(inode)->pnfs_curr_ld->setup_layoutcommit(
+				NFS_I(inode)->layout, &data->args);
+		if (status)
+			goto out;
+	}
 
 	status = nfs4_proc_layoutcommit(data, sync);
 out:

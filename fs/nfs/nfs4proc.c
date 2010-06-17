@@ -5854,6 +5854,7 @@ static void nfs4_layoutcommit_prepare(struct rpc_task *task, void *calldata)
 	if (nfs4_setup_sequence(server, &data->args.seq_args,
 				&data->res.seq_res, 1, task))
 		return;
+	data->res.status = -1;
 	rpc_call_start(task);
 }
 
@@ -5888,6 +5889,7 @@ static void nfs4_layoutcommit_release(void *calldata)
 {
 	struct nfs4_layoutcommit_data *data = calldata;
 
+	pnfs_cleanup_layoutcommit(data->args.inode, data);
 	/* Matched by references in pnfs_set_layoutcommit */
 	put_lseg(data->lseg);
 	put_rpccred(data->cred);
