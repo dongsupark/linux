@@ -5545,6 +5545,7 @@ static void nfs4_layoutcommit_prepare(struct rpc_task *task, void *data)
 	if (nfs4_setup_sequence(server, NULL, &ldata->args.seq_args,
 				&ldata->res.seq_res, 1, task))
 		return;
+	ldata->res.status = -1;
 	rpc_call_start(task);
 }
 
@@ -5560,8 +5561,6 @@ nfs4_layoutcommit_done(struct rpc_task *task, void *calldata)
 
 	if (nfs4_async_handle_error(task, server, NULL, NULL) == -EAGAIN)
 		nfs_restart_rpc(task, server->nfs_client);
-
-	data->status = task->tk_status;
 }
 
 static void nfs4_layoutcommit_release(void *lcdata)
@@ -5569,6 +5568,7 @@ static void nfs4_layoutcommit_release(void *lcdata)
 	struct nfs4_layoutcommit_data *data =
 		(struct nfs4_layoutcommit_data *)lcdata;
 
+	pnfs_cleanup_layoutcommit(data->args.inode, data);
 	/* Matched by get_layout in pnfs_layoutcommit_inode */
 	put_layout_hdr(NFS_I(data->args.inode)->layout);
 	put_rpccred(data->cred);
@@ -5618,11 +5618,11 @@ nfs4_proc_layoutcommit(struct nfs4_layoutcommit_data *data, int issync)
 	status = nfs4_wait_for_completion_rpc_task(task);
 	if (status != 0)
 		goto out;
-	status = data->status;
+	status = task->tk_status;
 out:
 	dprintk("%s: status %d\n", __func__, status);
 	rpc_put_task(task);
-	return 0;
+	return status;
 }
 
 static void

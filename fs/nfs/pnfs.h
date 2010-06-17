@@ -106,6 +106,9 @@ struct pnfs_layoutdriver_type {
 				     struct xdr_stream *xdr,
 				     const struct nfs4_layoutcommit_args *args);
 
+	void (*cleanup_layoutcommit) (struct pnfs_layout_hdr *layoutid,
+				      struct nfs4_layoutcommit_data *data);
+
 	void (*encode_layoutreturn) (struct pnfs_layout_hdr *layoutid,
 				     struct xdr_stream *xdr,
 				     const struct nfs4_layoutreturn_args *args);
@@ -223,6 +226,8 @@ enum pnfs_try_status pnfs_try_to_write_data(struct nfs_write_data *,
 					     const struct rpc_call_ops *, int);
 enum pnfs_try_status pnfs_try_to_read_data(struct nfs_read_data *,
 					    const struct rpc_call_ops *);
+void pnfs_cleanup_layoutcommit(struct inode *,
+			       struct nfs4_layoutcommit_data *);
 int pnfs_layoutcommit_inode(struct inode *inode, int sync);
 void pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent);
 void pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx);

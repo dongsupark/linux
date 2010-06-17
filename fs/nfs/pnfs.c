@@ -1234,11 +1234,24 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 	return trypnfs;
 }
 
+void pnfs_cleanup_layoutcommit(struct inode *inode,
+			       struct nfs4_layoutcommit_data *data)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	/* TODO: Maybe we should avoid this by allowing the layout driver
+	* to directly xdr its layout on the wire.
+	*/
+	if (nfss->pnfs_curr_ld->cleanup_layoutcommit)
+		nfss->pnfs_curr_ld->cleanup_layoutcommit(
+					NFS_I(inode)->layout, data);
+}
+
 /*
  * Set up the argument/result storage required for the RPC call.
  */
 static int
-pnfs_layoutcommit_setup(struct inode *inode,
+pnfs_setup_layoutcommit(struct inode *inode,
 			struct nfs4_layoutcommit_data *data,
 			loff_t write_begin_pos, loff_t write_end_pos)
 {
@@ -1315,7 +1328,7 @@ pnfs_layoutcommit_inode(struct inode *inode, int sync)
 	spin_unlock(&inode->i_lock);
 
 	/* Set up layout commit args */
-	status = pnfs_layoutcommit_setup(inode, data, write_begin_pos,
+	status = pnfs_setup_layoutcommit(inode, data, write_begin_pos,
 					 write_end_pos);
 	if (status) {
 		/* The layout driver failed to setup the layoutcommit */
