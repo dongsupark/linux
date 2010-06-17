@@ -147,6 +147,9 @@ struct layoutdriver_io_operations {
 	struct pnfs_layout_segment * (*alloc_lseg) (struct pnfs_layout_hdr *layoutid, struct nfs4_layoutget_res *lgr);
 	void (*free_lseg) (struct pnfs_layout_segment *lseg);
 
+	void (*encode_layoutcommit) (struct pnfs_layout_hdr *layoutid,
+				     struct xdr_stream *xdr,
+				     const struct nfs4_layoutcommit_args *args);
 	void (*encode_layoutreturn) (struct pnfs_layout_hdr *layoutid,
 				struct xdr_stream *xdr,
 				const struct nfs4_layoutreturn_args *args);

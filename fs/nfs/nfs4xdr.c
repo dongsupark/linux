@@ -1857,6 +1857,8 @@ encode_layoutcommit(struct xdr_stream *xdr,
 		    const struct nfs4_layoutcommit_args *args,
 		    struct compound_hdr *hdr)
 {
+	struct layoutdriver_io_operations *ld_io_ops =
+			NFS_SERVER(args->inode)->pnfs_curr_ld->ld_io_ops;
 	__be32 *p;
 
 	dprintk("%s: %llu@%llu lbw: %llu type: %d\n", __func__,
@@ -1882,8 +1884,13 @@ encode_layoutcommit(struct xdr_stream *xdr,
 	p = reserve_space(xdr, 4);
 	*p = cpu_to_be32(args->layout_type);
 
-	p = reserve_space(xdr, 4);
-	xdr_encode_opaque(p, NULL, 0);
+	if (ld_io_ops->encode_layoutcommit) {
+		ld_io_ops->encode_layoutcommit(NFS_I(args->inode)->layout,
+					       xdr, args);
+	} else {
+		p = reserve_space(xdr, 4);
+		xdr_encode_opaque(p, NULL, 0);
+	}
 
 	hdr->nops++;
 	hdr->replen += decode_layoutcommit_maxsz;
