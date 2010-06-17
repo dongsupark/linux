@@ -1279,6 +1279,11 @@ pnfs_setup_layoutcommit(struct inode *inode,
 	data->args.bitmask = nfss->attr_bitmask;
 	data->res.server = nfss;
 
+	/* Call layout driver to set the arguments */
+	if (nfss->pnfs_curr_ld->setup_layoutcommit)
+		result = nfss->pnfs_curr_ld->setup_layoutcommit(
+				NFS_I(inode)->layout, &data->args);
+
 	dprintk("<-- %s Status %d\n", __func__, result);
 	return result;
 }
