@@ -1113,7 +1113,6 @@ static void nfsd4_cb_device_done(struct rpc_task *task, void *calldata)
 	struct nfs4_client *clp = cbnd->nd_client;
 
 	nfsd4_cb_done_sequence(task, clp);
-	kfree(task->tk_msg.rpc_argp);
 
 	dprintk("%s: clp %p cb_client %p: status %d\n",
 	       __func__,
@@ -1128,9 +1127,18 @@ static void nfsd4_cb_device_done(struct rpc_task *task, void *calldata)
 	}
 }
 
+static void nfsd4_cb_device_release(void *calldata)
+{
+	struct nfs4_notify_device *cbnd = calldata;
+	kfree(cbnd->nd_args);
+	cbnd->nd_args = NULL;
+	kfree(cbnd);
+}
+
 static const struct rpc_call_ops nfsd4_cb_device_ops = {
 	.rpc_call_prepare = nfsd4_cb_device_prepare,
 	.rpc_call_done = nfsd4_cb_device_done,
+	.rpc_release = nfsd4_cb_device_release,
 };
 
 /*

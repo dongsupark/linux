@@ -109,6 +109,8 @@ struct nfs4_notify_device {
 	struct nfsd4_pnfs_cb_dev_list  *nd_list;
 	struct nfs4_client	       *nd_client;
 	struct list_head	        nd_perclnt;
+
+	void				*nd_args;	/* nfsd internal */
 };
 
 u64 find_create_sbid(struct super_block *);
