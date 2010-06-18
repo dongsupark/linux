@@ -40,7 +40,7 @@
 
 #include <linux/pnfs_osd_xdr.h>
 
-#define NFSDBG_FACILITY         NFSDBG_PNFS
+#define NFSDBG_FACILITY         NFSDBG_PNFS_LD
 
 /*
  * The following implementation is based on these Internet Drafts:
