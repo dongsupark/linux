@@ -188,6 +188,7 @@ nfsd4_set_pnfs_dlm_device(char *pnfs_dlm_device, int len)
 			found->disk_name, found->ds_list, new->ds_list);
 		memset(found->ds_list, 0, DISK_NAME_LEN);
 		memcpy(found->ds_list, new->ds_list, strlen(new->ds_list));
+		found->num_ds = new->num_ds;
 		kfree(new);
 	} else {
 		dprintk("%s Adding pnfs_dlm_device %s:%s\n", __func__,
