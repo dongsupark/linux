@@ -1088,6 +1088,7 @@ static void nfsd4_cb_layout_done(struct rpc_task *task, void *calldata)
 		rpc_restart_call_prepare(task);
 		break;
 	case -NFS4ERR_NOMATCHING_LAYOUT:
+		task->tk_status = 0;
 		nomatching_layout(clr);
 	}
 }
