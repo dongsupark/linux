@@ -1668,10 +1668,11 @@ int nfsd_device_notify_cb(struct super_block *sb,
 		status2 = nfsd4_cb_notify_device(cbnd);
 		pnfs_clear_device_notify(cbnd->nd_client);
 		put_nfs4_client(cbnd->nd_client);
-		if (status2)
+		if (status2) {
+			kfree(cbnd);
 			status = status2;
+		}
 		notify_num++;
-		kfree(cbnd);
 	}
 
 	dprintk("NFSD %s: status %d clients %u\n",
