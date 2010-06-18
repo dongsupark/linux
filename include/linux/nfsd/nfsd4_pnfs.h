@@ -234,6 +234,8 @@ struct nfs4_layoutrecall {
 	struct timespec			clr_time;	/* last activity */
 	struct super_block 		*clr_sb; /* We might not have a file */
 	struct nfs4_layoutrecall	*parent; /* The initiating recall */
+
+	void				*clr_args;	/* nfsd internal */
 };
 
 struct nfsd4_pnfs_cb_dev_item {
