@@ -1020,7 +1020,6 @@ static void nfsd4_cb_layout_done(struct rpc_task *task, void *calldata)
 	struct nfs4_client *clp = clr->clr_client;
 
 	nfsd4_cb_done_sequence(task, clp);
-	kfree(task->tk_msg.rpc_argp);
 
 	if (!task->tk_status)
 		return;
@@ -1057,6 +1056,8 @@ static void nfsd4_cb_layout_done(struct rpc_task *task, void *calldata)
 static void nfsd4_cb_layout_release(void *calldata)
 {
 	struct nfs4_layoutrecall *clr = calldata;
+	kfree(clr->clr_args);
+	clr->clr_args = NULL;
 	put_layoutrecall(clr);
 }
 
@@ -1086,6 +1087,7 @@ nfsd4_cb_layout(struct nfs4_layoutrecall *clr)
 		status = -ENOMEM;
 		goto out;
 	}
+	clr->clr_args = args;
 	args->args_op = clr;
 	msg.rpc_argp = args;
 	status = rpc_call_async(clnt, &msg, RPC_TASK_SOFT,
