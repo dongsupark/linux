@@ -121,9 +121,7 @@ _data_server_lookup(u32 ip_addr, u32 port)
 static int
 nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 {
-	struct nfs_server	tmp = {
-		.nfs_client = NULL,
-	};
+	struct nfs_server	*tmp;
 	struct sockaddr_in	sin;
 	struct rpc_clnt 	*mds_clnt = mds_srv->client;
 	struct nfs_client	*clp = mds_srv->nfs_client;
@@ -154,12 +152,18 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 		}
 		goto out;
 	}
+
+	/* Temporay server for nfs4_set_client */
+	tmp = kzalloc(sizeof(struct nfs_server), GFP_KERNEL);
+	if (!tmp)
+		goto out;
+
 	/*
 	 * Set a retrans, timeout interval, and authflavor equual to the MDS
 	 * values. Use the MDS nfs_client cl_ipaddr field so as to use the
 	 * same co_ownerid as the MDS.
 	 */
-	err = nfs4_set_client(&tmp,
+	err = nfs4_set_client(tmp,
 			      mds_srv->nfs_client->cl_hostname,
 			      (struct sockaddr *)&sin,
 			      sizeof(struct sockaddr),
@@ -169,9 +173,9 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 			      mds_clnt->cl_xprt->timeout,
 			      1 /* minorversion */);
 	if (err < 0)
-		goto out;
+		goto out_free;
 
-	clp = tmp.nfs_client;
+	clp = tmp->nfs_client;
 
 	/* Ask for only the EXCHGID4_FLAG_USE_PNFS_DS pNFS role */
 	dprintk("%s EXCHANGE_ID for clp %p\n", __func__, clp);
@@ -211,6 +215,8 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 	dprintk("%s: ip=%x, port=%hu, rpcclient %p\n", __func__,
 				ntohl(ds->ds_ip_addr), ntohs(ds->ds_port),
 				clp->cl_rpcclient);
+out_free:
+	kfree(tmp);
 out:
 	dprintk("%s Returns %d\n", __func__, err);
 	return err;
