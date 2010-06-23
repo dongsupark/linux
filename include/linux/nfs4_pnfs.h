@@ -147,6 +147,10 @@ struct layoutdriver_io_operations {
 	struct pnfs_layout_segment * (*alloc_lseg) (struct pnfs_layout_hdr *layoutid, struct nfs4_layoutget_res *lgr);
 	void (*free_lseg) (struct pnfs_layout_segment *lseg);
 
+	void (*encode_layoutreturn) (struct pnfs_layout_hdr *layoutid,
+				struct xdr_stream *xdr,
+				const struct nfs4_layoutreturn_args *args);
+
 	/* Registration information for a new mounted file system
 	 */
 	int (*initialize_mountpoint) (struct nfs_client *);
