@@ -332,45 +332,15 @@ struct pnfs_export_operations exofs_pnfs_ops = {
 	.get_device_info = exofs_get_device_info,
 };
 
-static bool is_layout_returned(struct exofs_i_info *oi, enum pnfs_iomode iomode,
-			      u64 offset, u64 length, void *cookie, int *status)
+static bool is_layout_returned(struct exofs_i_info *oi)
 {
-	struct inode *inode = &oi->vfs_inode;
-	bool done;
-	int error;
+	bool layout_given;
 
-	/* We most probably have finished the recall, unless there was an out-
-	 * of-memory condition when sending the recall. For forward progress
-	 * some recalls where sent and some not, resend these that where lost
-	 * before. If cb_layout_recall returns with -ENOENT we know we are
-	 * done for sure.
-	 */
+	spin_lock(&oi->i_layout_lock);
+	layout_given = test_bit(OBJ_LAYOUT_IS_GIVEN, &oi->i_flags);
+	spin_unlock(&oi->i_layout_lock);
 
-	error = cb_layout_recall(inode, iomode, offset, length, cookie);
-
-	switch (error) {
-	case 0:
-	case -EAGAIN:
-		done = false;
-		break;
-	case -ENOENT:
-		done = true;
-		break;
-	default:
-		goto err;
-	}
-
-	*status = 0;
-	return done;
-
-err:
-	/* this will cause wait_event_interruptible below to break with
-	 * an -ERESTARTSY return. If nfsd is able to unload we probably
-	 * should break out of any nfs loops
-	 */
-	*status = error;
-	restart_syscall();
-	return false;
+	return !layout_given;
 }
 
 int exofs_inode_recall_layout(struct inode *inode, enum pnfs_iomode iomode,
@@ -388,13 +358,26 @@ int exofs_inode_recall_layout(struct inode *inode, enum pnfs_iomode iomode,
 	if (!layout_given)
 		goto exec;
 
-	EXOFS_DBGMSG("(0x%lx) has_layout issue a recall\n", inode->i_ino);
+	for (;;) {
+		EXOFS_DBGMSG("(0x%lx) has_layout issue a recall\n",
+			     inode->i_ino);
+		error = cb_layout_recall(inode, iomode, 0, NFS4_MAX_UINT64,
+					 &oi->i_wq);
+		switch (error) {
+		case 0:
+		case -EAGAIN:
+			break;
+		case -ENOENT:
+			goto exec;
+		default:
+			goto err;
+		}
 
-	wait_event_interruptible(oi->i_wq,
-			is_layout_returned(oi, iomode, 0, NFS4_MAX_UINT64,
-					   todo, &error));
-	if (error)
-		goto err;
+		error = wait_event_interruptible(oi->i_wq,
+						 is_layout_returned(oi));
+		if (error)
+			goto err;
+	}
 
 exec:
 	error = todo(inode);
