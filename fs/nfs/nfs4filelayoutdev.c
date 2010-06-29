@@ -332,7 +332,7 @@ decode_and_add_ds(uint32_t **pp, struct inode *inode)
 	tmp[0] = be32_to_cpup(p++);
 
 	len = be32_to_cpup(p++);
-	if (len > 29) {
+	if (len >= sizeof(r_addr)) {
 		printk("%s: ERROR: Device ip/port too long (%d)\n",
 			__func__, len);
 		goto out_err;
