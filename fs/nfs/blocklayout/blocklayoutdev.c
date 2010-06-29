@@ -105,7 +105,8 @@ nfs4_blk_add_block_disk(struct device *cdev,
 	static char *claim_ptr = "I belong to pnfs block driver";
 	struct block_device *bdev;
 	struct gendisk *gd;
-	unsigned int major, minor, ret = 0;
+	unsigned int major, minor;
+	int ret;
 	dev_t dev;
 
 	dprintk("%s enter \n", __func__);
