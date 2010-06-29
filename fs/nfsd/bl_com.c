@@ -139,8 +139,10 @@ bl_pipe_downcall(struct file *filp, const char __user *src, size_t mlen)
 	if ((res = kmalloc(mlen, GFP_KERNEL)) == NULL)
 		return -ENOMEM;
 	
-	if (copy_from_user(res, src, mlen))
+	if (copy_from_user(res, src, mlen)) {
+		kfree(res);
 		return -EFAULT;
+	}
 	
 	mutex_lock(&bc->pipe_lock);
 	
