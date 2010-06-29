@@ -291,6 +291,7 @@ static int nfsd4_pnfs_dlm_getdevinfo(struct super_block *sb,
 	if (!fdev.fl_device_list) {
 		printk(KERN_ERR "%s: ERROR: unable to kmalloc a device list "
 			"buffer for %d DSes.\n", __func__, i);
+		fdev.fl_device_length = 0;
 		goto out;
 	}
 
