@@ -209,12 +209,13 @@ out_free:
 
 void nfsd4_pnfs_dlm_shutdown(void)
 {
-	struct dlm_device_entry *dlm_pdev;
+	struct dlm_device_entry *dlm_pdev, *next;
 
 	dprintk("--> %s\n", __func__);
 
 	spin_lock(&dlm_device_list_lock);
-	list_for_each_entry(dlm_pdev, &dlm_device_list, dlm_dev_list) {
+	list_for_each_entry_safe (dlm_pdev, next, &dlm_device_list,
+				  dlm_dev_list) {
 		list_del(&dlm_pdev->dlm_dev_list);
 		kfree(dlm_pdev);
 	}
