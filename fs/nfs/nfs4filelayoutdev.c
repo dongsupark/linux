@@ -222,7 +222,7 @@ out:
 	return err;
 out_put:
 	nfs_put_client(clp);
-	goto out;
+	goto out_free;
 }
 
 static void
