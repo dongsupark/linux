@@ -247,6 +247,10 @@ static __be32 decode_pnfs_layoutrecall_args(struct svc_rqst *rqstp,
 			goto out;
 
 		p = read_buf(xdr, 2 * sizeof(uint64_t));
+		if (unlikely(p == NULL)) {
+			status = htonl(NFS4ERR_RESOURCE);
+			goto out;
+		}
 		p = xdr_decode_hyper(p, &args->cbl_seg.offset);
 		p = xdr_decode_hyper(p, &args->cbl_seg.length);
 		status = decode_stateid(xdr, &args->cbl_stateid);
@@ -254,6 +258,10 @@ static __be32 decode_pnfs_layoutrecall_args(struct svc_rqst *rqstp,
 			goto out;
 	} else if (args->cbl_recall_type == RETURN_FSID) {
 		p = read_buf(xdr, 2 * sizeof(uint64_t));
+		if (unlikely(p == NULL)) {
+			status = htonl(NFS4ERR_RESOURCE);
+			goto out;
+		}
 		p = xdr_decode_hyper(p, &args->cbl_fsid.major);
 		p = xdr_decode_hyper(p, &args->cbl_fsid.minor);
 	}
