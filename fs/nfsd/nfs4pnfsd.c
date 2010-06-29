@@ -213,7 +213,7 @@ find_get_layout_state(struct nfs4_client *clp, struct nfs4_file *fp)
 	return NULL;
 }
 
-static int
+static __be32
 verify_stateid(struct nfs4_file *fp, stateid_t *stateid)
 {
 	struct nfs4_stateid *local = NULL;
@@ -274,7 +274,7 @@ nfs4_process_layout_stateid(struct nfs4_client *clp, struct nfs4_file *fp,
 
 		/* verify input stateid */
 		status = verify_stateid(fp, stateid);
-		if (status < 0) {
+		if (status) {
 			dprintk("%s ERROR: invalid open/deleg/lock stateid\n",
 				__func__);
 			goto out;
