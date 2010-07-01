@@ -2015,7 +2015,7 @@ pnfs_commit(struct nfs_write_data *data, int sync)
 	   before returning it, otherwise the data needs to be rewritten,
 	   either with a new layout or to the MDS */
 	result = pnfs_update_layout(data->inode,
-				    NULL,
+				    first->wb_context,
 				    count,
 				    first->wb_offset,
 				    IOMODE_RW,
