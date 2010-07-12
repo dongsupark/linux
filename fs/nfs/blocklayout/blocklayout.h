@@ -177,6 +177,7 @@ static inline int choose_list(enum exstate4 state)
 }
 
 struct pnfs_block_layout {
+	struct pnfs_layout_type bl_layout;
 	struct pnfs_inval_markings bl_inval; /* tracks INVAL->RW transition */
 	spinlock_t		bl_ext_lock;   /* Protects list manipulation */
 	struct list_head	bl_extents[EXTENT_LISTS]; /* R and RW extents */
@@ -193,8 +194,18 @@ struct bl_layoutupdate_data {
 };
 
 #define BLK_ID(lo) ((struct block_mount_id *)(PNFS_NFS_SERVER(lo)->pnfs_ld_data))
-#define BLK_LSEG2EXT(lseg) ((struct pnfs_block_layout *)lseg->layout->ld_data)
-#define BLK_LO2EXT(lo) ((struct pnfs_block_layout *)lo->ld_data)
+
+static inline struct pnfs_block_layout *
+BLK_LO2EXT(struct pnfs_layout_type *lo)
+{
+	return container_of(lo, struct pnfs_block_layout, bl_layout);
+}
+
+static inline struct pnfs_block_layout *
+BLK_LSEG2EXT(struct pnfs_layout_segment *lseg)
+{
+	return BLK_LO2EXT(lseg->layout);
+}
 
 uint32_t *blk_overflow(uint32_t *p, uint32_t *end, size_t nbytes);
 
