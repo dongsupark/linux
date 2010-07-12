@@ -49,7 +49,7 @@ struct pnfs_client_operations *pnfs_client_ops;
 /*
  * Create a objlayout layout structure for the given inode and return it.
  */
-static void *
+static struct pnfs_layout_type *
 objlayout_alloc_layout(struct inode *inode)
 {
 	struct objlayout *objlay;
@@ -60,16 +60,16 @@ objlayout_alloc_layout(struct inode *inode)
 		INIT_LIST_HEAD(&objlay->err_list);
 	}
 	dprintk("%s: Return %p\n", __func__, objlay);
-	return objlay;
+	return &objlay->pnfs_layout;
 }
 
 /*
  * Free an objlayout layout structure
  */
 static void
-objlayout_free_layout(void *p)
+objlayout_free_layout(struct pnfs_layout_type *lo)
 {
-	struct objlayout *objlay = p;
+	struct objlayout *objlay = OBJLAYOUT(lo);
 
 	dprintk("%s: objlay %p\n", __func__, objlay);
 
@@ -232,7 +232,7 @@ objlayout_iodone(struct objlayout_io_state *state)
 	if (likely(state->status >= 0)) {
 		objlayout_free_io_state(state);
 	} else {
-		struct objlayout *objlay = PNFS_LD_DATA(state->lseg->layout);
+		struct objlayout *objlay = OBJLAYOUT(state->lseg->layout);
 
 		spin_lock(&objlay->lock);
 		objlay->delta_space_valid = OBJ_DSU_INVALID;
@@ -485,7 +485,7 @@ objlayout_encode_layoutcommit(struct pnfs_layout_type *pnfslay,
 			      struct xdr_stream *xdr,
 			      const struct pnfs_layoutcommit_arg *args)
 {
-	struct objlayout *objlay = PNFS_LD_DATA(pnfslay);
+	struct objlayout *objlay = OBJLAYOUT(pnfslay);
 	struct pnfs_osd_layoutupdate lou;
 	__be32 *start;
 
@@ -621,7 +621,7 @@ objlayout_encode_layoutreturn(struct pnfs_layout_type *pnfslay,
 			      struct xdr_stream *xdr,
 			      const struct nfs4_pnfs_layoutreturn_arg *args)
 {
-	struct objlayout *objlay = PNFS_LD_DATA(pnfslay);
+	struct objlayout *objlay = OBJLAYOUT(pnfslay);
 	struct objlayout_io_state *state, *tmp;
 	__be32 *start, *uninitialized_var(last_xdr);
 
