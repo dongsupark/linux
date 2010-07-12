@@ -59,6 +59,8 @@ struct objlayout_segment {
  * per-inode layout
  */
 struct objlayout {
+	struct pnfs_layout_type pnfs_layout;
+
 	 /* for layout_commit */
 	enum osd_delta_space_valid_enum {
 		OBJ_DSU_INIT = 0,
@@ -71,6 +73,12 @@ struct objlayout {
 	spinlock_t lock;
 	struct list_head err_list;
 };
+
+static inline struct objlayout *
+OBJLAYOUT(struct pnfs_layout_type *lo)
+{
+	return container_of(lo, struct objlayout, pnfs_layout);
+}
 
 /*
  * per-I/O operation state
@@ -131,7 +139,7 @@ extern void objlayout_io_set_result(struct objlayout_io_state *state,
 static inline void
 objlayout_add_delta_space_used(struct objlayout_io_state *state, s64 space_used)
 {
-	struct objlayout *objlay = PNFS_LD_DATA(state->lseg->layout);
+	struct objlayout *objlay = OBJLAYOUT(state->lseg->layout);
 
 	/* If one of the I/Os errored out and the delta_space_used was
 	 * invalid we render the complete report as invalid. Protocol mandate
