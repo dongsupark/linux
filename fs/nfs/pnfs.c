@@ -945,6 +945,8 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo,
 void
 _pnfs_update_layout(struct inode *ino,
 		   struct nfs_open_context *ctx,
+		   loff_t pos,
+		   u64 count,
 		   enum pnfs_iomode iomode,
 		   struct pnfs_layout_segment **lsegpp)
 {
@@ -1221,7 +1223,8 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 	if (!pnfs_enabled_sb(nfss))
 		return;
 
-	_pnfs_update_layout(inode, ctx, IOMODE_READ, &pgio->pg_lseg);
+	_pnfs_update_layout(inode, ctx, 0, NFS4_MAX_UINT64, IOMODE_READ,
+			    &pgio->pg_lseg);
 	if (!pgio->pg_lseg)
 		return;
 

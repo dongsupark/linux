@@ -399,7 +399,7 @@ static int nfs_write_begin(struct file *file, struct address_space *mapping,
 
 	pnfs_update_layout(mapping->host,
 			   nfs_file_open_context(file),
-			   IOMODE_RW,
+			   0, NFS4_MAX_UINT64, IOMODE_RW,
 			   &lseg);
 start:
 	/*

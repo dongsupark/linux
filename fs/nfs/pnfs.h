@@ -33,7 +33,7 @@ extern const nfs4_stateid zero_stateid;
 
 void put_lseg(struct pnfs_layout_segment *lseg);
 void _pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
-	enum pnfs_iomode access_type,
+	loff_t pos, u64 count, enum pnfs_iomode access_type,
 	struct pnfs_layout_segment **lsegpp);
 
 int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *,
@@ -129,13 +129,13 @@ static inline int pnfs_return_layout(struct inode *ino,
 
 static inline void pnfs_update_layout(struct inode *ino,
 	struct nfs_open_context *ctx,
-	enum pnfs_iomode access_type,
+	loff_t pos, u64 count, enum pnfs_iomode access_type,
 	struct pnfs_layout_segment **lsegpp)
 {
 	struct nfs_server *nfss = NFS_SERVER(ino);
 
 	if (pnfs_enabled_sb(nfss))
-		_pnfs_update_layout(ino, ctx, access_type, lsegpp);
+		_pnfs_update_layout(ino, ctx, pos, count, access_type, lsegpp);
 	else {
 		if (lsegpp)
 			*lsegpp = NULL;
@@ -162,7 +162,7 @@ static inline void put_lseg(struct pnfs_layout_segment *lseg)
 
 static inline void
 pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
-	enum pnfs_iomode access_type,
+	loff_t pos, u64 count, enum pnfs_iomode access_type,
 	struct pnfs_layout_segment **lsegpp)
 {
 	if (lsegpp)
