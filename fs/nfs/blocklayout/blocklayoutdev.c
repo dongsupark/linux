@@ -620,7 +620,7 @@ int
 nfs4_blk_process_layoutget(struct pnfs_layout_type *lo,
 			   struct nfs4_pnfs_layoutget_res *lgr)
 {
-	struct pnfs_block_layout *bl = PNFS_LD_DATA(lo);
+	struct pnfs_block_layout *bl = BLK_LO2EXT(lo);
 	uint32_t *p = (uint32_t *)lgr->layout.buf;
 	uint32_t *end = (uint32_t *)((char *)lgr->layout.buf + lgr->layout.len);
 	int i, status = -EIO;
