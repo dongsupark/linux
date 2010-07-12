@@ -996,7 +996,9 @@ has_matching_lseg(struct pnfs_layout_segment *lseg,
  */
 static struct pnfs_layout_segment *
 pnfs_has_layout(struct pnfs_layout_hdr *lo,
-		struct pnfs_layout_range *range)
+		struct pnfs_layout_range *range,
+		bool take_ref,
+		bool only_valid)
 {
 	struct pnfs_layout_segment *lseg, *ret = NULL;
 
@@ -1004,24 +1006,28 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo,
 
 	BUG_ON_UNLOCKED_LO(lo);
 	list_for_each_entry (lseg, &lo->segs, fi_list) {
-		if (has_matching_lseg(lseg, range)) {
+		if (has_matching_lseg(lseg, range) &&
+		    (lseg->valid || !only_valid)) {
 			ret = lseg;
-			get_lseg(ret);
+			if (take_ref)
+				get_lseg(ret);
 			break;
 		}
 		if (cmp_layout(range, &lseg->range) > 0)
 			break;
 	}
 
-	dprintk("%s:Return lseg %p ref %d valid %d\n",
-		__func__, ret, ret ? atomic_read(&ret->kref.refcount) : 0,
+	dprintk("%s:Return lseg %p take_ref %d ref %d valid %d\n",
+		__func__, ret, take_ref,
+		ret ? atomic_read(&ret->kref.refcount) : 0,
 		ret ? ret->valid : 0);
 	return ret;
 }
 
 /* Update the file's layout for the given range and iomode.
  * Layout is retreived from the server if needed.
- * The appropriate layout segment is referenced and returned to the caller.
+ * If lsegpp is given, the appropriate layout segment is referenced and
+ * returned to the caller.
  */
 void
 _pnfs_update_layout(struct inode *ino,
@@ -1039,8 +1045,10 @@ _pnfs_update_layout(struct inode *ino,
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct pnfs_layout_hdr *lo;
 	struct pnfs_layout_segment *lseg = NULL;
+	bool take_ref = (lsegpp != NULL);
 
-	*lsegpp = NULL;
+	if (take_ref)
+		*lsegpp = NULL;
 	spin_lock(&ino->i_lock);
 	lo = pnfs_alloc_layout(ino);
 	if (lo == NULL) {
@@ -1049,9 +1057,10 @@ _pnfs_update_layout(struct inode *ino,
 	}
 
 	/* Check to see if the layout for the given range already exists */
-	lseg = pnfs_has_layout(lo, &arg);
+	lseg = pnfs_has_layout(lo, &arg, take_ref, !take_ref);
 	if (lseg && !lseg->valid) {
-		put_lseg_locked(lseg);
+		if (take_ref)
+			put_lseg_locked(lseg);
 		/* someone is cleaning the layout */
 		lseg = NULL;
 		goto out_unlock;
@@ -1090,7 +1099,8 @@ out:
 		nfsi->layout->state, lseg);
 	return;
 out_unlock:
-	*lsegpp = lseg;
+	if (lsegpp)
+		*lsegpp = lseg;
 	spin_unlock(&ino->i_lock);
 	goto out;
 }
