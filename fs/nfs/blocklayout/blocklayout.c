@@ -552,18 +552,17 @@ release_inval_marks(struct pnfs_inval_markings *marks)
 
 /* Note we are relying on caller locking to prevent nasty races. */
 static void
-bl_free_layout(void *p)
+bl_free_layout(struct pnfs_layout_type *lo)
 {
-	struct pnfs_block_layout	*bl = p;
+	struct pnfs_block_layout *bl = BLK_LO2EXT(lo);
 
 	dprintk("%s enter\n", __func__);
 	release_extents(bl, NULL);
 	release_inval_marks(&bl->bl_inval);
 	kfree(bl);
-	return;
 }
 
-static void *
+static struct pnfs_layout_type *
 bl_alloc_layout(struct inode *inode)
 {
 	struct pnfs_block_layout	*bl;
@@ -579,7 +578,7 @@ bl_alloc_layout(struct inode *inode)
 	bl->bl_count = 0;
 	bl->bl_blocksize = NFS_SERVER(inode)->pnfs_blksize >> 9;
 	INIT_INVAL_MARKS(&bl->bl_inval, bl->bl_blocksize);
-	return bl;
+	return &bl->bl_layout;
 }
 
 static void
