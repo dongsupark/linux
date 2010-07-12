@@ -206,7 +206,7 @@ bool should_free_lseg(struct pnfs_layout_range *lseg_range,
 		      struct pnfs_layout_range *recall_range);
 struct pnfs_layout_segment *
 pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
-		   enum pnfs_iomode access_type);
+		   loff_t pos, u64 count, enum pnfs_iomode access_type);
 bool pnfs_return_layout_barrier(struct nfs_inode *, struct pnfs_layout_range *);
 int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
@@ -323,7 +323,7 @@ static inline void put_lseg(struct pnfs_layout_segment *lseg)
 
 static inline struct pnfs_layout_segment *
 pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
-		   enum pnfs_iomode access_type)
+		   loff_t pos, u64 count, enum pnfs_iomode access_type)
 {
 	return NULL;
 }

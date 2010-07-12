@@ -596,11 +596,9 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 		put_layout_hdr(lo);
 		return NULL;
 	}
-	lgp->args.minlength = NFS4_MAX_UINT64;
+	lgp->args.minlength = PAGE_CACHE_SIZE;
 	lgp->args.maxcount = PNFS_LAYOUT_MAXSIZE;
-	lgp->args.range.iomode = range->iomode;
-	lgp->args.range.offset = 0;
-	lgp->args.range.length = NFS4_MAX_UINT64;
+	lgp->args.range = *range;
 	lgp->args.type = server->pnfs_curr_ld->id;
 	lgp->args.inode = ino;
 	lgp->args.ctx = get_nfs_open_context(ctx);
@@ -894,12 +892,14 @@ pnfs_find_lseg(struct pnfs_layout_hdr *lo,
 struct pnfs_layout_segment *
 pnfs_update_layout(struct inode *ino,
 		   struct nfs_open_context *ctx,
+		   loff_t pos,
+		   u64 count,
 		   enum pnfs_iomode iomode)
 {
 	struct pnfs_layout_range arg = {
 		.iomode = iomode,
-		.offset = 0,
-		.length = NFS4_MAX_UINT64,
+		.offset = pos,
+		.length = count,
 	};
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct nfs_client *clp = NFS_SERVER(ino)->nfs_client;
@@ -1099,7 +1099,7 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 		return;
 
 	readahead_range(inode, pages, &loff, &count);
-	pgio->pg_lseg = pnfs_update_layout(inode, ctx, IOMODE_READ);
+	pgio->pg_lseg = pnfs_update_layout(inode, ctx, loff, count, IOMODE_READ);
 	if (pgio->pg_lseg)
 		pnfs_set_pg_test(inode, pgio);
 }

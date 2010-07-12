@@ -390,7 +390,7 @@ static int nfs_write_begin(struct file *file, struct address_space *mapping,
 
 	lseg = pnfs_update_layout(mapping->host,
 				  nfs_file_open_context(file),
-				  IOMODE_RW);
+				  pos, len, IOMODE_RW);
 start:
 	/*
 	 * Prevent starvation issues if someone is doing a consistency
