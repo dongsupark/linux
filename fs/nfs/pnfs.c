@@ -957,6 +957,31 @@ out_forget_reply:
 }
 
 void
+readahead_range(struct inode *inode, struct list_head *pages, loff_t *offset,
+		size_t *count)
+{
+	struct page *first, *last;
+	loff_t foff, i_size = i_size_read(inode);
+	pgoff_t end_index = (i_size - 1) >> PAGE_CACHE_SHIFT;
+	size_t range;
+
+	first = list_entry((pages)->prev, struct page, lru);
+	last = list_entry((pages)->next, struct page, lru);
+
+	foff = (loff_t)first->index << PAGE_CACHE_SHIFT;
+
+	range = (last->index - first->index) * PAGE_CACHE_SIZE;
+	if (last->index == end_index)
+		range += ((i_size - 1) & ~PAGE_CACHE_MASK) + 1;
+	else
+		range += PAGE_CACHE_SIZE;
+	dprintk("%s foff %lu, range %Zu\n", __func__, (unsigned long)foff,
+		range);
+	*offset = foff;
+	*count = range;
+}
+
+void
 pnfs_set_pg_test(struct inode *inode, struct nfs_pageio_descriptor *pgio)
 {
 	struct pnfs_layout_hdr *lo;
@@ -982,6 +1007,8 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 		  struct list_head *pages)
 {
 	struct nfs_server *nfss = NFS_SERVER(inode);
+	size_t count = 0;
+	loff_t loff;
 
 	pgio->pg_iswrite = 0;
 	pgio->pg_test = NULL;
@@ -990,11 +1017,10 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 	if (!pnfs_enabled_sb(nfss))
 		return;
 
+	readahead_range(inode, pages, &loff, &count);
 	pgio->pg_lseg = pnfs_update_layout(inode, ctx, IOMODE_READ);
-	if (!pgio->pg_lseg)
-		return;
-
-	pnfs_set_pg_test(inode, pgio);
+	if (pgio->pg_lseg)
+		pnfs_set_pg_test(inode, pgio);
 }
 
 void
