@@ -154,6 +154,9 @@ struct layoutdriver_io_operations {
 };
 
 enum layoutdriver_policy_flags {
+	/* Should the NFS req. gather algorithm cross stripe boundaries? */
+	PNFS_GATHER_ACROSS_STRIPES	= 1 << 1,
+
 	/* Should the pNFS client commit and return the layout upon a setattr */
 	PNFS_LAYOUTRET_ON_SETATTR	= 1 << 3,
 };
@@ -167,6 +170,13 @@ struct layoutdriver_policy_operations {
 	/* test for nfs page cache coalescing */
 	int (*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
 };
+
+/* Should the NFS req. gather algorithm cross stripe boundaries? */
+static inline int
+pnfs_ld_gather_across_stripes(struct pnfs_layoutdriver_type *ld)
+{
+	return ld->ld_policy_ops->flags & PNFS_GATHER_ACROSS_STRIPES;
+}
 
 struct pnfs_device {
 	struct pnfs_deviceid dev_id;

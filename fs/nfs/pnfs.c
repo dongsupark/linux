@@ -1190,6 +1190,10 @@ pnfs_getboundary(struct inode *inode)
 	if (!policy_ops || !policy_ops->get_stripesize)
 		goto out;
 
+	/* The default is to not gather across stripes */
+	if (pnfs_ld_gather_across_stripes(nfss->pnfs_curr_ld))
+		goto out;
+
 	spin_lock(&inode->i_lock);
 	if (NFS_I(inode)->layout)
 		stripe_size = policy_ops->get_stripesize(NFS_I(inode)->layout);
