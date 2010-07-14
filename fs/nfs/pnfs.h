@@ -93,6 +93,16 @@ static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 	return nfss->pnfs_curr_ld != NULL;
 }
 
+/* Should the pNFS client commit and return the layout upon a setattr */
+static inline bool
+pnfs_ld_layoutret_on_setattr(struct inode *inode)
+{
+	if (!pnfs_enabled_sb(NFS_SERVER(inode)))
+		return false;
+	return NFS_SERVER(inode)->pnfs_curr_ld->ld_policy_ops->flags &
+		PNFS_LAYOUTRET_ON_SETATTR;
+}
+
 /* Should the pNFS client commit and return the layout on close
  */
 static inline int

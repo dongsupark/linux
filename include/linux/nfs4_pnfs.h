@@ -153,7 +153,14 @@ struct layoutdriver_io_operations {
 	int (*uninitialize_mountpoint) (struct nfs_server *server);
 };
 
+enum layoutdriver_policy_flags {
+	/* Should the pNFS client commit and return the layout upon a setattr */
+	PNFS_LAYOUTRET_ON_SETATTR	= 1 << 3,
+};
+
 struct layoutdriver_policy_operations {
+	unsigned flags;
+
 	/* The stripe size of the file system */
 	ssize_t (*get_stripesize) (struct pnfs_layout_hdr *layoutid);
 
