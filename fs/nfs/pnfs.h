@@ -62,12 +62,18 @@ enum {
 	NFS_LAYOUT_NEED_LCOMMIT,	/* LAYOUTCOMMIT needed */
 };
 
+enum layoutdriver_policy_flags {
+	/* Should the pNFS client commit and return the layout upon a setattr */
+	PNFS_LAYOUTRET_ON_SETATTR	= 1 << 0,
+};
+
 /* Per-layout driver specific registration structure */
 struct pnfs_layoutdriver_type {
 	struct list_head pnfs_tblid;
 	const u32 id;
 	const char *name;
 	struct module *owner;
+	unsigned flags;
 	int (*set_layoutdriver) (struct nfs_server *);
 	int (*clear_layoutdriver) (struct nfs_server *);
 	struct pnfs_layout_segment * (*alloc_lseg) (struct pnfs_layout_hdr *layoutid, struct nfs4_layoutget_res *lgr);
@@ -259,6 +265,16 @@ static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 	return nfss->pnfs_curr_ld != NULL;
 }
 
+/* Should the pNFS client commit and return the layout upon a setattr */
+static inline bool
+pnfs_ld_layoutret_on_setattr(struct inode *inode)
+{
+	if (!pnfs_enabled_sb(NFS_SERVER(inode)))
+		return false;
+	return NFS_SERVER(inode)->pnfs_curr_ld->flags &
+		PNFS_LAYOUTRET_ON_SETATTR;
+}
+
 /* Should the pNFS client commit and return the layout on close
  */
 static inline int
@@ -348,6 +364,12 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 static inline int pnfs_layoutcommit_inode(struct inode *inode, int sync)
 {
 	return 0;
+}
+
+static inline bool
+pnfs_ld_layoutret_on_setattr(struct inode *inode)
+{
+	return false;
 }
 
 static inline int
