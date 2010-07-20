@@ -220,20 +220,18 @@ static void bl_rpc_do_nothing(struct rpc_task *task, void *calldata)
 }
 
 static enum pnfs_try_status
-bl_read_pagelist(struct pnfs_layout_type *lo,
-		struct page **pages,
-		unsigned int pgbase,
-		unsigned nr_pages,
-		loff_t f_offset,
-		size_t count,
-		struct nfs_read_data *rdata)
+bl_read_pagelist(struct nfs_read_data *rdata,
+		 unsigned nr_pages)
 {
 	int i, hole;
 	struct bio *bio = NULL;
 	struct pnfs_block_extent *be = NULL, *cow_read = NULL;
 	sector_t isect, extent_length = 0;
 	struct parallel_io *par;
-	int pg_index = pgbase >> PAGE_CACHE_SHIFT;
+	loff_t f_offset = rdata->args.offset;
+	size_t count = rdata->args.count;
+	struct page **pages = rdata->args.pages;
+	int pg_index = rdata->args.pgbase >> PAGE_CACHE_SHIFT;
 
 	dprintk("%s enter nr_pages %u offset %lld count %Zd\n", __func__,
 	       nr_pages, f_offset, count);
