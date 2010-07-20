@@ -297,9 +297,7 @@ static void _rpc_commit_complete(struct work_struct *work)
  * Commit data remotely on OSDs
  */
 enum pnfs_try_status
-objlayout_commit(struct pnfs_layout_type *pnfslay,
-		 int sync,
-		 struct nfs_write_data *wdata)
+objlayout_commit(struct nfs_write_data *wdata, int how)
 {
 	int status = PNFS_ATTEMPTED;
 
