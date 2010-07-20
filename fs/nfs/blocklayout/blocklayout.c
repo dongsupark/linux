@@ -99,9 +99,8 @@ dont_like_caller(struct nfs_page *req)
 }
 
 static enum pnfs_try_status
-bl_commit(struct pnfs_layout_type *lo,
-		int sync,
-		struct nfs_write_data *nfs_data)
+bl_commit(struct nfs_write_data *nfs_data,
+	  int sync)
 {
 	dprintk("%s enter\n", __func__);
 	return PNFS_NOT_ATTEMPTED;
