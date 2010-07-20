@@ -352,23 +352,18 @@ objlayout_read_done(struct objlayout_io_state *state, ssize_t status, bool sync)
  * Perform sync or async reads.
  */
 enum pnfs_try_status
-objlayout_read_pagelist(struct pnfs_layout_type *pnfs_layout_type,
-			struct page **pages,
-			unsigned pgbase,
-			unsigned nr_pages,
-			loff_t offset,
-			size_t count,
-			struct nfs_read_data *rdata)
+objlayout_read_pagelist(struct nfs_read_data *rdata, unsigned nr_pages)
 {
-	struct inode *inode = PNFS_INODE(pnfs_layout_type);
+	loff_t offset = rdata->args.offset;
+	size_t count = rdata->args.count;
 	struct objlayout_io_state *state;
 	ssize_t status = 0;
 	loff_t eof;
 
 	dprintk("%s: Begin inode %p offset %llu count %d\n",
-		__func__, inode, offset, (int)count);
+		__func__, rdata->inode, offset, (int)count);
 
-	eof = i_size_read(inode);
+	eof = i_size_read(rdata->inode);
 	if (unlikely(offset + count > eof)) {
 		if (offset >= eof) {
 			status = 0;
@@ -379,7 +374,8 @@ objlayout_read_pagelist(struct pnfs_layout_type *pnfs_layout_type,
 		count = eof - offset;
 	}
 
-	state = objlayout_alloc_io_state(pnfs_layout_type, pages, pgbase,
+	state = objlayout_alloc_io_state(NFS_I(rdata->inode)->layout,
+					 rdata->args.pages, rdata->args.pgbase,
 					 nr_pages, offset, count,
 					 rdata->pdata.lseg, rdata);
 	if (unlikely(!state)) {
