@@ -428,21 +428,19 @@ bl_end_par_io_write(void *data)
 }
 
 static enum pnfs_try_status
-bl_write_pagelist(struct pnfs_layout_type *lo,
-		struct page **pages,
-		unsigned int pgbase,
-		unsigned nr_pages,
-		loff_t offset,
-		size_t count,
-		int sync,
-		struct nfs_write_data *wdata)
+bl_write_pagelist(struct nfs_write_data *wdata,
+		  unsigned nr_pages,
+		  int sync)
 {
 	int i;
 	struct bio *bio = NULL;
 	struct pnfs_block_extent *be = NULL;
 	sector_t isect, extent_length = 0;
 	struct parallel_io *par;
-	int pg_index = pgbase >> PAGE_CACHE_SHIFT;
+	loff_t offset = wdata->args.offset;
+	size_t count = wdata->args.count;
+	struct page **pages = wdata->args.pages;
+	int pg_index = wdata->args.pgbase >> PAGE_CACHE_SHIFT;
 
 	dprintk("%s enter, %Zu@%lld\n", __func__, count, offset);
 	if (!wdata->req->wb_lseg) {
