@@ -442,23 +442,22 @@ objlayout_write_done(struct objlayout_io_state *state, ssize_t status,
  * Perform sync or async writes.
  */
 enum pnfs_try_status
-objlayout_write_pagelist(struct pnfs_layout_type *pnfs_layout_type,
-			 struct page **pages,
-			 unsigned pgbase,
+objlayout_write_pagelist(struct nfs_write_data *wdata,
 			 unsigned nr_pages,
-			 loff_t offset,
-			 size_t count,
-			 int how,
-			 struct nfs_write_data *wdata)
+			 int how)
 {
 	struct objlayout_io_state *state;
 	ssize_t status;
 
-	dprintk("%s: Begin inode %p offset %llu count %d\n",
-		__func__, PNFS_INODE(pnfs_layout_type), offset, (int)count);
+	dprintk("%s: Begin inode %p offset %llu count %u\n",
+		__func__, wdata->inode, wdata->args.offset, wdata->args.count);
 
-	state = objlayout_alloc_io_state(pnfs_layout_type, pages, pgbase,
-					 nr_pages, offset, count,
+	state = objlayout_alloc_io_state(NFS_I(wdata->inode)->layout,
+					 wdata->args.pages,
+					 wdata->args.pgbase,
+					 nr_pages,
+					 wdata->args.offset,
+					 wdata->args.count,
 					 wdata->pdata.lseg, wdata);
 	if (unlikely(!state)) {
 		status = -ENOMEM;
