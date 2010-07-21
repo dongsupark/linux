@@ -56,7 +56,6 @@ struct block_mount_id {
 
 struct pnfs_block_dev {
 	struct list_head		bm_node;
-	char				*bm_mdevname; /* meta device name */
 	struct pnfs_deviceid		bm_mdevid;    /* associated devid */
 	struct block_device		*bm_mdev;     /* meta device itself */
 };
@@ -263,8 +262,6 @@ int nfs4_blk_process_layoutget(struct pnfs_layout_type *lo,
 int nfs4_blk_create_block_disk_list(struct list_head *);
 void nfs4_blk_destroy_disk_list(struct list_head *);
 /* blocklayoutdm.c */
-struct pnfs_block_dev *nfs4_blk_init_metadev(struct nfs_server *server,
-					     struct pnfs_device *dev);
 int nfs4_blk_flatten(struct pnfs_blk_volume *, int, struct pnfs_block_dev *);
 void free_block_dev(struct pnfs_block_dev *bdev);
 /* extents.c */
@@ -288,4 +285,19 @@ int add_and_merge_extent(struct pnfs_block_layout *bl,
 			 struct pnfs_block_extent *new);
 int mark_for_commit(struct pnfs_block_extent *be,
 		    sector_t offset, sector_t length);
+
+#include <linux/sunrpc/simple_rpc_pipefs.h>
+
+extern struct pipefs_list bl_device_list;
+extern struct dentry *bl_device_pipe;
+
+int bl_pipe_init(void);
+void bl_pipe_exit(void);
+
+#define BL_DEVICE_UMOUNT               0x0 /* Umount--delete devices */
+#define BL_DEVICE_MOUNT                0x1 /* Mount--create devices*/
+#define BL_DEVICE_REQUEST_INIT         0x0 /* Start request */
+#define BL_DEVICE_REQUEST_PROC         0x1 /* User level process succeeds */
+#define BL_DEVICE_REQUEST_ERR          0x2 /* User level process fails */
+
 #endif /* FS_NFS_NFS4BLOCKLAYOUT_H */

@@ -732,6 +732,7 @@ nfs4_blk_get_deviceinfo(struct nfs_server *server, const struct nfs_fh *fh,
 	dev->pglen = PAGE_SIZE * max_pages;
 	dev->mincount = 0;
 
+	dprintk("%s: dev_id: %s\n", __func__, dev->dev_id.data);
 	rc = pnfs_block_callback_ops->nfs_getdeviceinfo(server, dev);
 	dprintk("%s getdevice info returns %d\n", __func__, rc);
 	if (rc)
@@ -760,7 +761,7 @@ bl_initialize_mountpoint(struct nfs_server *server, const struct nfs_fh *fh)
 	struct pnfs_devicelist *dlist = NULL;
 	struct pnfs_block_dev *bdev;
 	LIST_HEAD(block_disklist);
-	int status, i;
+	int status = 0, i;
 
 	dprintk("%s enter\n", __func__);
 
@@ -776,13 +777,6 @@ bl_initialize_mountpoint(struct nfs_server *server, const struct nfs_fh *fh)
 	/* Initialize nfs4 block layout mount id */
 	spin_lock_init(&b_mt_id->bm_lock);
 	INIT_LIST_HEAD(&b_mt_id->bm_devlist);
-
-	/* Construct a list of all visible block disks that have not been
-	 * claimed.
-	 */
-	status =  nfs4_blk_create_block_disk_list(&block_disklist);
-	if (status < 0)
-		goto out_error;
 
 	dlist = kmalloc(sizeof(struct pnfs_devicelist), GFP_KERNEL);
 	if (!dlist)
@@ -814,10 +808,9 @@ bl_initialize_mountpoint(struct nfs_server *server, const struct nfs_fh *fh)
 	}
 	dprintk("%s SUCCESS\n", __func__);
 	server->pnfs_ld_data = b_mt_id;
-	status = 0;
+
  out_return:
 	kfree(dlist);
-	nfs4_blk_destroy_disk_list(&block_disklist);
 	return status;
 
  out_error:
@@ -1150,6 +1143,7 @@ static int __init nfs4blocklayout_init(void)
 	dprintk("%s: NFSv4 Block Layout Driver Registering...\n", __func__);
 
 	pnfs_block_callback_ops = pnfs_register_layoutdriver(&blocklayout_type);
+	bl_pipe_init();
 	return 0;
 }
 
@@ -1159,6 +1153,7 @@ static void __exit nfs4blocklayout_exit(void)
 	       __func__);
 
 	pnfs_unregister_layoutdriver(&blocklayout_type);
+	bl_pipe_exit();
 }
 
 module_init(nfs4blocklayout_init);
