@@ -11,6 +11,10 @@ struct rpc_pipe_msg {
 	size_t len;
 	size_t copied;
 	int errno;
+#define PIPEFS_AUTOFREE_RPCMSG       0x01 /* frees rpc_pipe_msg */
+#define PIPEFS_AUTOFREE_RPCMSG_DATA  0x02 /* frees rpc_pipe_msg->data */
+#define PIPEFS_AUTOFREE_UPCALL_MSG   PIPEFS_AUTOFREE_RPCMSG_DATA
+	u8 flags;
 };
 
 struct rpc_pipe_ops {
