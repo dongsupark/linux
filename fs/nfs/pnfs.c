@@ -1513,13 +1513,12 @@ nfs4_set_layout_deviceid(struct pnfs_layout_segment *l, struct nfs4_deviceid *d)
 {
 	dprintk("%s [%d]\n", __func__, atomic_read(&d->de_kref.refcount));
 	l->deviceid = d;
-	kref_get(&d->de_kref);
 }
 EXPORT_SYMBOL(nfs4_set_layout_deviceid);
 
 /* Called from layoutdriver_io_operations->free_lseg */
 void
-nfs4_unset_layout_deviceid(struct pnfs_layout_segment *l,
+nfs4_put_unset_layout_deviceid(struct pnfs_layout_segment *l,
 			   struct nfs4_deviceid *d,
 			   void (*free_callback)(struct kref *))
 {
@@ -1527,10 +1526,11 @@ nfs4_unset_layout_deviceid(struct pnfs_layout_segment *l,
 	l->deviceid = NULL;
 	kref_put(&d->de_kref, free_callback);
 }
-EXPORT_SYMBOL(nfs4_unset_layout_deviceid);
+EXPORT_SYMBOL(nfs4_put_unset_layout_deviceid);
 
+/* Find and reference a deviceid */
 struct nfs4_deviceid *
-nfs4_find_deviceid(struct nfs4_deviceid_cache *c, struct pnfs_deviceid *id)
+nfs4_find_get_deviceid(struct nfs4_deviceid_cache *c, struct pnfs_deviceid *id)
 {
 	struct nfs4_deviceid *d;
 	struct hlist_node *n;
@@ -1540,21 +1540,26 @@ nfs4_find_deviceid(struct nfs4_deviceid_cache *c, struct pnfs_deviceid *id)
 	rcu_read_lock();
 	hlist_for_each_entry_rcu(d, n, &c->dc_deviceids[hash], de_node) {
 		if (!memcmp(&d->de_id, id, NFS4_PNFS_DEVICEID4_SIZE)) {
-			rcu_read_unlock();
-			return d;
+			if (!atomic_inc_not_zero(&d->de_kref.refcount)) {
+				goto fail;
+			} else {
+				rcu_read_unlock();
+				return d;
+			}
 		}
 	}
+fail:
 	rcu_read_unlock();
 	return NULL;
 }
-EXPORT_SYMBOL(nfs4_find_deviceid);
+EXPORT_SYMBOL(nfs4_find_get_deviceid);
 
 /*
- * Add or kref_get a deviceid.
+ * Add and kref_get a deviceid.
  * GETDEVICEINFOs for same deviceid can race. If deviceid is found, discard new
  */
 struct nfs4_deviceid *
-nfs4_add_deviceid(struct nfs4_deviceid_cache *c, struct nfs4_deviceid *new)
+nfs4_add_get_deviceid(struct nfs4_deviceid_cache *c, struct nfs4_deviceid *new)
 {
 	struct nfs4_deviceid *d;
 	struct hlist_node *n;
@@ -1564,6 +1569,7 @@ nfs4_add_deviceid(struct nfs4_deviceid_cache *c, struct nfs4_deviceid *new)
 	spin_lock(&c->dc_lock);
 	hlist_for_each_entry_rcu(d, n, &c->dc_deviceids[hash], de_node) {
 		if (!memcmp(&d->de_id, &new->de_id, NFS4_PNFS_DEVICEID4_SIZE)) {
+			kref_get(&d->de_kref);
 			spin_unlock(&c->dc_lock);
 			dprintk("%s [discard]\n", __func__);
 			c->dc_free_callback(&new->de_kref);
@@ -1571,12 +1577,17 @@ nfs4_add_deviceid(struct nfs4_deviceid_cache *c, struct nfs4_deviceid *new)
 		}
 	}
 	hlist_add_head_rcu(&new->de_node, &c->dc_deviceids[hash]);
+	kref_get(&new->de_kref);
 	spin_unlock(&c->dc_lock);
 	dprintk("%s [new]\n", __func__);
 	return new;
 }
-EXPORT_SYMBOL(nfs4_add_deviceid);
+EXPORT_SYMBOL(nfs4_add_get_deviceid);
 
+/*
+ * Remove the first deviceid from a hash bucket, or return 0 if bucket list
+ * is empty.
+ */
 static int
 nfs4_remove_deviceid(struct nfs4_deviceid_cache *c, long hash)
 {

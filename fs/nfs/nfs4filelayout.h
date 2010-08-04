@@ -83,7 +83,7 @@ u32 nfs4_fl_calc_ds_index(struct pnfs_layout_segment *lseg, loff_t offset);
 struct nfs4_pnfs_ds *nfs4_fl_prepare_ds(struct pnfs_layout_segment *lseg,
 					u32 ds_idx);
 extern struct nfs4_file_layout_dsaddr *
-nfs4_pnfs_device_item_find(struct nfs_client *, struct pnfs_deviceid *dev_id);
+nfs4_fl_find_get_deviceid(struct nfs_client *, struct pnfs_deviceid *dev_id);
 struct nfs4_file_layout_dsaddr *
 get_device_info(struct inode *inode, struct pnfs_deviceid *dev_id);
 

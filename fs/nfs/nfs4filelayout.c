@@ -325,7 +325,8 @@ filelayout_check_layout(struct pnfs_layout_hdr *lo,
 	struct nfs_server *nfss = NFS_SERVER(PNFS_INODE(lo));
 
 	dprintk("--> %s\n", __func__);
-	dsaddr = nfs4_pnfs_device_item_find(nfss->nfs_client, &fl->dev_id);
+	/* find in list or get from server and reference the deviceid */
+	dsaddr = nfs4_fl_find_get_deviceid(nfss->nfs_client, &fl->dev_id);
 	if (dsaddr == NULL) {
 		dsaddr = get_device_info(PNFS_INODE(lo), &fl->dev_id);
 		if (dsaddr == NULL) {
@@ -338,26 +339,26 @@ filelayout_check_layout(struct pnfs_layout_hdr *lo,
 	    fl->first_stripe_index > dsaddr->stripe_count) {
 		dprintk("%s Bad first_stripe_index %d\n",
 				__func__, fl->first_stripe_index);
-		goto out;
+		goto out_put;
 	}
 
 	if (fl->pattern_offset != 0) {
 		dprintk("%s Unsupported no-zero pattern_offset %Ld\n",
 				__func__, fl->pattern_offset);
-		goto out;
+		goto out_put;
 	}
 
 	if (fl->stripe_unit % PAGE_SIZE) {
 		dprintk("%s Stripe unit (%u) not page aligned\n",
 			__func__, fl->stripe_unit);
-		goto out;
+		goto out_put;
 	}
 
 	/* XXX only support SPARSE packing. Don't support use MDS open fh */
 	if (!(fl->num_fh == 1 || fl->num_fh == dsaddr->ds_num)) {
 		dprintk("%s num_fh %u not equal to 1 or ds_num %u\n",
 			__func__, fl->num_fh, dsaddr->ds_num);
-		goto out;
+		goto out_put;
 	}
 
 	if (fl->stripe_unit % nfss->rsize || fl->stripe_unit % nfss->wsize) {
@@ -366,13 +367,16 @@ filelayout_check_layout(struct pnfs_layout_hdr *lo,
 			nfss->wsize);
 	}
 
-	/* reference the device */
 	nfs4_set_layout_deviceid(lseg, &dsaddr->deviceid);
 
 	status = 0;
 out:
 	dprintk("--> %s returns %d\n", __func__, status);
 	return status;
+out_put:
+	nfs4_put_unset_layout_deviceid(lseg, &dsaddr->deviceid,
+				       nfs4_fl_free_deviceid_callback);
+	goto out;
 }
 
 static void _filelayout_free_lseg(struct pnfs_layout_segment *lseg);
@@ -495,7 +499,7 @@ static void
 filelayout_free_lseg(struct pnfs_layout_segment *lseg)
 {
 	dprintk("--> %s\n", __func__);
-	nfs4_unset_layout_deviceid(lseg, lseg->deviceid,
+	nfs4_put_unset_layout_deviceid(lseg, lseg->deviceid,
 				   nfs4_fl_free_deviceid_callback);
 	_filelayout_free_lseg(lseg);
 }

@@ -203,13 +203,14 @@ extern int nfs4_alloc_init_deviceid_cache(struct nfs_client *,
 				void (*free_callback)(struct kref *));
 extern void nfs4_put_deviceid_cache(struct nfs_client *);
 extern void nfs4_init_deviceid_node(struct nfs4_deviceid *);
-extern struct nfs4_deviceid *nfs4_find_deviceid(struct nfs4_deviceid_cache *,
+extern struct nfs4_deviceid *nfs4_find_get_deviceid(
+				struct nfs4_deviceid_cache *,
 				struct pnfs_deviceid *);
-extern struct nfs4_deviceid *nfs4_add_deviceid(struct nfs4_deviceid_cache *,
+extern struct nfs4_deviceid *nfs4_add_get_deviceid(struct nfs4_deviceid_cache *,
 				struct nfs4_deviceid *);
 extern void nfs4_set_layout_deviceid(struct pnfs_layout_segment *,
 				struct nfs4_deviceid *);
-extern void nfs4_unset_layout_deviceid(struct pnfs_layout_segment *,
+extern void nfs4_put_unset_layout_deviceid(struct pnfs_layout_segment *,
 				struct nfs4_deviceid *,
 				void (*free_callback)(struct kref *));
 

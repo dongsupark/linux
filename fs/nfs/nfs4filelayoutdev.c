@@ -468,7 +468,7 @@ decode_and_add_device(struct inode *inode, struct pnfs_device *dev)
 		return NULL;
 	}
 
-	d = nfs4_add_deviceid(NFS_SERVER(inode)->nfs_client->cl_devid_cache,
+	d = nfs4_add_get_deviceid(NFS_SERVER(inode)->nfs_client->cl_devid_cache,
 			      &dsaddr->deviceid);
 
 	return container_of(d, struct nfs4_file_layout_dsaddr, deviceid);
@@ -549,11 +549,11 @@ out_free:
 }
 
 struct nfs4_file_layout_dsaddr *
-nfs4_pnfs_device_item_find(struct nfs_client *clp, struct pnfs_deviceid *id)
+nfs4_fl_find_get_deviceid(struct nfs_client *clp, struct pnfs_deviceid *id)
 {
 	struct nfs4_deviceid *d;
 
-	d = nfs4_find_deviceid(clp->cl_devid_cache, id);
+	d = nfs4_find_get_deviceid(clp->cl_devid_cache, id);
 	dprintk("%s device id (%s) nfs4_deviceid %p\n", __func__,
 		deviceid_fmt(id), d);
 	return (d == NULL) ? NULL :
