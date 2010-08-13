@@ -3144,13 +3144,19 @@ static void nfs4_proc_write_setup(struct nfs_write_data *data, struct rpc_messag
 	data->res.server = server;
 	data->timestamp   = jiffies;
 
+#ifdef CONFIG_NFS_V4_1
+	/* writes to DS use pnfs vector */
+	if (data->fldata.ds_nfs_client) {
+		msg->rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_PNFS_WRITE];
+		return;
+	}
+#endif /* CONFIG_NFS_V4_1 */
 	msg->rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_WRITE];
 }
 
 static int nfs4_commit_done(struct rpc_task *task, struct nfs_write_data *data)
 {
 	struct inode *inode = data->inode;
-	
 	if (!nfs4_sequence_done(task, &data->res.seq_res))
 		return -EAGAIN;
 
