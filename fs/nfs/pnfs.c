@@ -1197,6 +1197,68 @@ pnfs_layoutcommit_setup(struct inode *inode,
 	return result;
 }
 
+/* Issue a async layoutcommit for an inode.
+ */
+int
+pnfs_layoutcommit_inode(struct inode *inode, int sync)
+{
+	struct nfs4_layoutcommit_data *data;
+	struct nfs_inode *nfsi = NFS_I(inode);
+	loff_t write_begin_pos;
+	loff_t write_end_pos;
+
+	int status = 0;
+
+	dprintk("%s Begin (sync:%d)\n", __func__, sync);
+
+	BUG_ON(!has_layout(nfsi));
+
+	data = kzalloc(sizeof(*data), GFP_NOFS);
+	if (!data)
+		return -ENOMEM;
+
+	spin_lock(&inode->i_lock);
+	if (!layoutcommit_needed(nfsi)) {
+		spin_unlock(&inode->i_lock);
+		goto out_free;
+	}
+
+	/* Clear layoutcommit properties in the inode so
+	 * new lc info can be generated
+	 */
+	write_begin_pos = nfsi->layout->write_begin_pos;
+	write_end_pos = nfsi->layout->write_end_pos;
+	data->cred = nfsi->layout->cred;
+	nfsi->layout->write_begin_pos = 0;
+	nfsi->layout->write_end_pos = 0;
+	nfsi->layout->cred = NULL;
+	__clear_bit(NFS_LAYOUT_NEED_LCOMMIT, &nfsi->layout->plh_flags);
+	memcpy(data->args.stateid.data, nfsi->layout->stateid.data,
+	       NFS4_STATEID_SIZE);
+
+	/* Reference for layoutcommit matched in pnfs_layoutcommit_release */
+	get_layout_hdr(NFS_I(inode)->layout);
+
+	spin_unlock(&inode->i_lock);
+
+	/* Set up layout commit args */
+	status = pnfs_layoutcommit_setup(inode, data, write_begin_pos,
+					 write_end_pos);
+	if (status) {
+		/* The layout driver failed to setup the layoutcommit */
+		put_rpccred(data->cred);
+		put_layout_hdr(NFS_I(inode)->layout);
+		goto out_free;
+	}
+	status = nfs4_proc_layoutcommit(data, sync);
+out:
+	dprintk("%s end (err:%d)\n", __func__, status);
+	return status;
+out_free:
+	kfree(data);
+	goto out;
+}
+
 /*
  * Device ID cache. Currently supports one layout type per struct nfs_client.
  * Add layout type to the lookup key to expand to support multiple types.

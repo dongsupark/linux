@@ -324,6 +324,11 @@ static int nfs4_stat_to_errno(int);
 #define decode_layoutget_maxsz	(op_decode_hdr_maxsz + 8 + \
 				decode_stateid_maxsz + \
 				XDR_QUADLEN(PNFS_LAYOUT_MAXSIZE))
+#define encode_layoutcommit_maxsz (18 +                           \
+				XDR_QUADLEN(PNFS_LAYOUT_MAXSIZE) + \
+				op_encode_hdr_maxsz +          \
+				encode_stateid_maxsz)
+#define decode_layoutcommit_maxsz (3 + op_decode_hdr_maxsz)
 #else /* CONFIG_NFS_V4_1 */
 #define encode_sequence_maxsz	0
 #define decode_sequence_maxsz	0
@@ -727,6 +732,16 @@ static int nfs4_stat_to_errno(int);
 				decode_sequence_maxsz + \
 				decode_putfh_maxsz +        \
 				decode_layoutget_maxsz)
+#define NFS4_enc_layoutcommit_sz (compound_encode_hdr_maxsz + \
+				encode_sequence_maxsz +\
+				encode_putfh_maxsz + \
+				encode_layoutcommit_maxsz + \
+				encode_getattr_maxsz)
+#define NFS4_dec_layoutcommit_sz (compound_decode_hdr_maxsz + \
+				decode_sequence_maxsz + \
+				decode_putfh_maxsz + \
+				decode_layoutcommit_maxsz + \
+				decode_getattr_maxsz)
 #define NFS4_enc_dswrite_sz	(compound_encode_hdr_maxsz + \
 				encode_sequence_maxsz +\
 				encode_putfh_maxsz + \
@@ -1835,6 +1850,44 @@ encode_layoutget(struct xdr_stream *xdr,
 	return 0;
 }
 
+static int
+encode_layoutcommit(struct xdr_stream *xdr,
+		    const struct nfs4_layoutcommit_args *args,
+		    struct compound_hdr *hdr)
+{
+	__be32 *p;
+
+	dprintk("%s: %llu@%llu lbw: %llu type: %d\n", __func__,
+		args->range.length, args->range.offset, args->lastbytewritten,
+		args->layout_type);
+
+	p = reserve_space(xdr, 40 + NFS4_STATEID_SIZE);
+	*p++ = cpu_to_be32(OP_LAYOUTCOMMIT);
+	p = xdr_encode_hyper(p, args->range.offset);
+	p = xdr_encode_hyper(p, args->range.length);
+	*p++ = cpu_to_be32(0);     /* reclaim */
+	p = xdr_encode_opaque_fixed(p, args->stateid.data, NFS4_STATEID_SIZE);
+	*p++ = cpu_to_be32(1);     /* newoffset = TRUE */
+	p = xdr_encode_hyper(p, args->lastbytewritten);
+	*p = cpu_to_be32(args->time_modify_changed != 0);
+	if (args->time_modify_changed) {
+		p = reserve_space(xdr, 12);
+		*p++ = cpu_to_be32(0);
+		*p++ = cpu_to_be32(args->time_modify.tv_sec);
+		*p = cpu_to_be32(args->time_modify.tv_nsec);
+	}
+
+	p = reserve_space(xdr, 4);
+	*p = cpu_to_be32(args->layout_type);
+
+	p = reserve_space(xdr, 4);
+	xdr_encode_opaque(p, NULL, 0);
+
+	hdr->nops++;
+	hdr->replen += decode_layoutcommit_maxsz;
+	return 0;
+}
+
 #endif /* CONFIG_NFS_V4_1 */
 
 /*
@@ -2699,6 +2752,27 @@ static int nfs4_xdr_enc_layoutget(struct rpc_rqst *req, uint32_t *p,
 	status = encode_layoutget(&xdr, args, &hdr);
 	if (status)
 		return status;
+	encode_nops(&hdr);
+	return 0;
+}
+
+/*
+ *  Encode LAYOUTCOMMIT request
+ */
+static int nfs4_xdr_enc_layoutcommit(struct rpc_rqst *req, uint32_t *p,
+				     struct nfs4_layoutcommit_args *args)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr = {
+		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
+	};
+
+	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
+	encode_compound_hdr(&xdr, req, &hdr);
+	encode_sequence(&xdr, &args->seq_args, &hdr);
+	encode_putfh(&xdr, args->fh, &hdr);
+	encode_layoutcommit(&xdr, args, &hdr);
+	encode_getfattr(&xdr, args->bitmask, &hdr);
 	encode_nops(&hdr);
 	return 0;
 }
@@ -5145,6 +5219,33 @@ out_overflow:
 	return -EIO;
 }
 
+static int decode_layoutcommit(struct xdr_stream *xdr,
+				    struct rpc_rqst *req,
+				    struct nfs4_layoutcommit_res *res)
+{
+	__be32 *p;
+	int status;
+
+	status = decode_op_hdr(xdr, OP_LAYOUTCOMMIT);
+	if (status)
+		return status;
+
+	p = xdr_inline_decode(xdr, 4);
+	if (unlikely(!p))
+		goto out_overflow;
+	res->sizechanged = be32_to_cpup(p);
+
+	if (res->sizechanged) {
+		p = xdr_inline_decode(xdr, 8);
+		if (unlikely(!p))
+			goto out_overflow;
+		xdr_decode_hyper(p, &res->newsize);
+	}
+	return 0;
+out_overflow:
+	print_overflow_msg(__func__, xdr);
+	return -EIO;
+}
 #endif /* CONFIG_NFS_V4_1 */
 
 /*
@@ -6223,6 +6324,35 @@ out:
 }
 
 /*
+ * Decode LAYOUTCOMMIT response
+ */
+static int nfs4_xdr_dec_layoutcommit(struct rpc_rqst *rqstp, uint32_t *p,
+				     struct nfs4_layoutcommit_res *res)
+{
+	struct xdr_stream xdr;
+	struct compound_hdr hdr;
+	int status;
+
+	xdr_init_decode(&xdr, &rqstp->rq_rcv_buf, p);
+	status = decode_compound_hdr(&xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(&xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_putfh(&xdr);
+	if (status)
+		goto out;
+	status = decode_layoutcommit(&xdr, rqstp, res);
+	if (status)
+		goto out;
+	decode_getfattr(&xdr, res->fattr, res->server,
+			!RPC_IS_ASYNC(rqstp->rq_task));
+out:
+	return status;
+}
+
+/*
  * Decode pNFS File Layout Data Server WRITE response
  */
 static int nfs4_xdr_dec_dswrite(struct rpc_rqst *rqstp, uint32_t *p,
@@ -6470,6 +6600,7 @@ struct rpc_procinfo	nfs4_procedures[] = {
   PROC(RECLAIM_COMPLETE, enc_reclaim_complete,  dec_reclaim_complete),
   PROC(GETDEVICEINFO, enc_getdeviceinfo, dec_getdeviceinfo),
   PROC(LAYOUTGET,  enc_layoutget,     dec_layoutget),
+  PROC(LAYOUTCOMMIT, enc_layoutcommit,  dec_layoutcommit),
   PROC(PNFS_WRITE, enc_dswrite,  dec_dswrite),
   PROC(PNFS_COMMIT, enc_dscommit,  dec_dscommit),
 #endif /* CONFIG_NFS_V4_1 */
