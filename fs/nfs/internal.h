@@ -277,7 +277,16 @@ extern int pnfs_initiate_read(struct nfs_read_data *data, struct rpc_clnt *clnt,
 extern void nfs_read_prepare(struct rpc_task *task, void *calldata);
 
 /* write.c */
+extern int nfs_initiate_write(struct nfs_write_data *data,
+			      struct rpc_clnt *clnt,
+			      const struct rpc_call_ops *call_ops,
+			      int how);
+extern int pnfs_initiate_write(struct nfs_write_data *data,
+			      struct rpc_clnt *clnt,
+			      const struct rpc_call_ops *call_ops,
+			      int how);
 extern void nfs_write_prepare(struct rpc_task *task, void *calldata);
+extern void nfs_mark_list_commit(struct list_head *head);
 #ifdef CONFIG_MIGRATION
 extern int nfs_migrate_page(struct address_space *,
 		struct page *, struct page *);

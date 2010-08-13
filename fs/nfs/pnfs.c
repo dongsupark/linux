@@ -1000,6 +1000,50 @@ static void _pnfs_clear_lseg_from_pages(struct list_head *head)
 }
 
 /*
+ * Call the appropriate parallel I/O subsystem write function.
+ * If no I/O device driver exists, or one does match the returned
+ * fstype, then return a positive status for regular NFS processing.
+ *
+ * TODO: Is wdata->how and wdata->args.stable always the same value?
+ * TODO: It seems in NFS, the server may not do a stable write even
+ * though it was requested (and vice-versa?).  To check, it looks
+ * in data->res.verf->committed.  Do we need this ability
+ * for non-file layout drivers?
+ */
+enum pnfs_try_status
+pnfs_try_to_write_data(struct nfs_write_data *wdata,
+			const struct rpc_call_ops *call_ops, int how)
+{
+	struct inode *inode = wdata->inode;
+	enum pnfs_try_status trypnfs;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	struct pnfs_layout_segment *lseg = wdata->req->wb_lseg;
+
+	wdata->pdata.call_ops = call_ops;
+	wdata->pdata.how = how;
+
+	dprintk("%s: Writing ino:%lu %u@%llu (how %d)\n", __func__,
+		inode->i_ino, wdata->args.count, wdata->args.offset, how);
+
+	get_lseg(lseg);
+
+	wdata->pdata.lseg = lseg;
+	trypnfs = nfss->pnfs_curr_ld->write_pagelist(wdata,
+		nfs_page_array_len(wdata->args.pgbase, wdata->args.count),
+		how);
+
+	if (trypnfs == PNFS_NOT_ATTEMPTED) {
+		wdata->pdata.lseg = NULL;
+		put_lseg(lseg);
+		_pnfs_clear_lseg_from_pages(&wdata->pages);
+	} else {
+		nfs_inc_stats(inode, NFSIOS_PNFS_WRITE);
+	}
+	dprintk("%s End (trypnfs:%d)\n", __func__, trypnfs);
+	return trypnfs;
+}
+
+/*
  * Call the appropriate parallel I/O subsystem read function.
  * If no I/O device driver exists, or one does match the returned
  * fstype, then return a positive status for regular NFS processing.

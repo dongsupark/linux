@@ -3097,17 +3097,41 @@ static void nfs4_proc_read_setup(struct nfs_read_data *data, struct rpc_message 
 static int nfs4_write_done(struct rpc_task *task, struct nfs_write_data *data)
 {
 	struct inode *inode = data->inode;
-	
+	struct nfs_server *server = NFS_SERVER(inode);
+	struct nfs_client *client = server->nfs_client;
+
 	if (!nfs4_sequence_done(task, &data->res.seq_res))
 		return -EAGAIN;
 
-	if (nfs4_async_handle_error(task, NFS_SERVER(inode), data->args.context->state, NULL) == -EAGAIN) {
-		nfs_restart_rpc(task, NFS_SERVER(inode)->nfs_client);
+#ifdef CONFIG_NFS_V4_1
+	/* restore original count after retry? */
+	if (data->pdata.orig_count) {
+		dprintk("%s: restoring original count %u\n", __func__,
+			data->pdata.orig_count);
+		data->args.count = data->pdata.orig_count;
+	}
+
+	/* Is this a DS session */
+	if (data->fldata.ds_nfs_client) {
+		dprintk("%s DS write\n", __func__);
+		client = data->fldata.ds_nfs_client;
+	}
+#endif /* CONFIG_NFS_V4_1 */
+
+	if (nfs4_async_handle_error(task, server, data->args.context->state, client) == -EAGAIN) {
+		nfs_restart_rpc(task, client);
 		return -EAGAIN;
 	}
+
+	/*
+	 * MDS write: renew lease
+	 * DS write: update lastbyte written, mark for layout commit
+	 */
 	if (task->tk_status >= 0) {
-		renew_lease(NFS_SERVER(inode), data->timestamp);
-		nfs_post_op_update_inode_force_wcc(inode, data->res.fattr);
+		if (client == server->nfs_client) {
+			renew_lease(server, data->timestamp);
+			nfs_post_op_update_inode_force_wcc(inode, data->res.fattr);
+		}
 	}
 	return 0;
 }

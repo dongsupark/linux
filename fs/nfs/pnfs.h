@@ -85,6 +85,8 @@ struct pnfs_layoutdriver_type {
 	 */
 	enum pnfs_try_status
 	(*read_pagelist) (struct nfs_read_data *nfs_data, unsigned nr_pages);
+	enum pnfs_try_status
+	(*write_pagelist) (struct nfs_write_data *nfs_data, unsigned nr_pages, int how);
 };
 
 struct pnfs_layout_hdr {
@@ -174,6 +176,8 @@ pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unset_pnfs_layoutdriver(struct nfs_server *);
+enum pnfs_try_status pnfs_try_to_write_data(struct nfs_write_data *,
+					     const struct rpc_call_ops *, int);
 enum pnfs_try_status pnfs_try_to_read_data(struct nfs_read_data *,
 					    const struct rpc_call_ops *);
 void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *,
@@ -270,6 +274,13 @@ has_layout(struct nfs_inode *nfsi)
 static inline enum pnfs_try_status
 pnfs_try_to_read_data(struct nfs_read_data *data,
 		      const struct rpc_call_ops *call_ops)
+{
+	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline enum pnfs_try_status
+pnfs_try_to_write_data(struct nfs_write_data *data,
+		       const struct rpc_call_ops *call_ops, int how)
 {
 	return PNFS_NOT_ATTEMPTED;
 }
