@@ -727,6 +727,14 @@ static int nfs4_stat_to_errno(int);
 				decode_sequence_maxsz + \
 				decode_putfh_maxsz +        \
 				decode_layoutget_maxsz)
+#define NFS4_enc_dswrite_sz	(compound_encode_hdr_maxsz + \
+				encode_sequence_maxsz +\
+				encode_putfh_maxsz + \
+				encode_write_maxsz)
+#define NFS4_dec_dswrite_sz	(compound_decode_hdr_maxsz + \
+				decode_sequence_maxsz + \
+				decode_putfh_maxsz + \
+				decode_write_maxsz)
 
 const u32 nfs41_maxwrite_overhead = ((RPC_MAX_HEADER_WITH_AUTH +
 				      compound_encode_hdr_maxsz +
@@ -2601,6 +2609,25 @@ static void nfs4_xdr_enc_layoutget(struct rpc_rqst *req,
 	encode_layoutget(xdr, args, &hdr);
 	encode_nops(&hdr);
 }
+
+/*
+ * Encode a pNFS File Layout Data Server WRITE request
+ */
+static void nfs4_xdr_enc_dswrite(struct rpc_rqst *req,
+				 struct xdr_stream *xdr,
+				 struct nfs_writeargs *args)
+{
+	struct compound_hdr hdr = {
+		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
+	};
+
+	encode_compound_hdr(xdr, req, &hdr);
+	encode_sequence(xdr, &args->seq_args, &hdr);
+	encode_putfh(xdr, args->fh, &hdr);
+	encode_write(xdr, args, &hdr);
+	encode_nops(&hdr);
+}
+
 #endif /* CONFIG_NFS_V4_1 */
 
 static void print_overflow_msg(const char *func, const struct xdr_stream *xdr)
@@ -6062,6 +6089,33 @@ static int nfs4_xdr_dec_layoutget(struct rpc_rqst *rqstp,
 out:
 	return status;
 }
+
+/*
+ * Decode pNFS File Layout Data Server WRITE response
+ */
+static int nfs4_xdr_dec_dswrite(struct rpc_rqst *rqstp,
+				struct xdr_stream *xdr,
+				struct nfs_writeres *res)
+{
+	struct compound_hdr hdr;
+	int status;
+
+	status = decode_compound_hdr(xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_putfh(xdr);
+	if (status)
+		goto out;
+	status = decode_write(xdr, res);
+	if (!status)
+		return res->count;
+out:
+	return status;
+}
+
 #endif /* CONFIG_NFS_V4_1 */
 
 /**
@@ -6265,6 +6319,7 @@ struct rpc_procinfo	nfs4_procedures[] = {
 	PROC(RECLAIM_COMPLETE,	enc_reclaim_complete,	dec_reclaim_complete),
 	PROC(GETDEVICEINFO,	enc_getdeviceinfo,	dec_getdeviceinfo),
 	PROC(LAYOUTGET,		enc_layoutget,		dec_layoutget),
+	PROC(PNFS_WRITE,	enc_dswrite,		dec_dswrite),
 #endif /* CONFIG_NFS_V4_1 */
 };
 
