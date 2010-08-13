@@ -5586,6 +5586,112 @@ int nfs4_proc_layoutcommit(struct nfs4_layoutcommit_data *data, int issync)
 	return err;
 }
 
+static void
+nfs4_layoutreturn_prepare(struct rpc_task *task, void *calldata)
+{
+	struct nfs4_layoutreturn *lrp = calldata;
+	struct inode *ino = lrp->args.inode;
+	struct nfs_server *server = NFS_SERVER(ino);
+
+	dprintk("--> %s\n", __func__);
+	if (nfs4_setup_sequence(server, &lrp->args.seq_args,
+				&lrp->res.seq_res, 0, task))
+		return;
+	rpc_call_start(task);
+}
+
+static void nfs4_layoutreturn_done(struct rpc_task *task, void *calldata)
+{
+	struct nfs4_layoutreturn *lrp = calldata;
+	struct inode *ino = lrp->args.inode;
+	struct nfs_server *server = NFS_SERVER(ino);
+
+	dprintk("--> %s\n", __func__);
+
+	if (!nfs4_sequence_done(task, &lrp->res.seq_res))
+		return;
+
+	if (RPC_ASSASSINATED(task))
+		return;
+
+	if (nfs4_async_handle_error(task, server, NULL) == -EAGAIN)
+		nfs_restart_rpc(task, server->nfs_client);
+
+	dprintk("<-- %s\n", __func__);
+}
+
+static void nfs4_layoutreturn_release(void *calldata)
+{
+	struct nfs4_layoutreturn *lrp = calldata;
+	struct pnfs_layout_hdr *lo = NFS_I(lrp->args.inode)->layout;
+
+	dprintk("--> %s return_type %d lo %p\n", __func__,
+		lrp->args.return_type, lo);
+
+	if (lrp->args.return_type == RETURN_FILE) {
+		if (!lrp->res.lrs_present)
+			pnfs_set_layout_stateid(lo, &zero_stateid);
+		pnfs_layout_release(lo, &lrp->args.range);
+	}
+	kfree(calldata);
+	dprintk("<-- %s\n", __func__);
+}
+
+static const struct rpc_call_ops nfs4_layoutreturn_call_ops = {
+	.rpc_call_prepare = nfs4_layoutreturn_prepare,
+	.rpc_call_done = nfs4_layoutreturn_done,
+	.rpc_release = nfs4_layoutreturn_release,
+};
+
+int _nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool issync)
+{
+	struct inode *ino = lrp->args.inode;
+	struct nfs_server *server = NFS_SERVER(ino);
+	struct rpc_task *task;
+	struct rpc_message msg = {
+		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_LAYOUTRETURN],
+		.rpc_argp = &lrp->args,
+		.rpc_resp = &lrp->res,
+	};
+	struct rpc_task_setup task_setup_data = {
+		.rpc_client = server->client,
+		.rpc_message = &msg,
+		.callback_ops = &nfs4_layoutreturn_call_ops,
+		.callback_data = lrp,
+		.flags = RPC_TASK_ASYNC,
+	};
+	int status = 0;
+
+	dprintk("--> %s\n", __func__);
+	lrp->res.seq_res.sr_slotid = NFS4_MAX_SLOT_TABLE;
+	task = rpc_run_task(&task_setup_data);
+	if (IS_ERR(task))
+		return PTR_ERR(task);
+	if (!issync)
+		goto out;
+	status = nfs4_wait_for_completion_rpc_task(task);
+	if (status != 0)
+		goto out;
+	status = task->tk_status;
+out:
+	dprintk("<-- %s\n", __func__);
+	rpc_put_task(task);
+	return status;
+}
+
+int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool issync)
+{
+	struct nfs_server *server = NFS_SERVER(lrp->args.inode);
+	struct nfs4_exception exception = { };
+	int err;
+	do {
+		err = nfs4_handle_exception(server,
+				_nfs4_proc_layoutreturn(lrp, issync),
+				&exception);
+	} while (exception.retry);
+	return err;
+}
+
 int nfs4_proc_getdeviceinfo(struct nfs_server *server, struct pnfs_device *pdev)
 {
 	struct nfs4_getdeviceinfo_args args = {

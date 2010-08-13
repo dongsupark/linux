@@ -668,7 +668,30 @@ return_layout(struct inode *ino, struct pnfs_layout_range *range,
 	      enum pnfs_layoutreturn_type type, struct pnfs_layout_hdr *lo,
 	      bool wait)
 {
-	return 0;
+	struct nfs4_layoutreturn *lrp;
+	struct nfs_server *server = NFS_SERVER(ino);
+	int status = -ENOMEM;
+
+	dprintk("--> %s\n", __func__);
+
+	BUG_ON(type != RETURN_FILE);
+
+	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
+	if (lrp == NULL) {
+		if (lo && (type == RETURN_FILE))
+			pnfs_layout_release(lo, NULL);
+		goto out;
+	}
+	lrp->args.reclaim = 0;
+	lrp->args.layout_type = server->pnfs_curr_ld->id;
+	lrp->args.return_type = type;
+	lrp->args.range = *range;
+	lrp->args.inode = ino;
+
+	status = nfs4_proc_layoutreturn(lrp, wait);
+out:
+	dprintk("<-- %s status: %d\n", __func__, status);
+	return status;
 }
 
 int
