@@ -196,6 +196,16 @@ struct pnfs_deviceid {
 	char data[NFS4_PNFS_DEVICEID4_SIZE];
 };
 
+struct nfs4_getdeviceinfo_args {
+	struct pnfs_device *pdev;
+	struct nfs4_sequence_args seq_args;
+};
+
+struct nfs4_getdeviceinfo_res {
+	struct pnfs_device *pdev;
+	struct nfs4_sequence_res seq_res;
+};
+
 /*
  * Arguments to the open call.
  */

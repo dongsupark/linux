@@ -20,6 +20,9 @@
 #include <linux/nfs_iostat.h>
 #include "iostat.h"
 
+/* nfs4proc.c */
+extern int nfs4_proc_getdeviceinfo(struct nfs_server *server,
+				   struct pnfs_device *dev);
 /* pnfs.c */
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unmount_pnfs_layoutdriver(struct nfs_server *);

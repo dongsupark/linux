@@ -193,6 +193,7 @@ pnfs_unregister_layoutdriver(struct pnfs_layoutdriver_type *ld_type)
 /* Callback operations for layout drivers.
  */
 struct pnfs_client_operations pnfs_ops = {
+	.nfs_getdeviceinfo = nfs4_proc_getdeviceinfo,
 };
 
 EXPORT_SYMBOL(pnfs_unregister_layoutdriver);

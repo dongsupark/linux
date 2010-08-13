@@ -33,6 +33,17 @@ struct layoutdriver_io_operations {
 struct layoutdriver_policy_operations {
 };
 
+struct pnfs_device {
+	struct pnfs_deviceid dev_id;
+	unsigned int  layout_type;
+	unsigned int  mincount;
+	struct page **pages;
+	void          *area;
+	unsigned int  pgbase;
+	unsigned int  pglen;
+	unsigned int  dev_notify_types;
+};
+
 /*
  * Device ID RCU cache. A device ID is unique per client ID and layout type.
  */
@@ -82,6 +93,8 @@ extern struct nfs4_deviceid *nfs4_add_deviceid(struct nfs4_deviceid_cache *,
  * E.g., getdeviceinfo, I/O callbacks, etc
  */
 struct pnfs_client_operations {
+	int (*nfs_getdeviceinfo) (struct nfs_server *,
+				  struct pnfs_device *dev);
 };
 
 extern struct pnfs_client_operations pnfs_ops;
