@@ -104,6 +104,114 @@ _data_server_lookup_locked(u32 ip_addr, u32 port)
 	return NULL;
 }
 
+/* Create an rpc to the data server defined in 'dev_list' */
+static int
+nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
+{
+	struct nfs_server	*tmp;
+	struct sockaddr_in	sin;
+	struct rpc_clnt		*mds_clnt = mds_srv->client;
+	struct nfs_client	*clp = mds_srv->nfs_client;
+	struct sockaddr		*mds_addr;
+	int err = 0;
+
+	dprintk("--> %s ip:port %x:%hu au_flavor %d\n", __func__,
+		ntohl(ds->ds_ip_addr), ntohs(ds->ds_port),
+		mds_clnt->cl_auth->au_flavor);
+
+	sin.sin_family = AF_INET;
+	sin.sin_addr.s_addr = ds->ds_ip_addr;
+	sin.sin_port = ds->ds_port;
+
+	/*
+	 * If this DS is also the MDS, use the MDS session only if the
+	 * MDS exchangeid flags show the EXCHGID4_FLAG_USE_PNFS_DS pNFS role.
+	 */
+	mds_addr = (struct sockaddr *)&clp->cl_addr;
+	if (nfs_sockaddr_cmp((struct sockaddr *)&sin, mds_addr)) {
+		if (!(clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_DS)) {
+			printk(KERN_INFO
+			       "ip:port %x:%hu is not a pNFS Data Server\n",
+			       ntohl(ds->ds_ip_addr), ntohs(ds->ds_port));
+			err = -ENODEV;
+		} else {
+			atomic_inc(&clp->cl_count);
+			ds->ds_clp = clp;
+			dprintk("%s Using MDS Session for DS\n", __func__);
+		}
+		goto out;
+	}
+
+	/* Temporay server for nfs4_set_client */
+	tmp = kzalloc(sizeof(struct nfs_server), GFP_KERNEL);
+	if (!tmp)
+		goto out;
+
+	/*
+	 * Set a retrans, timeout interval, and authflavor equual to the MDS
+	 * values. Use the MDS nfs_client cl_ipaddr field so as to use the
+	 * same co_ownerid as the MDS.
+	 */
+	err = nfs4_set_client(tmp,
+			      mds_srv->nfs_client->cl_hostname,
+			      (struct sockaddr *)&sin,
+			      sizeof(struct sockaddr),
+			      mds_srv->nfs_client->cl_ipaddr,
+			      mds_clnt->cl_auth->au_flavor,
+			      IPPROTO_TCP,
+			      mds_clnt->cl_xprt->timeout,
+			      1 /* minorversion */);
+	if (err < 0)
+		goto out_free;
+
+	clp = tmp->nfs_client;
+
+	/* Ask for only the EXCHGID4_FLAG_USE_PNFS_DS pNFS role */
+	dprintk("%s EXCHANGE_ID for clp %p\n", __func__, clp);
+	clp->cl_exchange_flags = EXCHGID4_FLAG_USE_PNFS_DS;
+
+	err = nfs4_recover_expired_lease(clp);
+	if (!err)
+		err = nfs4_check_client_ready(clp);
+	if (err)
+		goto out_put;
+
+	if (!(clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_DS)) {
+		printk(KERN_INFO "ip:port %x:%hu is not a pNFS Data Server\n",
+		       ntohl(ds->ds_ip_addr), ntohs(ds->ds_port));
+		err = -ENODEV;
+		goto out_put;
+	}
+	/*
+	 * Mask the (possibly) returned EXCHGID4_FLAG_USE_PNFS_MDS pNFS role
+	 * The is_ds_only_session depends on this.
+	 */
+	clp->cl_exchange_flags &= ~EXCHGID4_FLAG_USE_PNFS_MDS;
+	/*
+	 * Set DS lease equal to the MDS lease, renewal is scheduled in
+	 * create_session
+	 */
+	spin_lock(&mds_srv->nfs_client->cl_lock);
+	clp->cl_lease_time = mds_srv->nfs_client->cl_lease_time;
+	spin_unlock(&mds_srv->nfs_client->cl_lock);
+	clp->cl_last_renewal = jiffies;
+
+	clear_bit(NFS4CLNT_SESSION_RESET, &clp->cl_state);
+	ds->ds_clp = clp;
+
+	dprintk("%s: ip=%x, port=%hu, rpcclient %p\n", __func__,
+				ntohl(ds->ds_ip_addr), ntohs(ds->ds_port),
+				clp->cl_rpcclient);
+out_free:
+	kfree(tmp);
+out:
+	dprintk("%s Returns %d\n", __func__, err);
+	return err;
+out_put:
+	nfs_put_client(clp);
+	goto out_free;
+}
+
 static void
 destroy_ds(struct nfs4_pnfs_ds *ds)
 {
@@ -445,4 +553,73 @@ nfs4_fl_find_get_deviceid(struct nfs_client *clp, struct nfs4_deviceid *id)
 	d = pnfs_find_get_deviceid(clp->cl_devid_cache, id);
 	return (d == NULL) ? NULL :
 		container_of(d, struct nfs4_file_layout_dsaddr, deviceid);
+}
+
+/*
+ * Want res = (offset - layout->pattern_offset)/ layout->stripe_unit
+ * Then: ((res + fsi) % dsaddr->stripe_count)
+ */
+static u32
+_nfs4_fl_calc_j_index(struct pnfs_layout_segment *lseg, loff_t offset)
+{
+	struct nfs4_filelayout_segment *flseg = FILELAYOUT_LSEG(lseg);
+	u64 tmp;
+
+	tmp = offset - flseg->pattern_offset;
+	do_div(tmp, flseg->stripe_unit);
+	tmp += flseg->first_stripe_index;
+	return do_div(tmp, flseg->dsaddr->stripe_count);
+}
+
+u32
+nfs4_fl_calc_ds_index(struct pnfs_layout_segment *lseg, loff_t offset)
+{
+	u32 j;
+
+	j = _nfs4_fl_calc_j_index(lseg, offset);
+	return FILELAYOUT_LSEG(lseg)->dsaddr->stripe_indices[j];
+}
+
+struct nfs_fh *
+nfs4_fl_select_ds_fh(struct pnfs_layout_segment *lseg, loff_t offset)
+{
+	struct nfs4_filelayout_segment *flseg = FILELAYOUT_LSEG(lseg);
+	u32 i;
+
+	if (flseg->stripe_type == STRIPE_SPARSE) {
+		if (flseg->num_fh == 1)
+			i = 0;
+		else if (flseg->num_fh == 0)
+			return NULL;
+		else
+			i = nfs4_fl_calc_ds_index(lseg, offset);
+	} else
+		i = _nfs4_fl_calc_j_index(lseg, offset);
+	return flseg->fh_array[i];
+}
+
+struct nfs4_pnfs_ds *
+nfs4_fl_prepare_ds(struct pnfs_layout_segment *lseg, u32 ds_idx)
+{
+	struct nfs4_file_layout_dsaddr *dsaddr;
+
+	dsaddr = FILELAYOUT_LSEG(lseg)->dsaddr;
+	if (dsaddr->ds_list[ds_idx] == NULL) {
+		printk(KERN_ERR "%s: No data server for device id!\n",
+			__func__);
+		return NULL;
+	}
+
+	if (!dsaddr->ds_list[ds_idx]->ds_clp) {
+		int err;
+
+		err = nfs4_pnfs_ds_create(NFS_SERVER(lseg->layout->inode),
+					  dsaddr->ds_list[ds_idx]);
+		if (err) {
+			printk(KERN_ERR "%s nfs4_pnfs_ds_create error %d\n",
+			       __func__, err);
+			return NULL;
+		}
+	}
+	return dsaddr->ds_list[ds_idx];
 }

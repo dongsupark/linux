@@ -148,6 +148,16 @@ extern struct nfs_server *nfs_clone_server(struct nfs_server *,
 					   struct nfs_fattr *);
 extern void nfs_mark_client_ready(struct nfs_client *clp, int state);
 extern int nfs4_check_client_ready(struct nfs_client *clp);
+extern int nfs_sockaddr_cmp(const struct sockaddr *sa1,
+		const struct sockaddr *sa2);
+extern int nfs4_set_client(struct nfs_server *server,
+		const char *hostname,
+		const struct sockaddr *addr,
+		const size_t addrlen,
+		const char *ip_addr,
+		rpc_authflavor_t authflavour,
+		int proto, const struct rpc_timeout *timeparms,
+		u32 minorversion);
 #ifdef CONFIG_PROC_FS
 extern int __init nfs_fs_proc_init(void);
 extern void nfs_fs_proc_exit(void);
@@ -209,6 +219,8 @@ extern const u32 nfs41_maxwrite_overhead;
 #ifdef CONFIG_NFS_V4
 extern struct rpc_procinfo nfs4_procedures[];
 #endif
+
+extern int nfs4_recover_expired_lease(struct nfs_client *clp);
 
 /* proc.c */
 void nfs_close_context(struct nfs_open_context *ctx, int is_sync);
