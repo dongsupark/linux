@@ -735,6 +735,12 @@ static int nfs4_stat_to_errno(int);
 				decode_sequence_maxsz + \
 				decode_putfh_maxsz + \
 				decode_write_maxsz)
+#define NFS4_enc_dscommit_sz	(compound_encode_hdr_maxsz + \
+				encode_putfh_maxsz + \
+				encode_commit_maxsz)
+#define NFS4_dec_dscommit_sz	(compound_decode_hdr_maxsz + \
+				decode_putfh_maxsz + \
+				decode_commit_maxsz)
 
 const u32 nfs41_maxwrite_overhead = ((RPC_MAX_HEADER_WITH_AUTH +
 				      compound_encode_hdr_maxsz +
@@ -2628,6 +2634,23 @@ static void nfs4_xdr_enc_dswrite(struct rpc_rqst *req,
 	encode_nops(&hdr);
 }
 
+/*
+ * Encode a pNFS File Layout Data Server COMMIT request
+ */
+static void nfs4_xdr_enc_dscommit(struct rpc_rqst *req,
+				  struct xdr_stream *xdr,
+				  struct nfs_writeargs *args)
+{
+	struct compound_hdr hdr = {
+		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
+	};
+
+	encode_compound_hdr(xdr, req, &hdr);
+	encode_sequence(xdr, &args->seq_args, &hdr);
+	encode_putfh(xdr, args->fh, &hdr);
+	encode_commit(xdr, args, &hdr);
+	encode_nops(&hdr);
+}
 #endif /* CONFIG_NFS_V4_1 */
 
 static void print_overflow_msg(const char *func, const struct xdr_stream *xdr)
@@ -6116,6 +6139,29 @@ out:
 	return status;
 }
 
+/*
+ * Decode pNFS File Layout Data Server COMMIT response
+ */
+static int nfs4_xdr_dec_dscommit(struct rpc_rqst *rqstp,
+				 struct xdr_stream *xdr,
+				 struct nfs_writeres *res)
+{
+	struct compound_hdr hdr;
+	int status;
+
+	status = decode_compound_hdr(xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_putfh(xdr);
+	if (status)
+		goto out;
+	status = decode_commit(xdr, res);
+out:
+	return status;
+}
 #endif /* CONFIG_NFS_V4_1 */
 
 /**
@@ -6320,6 +6366,7 @@ struct rpc_procinfo	nfs4_procedures[] = {
 	PROC(GETDEVICEINFO,	enc_getdeviceinfo,	dec_getdeviceinfo),
 	PROC(LAYOUTGET,		enc_layoutget,		dec_layoutget),
 	PROC(PNFS_WRITE,	enc_dswrite,		dec_dswrite),
+	PROC(PNFS_COMMIT,	enc_dscommit,		dec_dscommit),
 #endif /* CONFIG_NFS_V4_1 */
 };
 
