@@ -14,6 +14,11 @@
 
 #include <linux/nfs_page.h>
 
+enum pnfs_try_status {
+	PNFS_ATTEMPTED     = 0,
+	PNFS_NOT_ATTEMPTED = 1,
+};
+
 /* Per-layout driver specific registration structure */
 struct pnfs_layoutdriver_type {
 	const u32 id;
@@ -103,6 +108,18 @@ LSEG_LD_DATA(struct pnfs_layout_segment *lseg)
  * Either the pagecache or non-pagecache read/write operations must be implemented
  */
 struct layoutdriver_io_operations {
+	/* Functions that use the pagecache.
+	 * If use_pagecache == 1, then these functions must be implemented.
+	 */
+	/* read and write pagelist should return just 0 (to indicate that
+	 * the layout code has taken control) or 1 (to indicate that the
+	 * layout code wishes to fall back to normal nfs.)  If 0 is returned,
+	 * information can be passed back through nfs_data->res and
+	 * nfs_data->task.tk_status, and the appropriate pnfs done function
+	 * MUST be called.
+	 */
+	enum pnfs_try_status
+	(*read_pagelist) (struct nfs_read_data *nfs_data, unsigned nr_pages);
 	/* Layout information. For each inode, alloc_layout is executed once to retrieve an
 	 * inode specific layout structure.  Each subsequent layoutget operation results in
 	 * a set_layout call to set the opaque layout in the layout driver.*/
