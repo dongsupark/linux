@@ -225,6 +225,39 @@ struct nfs4_layoutget {
 	struct pnfs_layout_segment **lsegpp;
 };
 
+struct nfs4_layoutcommit_args {
+	nfs4_stateid stateid;
+	__u64 lastbytewritten;
+	__u32 time_modify_changed;
+	struct timespec time_modify;
+	const u32 *bitmask;
+	struct nfs_fh *fh;
+	struct inode *inode;
+
+	/* Values set by layout driver */
+	struct pnfs_layout_range range;
+	__u32 layout_type;
+	void *layoutdriver_data;
+	struct nfs4_sequence_args seq_args;
+};
+
+struct nfs4_layoutcommit_res {
+	__u32 sizechanged;
+	__u64 newsize;
+	struct nfs_fattr *fattr;
+	const struct nfs_server *server;
+	struct nfs4_sequence_res seq_res;
+};
+
+struct nfs4_layoutcommit_data {
+	struct rpc_task task;
+	struct rpc_cred *cred;
+	struct nfs_fattr fattr;
+	struct nfs4_layoutcommit_args args;
+	struct nfs4_layoutcommit_res res;
+	int status;
+};
+
 struct nfs4_getdeviceinfo_args {
 	struct pnfs_device *pdev;
 	struct nfs4_sequence_args seq_args;

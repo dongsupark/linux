@@ -72,6 +72,52 @@ find_pnfs_driver(u32 id)
 	return local;
 }
 
+/* Set cred to indicate we require a layoutcommit
+ * If we don't even have a layout, we don't need to commit it.
+ */
+void
+pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx)
+{
+	dprintk("%s: has_layout=%d ctx=%p\n", __func__, has_layout(nfsi), ctx);
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	if (has_layout(nfsi) &&
+	    !test_bit(NFS_LAYOUT_NEED_LCOMMIT, &nfsi->layout->plh_flags)) {
+		nfsi->layout->cred = get_rpccred(ctx->state->owner->so_cred);
+		__set_bit(NFS_LAYOUT_NEED_LCOMMIT,
+			  &nfsi->layout->plh_flags);
+		nfsi->change_attr++;
+		spin_unlock(&nfsi->vfs_inode.i_lock);
+		dprintk("%s: Set layoutcommit\n", __func__);
+		return;
+	}
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+}
+
+/* Update last_write_offset for layoutcommit.
+ * TODO: We should only use commited extents, but the current nfs
+ * implementation does not calculate the written range in nfs_commit_done.
+ * We therefore update this field in writeback_done.
+ */
+void
+pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent)
+{
+	loff_t end_pos;
+
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	if (offset < nfsi->layout->write_begin_pos)
+		nfsi->layout->write_begin_pos = offset;
+	end_pos = offset + extent - 1; /* I'm being inclusive */
+	if (end_pos > nfsi->layout->write_end_pos)
+		nfsi->layout->write_end_pos = end_pos;
+	dprintk("%s: Wrote %lu@%lu bpos %lu, epos: %lu\n",
+		__func__,
+		(unsigned long) extent,
+		(unsigned long) offset ,
+		(unsigned long) nfsi->layout->write_begin_pos,
+		(unsigned long) nfsi->layout->write_end_pos);
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+}
+
 void
 unset_pnfs_layoutdriver(struct nfs_server *nfss)
 {
@@ -1113,6 +1159,42 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 		nfs_inc_stats(inode, NFSIOS_PNFS_COMMIT);
 	dprintk("%s End (trypnfs:%d)\n", __func__, trypnfs);
 	return trypnfs;
+}
+
+/*
+ * Set up the argument/result storage required for the RPC call.
+ */
+static int
+pnfs_layoutcommit_setup(struct inode *inode,
+			struct nfs4_layoutcommit_data *data,
+			loff_t write_begin_pos, loff_t write_end_pos)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	int result = 0;
+
+	dprintk("--> %s\n", __func__);
+
+	data->args.inode = inode;
+	data->args.fh = NFS_FH(inode);
+	data->args.layout_type = nfss->pnfs_curr_ld->id;
+	data->res.fattr = &data->fattr;
+	nfs_fattr_init(&data->fattr);
+
+	/* TODO: Need to determine the correct values */
+	data->args.time_modify_changed = 0;
+
+	/* Set values from inode so it can be reset
+	 */
+	data->args.range.iomode = IOMODE_RW;
+	data->args.range.offset = write_begin_pos;
+	data->args.range.length = write_end_pos - write_begin_pos + 1;
+	data->args.lastbytewritten =  min(write_end_pos,
+					  i_size_read(inode) - 1);
+	data->args.bitmask = nfss->attr_bitmask;
+	data->res.server = nfss;
+
+	dprintk("<-- %s Status %d\n", __func__, result);
+	return result;
 }
 
 /*
