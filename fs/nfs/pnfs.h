@@ -23,11 +23,16 @@
 /* nfs4proc.c */
 extern int nfs4_proc_getdeviceinfo(struct nfs_server *server,
 				   struct pnfs_device *dev);
+extern int nfs4_proc_layoutget(struct nfs4_layoutget *lgp);
+
 /* pnfs.c */
 void put_lseg(struct pnfs_layout_segment *lseg);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unmount_pnfs_layoutdriver(struct nfs_server *);
 int pnfs_initialize(void);
+void pnfs_get_layout_done(struct nfs4_layoutget *, int rpc_status);
+int pnfs_layout_process(struct nfs4_layoutget *lgp);
+void pnfs_layout_release(struct pnfs_layout_hdr *, struct pnfs_layout_range *range);
 void pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
 			     const nfs4_stateid *stateid);
 void pnfs_destroy_layout(struct nfs_inode *);

@@ -255,6 +255,12 @@ put_layout(struct inode *inode)
 }
 
 void
+pnfs_layout_release(struct pnfs_layout_hdr *lo,
+		    struct pnfs_layout_range *range)
+{
+}
+
+void
 pnfs_destroy_layout(struct nfs_inode *nfsi)
 {
 	struct pnfs_layout_hdr *lo;
@@ -522,6 +528,19 @@ pnfs_alloc_layout(struct inode *ino)
 		put_layout_locked(nfsi->layout);
 	}
 	return nfsi->layout;
+}
+
+void
+pnfs_get_layout_done(struct nfs4_layoutget *lgp, int rpc_status)
+{
+}
+
+int
+pnfs_layout_process(struct nfs4_layoutget *lgp)
+{
+	int status = 0;
+
+	return status;
 }
 
 /* Callback operations for layout drivers.
