@@ -65,7 +65,7 @@ nfs4_renew_state(struct work_struct *work)
 	dprintk("%s: start\n", __func__);
 
 	rcu_read_lock();
-	if (list_empty(&clp->cl_superblocks)) {
+	if (list_empty(&clp->cl_superblocks) && !is_ds_only_client(clp)) {
 		rcu_read_unlock();
 		goto out;
 	}
