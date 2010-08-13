@@ -4573,7 +4573,7 @@ int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 	nfs4_verifier verifier;
 	struct nfs41_exchange_id_args args = {
 		.client = clp,
-		.flags = clp->cl_exchange_flags,
+		.flags = clp->cl_exchange_flags & ~EXCHGID4_FLAG_CONFIRMED_R,
 	};
 	struct nfs41_exchange_id_res res = {
 		.client = clp,
