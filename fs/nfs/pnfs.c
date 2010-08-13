@@ -100,6 +100,51 @@ find_pnfs(u32 id, struct pnfs_module **module) {
 	return 0;
 }
 
+/* Unitialize a mountpoint in a layout driver */
+void
+unmount_pnfs_layoutdriver(struct nfs_server *nfss)
+{
+	if (PNFS_EXISTS_LDIO_OP(nfss, uninitialize_mountpoint))
+		nfss->pnfs_curr_ld->ld_io_ops->uninitialize_mountpoint(nfss);
+}
+
+/*
+ * Set the server pnfs module to the first registered pnfs_type.
+ * Only one pNFS layout driver is supported.
+ */
+void
+set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
+{
+	struct pnfs_module *mod = NULL;
+
+	if (server->pnfs_curr_ld)
+		return;
+
+	if (!find_pnfs(id, &mod)) {
+		request_module("%s-%u", LAYOUT_NFSV4_1_MODULE_PREFIX, id);
+		find_pnfs(id, &mod);
+	}
+
+	if (!mod) {
+		dprintk("%s: No pNFS module found for %u. ", __func__, id);
+		goto out_err;
+	}
+
+	server->pnfs_curr_ld = mod->pnfs_ld_type;
+	if (mod->pnfs_ld_type->ld_io_ops->initialize_mountpoint(
+							server->nfs_client)) {
+		printk(KERN_ERR "%s: Error initializing mount point "
+		       "for layout driver %u. ", __func__, id);
+		goto out_err;
+	}
+
+	dprintk("%s: pNFS module for %u set\n", __func__, id);
+	return;
+
+out_err:
+	dprintk("Using NFSv4 I/O\n");
+	server->pnfs_curr_ld = NULL;
+}
 
 /* Allow I/O module to set its functions structure */
 struct pnfs_client_operations*

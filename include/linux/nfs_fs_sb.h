@@ -145,6 +145,11 @@ struct nfs_server {
 						   that are supported on this
 						   filesystem */
 #endif
+
+#ifdef CONFIG_NFS_V4_1
+	struct pnfs_layoutdriver_type  *pnfs_curr_ld; /* Active layout driver */
+#endif /* CONFIG_NFS_V4_1 */
+
 	void (*destroy)(struct nfs_server *);
 
 	atomic_t active; /* Keep trace of any activity to this server */
