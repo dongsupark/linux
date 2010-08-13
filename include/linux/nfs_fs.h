@@ -212,6 +212,7 @@ struct nfs_inode {
 
 	/* pNFS layout information */
 #if defined(CONFIG_NFS_V4_1)
+	wait_queue_head_t lo_waitq;
 	struct pnfs_layout_hdr *layout;
 #endif /* CONFIG_NFS_V4_1 */
 #endif /* CONFIG_NFS_V4*/

@@ -203,6 +203,9 @@ struct pnfs_layout_range {
 	u64 length;
 };
 
+struct nfs4_layoutget_res {
+};
+
 struct nfs4_getdeviceinfo_args {
 	struct pnfs_device *pdev;
 	struct nfs4_sequence_args seq_args;

@@ -169,6 +169,12 @@ pnfs_register_layoutdriver(struct pnfs_layoutdriver_type *ld_type)
 		return NULL;
 	}
 
+	if (!io_ops->alloc_lseg || !io_ops->free_lseg) {
+		printk(KERN_ERR "%s Layout driver must provide "
+		       "alloc_lseg and free_lseg.\n", __func__);
+		return NULL;
+	}
+
 	pnfs_mod = kmalloc(sizeof(struct pnfs_module), GFP_KERNEL);
 	if (pnfs_mod != NULL) {
 		dprintk("%s Registering id:%u name:%s\n",
@@ -294,6 +300,66 @@ pnfs_destroy_all_layouts(struct nfs_client *clp)
 	}
 }
 
+static inline void
+init_lseg(struct pnfs_layout_hdr *lo, struct pnfs_layout_segment *lseg)
+{
+	INIT_LIST_HEAD(&lseg->fi_list);
+	kref_init(&lseg->kref);
+	lseg->valid = true;
+	lseg->layout = lo;
+}
+
+static void
+destroy_lseg(struct kref *kref)
+{
+	struct pnfs_layout_segment *lseg =
+		container_of(kref, struct pnfs_layout_segment, kref);
+
+	dprintk("--> %s\n", __func__);
+	/* Matched by get_layout in pnfs_insert_layout */
+	put_layout_locked(lseg->layout);
+	PNFS_LD_IO_OPS(lseg->layout)->free_lseg(lseg);
+}
+
+static void
+put_lseg_locked(struct pnfs_layout_segment *lseg)
+{
+	bool do_wake_up;
+	struct nfs_inode *nfsi;
+
+	if (!lseg)
+		return;
+
+	dprintk("%s: lseg %p ref %d valid %d\n", __func__, lseg,
+		atomic_read(&lseg->kref.refcount), lseg->valid);
+	do_wake_up = !lseg->valid;
+	nfsi = PNFS_NFS_INODE(lseg->layout);
+	kref_put(&lseg->kref, destroy_lseg);
+	if (do_wake_up)
+		wake_up(&nfsi->lo_waitq);
+}
+
+void
+put_lseg(struct pnfs_layout_segment *lseg)
+{
+	bool do_wake_up;
+	struct nfs_inode *nfsi;
+
+	if (!lseg)
+		return;
+
+	dprintk("%s: lseg %p ref %d valid %d\n", __func__, lseg,
+		atomic_read(&lseg->kref.refcount), lseg->valid);
+	do_wake_up = !lseg->valid;
+	nfsi = PNFS_NFS_INODE(lseg->layout);
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	kref_put(&lseg->kref, destroy_lseg);
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+	if (do_wake_up)
+		wake_up(&nfsi->lo_waitq);
+}
+EXPORT_SYMBOL(put_lseg);
+
 void
 pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
 			const nfs4_stateid *stateid)
@@ -338,13 +404,52 @@ pnfs_layout_from_open_stateid(struct pnfs_layout_hdr *lo,
 	dprintk("<-- %s\n", __func__);
 }
 
+/*
+ * iomode matching rules:
+ * range	lseg	match
+ * -----	-----	-----
+ * ANY		READ	true
+ * ANY		RW	true
+ * RW		READ	false
+ * RW		RW	true
+ * READ		READ	true
+ * READ		RW	false
+ */
+static inline int
+should_free_lseg(struct pnfs_layout_segment *lseg,
+		   struct pnfs_layout_range *range)
+{
+	return (range->iomode == IOMODE_ANY ||
+		lseg->range.iomode == range->iomode);
+}
+
+static inline bool
+_pnfs_can_return_lseg(struct pnfs_layout_segment *lseg)
+{
+	return atomic_read(&lseg->kref.refcount) == 1;
+}
+
+
 static void
 pnfs_free_layout(struct pnfs_layout_hdr *lo,
 		 struct pnfs_layout_range *range)
 {
+	struct pnfs_layout_segment *lseg, *next;
 	dprintk("%s:Begin lo %p offset %llu length %llu iomode %d\n",
 		__func__, lo, range->offset, range->length, range->iomode);
 
+	BUG_ON_UNLOCKED_LO(lo);
+	list_for_each_entry_safe (lseg, next, &lo->segs, fi_list) {
+		if (!should_free_lseg(lseg, range) ||
+		    !_pnfs_can_return_lseg(lseg))
+			continue;
+		dprintk("%s: freeing lseg %p iomode %d "
+			"offset %llu length %llu\n", __func__,
+			lseg, lseg->range.iomode, lseg->range.offset,
+			lseg->range.length);
+		list_del(&lseg->fi_list);
+		put_lseg_locked(lseg);
+	}
 	if (list_empty(&lo->segs)) {
 		struct nfs_client *clp;
 

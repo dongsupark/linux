@@ -74,6 +74,8 @@ struct layoutdriver_io_operations {
 	 * a set_layout call to set the opaque layout in the layout driver.*/
 	struct pnfs_layout_hdr * (*alloc_layout) (struct inode *inode);
 	void (*free_layout) (struct pnfs_layout_hdr *);
+	struct pnfs_layout_segment * (*alloc_lseg) (struct pnfs_layout_hdr *layoutid, struct nfs4_layoutget_res *lgr);
+	void (*free_lseg) (struct pnfs_layout_segment *lseg);
 
 	/* Registration information for a new mounted file system
 	 */
