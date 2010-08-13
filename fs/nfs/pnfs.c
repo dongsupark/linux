@@ -668,6 +668,21 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 				   !pnfs_return_layout_barrier(nfsi, arg.iomode));
 		}
 
+		if (layoutcommit_needed(nfsi)) {
+			if (stateid && !wait) { /* callback */
+				dprintk("%s: layoutcommit pending\n", __func__);
+				status = -EAGAIN;
+				goto out_put;
+			}
+			status = pnfs_layoutcommit_inode(ino, wait);
+			if (status) {
+				/* Return layout even if layoutcommit fails */
+				dprintk("%s: layoutcommit failed, status=%d. "
+					"Returning layout anyway\n",
+					__func__, status);
+			}
+		}
+
 		if (!stateid)
 			status = return_layout(ino, &arg, type, lo, wait);
 		else
@@ -1159,6 +1174,67 @@ pnfs_layoutcommit_setup(struct inode *inode,
 
 	dprintk("<-- %s Status %d\n", __func__, result);
 	return result;
+}
+
+/* Issue a async layoutcommit for an inode.
+ */
+int
+pnfs_layoutcommit_inode(struct inode *inode, int sync)
+{
+	struct nfs4_layoutcommit_data *data;
+	struct nfs_inode *nfsi = NFS_I(inode);
+	loff_t write_begin_pos;
+	loff_t write_end_pos;
+
+	int status = 0;
+
+	dprintk("%s Begin (sync:%d)\n", __func__, sync);
+
+	BUG_ON(!has_layout(nfsi));
+
+	data = kzalloc(sizeof(*data), GFP_NOFS);
+	if (!data)
+		return -ENOMEM;
+
+	spin_lock(&inode->i_lock);
+	if (!layoutcommit_needed(nfsi)) {
+		spin_unlock(&inode->i_lock);
+		goto out_free;
+	}
+
+	/* Clear layoutcommit properties in the inode so
+	 * new lc info can be generated
+	 */
+	write_begin_pos = nfsi->layout->write_begin_pos;
+	write_end_pos = nfsi->layout->write_end_pos;
+	data->cred = nfsi->layout->cred;
+	nfsi->layout->write_begin_pos = 0;
+	nfsi->layout->write_end_pos = 0;
+	nfsi->layout->cred = NULL;
+	__clear_bit(NFS_LAYOUT_NEED_LCOMMIT, &nfsi->layout->state);
+	pnfs_get_layout_stateid(&data->args.stateid, nfsi->layout, NULL);
+
+	/* Reference for layoutcommit matched in pnfs_layoutcommit_release */
+	get_layout_hdr_locked(NFS_I(inode)->layout);
+
+	spin_unlock(&inode->i_lock);
+
+	/* Set up layout commit args */
+	status = pnfs_layoutcommit_setup(inode, data, write_begin_pos,
+					 write_end_pos);
+	if (status) {
+		/* The layout driver failed to setup the layoutcommit */
+		put_rpccred(data->cred);
+		put_layout_hdr(inode);
+		goto out_free;
+	}
+	status = nfs4_proc_layoutcommit(data, sync);
+out:
+	dprintk("%s end (err:%d)\n", __func__, status);
+	return status;
+out_free:
+	kfree(data);
+	goto out;
 }
 
 /*
