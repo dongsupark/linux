@@ -104,6 +104,27 @@ struct nfs_delegation;
 
 struct posix_acl;
 
+struct pnfs_layout_hdr {
+	int			refcount;
+	struct list_head	layouts;   /* other client layouts */
+	struct list_head	segs;      /* layout segments list */
+	int			roc_iomode;/* return on close iomode, 0=none */
+	seqlock_t		seqlock;   /* Protects the stateid */
+	nfs4_stateid		stateid;
+	unsigned long		state;
+#define NFS_INO_RO_LAYOUT_FAILED 0         /* ro layoutget failed stop trying */
+#define NFS_INO_RW_LAYOUT_FAILED 1         /* rw layoutget failed stop trying */
+#define NFS_INO_LAYOUTCOMMIT     2         /* LAYOUTCOMMIT needed */
+
+	struct rpc_cred		*cred;     /* layoutcommit credential */
+	/* DH: These vars keep track of the maximum write range
+	 * so the values can be used for layoutcommit.
+	 */
+	loff_t			write_begin_pos;
+	loff_t			write_end_pos;
+	struct inode		*inode;
+};
+
 /*
  * nfs fs inode data in memory
  */
@@ -188,6 +209,11 @@ struct nfs_inode {
 	struct nfs_delegation	*delegation;
 	fmode_t			 delegation_state;
 	struct rw_semaphore	rwsem;
+
+	/* pNFS layout information */
+#if defined(CONFIG_NFS_V4_1)
+	struct pnfs_layout_hdr *layout;
+#endif /* CONFIG_NFS_V4_1 */
 #endif /* CONFIG_NFS_V4*/
 #ifdef CONFIG_NFS_FSCACHE
 	struct fscache_cookie	*fscache;

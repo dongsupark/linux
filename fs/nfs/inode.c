@@ -1430,7 +1430,10 @@ struct inode *nfs_alloc_inode(struct super_block *sb)
 
 void nfs_destroy_inode(struct inode *inode)
 {
-	kmem_cache_free(nfs_inode_cachep, NFS_I(inode));
+	struct nfs_inode *nfsi = NFS_I(inode);
+
+	pnfs_destroy_layout(nfsi);
+	kmem_cache_free(nfs_inode_cachep, nfsi);
 }
 
 static inline void nfs4_init_once(struct nfs_inode *nfsi)
@@ -1440,6 +1443,9 @@ static inline void nfs4_init_once(struct nfs_inode *nfsi)
 	nfsi->delegation = NULL;
 	nfsi->delegation_state = 0;
 	init_rwsem(&nfsi->rwsem);
+#ifdef CONFIG_NFS_V4_1
+	nfsi->layout = NULL;
+#endif /* CONFIG_NFS_V4_1 */
 #endif
 }
 

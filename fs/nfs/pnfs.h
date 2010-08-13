@@ -27,12 +27,34 @@ extern int nfs4_proc_getdeviceinfo(struct nfs_server *server,
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unmount_pnfs_layoutdriver(struct nfs_server *);
 int pnfs_initialize(void);
+void pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
+			     const nfs4_stateid *stateid);
+void pnfs_destroy_layout(struct nfs_inode *);
+void pnfs_destroy_all_layouts(struct nfs_client *);
+void put_layout(struct inode *inode);
+void pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo);
 
 #define PNFS_EXISTS_LDIO_OP(srv, opname) ((srv)->pnfs_curr_ld &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops->opname)
 
 #define LAYOUT_NFSV4_1_MODULE_PREFIX "nfs-layouttype4"
+
+/* Return true if a layout driver is being used for this mountpoint */
+static inline int pnfs_enabled_sb(struct nfs_server *nfss)
+{
+	return nfss->pnfs_curr_ld != NULL;
+}
+
+#else  /* CONFIG_NFS_V4_1 */
+
+static inline void pnfs_destroy_all_layouts(struct nfs_client *clp)
+{
+}
+
+static inline void pnfs_destroy_layout(struct nfs_inode *nfsi)
+{
+}
 
 #endif /* CONFIG_NFS_V4_1 */
 

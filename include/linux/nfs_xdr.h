@@ -190,10 +190,17 @@ struct nfs4_get_lease_time_res {
 	struct nfs4_sequence_res	lr_seq_res;
 };
 
+#define PNFS_LAYOUT_MAXSIZE 4096
 #define NFS4_PNFS_DEVICEID4_SIZE 16
 
 struct pnfs_deviceid {
 	char data[NFS4_PNFS_DEVICEID4_SIZE];
+};
+
+struct pnfs_layout_range {
+	u32 iomode;
+	u64 offset;
+	u64 length;
 };
 
 struct nfs4_getdeviceinfo_args {

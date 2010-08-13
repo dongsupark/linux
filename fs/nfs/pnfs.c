@@ -56,6 +56,10 @@
 
 static int pnfs_initialized;
 
+static void pnfs_free_layout(struct pnfs_layout_hdr *lo,
+			     struct pnfs_layout_range *range);
+static inline void get_layout(struct pnfs_layout_hdr *lo);
+
 /* Locking:
  *
  * pnfs_spinlock:
@@ -151,10 +155,17 @@ struct pnfs_client_operations*
 pnfs_register_layoutdriver(struct pnfs_layoutdriver_type *ld_type)
 {
 	struct pnfs_module *pnfs_mod;
+	struct layoutdriver_io_operations *io_ops = ld_type->ld_io_ops;
 
 	if (!pnfs_initialized) {
 		printk(KERN_ERR "%s Registration failure. "
 		       "pNFS not initialized.\n", __func__);
+		return NULL;
+	}
+
+	if (!io_ops || !io_ops->alloc_layout || !io_ops->free_layout) {
+		printk(KERN_ERR "%s Layout driver must provide "
+		       "alloc_layout and free_layout.\n", __func__);
 		return NULL;
 	}
 
@@ -188,6 +199,224 @@ pnfs_unregister_layoutdriver(struct pnfs_layoutdriver_type *ld_type)
 		spin_unlock(&pnfs_spinlock);
 		kfree(pnfs_mod);
 	}
+}
+
+/*
+ * pNFS client layout cache
+ */
+#if defined(CONFIG_SMP)
+#define BUG_ON_UNLOCKED_INO(ino) \
+	BUG_ON(!spin_is_locked(&ino->i_lock))
+#define BUG_ON_UNLOCKED_LO(lo) \
+	BUG_ON_UNLOCKED_INO(PNFS_INODE(lo))
+#else /* CONFIG_SMP */
+#define BUG_ON_UNLOCKED_INO(lo) do {} while (0)
+#define BUG_ON_UNLOCKED_LO(lo) do {} while (0)
+#endif /* CONFIG_SMP */
+
+static inline void
+get_layout(struct pnfs_layout_hdr *lo)
+{
+	BUG_ON_UNLOCKED_LO(lo);
+	lo->refcount++;
+}
+
+static inline void
+put_layout_locked(struct pnfs_layout_hdr *lo)
+{
+	BUG_ON_UNLOCKED_LO(lo);
+	BUG_ON(lo->refcount <= 0);
+
+	lo->refcount--;
+	if (!lo->refcount) {
+		struct layoutdriver_io_operations *io_ops = PNFS_LD_IO_OPS(lo);
+		struct nfs_inode *nfsi = PNFS_NFS_INODE(lo);
+
+		dprintk("%s: freeing layout cache %p\n", __func__, lo);
+		WARN_ON(!list_empty(&lo->layouts));
+		io_ops->free_layout(lo);
+		nfsi->layout = NULL;
+	}
+}
+
+void
+put_layout(struct inode *inode)
+{
+	spin_lock(&inode->i_lock);
+	put_layout_locked(NFS_I(inode)->layout);
+	spin_unlock(&inode->i_lock);
+
+}
+
+void
+pnfs_destroy_layout(struct nfs_inode *nfsi)
+{
+	struct pnfs_layout_hdr *lo;
+	struct pnfs_layout_range range = {
+		.iomode = IOMODE_ANY,
+		.offset = 0,
+		.length = NFS4_MAX_UINT64,
+	};
+
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	lo = nfsi->layout;
+	if (lo) {
+		pnfs_free_layout(lo, &range);
+		WARN_ON(!list_empty(&nfsi->layout->segs));
+		WARN_ON(!list_empty(&nfsi->layout->layouts));
+
+		if (nfsi->layout->refcount != 1)
+			printk(KERN_WARNING "%s: layout refcount not=1 %d\n",
+				__func__, nfsi->layout->refcount);
+		WARN_ON(nfsi->layout->refcount != 1);
+
+		/* Matched by refcount set to 1 in alloc_init_layout */
+		put_layout_locked(lo);
+	}
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+}
+
+/*
+ * Called by the state manger to remove all layouts established under an
+ * expired lease.
+ */
+void
+pnfs_destroy_all_layouts(struct nfs_client *clp)
+{
+	struct pnfs_layout_hdr *lo;
+
+	while (!list_empty(&clp->cl_layouts)) {
+		lo = list_entry(clp->cl_layouts.next, struct pnfs_layout_hdr,
+				layouts);
+		dprintk("%s freeing layout for inode %lu\n", __func__,
+			lo->inode->i_ino);
+		pnfs_destroy_layout(NFS_I(lo->inode));
+	}
+}
+
+void
+pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
+			const nfs4_stateid *stateid)
+{
+	write_seqlock(&lo->seqlock);
+	memcpy(lo->stateid.u.data, stateid->u.data, sizeof(lo->stateid.u.data));
+	write_sequnlock(&lo->seqlock);
+}
+
+void
+pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo)
+{
+	int seq;
+
+	dprintk("--> %s\n", __func__);
+
+	do {
+		seq = read_seqbegin(&lo->seqlock);
+		memcpy(dst->u.data, lo->stateid.u.data,
+		       sizeof(lo->stateid.u.data));
+	} while (read_seqretry(&lo->seqlock, seq));
+
+	dprintk("<-- %s\n", __func__);
+}
+
+static void
+pnfs_layout_from_open_stateid(struct pnfs_layout_hdr *lo,
+			      struct nfs4_state *state)
+{
+	int seq;
+
+	dprintk("--> %s\n", __func__);
+
+	write_seqlock(&lo->seqlock);
+	if (!memcmp(lo->stateid.u.data, &zero_stateid, NFS4_STATEID_SIZE))
+		do {
+			seq = read_seqbegin(&state->seqlock);
+			memcpy(lo->stateid.u.data, state->stateid.u.data,
+					sizeof(state->stateid.u.data));
+		} while (read_seqretry(&state->seqlock, seq));
+	write_sequnlock(&lo->seqlock);
+	dprintk("<-- %s\n", __func__);
+}
+
+static void
+pnfs_free_layout(struct pnfs_layout_hdr *lo,
+		 struct pnfs_layout_range *range)
+{
+	dprintk("%s:Begin lo %p offset %llu length %llu iomode %d\n",
+		__func__, lo, range->offset, range->length, range->iomode);
+
+	if (list_empty(&lo->segs)) {
+		struct nfs_client *clp;
+
+		clp = PNFS_NFS_SERVER(lo)->nfs_client;
+		spin_lock(&clp->cl_lock);
+		list_del_init(&lo->layouts);
+		spin_unlock(&clp->cl_lock);
+		pnfs_set_layout_stateid(lo, &zero_stateid);
+	}
+
+	dprintk("%s:Return\n", __func__);
+}
+
+/*
+ * Each layoutdriver embeds pnfs_layout_hdr as the first field in it's
+ * per-layout type layout cache structure and returns it ZEROed
+ * from layoutdriver_io_ops->alloc_layout
+ */
+static struct pnfs_layout_hdr *
+alloc_init_layout(struct inode *ino)
+{
+	struct pnfs_layout_hdr *lo;
+	struct layoutdriver_io_operations *io_ops;
+
+	io_ops = NFS_SERVER(ino)->pnfs_curr_ld->ld_io_ops;
+	lo = io_ops->alloc_layout(ino);
+	if (!lo) {
+		printk(KERN_ERR
+			"%s: out of memory: io_ops->alloc_layout failed\n",
+			__func__);
+		return NULL;
+	}
+	lo->refcount = 1;
+	INIT_LIST_HEAD(&lo->layouts);
+	INIT_LIST_HEAD(&lo->segs);
+	seqlock_init(&lo->seqlock);
+	lo->inode = ino;
+	return lo;
+}
+
+/*
+ * Retrieve and possibly allocate the inode layout
+ *
+ * ino->i_lock must be taken by the caller.
+ */
+static struct pnfs_layout_hdr *
+pnfs_alloc_layout(struct inode *ino)
+{
+	struct nfs_inode *nfsi = NFS_I(ino);
+	struct pnfs_layout_hdr *new = NULL;
+
+	dprintk("%s Begin ino=%p layout=%p\n", __func__, ino, nfsi->layout);
+
+	BUG_ON_UNLOCKED_INO(ino);
+	if (likely(nfsi->layout))
+		return nfsi->layout;
+
+	spin_unlock(&ino->i_lock);
+	new = alloc_init_layout(ino);
+	spin_lock(&ino->i_lock);
+
+	if (likely(nfsi->layout == NULL)) {	/* Won the race? */
+		nfsi->layout = new;
+	} else if (new) {
+		/* Reference the layout accross i_lock release and grab */
+		get_layout(nfsi->layout);
+		spin_unlock(&ino->i_lock);
+		NFS_SERVER(ino)->pnfs_curr_ld->ld_io_ops->free_layout(new);
+		spin_lock(&ino->i_lock);
+		put_layout_locked(nfsi->layout);
+	}
+	return nfsi->layout;
 }
 
 /* Callback operations for layout drivers.
