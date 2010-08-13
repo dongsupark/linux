@@ -12,6 +12,8 @@
 #ifndef LINUX_NFS4_PNFS_H
 #define LINUX_NFS4_PNFS_H
 
+#include <linux/nfs_page.h>
+
 /* Per-layout driver specific registration structure */
 struct pnfs_layoutdriver_type {
 	const u32 id;
@@ -116,6 +118,11 @@ struct layoutdriver_io_operations {
 };
 
 struct layoutdriver_policy_operations {
+	/* The stripe size of the file system */
+	ssize_t (*get_stripesize) (struct pnfs_layout_hdr *layoutid);
+
+	/* test for nfs page cache coalescing */
+	int (*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
 };
 
 struct pnfs_device {
