@@ -19,6 +19,8 @@ enum pnfs_try_status {
 	PNFS_NOT_ATTEMPTED = 1,
 };
 
+#define NFS4_PNFS_GETDEVLIST_MAXNUM 16
+
 /* Per-layout driver specific registration structure */
 struct pnfs_layoutdriver_type {
 	const u32 id;
@@ -57,6 +59,12 @@ static inline struct layoutdriver_io_operations *
 PNFS_LD_IO_OPS(struct pnfs_layout_hdr *lo)
 {
 	return PNFS_LD(lo)->ld_io_ops;
+}
+
+static inline struct layoutdriver_policy_operations *
+PNFS_LD_POLICY_OPS(struct pnfs_layout_hdr *lo)
+{
+	return PNFS_LD(lo)->ld_policy_ops;
 }
 
 static inline bool
@@ -164,6 +172,12 @@ struct pnfs_device {
 	unsigned int  dev_notify_types;
 };
 
+struct pnfs_devicelist {
+	unsigned int		eof;
+	unsigned int		num_devs;
+	struct pnfs_deviceid	dev_id[NFS4_PNFS_GETDEVLIST_MAXNUM];
+};
+
 /*
  * Device ID RCU cache. A device ID is unique per client ID and layout type.
  */
@@ -222,11 +236,15 @@ extern void nfs4_put_unset_layout_deviceid(struct pnfs_layout_segment *,
 struct pnfs_client_operations {
 	int (*nfs_getdeviceinfo) (struct nfs_server *,
 				  struct pnfs_device *dev);
+	void (*nfs_return_layout) (struct inode *);
 };
 
 extern struct pnfs_client_operations pnfs_ops;
 
 extern struct pnfs_client_operations *pnfs_register_layoutdriver(struct pnfs_layoutdriver_type *);
 extern void pnfs_unregister_layoutdriver(struct pnfs_layoutdriver_type *);
+
+#define NFS4_PNFS_MAX_LAYOUTS 4
+#define NFS4_PNFS_PRIVATE_LAYOUT 0x80000000
 
 #endif /* LINUX_NFS4_PNFS_H */

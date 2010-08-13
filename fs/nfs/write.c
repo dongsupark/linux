@@ -20,6 +20,7 @@
 #include <linux/nfs_mount.h>
 #include <linux/nfs_page.h>
 #include <linux/backing-dev.h>
+#include <linux/module.h>
 
 #include <asm/uaccess.h>
 
@@ -68,6 +69,7 @@ void nfs_commit_free(struct nfs_write_data *p)
 		kfree(p->pagevec);
 	mempool_free(p, nfs_commit_mempool);
 }
+EXPORT_SYMBOL(nfs_commit_free);
 
 struct nfs_write_data *nfs_writedata_alloc(unsigned int pagecount)
 {
@@ -1252,6 +1254,9 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 	if (task->tk_status >= 0 && resp->count < argp->count) {
 		static unsigned long    complain;
 
+		dprintk("NFS:       short write:"
+			" (resp->count %u) < (argp->count = %u)\n",
+			resp->count, argp->count);
 		nfs_inc_stats(data->inode, NFSIOS_SHORTWRITE);
 
 		/* Has the server at least made some progress? */
@@ -1268,7 +1273,7 @@ int nfs_writeback_done(struct rpc_task *task, struct nfs_write_data *data)
 				 */
 				argp->stable = NFS_FILE_SYNC;
 			}
-			nfs_restart_rpc(task, server->nfs_client);
+			nfs_restart_rpc(task, clp);
 			return -EAGAIN;
 		}
 		if (time_before(complain, jiffies)) {
@@ -1607,6 +1612,7 @@ int nfs_write_inode(struct inode *inode, struct writeback_control *wbc)
  */
 int nfs_wb_all(struct inode *inode)
 {
+	int ret;
 	struct writeback_control wbc = {
 		.sync_mode = WB_SYNC_ALL,
 		.nr_to_write = LONG_MAX,
@@ -1614,7 +1620,8 @@ int nfs_wb_all(struct inode *inode)
 		.range_end = LLONG_MAX,
 	};
 
-	return sync_inode(inode, &wbc);
+	ret = sync_inode(inode, &wbc);
+	return ret;
 }
 
 int nfs_wb_page_cancel(struct inode *inode, struct page *page)

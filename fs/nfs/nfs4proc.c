@@ -4710,6 +4710,7 @@ int nfs4_proc_exchange_id(struct nfs_client *clp, struct rpc_cred *cred)
 	dprintk("<-- %s status= %d\n", __func__, status);
 	return status;
 }
+EXPORT_SYMBOL(nfs4_proc_exchange_id);
 
 struct nfs4_get_lease_time_data {
 	struct nfs4_get_lease_time_args *args;
@@ -5886,6 +5887,7 @@ const struct nfs_rpc_ops nfs_v4_clientops = {
 	.dentry_ops	= &nfs4_dentry_operations,
 	.dir_inode_ops	= &nfs4_dir_inode_operations,
 	.file_inode_ops	= &nfs4_file_inode_operations,
+	.file_ops	= &nfs_file_operations,
 	.getroot	= nfs4_proc_get_root,
 	.getattr	= nfs4_proc_getattr,
 	.setattr	= nfs4_proc_setattr,

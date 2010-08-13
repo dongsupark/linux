@@ -1156,6 +1156,7 @@ struct nfs_rpc_ops {
 	const struct dentry_operations *dentry_ops;
 	const struct inode_operations *dir_inode_ops;
 	const struct inode_operations *file_inode_ops;
+	const struct file_operations *file_ops;
 
 	int	(*getroot) (struct nfs_server *, struct nfs_fh *,
 			    struct nfs_fsinfo *);
@@ -1220,6 +1221,7 @@ struct nfs_rpc_ops {
 extern const struct nfs_rpc_ops	nfs_v2_clientops;
 extern const struct nfs_rpc_ops	nfs_v3_clientops;
 extern const struct nfs_rpc_ops	nfs_v4_clientops;
+extern const struct nfs_rpc_ops	pnfs_v4_clientops;
 extern struct rpc_version	nfs_version2;
 extern struct rpc_version	nfs_version3;
 extern struct rpc_version	nfs_version4;

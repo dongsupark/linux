@@ -64,6 +64,9 @@ MODULE_DESCRIPTION("The NFSv4 file layout driver");
 /* Callback operations to the pNFS client */
 struct pnfs_client_operations *pnfs_callback_ops;
 
+/* Forward declaration */
+struct layoutdriver_io_operations filelayout_io_operations;
+
 int
 filelayout_initialize_mountpoint(struct nfs_client *clp)
 {

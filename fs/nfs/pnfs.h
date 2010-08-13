@@ -29,6 +29,8 @@ extern int nfs4_proc_layoutcommit(struct nfs4_layoutcommit_data *data,
 extern int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool wait);
 
 /* pnfs.c */
+extern const nfs4_stateid zero_stateid;
+
 void put_lseg(struct pnfs_layout_segment *lseg);
 void _pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 	enum pnfs_iomode access_type,
@@ -68,6 +70,9 @@ void pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo);
 #define PNFS_EXISTS_LDIO_OP(srv, opname) ((srv)->pnfs_curr_ld &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops &&	\
 				     (srv)->pnfs_curr_ld->ld_io_ops->opname)
+#define PNFS_EXISTS_LDPOLICY_OP(srv, opname) ((srv)->pnfs_curr_ld &&	\
+				     (srv)->pnfs_curr_ld->ld_policy_ops && \
+				     (srv)->pnfs_curr_ld->ld_policy_ops->opname)
 
 #define LAYOUT_NFSV4_1_MODULE_PREFIX "nfs-layouttype4"
 
@@ -173,6 +178,16 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 		   const struct rpc_call_ops *call_ops, int how)
 {
 	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline int pnfs_get_write_status(struct nfs_write_data *data)
+{
+	return 0;
+}
+
+static inline int pnfs_get_read_status(struct nfs_read_data *data)
+{
+	return 0;
 }
 
 static inline int pnfs_layoutcommit_inode(struct inode *inode, int sync)

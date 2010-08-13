@@ -21,6 +21,7 @@
 
 #define NFS4_PNFS_MAX_STRIPE_CNT 4096
 #define NFS4_PNFS_MAX_MULTI_CNT  64 /* 256 fit into a u8 stripe_index */
+#define NFS4_PNFS_MAX_MULTI_DS   2
 
 #define FILE_DSADDR(lseg) (container_of(lseg->deviceid, \
 					struct nfs4_file_layout_dsaddr, \
@@ -47,6 +48,11 @@ struct nfs4_file_layout_dsaddr {
 	u8			*stripe_indices;
 	u32			ds_num;
 	struct nfs4_pnfs_ds	*ds_list[1];
+};
+
+struct nfs4_pnfs_dev_hlist {
+	rwlock_t		dev_lock;
+	struct hlist_head	dev_list[NFS4_PNFS_DEV_HASH_SIZE];
 };
 
 struct nfs4_filelayout_segment {
