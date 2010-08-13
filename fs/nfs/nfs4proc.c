@@ -3186,6 +3186,12 @@ static void nfs4_proc_commit_setup(struct nfs_write_data *data, struct rpc_messa
 	
 	data->args.bitmask = server->cache_consistency_bitmask;
 	data->res.server = server;
+#if defined(CONFIG_NFS_V4_1)
+	if (data->fldata.ds_nfs_client) {
+		msg->rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_PNFS_COMMIT];
+		return;
+	}
+#endif /* CONFIG_NFS_V4_1 */
 	msg->rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_COMMIT];
 }
 
