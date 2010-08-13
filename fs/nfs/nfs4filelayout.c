@@ -304,6 +304,39 @@ filelayout_free_lseg(struct pnfs_layout_segment *lseg)
 				   nfs4_fl_free_deviceid_callback);
 	_filelayout_free_lseg(lseg);
 }
+
+/* Return the stripesize for the specified file */
+ssize_t
+filelayout_get_stripesize(struct pnfs_layout_hdr *lo)
+{
+	struct nfs4_filelayout *flo = FILE_LO(lo);
+
+	return flo->stripe_unit;
+}
+
+/*
+ * filelayout_pg_test(). Called by nfs_can_coalesce_requests()
+ *
+ * return 1 :  coalesce page
+ * return 0 :  don't coalesce page
+ */
+int
+filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
+		   struct nfs_page *req)
+{
+	u64 p_stripe, r_stripe;
+
+	if (pgio->pg_boundary == 0)
+		return 1;
+	p_stripe = (u64)prev->wb_index << PAGE_CACHE_SHIFT;
+	r_stripe = (u64)req->wb_index << PAGE_CACHE_SHIFT;
+
+	do_div(p_stripe, pgio->pg_boundary);
+	do_div(r_stripe, pgio->pg_boundary);
+
+	return (p_stripe == r_stripe);
+}
+
 struct layoutdriver_io_operations filelayout_io_operations = {
 	.alloc_layout            = filelayout_alloc_layout,
 	.free_layout             = filelayout_free_layout,
@@ -314,6 +347,8 @@ struct layoutdriver_io_operations filelayout_io_operations = {
 };
 
 struct layoutdriver_policy_operations filelayout_policy_operations = {
+	.get_stripesize        = filelayout_get_stripesize,
+	.pg_test               = filelayout_pg_test,
 };
 
 struct pnfs_layoutdriver_type filelayout_type = {
