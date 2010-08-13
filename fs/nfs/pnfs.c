@@ -30,6 +30,7 @@
 #include <linux/nfs_fs.h>
 #include "internal.h"
 #include "pnfs.h"
+#include "iostat.h"
 
 #define NFSDBG_FACILITY		NFSDBG_PNFS
 
@@ -996,6 +997,41 @@ static void _pnfs_clear_lseg_from_pages(struct list_head *head)
 		put_lseg(req->wb_lseg);
 		req->wb_lseg = NULL;
 	}
+}
+
+/*
+ * Call the appropriate parallel I/O subsystem read function.
+ * If no I/O device driver exists, or one does match the returned
+ * fstype, then return a positive status for regular NFS processing.
+ */
+enum pnfs_try_status
+pnfs_try_to_read_data(struct nfs_read_data *rdata,
+		       const struct rpc_call_ops *call_ops)
+{
+	struct inode *inode = rdata->inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	struct pnfs_layout_segment *lseg = rdata->req->wb_lseg;
+	enum pnfs_try_status trypnfs;
+
+	rdata->pdata.call_ops = call_ops;
+
+	dprintk("%s: Reading ino:%lu %u@%llu\n",
+		__func__, inode->i_ino, rdata->args.count, rdata->args.offset);
+
+	get_lseg(lseg);
+
+	rdata->pdata.lseg = lseg;
+	trypnfs = nfss->pnfs_curr_ld->read_pagelist(rdata,
+		nfs_page_array_len(rdata->args.pgbase, rdata->args.count));
+	if (trypnfs == PNFS_NOT_ATTEMPTED) {
+		rdata->pdata.lseg = NULL;
+		put_lseg(lseg);
+		_pnfs_clear_lseg_from_pages(&rdata->pages);
+	} else {
+		nfs_inc_stats(inode, NFSIOS_PNFS_READ);
+	}
+	dprintk("%s End (trypnfs:%d)\n", __func__, trypnfs);
+	return trypnfs;
 }
 
 /*

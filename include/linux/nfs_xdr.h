@@ -1002,6 +1002,23 @@ struct nfs_page;
 
 #define NFS_PAGEVEC_SIZE	(8U)
 
+#if defined(CONFIG_NFS_V4_1)
+
+/* pnfs-specific data needed for read, write, and commit calls */
+struct pnfs_call_data {
+	struct pnfs_layout_segment *lseg;
+	const struct rpc_call_ops *call_ops;
+	u32			orig_count;	/* for retry via MDS */
+	u8			how;		/* for FLUSH_STABLE */
+};
+
+/* files layout-type specific data for read, write, and commit */
+struct pnfs_fl_call_data {
+	struct nfs_client	*ds_nfs_client;
+	__u64			orig_offset;
+};
+#endif /* CONFIG_NFS_V4_1 */
+
 struct nfs_read_data {
 	int			flags;
 	struct rpc_task		task;
@@ -1017,6 +1034,10 @@ struct nfs_read_data {
 #ifdef CONFIG_NFS_V4
 	unsigned long		timestamp;	/* For lease renewal */
 #endif
+#if defined(CONFIG_NFS_V4_1)
+	struct pnfs_call_data	pdata;
+	struct pnfs_fl_call_data fldata;
+#endif /* CONFIG_NFS_V4_1 */
 	struct page		*page_array[NFS_PAGEVEC_SIZE];
 };
 

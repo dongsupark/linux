@@ -46,6 +46,11 @@ struct pnfs_layout_segment {
 	int pls_recall_count;
 };
 
+enum pnfs_try_status {
+	PNFS_ATTEMPTED     = 0,
+	PNFS_NOT_ATTEMPTED = 1,
+};
+
 #ifdef CONFIG_NFS_V4_1
 
 #define LAYOUT_NFSV4_1_MODULE_PREFIX "nfs-layouttype4"
@@ -70,6 +75,16 @@ struct pnfs_layoutdriver_type {
 
 	/* test for nfs page cache coalescing */
 	int (*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
+
+	/* read and write pagelist should return just 0 (to indicate that
+	 * the layout code has taken control) or 1 (to indicate that the
+	 * layout code wishes to fall back to normal nfs.)  If 0 is returned,
+	 * information can be passed back through nfs_data->res and
+	 * nfs_data->task.tk_status, and the appropriate pnfs done function
+	 * MUST be called.
+	 */
+	enum pnfs_try_status
+	(*read_pagelist) (struct nfs_read_data *nfs_data, unsigned nr_pages);
 };
 
 struct pnfs_layout_hdr {
@@ -159,6 +174,8 @@ pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unset_pnfs_layoutdriver(struct nfs_server *);
+enum pnfs_try_status pnfs_try_to_read_data(struct nfs_read_data *,
+					    const struct rpc_call_ops *);
 void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *,
 			   struct nfs_open_context *, struct list_head *);
 void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *);
@@ -248,6 +265,20 @@ static inline bool
 has_layout(struct nfs_inode *nfsi)
 {
 	return false;
+}
+
+static inline enum pnfs_try_status
+pnfs_try_to_read_data(struct nfs_read_data *data,
+		      const struct rpc_call_ops *call_ops)
+{
+	return PNFS_NOT_ATTEMPTED;
+}
+
+static inline enum pnfs_try_status
+pnfs_try_to_commit(struct nfs_write_data *data,
+		   const struct rpc_call_ops *call_ops, int how)
+{
+	return PNFS_NOT_ATTEMPTED;
 }
 
 static inline bool
