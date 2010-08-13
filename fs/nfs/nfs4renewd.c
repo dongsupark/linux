@@ -64,7 +64,7 @@ nfs4_renew_state(struct work_struct *work)
 	ops = clp->cl_mvops->state_renewal_ops;
 	dprintk("%s: start\n", __func__);
 	/* Are there any active superblocks? */
-	if (list_empty(&clp->cl_superblocks))
+	if (list_empty(&clp->cl_superblocks) && !is_ds_only_client(clp))
 		goto out;
 	spin_lock(&clp->cl_lock);
 	lease = clp->cl_lease_time;
