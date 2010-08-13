@@ -22,6 +22,10 @@
 #define NFS4_PNFS_MAX_STRIPE_CNT 4096
 #define NFS4_PNFS_MAX_MULTI_CNT  64 /* 256 fit into a u8 stripe_index */
 
+#define FILE_DSADDR(lseg) (container_of(lseg->deviceid, \
+					struct nfs4_file_layout_dsaddr, \
+					deviceid))
+
 enum stripetype4 {
 	STRIPE_SPARSE = 1,
 	STRIPE_DENSE = 2
@@ -61,6 +65,9 @@ struct nfs4_filelayout {
 	u32 stripe_unit;
 };
 
+extern struct nfs_fh *
+nfs4_fl_select_ds_fh(struct pnfs_layout_segment *lseg, loff_t offset);
+
 static inline struct nfs4_filelayout *
 FILE_LO(struct pnfs_layout_hdr *lo)
 {
@@ -72,6 +79,9 @@ extern struct pnfs_client_operations *pnfs_callback_ops;
 extern void nfs4_fl_free_deviceid_callback(struct kref *);
 extern void print_ds(struct nfs4_pnfs_ds *ds);
 char *deviceid_fmt(const struct pnfs_deviceid *dev_id);
+u32 nfs4_fl_calc_ds_index(struct pnfs_layout_segment *lseg, loff_t offset);
+struct nfs4_pnfs_ds *nfs4_fl_prepare_ds(struct pnfs_layout_segment *lseg,
+					u32 ds_idx);
 extern struct nfs4_file_layout_dsaddr *
 nfs4_pnfs_device_item_find(struct nfs_client *, struct pnfs_deviceid *dev_id);
 struct nfs4_file_layout_dsaddr *

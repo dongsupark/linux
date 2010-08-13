@@ -38,8 +38,14 @@
 
 #include <linux/module.h>
 #include <linux/init.h>
-
+#include <linux/time.h>
+#include <linux/kernel.h>
+#include <linux/mm.h>
+#include <linux/string.h>
 #include <linux/vmalloc.h>
+#include <linux/stat.h>
+#include <linux/errno.h>
+#include <linux/unistd.h>
 #include <linux/nfs_fs.h>
 #include <linux/nfs_page.h>
 #include <linux/nfs4_pnfs.h>
@@ -81,6 +87,38 @@ filelayout_uninitialize_mountpoint(struct nfs_server *nfss)
 
 	if (nfss->pnfs_curr_ld && nfss->nfs_client->cl_devid_cache)
 		nfs4_put_deviceid_cache(nfss->nfs_client);
+	return 0;
+}
+
+/* This function is used by the layout driver to calculate the
+ * offset of the file on the dserver based on whether the
+ * layout type is STRIPE_DENSE or STRIPE_SPARSE
+ */
+static loff_t
+filelayout_get_dserver_offset(struct pnfs_layout_segment *lseg, loff_t offset)
+{
+	struct nfs4_filelayout_segment *flseg = LSEG_LD_DATA(lseg);
+
+	switch (flseg->stripe_type) {
+	case STRIPE_SPARSE:
+		return offset;
+
+	case STRIPE_DENSE:
+	{
+		u32 stripe_width;
+		u64 tmp, off;
+		u32 unit = flseg->stripe_unit;
+
+		stripe_width = unit * FILE_DSADDR(lseg)->stripe_count;
+		tmp = off = offset - flseg->pattern_offset;
+		do_div(tmp, stripe_width);
+		return tmp * unit + do_div(off, unit);
+	}
+	default:
+		BUG();
+	}
+
+	/* We should never get here... just to stop the gcc warning */
 	return 0;
 }
 
