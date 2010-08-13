@@ -120,6 +120,10 @@ struct layoutdriver_io_operations {
 	 */
 	enum pnfs_try_status
 	(*read_pagelist) (struct nfs_read_data *nfs_data, unsigned nr_pages);
+	enum pnfs_try_status
+	(*write_pagelist) (struct nfs_write_data *nfs_data, unsigned nr_pages, int how);
+
+
 	/* Layout information. For each inode, alloc_layout is executed once to retrieve an
 	 * inode specific layout structure.  Each subsequent layoutget operation results in
 	 * a set_layout call to set the opaque layout in the layout driver.*/
