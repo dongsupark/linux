@@ -119,6 +119,13 @@ extern int nfs41_validate_delegation_stateid(struct nfs_delegation *delegation,
 
 #define RCA4_TYPE_MASK_RDATA_DLG	0
 #define RCA4_TYPE_MASK_WDATA_DLG	1
+#define RCA4_TYPE_MASK_DIR_DLG         2
+#define RCA4_TYPE_MASK_FILE_LAYOUT     3
+#define RCA4_TYPE_MASK_BLK_LAYOUT      4
+#define RCA4_TYPE_MASK_OBJ_LAYOUT_MIN  8
+#define RCA4_TYPE_MASK_OBJ_LAYOUT_MAX  9
+#define RCA4_TYPE_MASK_OTHER_LAYOUT_MIN 12
+#define RCA4_TYPE_MASK_OTHER_LAYOUT_MAX 15
 
 struct cb_recallanyargs {
 	struct sockaddr	*craa_addr;
@@ -137,6 +144,21 @@ struct cb_recallslotargs {
 extern unsigned nfs4_callback_recallslot(struct cb_recallslotargs *args,
 					 void *dummy,
 					 struct cb_process_state *cps);
+
+struct cb_layoutrecallargs {
+	struct sockaddr		*cbl_addr;
+	struct nfs_fh		cbl_fh;
+	struct pnfs_layout_range cbl_seg;
+	struct nfs_fsid		cbl_fsid;
+	uint32_t		cbl_recall_type;
+	uint32_t		cbl_layout_type;
+	uint32_t		cbl_layoutchanged;
+	nfs4_stateid		cbl_stateid;
+};
+
+extern unsigned nfs4_callback_layoutrecall(
+	struct cb_layoutrecallargs *args,
+	void *dummy, struct cb_process_state *cps);
 
 extern void nfs4_check_drain_bc_complete(struct nfs4_session *ses);
 #endif /* CONFIG_NFS_V4_1 */

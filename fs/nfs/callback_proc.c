@@ -8,10 +8,14 @@
 #include <linux/nfs4.h>
 #include <linux/nfs_fs.h>
 #include <linux/slab.h>
+#include <linux/kthread.h>
+#include <linux/module.h>
+#include <linux/writeback.h>
 #include "nfs4_fs.h"
 #include "callback.h"
 #include "delegation.h"
 #include "internal.h"
+#include "pnfs.h"
 
 #ifdef NFS_DEBUG
 #define NFSDBG_FACILITY NFSDBG_CALLBACK
@@ -106,6 +110,274 @@ int nfs4_validate_delegation_stateid(struct nfs_delegation *delegation, const nf
 }
 
 #if defined(CONFIG_NFS_V4_1)
+
+static bool
+pnfs_is_next_layout_stateid(const struct pnfs_layout_hdr *lo,
+			    const nfs4_stateid stateid)
+{
+	int seqlock;
+	bool res;
+	u32 oldseqid, newseqid;
+
+	do {
+		seqlock = read_seqbegin(&lo->seqlock);
+		oldseqid = be32_to_cpu(lo->stateid.stateid.seqid);
+		newseqid = be32_to_cpu(stateid.stateid.seqid);
+		res = !memcmp(lo->stateid.stateid.other,
+			      stateid.stateid.other,
+			      NFS4_STATEID_OTHER_SIZE);
+		if (res) { /* comparing layout stateids */
+			if (oldseqid == ~0)
+				res = (newseqid == 1);
+			else
+				res = (newseqid == oldseqid + 1);
+		} else { /* open stateid */
+			res = !memcmp(lo->stateid.data,
+				      &zero_stateid,
+				      NFS4_STATEID_SIZE);
+			if (res)
+				res = (newseqid == 1);
+		}
+	} while (read_seqretry(&lo->seqlock, seqlock));
+
+	return res;
+}
+
+/*
+ * Retrieve an inode based on layout recall parameters
+ *
+ * Note: caller must iput(inode) to dereference the inode.
+ */
+static struct inode *
+nfs_layoutrecall_find_inode(struct nfs_client *clp,
+			    const struct cb_layoutrecallargs *args)
+{
+	struct nfs_inode *nfsi;
+	struct pnfs_layout_hdr *lo;
+	struct nfs_server *server;
+	struct inode *ino = NULL;
+
+	dprintk("%s: Begin recall_type=%d clp %p\n",
+		__func__, args->cbl_recall_type, clp);
+
+	spin_lock(&clp->cl_lock);
+	list_for_each_entry(lo, &clp->cl_layouts, layouts) {
+		nfsi = NFS_I(lo->inode);
+		if (!nfsi)
+			continue;
+
+		dprintk("%s: Searching inode=%lu\n",
+			__func__, nfsi->vfs_inode.i_ino);
+
+		if (args->cbl_recall_type == RETURN_FILE) {
+		    if (nfs_compare_fh(&args->cbl_fh, &nfsi->fh))
+			continue;
+		} else if (args->cbl_recall_type == RETURN_FSID) {
+			server = NFS_SERVER(&nfsi->vfs_inode);
+			if (server->fsid.major != args->cbl_fsid.major ||
+			    server->fsid.minor != args->cbl_fsid.minor)
+				continue;
+		}
+
+		/* Make sure client didn't clean up layout without
+		 * telling the server */
+		if (!has_layout(nfsi))
+			continue;
+
+		ino = igrab(&nfsi->vfs_inode);
+		dprintk("%s: Found inode=%p\n", __func__, ino);
+		break;
+	}
+	spin_unlock(&clp->cl_lock);
+	return ino;
+}
+
+struct recall_layout_threadargs {
+	struct inode *inode;
+	struct nfs_client *clp;
+	struct completion started;
+	struct cb_layoutrecallargs *rl;
+	int result;
+};
+
+static int pnfs_recall_layout(void *data)
+{
+	struct inode *inode, *ino;
+	struct nfs_client *clp;
+	struct cb_layoutrecallargs rl;
+	struct nfs4_layoutreturn *lrp;
+	struct recall_layout_threadargs *args =
+		(struct recall_layout_threadargs *)data;
+	int status = 0;
+
+	daemonize("nfsv4-layoutreturn");
+
+	dprintk("%s: recall_type=%d fsid 0x%llx-0x%llx start\n",
+		__func__, args->rl->cbl_recall_type,
+		args->rl->cbl_fsid.major, args->rl->cbl_fsid.minor);
+
+	clp = args->clp;
+	inode = args->inode;
+	rl = *args->rl;
+
+	/* support whole file layouts only */
+	rl.cbl_seg.offset = 0;
+	rl.cbl_seg.length = NFS4_MAX_UINT64;
+
+	if (rl.cbl_recall_type == RETURN_FILE) {
+		if (pnfs_is_next_layout_stateid(NFS_I(inode)->layout,
+						rl.cbl_stateid))
+			status = pnfs_return_layout(inode, &rl.cbl_seg,
+						    &rl.cbl_stateid, RETURN_FILE,
+						    false);
+		else
+			status = cpu_to_be32(NFS4ERR_DELAY);
+		if (status)
+			dprintk("%s RETURN_FILE error: %d\n", __func__, status);
+		else
+			status =  cpu_to_be32(NFS4ERR_NOMATCHING_LAYOUT);
+		args->result = status;
+		complete(&args->started);
+		goto out;
+	}
+
+	status = cpu_to_be32(NFS4_OK);
+	args->result = status;
+	complete(&args->started);
+	args = NULL;
+
+	/* IMPROVEME: This loop is inefficient, running in O(|s_inodes|^2) */
+	while ((ino = nfs_layoutrecall_find_inode(clp, &rl)) != NULL) {
+		/* FIXME: need to check status on pnfs_return_layout */
+		pnfs_return_layout(ino, &rl.cbl_seg, NULL, RETURN_FILE, false);
+		iput(ino);
+	}
+
+	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
+	if (!lrp) {
+		dprintk("%s: allocation failed. Cannot send last LAYOUTRETURN\n",
+			__func__);
+		goto out;
+	}
+
+	/* send final layoutreturn */
+	lrp->args.reclaim = 0;
+	lrp->args.layout_type = rl.cbl_layout_type;
+	lrp->args.return_type = rl.cbl_recall_type;
+	lrp->args.range = rl.cbl_seg;
+	lrp->args.inode = inode;
+	nfs4_proc_layoutreturn(lrp, true);
+
+out:
+	clear_bit(NFS4CLNT_LAYOUT_RECALL, &clp->cl_state);
+	nfs_put_client(clp);
+	module_put_and_exit(0);
+	dprintk("%s: exit status %d\n", __func__, 0);
+	return 0;
+}
+
+/*
+ * Asynchronous layout recall!
+ */
+static int pnfs_async_return_layout(struct nfs_client *clp, struct inode *inode,
+				    struct cb_layoutrecallargs *rl)
+{
+	struct recall_layout_threadargs data = {
+		.clp = clp,
+		.inode = inode,
+		.rl = rl,
+	};
+	struct task_struct *t;
+	int status = -EAGAIN;
+
+	dprintk("%s: -->\n", __func__);
+
+	/* FIXME: do not allow two concurrent layout recalls */
+	if (test_and_set_bit(NFS4CLNT_LAYOUT_RECALL, &clp->cl_state))
+		return status;
+
+	init_completion(&data.started);
+	__module_get(THIS_MODULE);
+	if (!atomic_inc_not_zero(&clp->cl_count))
+		goto out_put_no_client;
+
+	t = kthread_run(pnfs_recall_layout, &data, "%s", "pnfs_recall_layout");
+	if (IS_ERR(t)) {
+		printk(KERN_INFO "NFS: Layout recall callback thread failed "
+			"for client (clientid %08x/%08x)\n",
+			(unsigned)(clp->cl_clientid >> 32),
+			(unsigned)(clp->cl_clientid));
+		status = PTR_ERR(t);
+		goto out_module_put;
+	}
+	wait_for_completion(&data.started);
+	return data.result;
+out_module_put:
+	nfs_put_client(clp);
+out_put_no_client:
+	clear_bit(NFS4CLNT_LAYOUT_RECALL, &clp->cl_state);
+	module_put(THIS_MODULE);
+	return status;
+}
+
+static int pnfs_recall_all_layouts(struct nfs_client *clp)
+{
+	struct cb_layoutrecallargs rl;
+	struct inode *inode;
+	int status = 0;
+
+	rl.cbl_recall_type = RETURN_ALL;
+	rl.cbl_seg.iomode = IOMODE_ANY;
+	rl.cbl_seg.offset = 0;
+	rl.cbl_seg.length = NFS4_MAX_UINT64;
+
+	/* we need the inode to get the nfs_server struct */
+	inode = nfs_layoutrecall_find_inode(clp, &rl);
+	if (!inode)
+		return status;
+	status = pnfs_async_return_layout(clp, inode, &rl);
+	iput(inode);
+
+	return status;
+}
+
+__be32 nfs4_callback_layoutrecall(struct cb_layoutrecallargs *args,
+				  void *dummy, struct cb_process_state *cps)
+{
+	struct inode *inode = NULL;
+	__be32 res;
+	int status;
+
+	dprintk("%s: -->\n", __func__);
+
+	res = cpu_to_be32(NFS4ERR_OP_NOT_IN_SESSION);
+	if (!cps->clp)
+		goto out;
+
+	res = cpu_to_be32(NFS4ERR_NOMATCHING_LAYOUT);
+	if (args->cbl_recall_type == RETURN_FILE) {
+		inode = nfs_layoutrecall_find_inode(cps->clp, args);
+		if (inode != NULL) {
+			status = pnfs_async_return_layout(cps->clp, inode,
+							  args);
+			if (status)
+				res = cpu_to_be32(NFS4ERR_DELAY);
+			iput(inode);
+		}
+	} else { /* _ALL or _FSID */
+		/* we need the inode to get the nfs_server struct */
+		inode = nfs_layoutrecall_find_inode(cps->clp, args);
+		if (!inode)
+			goto out;
+		status = pnfs_async_return_layout(cps->clp, inode, args);
+		if (status)
+			res = cpu_to_be32(NFS4ERR_DELAY);
+		iput(inode);
+	}
+out:
+	dprintk("%s: exit with status = %d\n", __func__, ntohl(res));
+	return res;
+}
 
 int nfs41_validate_delegation_stateid(struct nfs_delegation *delegation, const nfs4_stateid *stateid)
 {
@@ -297,29 +569,62 @@ out:
 	return status;
 }
 
+static inline bool
+validate_bitmap_values(const unsigned long *mask)
+{
+	int i;
+
+	if (*mask == 0)
+		return true;
+	if (test_bit(RCA4_TYPE_MASK_RDATA_DLG, mask) ||
+	    test_bit(RCA4_TYPE_MASK_WDATA_DLG, mask) ||
+	    test_bit(RCA4_TYPE_MASK_DIR_DLG, mask) ||
+	    test_bit(RCA4_TYPE_MASK_FILE_LAYOUT, mask) ||
+	    test_bit(RCA4_TYPE_MASK_BLK_LAYOUT, mask))
+		return true;
+	for (i = RCA4_TYPE_MASK_OBJ_LAYOUT_MIN;
+	     i <= RCA4_TYPE_MASK_OBJ_LAYOUT_MAX; i++)
+		if (test_bit(i, mask))
+			return true;
+	for (i = RCA4_TYPE_MASK_OTHER_LAYOUT_MIN;
+	     i <= RCA4_TYPE_MASK_OTHER_LAYOUT_MAX; i++)
+		if (test_bit(i, mask))
+			return true;
+	return false;
+}
+
 __be32 nfs4_callback_recallany(struct cb_recallanyargs *args, void *dummy,
 			       struct cb_process_state *cps)
 {
 	__be32 status;
 	fmode_t flags = 0;
 
-	status = htonl(NFS4ERR_OP_NOT_IN_SESSION);
+	status = cpu_to_be32(NFS4ERR_OP_NOT_IN_SESSION);
 	if (!cps->clp) /* set in cb_sequence */
 		goto out;
 
 	dprintk("NFS: RECALL_ANY callback request from %s\n",
 		rpc_peeraddr2str(cps->clp->cl_rpcclient, RPC_DISPLAY_ADDR));
 
+	status = cpu_to_be32(NFS4ERR_INVAL);
+	if (!validate_bitmap_values((const unsigned long *)
+				    &args->craa_type_mask))
+		goto out;
+
+	status = cpu_to_be32(NFS4_OK);
 	if (test_bit(RCA4_TYPE_MASK_RDATA_DLG, (const unsigned long *)
 		     &args->craa_type_mask))
 		flags = FMODE_READ;
 	if (test_bit(RCA4_TYPE_MASK_WDATA_DLG, (const unsigned long *)
 		     &args->craa_type_mask))
 		flags |= FMODE_WRITE;
+	if (test_bit(RCA4_TYPE_MASK_FILE_LAYOUT, (const unsigned long *)
+		     &args->craa_type_mask))
+		if (pnfs_recall_all_layouts(cps->clp) == -EAGAIN)
+			status = cpu_to_be32(NFS4ERR_DELAY);
 
 	if (flags)
 		nfs_expire_all_delegation_types(cps->clp, flags);
-	status = htonl(NFS4_OK);
 out:
 	dprintk("%s: exit with status = %d\n", __func__, ntohl(status));
 	return status;
