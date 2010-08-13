@@ -19,6 +19,9 @@
 #define NFS4_PNFS_DEV_HASH_SIZE (1 << NFS4_PNFS_DEV_HASH_BITS)
 #define NFS4_PNFS_DEV_HASH_MASK (NFS4_PNFS_DEV_HASH_SIZE - 1)
 
+#define NFS4_PNFS_MAX_STRIPE_CNT 4096
+#define NFS4_PNFS_MAX_MULTI_CNT  64 /* 256 fit into a u8 stripe_index */
+
 /* Individual ip address */
 struct nfs4_pnfs_ds {
 	struct list_head	ds_node;  /* nfs4_pnfs_dev_hlist dev_dslist */
@@ -45,4 +48,7 @@ extern void print_ds(struct nfs4_pnfs_ds *ds);
 char *deviceid_fmt(const struct pnfs_deviceid *dev_id);
 extern struct nfs4_file_layout_dsaddr *
 nfs4_pnfs_device_item_find(struct nfs_client *, struct pnfs_deviceid *dev_id);
+struct nfs4_file_layout_dsaddr *
+get_device_info(struct inode *inode, struct pnfs_deviceid *dev_id);
+
 #endif /* FS_NFS_NFS4FILELAYOUT_H */
