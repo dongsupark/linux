@@ -1042,6 +1042,8 @@ struct nfs_read_data {
 };
 
 struct nfs_write_data {
+	struct kref		refcount;	/* For pnfs commit splitting */
+	struct nfs_write_data	*parent;	/* For pnfs commit splitting */
 	int			flags;
 	struct rpc_task		task;
 	struct inode		*inode;

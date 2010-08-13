@@ -543,7 +543,7 @@ nfs_need_commit(struct nfs_inode *nfsi)
  * The requests are *not* checked to ensure that they form a contiguous set.
  */
 static int
-nfs_scan_commit(struct inode *inode, struct list_head *dst, pgoff_t idx_start, unsigned int npages)
+nfs_scan_commit(struct inode *inode, struct list_head *dst, pgoff_t idx_start, unsigned int npages, int *use_pnfs)
 {
 	struct nfs_inode *nfsi = NFS_I(inode);
 	int ret;
@@ -551,7 +551,8 @@ nfs_scan_commit(struct inode *inode, struct list_head *dst, pgoff_t idx_start, u
 	if (!nfs_need_commit(nfsi))
 		return 0;
 
-	ret = nfs_scan_list(nfsi, dst, idx_start, npages, NFS_PAGE_TAG_COMMIT);
+	ret = nfs_scan_list(nfsi, dst, idx_start, npages, NFS_PAGE_TAG_COMMIT,
+			    use_pnfs);
 	if (ret > 0)
 		nfsi->ncommit -= ret;
 	if (nfs_need_commit(NFS_I(inode)))
@@ -1461,21 +1462,22 @@ int nfs_commit_inode(struct inode *inode, int how)
 	LIST_HEAD(head);
 	int may_wait = how & FLUSH_SYNC;
 	int res = 0;
+	int use_pnfs = 0;
 
 	if (!nfs_commit_set_lock(NFS_I(inode), may_wait))
 		goto out_mark_dirty;
 	spin_lock(&inode->i_lock);
-	res = nfs_scan_commit(inode, &head, 0, 0);
+	res = nfs_scan_commit(inode, &head, 0, 0, &use_pnfs);
 	spin_unlock(&inode->i_lock);
 	if (res) {
 		int error = nfs_commit_list(inode, &head, how);
 		if (error < 0)
 			return error;
-		if (may_wait)
+		if (may_wait) {
 			wait_on_bit(&NFS_I(inode)->flags, NFS_INO_COMMIT,
 					nfs_wait_bit_killable,
 					TASK_KILLABLE);
-		else
+		} else
 			goto out_mark_dirty;
 	} else
 		nfs_commit_clear_lock(NFS_I(inode));

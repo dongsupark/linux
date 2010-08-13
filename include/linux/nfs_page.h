@@ -83,7 +83,8 @@ extern	void nfs_release_request(struct nfs_page *req);
 
 
 extern	int nfs_scan_list(struct nfs_inode *nfsi, struct list_head *dst,
-			  pgoff_t idx_start, unsigned int npages, int tag);
+			  pgoff_t idx_start, unsigned int npages, int tag,
+			  int *use_pnfs);
 extern	void nfs_pageio_init(struct nfs_pageio_descriptor *desc,
 			     struct inode *inode,
 			     int (*doio)(struct inode *, struct list_head *, unsigned int, size_t, int),
