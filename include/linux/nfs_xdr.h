@@ -226,6 +226,28 @@ struct nfs4_layoutget {
 	int status;
 };
 
+struct nfs4_layoutreturn_args {
+	__u32   reclaim;
+	__u32   layout_type;
+	__u32   return_type;
+	struct pnfs_layout_range range;
+	struct inode *inode;
+	struct nfs4_sequence_args seq_args;
+};
+
+struct nfs4_layoutreturn_res {
+	struct nfs4_sequence_res seq_res;
+	u32 lrs_present;
+	nfs4_stateid stateid;
+};
+
+struct nfs4_layoutreturn {
+	struct nfs4_layoutreturn_args args;
+	struct nfs4_layoutreturn_res res;
+	struct rpc_cred *cred;
+	int rpc_status;
+};
+
 struct nfs4_getdeviceinfo_args {
 	struct pnfs_device *pdev;
 	struct nfs4_sequence_args seq_args;
