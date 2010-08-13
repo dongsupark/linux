@@ -123,6 +123,13 @@ struct layoutdriver_io_operations {
 	enum pnfs_try_status
 	(*write_pagelist) (struct nfs_write_data *nfs_data, unsigned nr_pages, int how);
 
+	/* Consistency ops */
+	/* 2 problems:
+	 * 1) the page list contains nfs_pages, NOT pages
+	 * 2) currently the NFS code doesn't create a page array (as it does with read/write)
+	 */
+	enum pnfs_try_status
+	(*commit) (struct nfs_write_data *nfs_data, int how);
 
 	/* Layout information. For each inode, alloc_layout is executed once to retrieve an
 	 * inode specific layout structure.  Each subsequent layoutget operation results in
