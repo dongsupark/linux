@@ -50,10 +50,106 @@
 #include "internal.h"
 #include "nfs4_fs.h"
 
-#define NFSDBG_FACILITY         NFSDBG_PNFS_LD
+#define NFSDBG_FACILITY		NFSDBG_PNFS_LD
+
+DEFINE_SPINLOCK(nfs4_ds_cache_lock);
+static LIST_HEAD(nfs4_data_server_cache);
+
+void
+print_ds(struct nfs4_pnfs_ds *ds)
+{
+	if (ds == NULL) {
+		dprintk("%s NULL device \n", __func__);
+		return;
+	}
+	dprintk("        ip_addr %x\n", ntohl(ds->ds_ip_addr));
+	dprintk("        port %hu\n", ntohs(ds->ds_port));
+	dprintk("        client %p\n", ds->ds_clp);
+	dprintk("        ref count %d\n", atomic_read(&ds->ds_count));
+	if (ds->ds_clp)
+		dprintk("        cl_exchange_flags %x\n",
+					    ds->ds_clp->cl_exchange_flags);
+	dprintk("        ip:port %s\n", ds->r_addr);
+}
+
+void
+print_ds_list(struct nfs4_file_layout_dsaddr *dsaddr)
+{
+	int i;
+
+	dprintk("%s dsaddr->ds_num %d\n", __func__,
+		dsaddr->ds_num);
+	for (i = 0; i < dsaddr->ds_num; i++)
+		print_ds(dsaddr->ds_list[i]);
+}
+
+/* nfs4_ds_cache_lock is held */
+static inline struct nfs4_pnfs_ds *
+_data_server_lookup(u32 ip_addr, u32 port)
+{
+	struct nfs4_pnfs_ds *ds;
+
+	dprintk("_data_server_lookup: ip_addr=%x port=%hu\n",
+			ntohl(ip_addr), ntohs(port));
+
+	list_for_each_entry(ds, &nfs4_data_server_cache, ds_node) {
+		if (ds->ds_ip_addr == ip_addr &&
+		    ds->ds_port == port) {
+			return ds;
+		}
+	}
+	return NULL;
+}
+
+static void
+destroy_ds(struct nfs4_pnfs_ds *ds)
+{
+	dprintk("--> %s\n", __func__);
+	print_ds(ds);
+
+	if (ds->ds_clp)
+		nfs_put_client(ds->ds_clp);
+	kfree(ds);
+}
 
 void
 nfs4_fl_free_deviceid_callback(struct kref *kref)
 {
 }
 
+static void
+nfs4_pnfs_ds_add(struct inode *inode, struct nfs4_pnfs_ds **dsp,
+		 u32 ip_addr, u32 port, char *r_addr, int len)
+{
+	struct nfs4_pnfs_ds *tmp_ds, *ds;
+
+	*dsp = NULL;
+
+	ds = kzalloc(sizeof(*tmp_ds), GFP_KERNEL);
+	if (!ds)
+		return;
+
+	spin_lock(&nfs4_ds_cache_lock);
+	tmp_ds = _data_server_lookup(ip_addr, port);
+	if (tmp_ds == NULL) {
+		ds->ds_ip_addr = ip_addr;
+		ds->ds_port = port;
+		strncpy(ds->r_addr, r_addr, len);
+		atomic_set(&ds->ds_count, 1);
+		INIT_LIST_HEAD(&ds->ds_node);
+		ds->ds_clp = NULL;
+		list_add(&ds->ds_node, &nfs4_data_server_cache);
+		*dsp = ds;
+		dprintk("%s add new data server ip 0x%x\n", __func__,
+				ds->ds_ip_addr);
+		spin_unlock(&nfs4_ds_cache_lock);
+	} else {
+		atomic_inc(&tmp_ds->ds_count);
+		*dsp = tmp_ds;
+		dprintk("%s data server found ip 0x%x, inc'ed ds_count to %d\n",
+				__func__, tmp_ds->ds_ip_addr,
+				atomic_read(&tmp_ds->ds_count));
+		spin_unlock(&nfs4_ds_cache_lock);
+		kfree(ds);
+	}
+}
