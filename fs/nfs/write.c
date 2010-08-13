@@ -28,6 +28,7 @@
 #include "iostat.h"
 #include "nfs4_fs.h"
 #include "fscache.h"
+#include "pnfs.h"
 
 #define NFSDBG_FACILITY		NFSDBG_PAGECACHE
 
@@ -1465,7 +1466,18 @@ static int nfs_commit_unstable_pages(struct inode *inode, struct writeback_contr
 
 int nfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
-	return nfs_commit_unstable_pages(inode, wbc);
+	int ret;
+	ret = nfs_commit_unstable_pages(inode, wbc);
+	if (ret >= 0 && layoutcommit_needed(NFS_I(inode))) {
+		int err, sync = wbc->sync_mode;
+
+		if (wbc->nonblocking || wbc->for_background)
+			sync = 0;
+		err = pnfs_layoutcommit_inode(inode, sync);
+		if (err < 0)
+			ret = err;
+	}
+	return ret;
 }
 
 /*

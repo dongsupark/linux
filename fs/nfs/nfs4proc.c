@@ -5479,6 +5479,113 @@ int nfs4_proc_layoutget(struct nfs4_layoutget *lgp)
 	return err;
 }
 
+static void nfs4_layoutcommit_prepare(struct rpc_task *task, void *data)
+{
+	struct nfs4_layoutcommit_data *ldata =
+		(struct nfs4_layoutcommit_data *)data;
+	struct nfs_server *server = NFS_SERVER(ldata->args.inode);
+
+	if (nfs4_setup_sequence(server, &ldata->args.seq_args,
+				&ldata->res.seq_res, 1, task))
+		return;
+	rpc_call_start(task);
+}
+
+static void
+nfs4_layoutcommit_done(struct rpc_task *task, void *calldata)
+{
+	struct nfs4_layoutcommit_data *data =
+		(struct nfs4_layoutcommit_data *)calldata;
+	struct nfs_server *server = NFS_SERVER(data->args.inode);
+
+	if (!nfs4_sequence_done(task, &data->res.seq_res))
+		return;
+
+	if (RPC_ASSASSINATED(task))
+		return;
+
+	if (nfs4_async_handle_error(task, server, NULL) == -EAGAIN)
+		nfs_restart_rpc(task, server->nfs_client);
+
+	data->status = task->tk_status;
+}
+
+static void nfs4_layoutcommit_release(void *lcdata)
+{
+	struct nfs4_layoutcommit_data *data =
+		(struct nfs4_layoutcommit_data *)lcdata;
+
+	/* Matched by get_layout in pnfs_layoutcommit_inode */
+	put_layout(data->args.inode);
+	put_rpccred(data->cred);
+	pnfs_layoutcommit_free(lcdata);
+}
+
+static const struct rpc_call_ops nfs4_layoutcommit_ops = {
+	.rpc_call_prepare = nfs4_layoutcommit_prepare,
+	.rpc_call_done = nfs4_layoutcommit_done,
+	.rpc_release = nfs4_layoutcommit_release,
+};
+
+/* Execute a layoutcommit to the server */
+static int
+_nfs4_proc_layoutcommit(struct nfs4_layoutcommit_data *data, int issync)
+{
+	struct rpc_message msg = {
+		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_LAYOUTCOMMIT],
+		.rpc_argp = &data->args,
+		.rpc_resp = &data->res,
+		.rpc_cred = data->cred,
+	};
+	struct rpc_task_setup task_setup_data = {
+		.task = &data->task,
+		.rpc_client = NFS_CLIENT(data->args.inode),
+		.rpc_message = &msg,
+		.callback_ops = &nfs4_layoutcommit_ops,
+		.callback_data = data,
+		.flags = RPC_TASK_ASYNC,
+	};
+	struct rpc_task *task;
+	int status = 0;
+
+	dprintk("NFS: %4d initiating layoutcommit call. %llu@%llu lbw: %llu "
+		"type: %d issync %d\n",
+		data->task.tk_pid,
+		data->args.range.length,
+		data->args.range.offset,
+		data->args.lastbytewritten,
+		data->args.layout_type, issync);
+
+	data->res.seq_res.sr_slotid = NFS4_MAX_SLOT_TABLE;
+	task = rpc_run_task(&task_setup_data);
+	if (IS_ERR(task))
+		return PTR_ERR(task);
+	if (!issync)
+		goto out;
+	status = nfs4_wait_for_completion_rpc_task(task);
+	if (status != 0)
+		goto out;
+	status = data->status;
+out:
+	dprintk("%s: status %d\n", __func__, status);
+	rpc_put_task(task);
+	return 0;
+}
+
+int nfs4_proc_layoutcommit(struct nfs4_layoutcommit_data *data, int issync)
+{
+	struct nfs4_exception exception = { };
+	struct nfs_server *server = NFS_SERVER(data->args.inode);
+	int err;
+
+	do {
+		err = nfs4_handle_exception(server,
+					_nfs4_proc_layoutcommit(data, issync),
+					&exception);
+	} while (exception.retry);
+	return err;
+}
+
 int nfs4_proc_getdeviceinfo(struct nfs_server *server, struct pnfs_device *pdev)
 {
 	struct nfs4_getdeviceinfo_args args = {

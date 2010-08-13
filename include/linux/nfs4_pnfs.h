@@ -58,12 +58,25 @@ has_layout(struct nfs_inode *nfsi)
 	return nfsi->layout != NULL;
 }
 
+static inline bool
+layoutcommit_needed(struct nfs_inode *nfsi)
+{
+	return has_layout(nfsi) &&
+	       test_bit(NFS_INO_LAYOUTCOMMIT, &nfsi->layout->state);
+}
+
 #else /* CONFIG_NFS_V4_1 */
 
 static inline bool
 has_layout(struct nfs_inode *nfsi)
 {
 	return false;
+}
+
+static inline bool
+layoutcommit_needed(struct nfs_inode *nfsi)
+{
+	return 0;
 }
 
 #endif /* CONFIG_NFS_V4_1 */
