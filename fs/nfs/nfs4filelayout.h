@@ -22,6 +22,11 @@
 #define NFS4_PNFS_MAX_STRIPE_CNT 4096
 #define NFS4_PNFS_MAX_MULTI_CNT  64 /* 256 fit into a u8 stripe_index */
 
+enum stripetype4 {
+	STRIPE_SPARSE = 1,
+	STRIPE_DENSE = 2
+};
+
 /* Individual ip address */
 struct nfs4_pnfs_ds {
 	struct list_head	ds_node;  /* nfs4_pnfs_dev_hlist dev_dslist */
@@ -38,6 +43,17 @@ struct nfs4_file_layout_dsaddr {
 	u8			*stripe_indices;
 	u32			ds_num;
 	struct nfs4_pnfs_ds	*ds_list[1];
+};
+
+struct nfs4_filelayout_segment {
+	u32 stripe_type;
+	u32 commit_through_mds;
+	u32 stripe_unit;
+	u32 first_stripe_index;
+	u64 pattern_offset;
+	struct pnfs_deviceid dev_id;
+	unsigned int num_fh;
+	struct nfs_fh *fh_array;
 };
 
 struct nfs4_filelayout {

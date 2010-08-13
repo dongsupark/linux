@@ -39,6 +39,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 
+#include <linux/vmalloc.h>
 #include <linux/nfs_fs.h>
 #include <linux/nfs_page.h>
 #include <linux/nfs4_pnfs.h>
@@ -46,6 +47,7 @@
 #include "nfs4filelayout.h"
 #include "nfs4_fs.h"
 #include "internal.h"
+#include "pnfs.h"
 
 #define NFSDBG_FACILITY         NFSDBG_PNFS_LD
 
@@ -104,9 +106,209 @@ filelayout_free_layout(struct pnfs_layout_hdr *lo)
 	dprintk("NFS_FILELAYOUT: freeing layout\n");
 	kfree(FILE_LO(lo));
 }
+
+/*
+ * filelayout_check_layout()
+ *
+ * Make sure layout segment parameters are sane WRT the device.
+ *
+ * Notes:
+ * 1) current code insists that # stripe index = # data servers in ds_list
+ *    which is wrong.
+ * 2) pattern_offset is ignored and must == 0 which is wrong;
+ * 3) the pattern_offset needs to be a mutliple of the stripe unit.
+ * 4) stripe unit is multiple of page size
+ */
+
+static int
+filelayout_check_layout(struct pnfs_layout_hdr *lo,
+			struct pnfs_layout_segment *lseg)
+{
+	struct nfs4_filelayout_segment *fl = LSEG_LD_DATA(lseg);
+	struct nfs4_file_layout_dsaddr *dsaddr;
+	int status = -EINVAL;
+	struct nfs_server *nfss = NFS_SERVER(PNFS_INODE(lo));
+
+	dprintk("--> %s\n", __func__);
+	dsaddr = nfs4_pnfs_device_item_find(nfss->nfs_client, &fl->dev_id);
+	if (dsaddr == NULL) {
+		dsaddr = get_device_info(PNFS_INODE(lo), &fl->dev_id);
+		if (dsaddr == NULL) {
+			dprintk("%s NO device for dev_id %s\n",
+				__func__, deviceid_fmt(&fl->dev_id));
+			goto out;
+		}
+	}
+	if (fl->first_stripe_index < 0 ||
+	    fl->first_stripe_index > dsaddr->stripe_count) {
+		dprintk("%s Bad first_stripe_index %d\n",
+				__func__, fl->first_stripe_index);
+		goto out;
+	}
+
+	if (fl->pattern_offset != 0) {
+		dprintk("%s Unsupported no-zero pattern_offset %Ld\n",
+				__func__, fl->pattern_offset);
+		goto out;
+	}
+
+	if (fl->stripe_unit % PAGE_SIZE) {
+		dprintk("%s Stripe unit (%u) not page aligned\n",
+			__func__, fl->stripe_unit);
+		goto out;
+	}
+
+	/* XXX only support SPARSE packing. Don't support use MDS open fh */
+	if (!(fl->num_fh == 1 || fl->num_fh == dsaddr->ds_num)) {
+		dprintk("%s num_fh %u not equal to 1 or ds_num %u\n",
+			__func__, fl->num_fh, dsaddr->ds_num);
+		goto out;
+	}
+
+	if (fl->stripe_unit % nfss->rsize || fl->stripe_unit % nfss->wsize) {
+		dprintk("%s Stripe unit (%u) not aligned with rsize %u "
+			"wsize %u\n", __func__, fl->stripe_unit, nfss->rsize,
+			nfss->wsize);
+	}
+
+	/* reference the device */
+	nfs4_set_layout_deviceid(lseg, &dsaddr->deviceid);
+
+	status = 0;
+out:
+	dprintk("--> %s returns %d\n", __func__, status);
+	return status;
+}
+
+static void _filelayout_free_lseg(struct pnfs_layout_segment *lseg);
+static void filelayout_free_fh_array(struct nfs4_filelayout_segment *fl);
+
+/* Decode layout and store in layoutid.  Overwrite any existing layout
+ * information for this file.
+ */
+static int
+filelayout_set_layout(struct nfs4_filelayout *flo,
+		      struct nfs4_filelayout_segment *fl,
+		      struct nfs4_layoutget_res *lgr)
+{
+	uint32_t *p = (uint32_t *)lgr->layout.buf;
+	uint32_t nfl_util;
+	int i;
+
+	dprintk("%s: set_layout_map Begin\n", __func__);
+
+	memcpy(&fl->dev_id, p, NFS4_PNFS_DEVICEID4_SIZE);
+	p += XDR_QUADLEN(NFS4_PNFS_DEVICEID4_SIZE);
+	nfl_util = be32_to_cpup(p++);
+	if (nfl_util & NFL4_UFLG_COMMIT_THRU_MDS)
+		fl->commit_through_mds = 1;
+	if (nfl_util & NFL4_UFLG_DENSE)
+		fl->stripe_type = STRIPE_DENSE;
+	else
+		fl->stripe_type = STRIPE_SPARSE;
+	fl->stripe_unit = nfl_util & ~NFL4_UFLG_MASK;
+
+	if (!flo->stripe_unit)
+		flo->stripe_unit = fl->stripe_unit;
+	else if (flo->stripe_unit != fl->stripe_unit) {
+		printk(KERN_NOTICE "%s: updating strip_unit from %u to %u\n",
+			__func__, flo->stripe_unit, fl->stripe_unit);
+		flo->stripe_unit = fl->stripe_unit;
+	}
+
+	fl->first_stripe_index = be32_to_cpup(p++);
+	p = xdr_decode_hyper(p, &fl->pattern_offset);
+	fl->num_fh = be32_to_cpup(p++);
+
+	dprintk("%s: nfl_util 0x%X num_fh %u fsi %u po %llu dev_id %s\n",
+		__func__, nfl_util, fl->num_fh, fl->first_stripe_index,
+		fl->pattern_offset, deviceid_fmt(&fl->dev_id));
+
+	if (fl->num_fh * sizeof(struct nfs_fh) > 2*PAGE_SIZE) {
+		fl->fh_array = vmalloc(fl->num_fh * sizeof(struct nfs_fh));
+		if (fl->fh_array)
+			memset(fl->fh_array, 0,
+				fl->num_fh * sizeof(struct nfs_fh));
+	} else {
+		fl->fh_array = kzalloc(fl->num_fh * sizeof(struct nfs_fh),
+					GFP_KERNEL);
+       }
+	if (!fl->fh_array)
+		return -ENOMEM;
+
+	for (i = 0; i < fl->num_fh; i++) {
+		/* fh */
+		fl->fh_array[i].size = be32_to_cpup(p++);
+		if (sizeof(struct nfs_fh) < fl->fh_array[i].size) {
+			printk(KERN_ERR "Too big fh %d received %d\n",
+				i, fl->fh_array[i].size);
+			/* Layout is now invalid, pretend it doesn't exist */
+			filelayout_free_fh_array(fl);
+			fl->num_fh = 0;
+			break;
+		}
+		memcpy(fl->fh_array[i].data, p, fl->fh_array[i].size);
+		p += XDR_QUADLEN(fl->fh_array[i].size);
+		dprintk("DEBUG: %s: fh len %d\n", __func__,
+					fl->fh_array[i].size);
+	}
+
+	return 0;
+}
+
+static struct pnfs_layout_segment *
+filelayout_alloc_lseg(struct pnfs_layout_hdr *layoutid,
+		      struct nfs4_layoutget_res *lgr)
+{
+	struct nfs4_filelayout *flo = FILE_LO(layoutid);
+	struct pnfs_layout_segment *lseg;
+	int rc;
+
+	dprintk("--> %s\n", __func__);
+	lseg = kzalloc(sizeof(struct pnfs_layout_segment) +
+		       sizeof(struct nfs4_filelayout_segment), GFP_KERNEL);
+	if (!lseg)
+		return NULL;
+
+	rc = filelayout_set_layout(flo, LSEG_LD_DATA(lseg), lgr);
+
+	if (rc != 0 || filelayout_check_layout(layoutid, lseg)) {
+		_filelayout_free_lseg(lseg);
+		lseg = NULL;
+	}
+	return lseg;
+}
+
+static void filelayout_free_fh_array(struct nfs4_filelayout_segment *fl)
+{
+	if (fl->num_fh * sizeof(struct nfs_fh) > 2*PAGE_SIZE)
+		vfree(fl->fh_array);
+	else
+		kfree(fl->fh_array);
+
+	fl->fh_array = NULL;
+}
+
+static void
+_filelayout_free_lseg(struct pnfs_layout_segment *lseg)
+{
+	filelayout_free_fh_array(LSEG_LD_DATA(lseg));
+	kfree(lseg);
+}
+
+static void
+filelayout_free_lseg(struct pnfs_layout_segment *lseg)
+{
+	dprintk("--> %s\n", __func__);
+	nfs4_unset_layout_deviceid(lseg, lseg->deviceid,
+				   nfs4_fl_free_deviceid_callback);
+	_filelayout_free_lseg(lseg);
+}
 struct layoutdriver_io_operations filelayout_io_operations = {
 	.alloc_layout            = filelayout_alloc_layout,
 	.free_layout             = filelayout_free_layout,
+	.alloc_lseg              = filelayout_alloc_lseg,
+	.free_lseg               = filelayout_free_lseg,
 	.initialize_mountpoint   = filelayout_initialize_mountpoint,
 	.uninitialize_mountpoint = filelayout_uninitialize_mountpoint,
 };

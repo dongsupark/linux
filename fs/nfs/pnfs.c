@@ -971,6 +971,28 @@ nfs4_init_deviceid_node(struct nfs4_deviceid *d)
 }
 EXPORT_SYMBOL(nfs4_init_deviceid_node);
 
+/* Called from layoutdriver_io_operations->alloc_lseg */
+void
+nfs4_set_layout_deviceid(struct pnfs_layout_segment *l, struct nfs4_deviceid *d)
+{
+	dprintk("%s [%d]\n", __func__, atomic_read(&d->de_kref.refcount));
+	l->deviceid = d;
+	kref_get(&d->de_kref);
+}
+EXPORT_SYMBOL(nfs4_set_layout_deviceid);
+
+/* Called from layoutdriver_io_operations->free_lseg */
+void
+nfs4_unset_layout_deviceid(struct pnfs_layout_segment *l,
+			   struct nfs4_deviceid *d,
+			   void (*free_callback)(struct kref *))
+{
+	dprintk("%s [%d]\n", __func__, atomic_read(&d->de_kref.refcount));
+	l->deviceid = NULL;
+	kref_put(&d->de_kref, free_callback);
+}
+EXPORT_SYMBOL(nfs4_unset_layout_deviceid);
+
 struct nfs4_deviceid *
 nfs4_find_deviceid(struct nfs4_deviceid_cache *c, struct pnfs_deviceid *id)
 {

@@ -65,6 +65,12 @@ struct pnfs_layout_segment {
 	u8 ld_data[];			/* layout driver private data */
 };
 
+static inline void *
+LSEG_LD_DATA(struct pnfs_layout_segment *lseg)
+{
+	return lseg->ld_data;
+}
+
 /* Layout driver I/O operations.
  * Either the pagecache or non-pagecache read/write operations must be implemented
  */
@@ -140,6 +146,12 @@ extern struct nfs4_deviceid *nfs4_find_deviceid(struct nfs4_deviceid_cache *,
 				struct pnfs_deviceid *);
 extern struct nfs4_deviceid *nfs4_add_deviceid(struct nfs4_deviceid_cache *,
 				struct nfs4_deviceid *);
+extern void nfs4_set_layout_deviceid(struct pnfs_layout_segment *,
+				struct nfs4_deviceid *);
+extern void nfs4_unset_layout_deviceid(struct pnfs_layout_segment *,
+				struct nfs4_deviceid *,
+				void (*free_callback)(struct kref *));
+
 /* pNFS client callback functions.
  * These operations allow the layout driver to access pNFS client
  * specific information or call pNFS client->server operations.
