@@ -104,7 +104,8 @@ again:
 			continue;
 		if (!test_bit(NFS_DELEGATED_STATE, &state->flags))
 			continue;
-		if (memcmp(state->stateid.data, stateid->data, sizeof(state->stateid.data)) != 0)
+		if (memcmp(state->stateid.u.data, stateid->u.data,
+			   sizeof(state->stateid.u.data)) != 0)
 			continue;
 		get_nfs_open_context(ctx);
 		spin_unlock(&inode->i_lock);
@@ -133,8 +134,8 @@ void nfs_inode_reclaim_delegation(struct inode *inode, struct rpc_cred *cred, st
 	if (delegation != NULL) {
 		spin_lock(&delegation->lock);
 		if (delegation->inode != NULL) {
-			memcpy(delegation->stateid.data, res->delegation.data,
-			       sizeof(delegation->stateid.data));
+			memcpy(delegation->stateid.u.data, res->delegation.u.data,
+			       sizeof(delegation->stateid.u.data));
 			delegation->type = res->delegation_type;
 			delegation->maxsize = res->maxsize;
 			oldcred = delegation->cred;
@@ -187,8 +188,9 @@ static struct nfs_delegation *nfs_detach_delegation_locked(struct nfs_inode *nfs
 	if (delegation == NULL)
 		goto nomatch;
 	spin_lock(&delegation->lock);
-	if (stateid != NULL && memcmp(delegation->stateid.data, stateid->data,
-				sizeof(delegation->stateid.data)) != 0)
+	if (stateid != NULL && memcmp(delegation->stateid.u.data,
+				      stateid->u.data,
+				      sizeof(delegation->stateid.u.data)) != 0)
 		goto nomatch_unlock;
 	list_del_rcu(&delegation->super_list);
 	delegation->inode = NULL;
@@ -216,8 +218,8 @@ int nfs_inode_set_delegation(struct inode *inode, struct rpc_cred *cred, struct 
 	delegation = kmalloc(sizeof(*delegation), GFP_NOFS);
 	if (delegation == NULL)
 		return -ENOMEM;
-	memcpy(delegation->stateid.data, res->delegation.data,
-			sizeof(delegation->stateid.data));
+	memcpy(delegation->stateid.u.data, res->delegation.u.data,
+			sizeof(delegation->stateid.u.data));
 	delegation->type = res->delegation_type;
 	delegation->maxsize = res->maxsize;
 	delegation->change_attr = nfsi->change_attr;
@@ -560,7 +562,8 @@ int nfs4_copy_delegation_stateid(nfs4_stateid *dst, struct inode *inode)
 	rcu_read_lock();
 	delegation = rcu_dereference(nfsi->delegation);
 	if (delegation != NULL) {
-		memcpy(dst->data, delegation->stateid.data, sizeof(dst->data));
+		memcpy(dst->u.data, delegation->stateid.u.data,
+		       sizeof(dst->u.data));
 		ret = 1;
 	}
 	rcu_read_unlock();
