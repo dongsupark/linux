@@ -214,6 +214,7 @@ struct nfs_inode {
 #if defined(CONFIG_NFS_V4_1)
 	wait_queue_head_t lo_waitq;
 	struct pnfs_layout_hdr *layout;
+	time_t pnfs_layout_suspend;
 #endif /* CONFIG_NFS_V4_1 */
 #endif /* CONFIG_NFS_V4*/
 #ifdef CONFIG_NFS_FSCACHE

@@ -258,6 +258,18 @@ void
 pnfs_layout_release(struct pnfs_layout_hdr *lo,
 		    struct pnfs_layout_range *range)
 {
+	struct nfs_inode *nfsi = PNFS_NFS_INODE(lo);
+
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	if (range)
+		pnfs_free_layout(lo, range);
+	/*
+	 * Matched in _pnfs_update_layout for layoutget
+	 * and by get_layout in _pnfs_return_layout for layoutreturn
+	 */
+	put_layout_locked(lo);
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+	wake_up_all(&nfsi->lo_waitq);
 }
 
 void
@@ -411,6 +423,61 @@ pnfs_layout_from_open_stateid(struct pnfs_layout_hdr *lo,
 }
 
 /*
+* Get layout from server.
+*    for now, assume that whole file layouts are requested.
+*    arg->offset: 0
+*    arg->length: all ones
+*/
+static int
+send_layoutget(struct inode *ino,
+	   struct nfs_open_context *ctx,
+	   struct pnfs_layout_range *range,
+	   struct pnfs_layout_segment **lsegpp,
+	   struct pnfs_layout_hdr *lo)
+{
+	int status;
+	struct nfs_server *server = NFS_SERVER(ino);
+	struct nfs4_layoutget *lgp;
+
+	dprintk("--> %s\n", __func__);
+
+	lgp = kzalloc(sizeof(*lgp), GFP_KERNEL);
+	if (lgp == NULL) {
+		pnfs_layout_release(lo, NULL);
+		return -ENOMEM;
+	}
+	lgp->args.minlength = NFS4_MAX_UINT64;
+	lgp->args.maxcount = PNFS_LAYOUT_MAXSIZE;
+	lgp->args.range.iomode = range->iomode;
+	lgp->args.range.offset = 0;
+	lgp->args.range.length = NFS4_MAX_UINT64;
+	lgp->args.type = server->pnfs_curr_ld->id;
+	lgp->args.inode = ino;
+	lgp->lsegpp = lsegpp;
+
+	if (!memcmp(lo->stateid.u.data, &zero_stateid, NFS4_STATEID_SIZE)) {
+		struct nfs_open_context *oldctx = ctx;
+
+		if (!oldctx) {
+			ctx = nfs_find_open_context(ino, NULL,
+					(range->iomode == IOMODE_READ) ?
+					FMODE_READ: FMODE_WRITE);
+			BUG_ON(!ctx);
+		}
+		/* Set the layout stateid from the open stateid */
+		pnfs_layout_from_open_stateid(NFS_I(ino)->layout, ctx->state);
+		if (!oldctx)
+			put_nfs_open_context(ctx);
+	}
+
+	/* Retrieve layout information from server */
+	status = nfs4_proc_layoutget(lgp);
+
+	dprintk("<-- %s status %d\n", __func__, status);
+	return status;
+}
+
+/*
  * iomode matching rules:
  * range	lseg	match
  * -----	-----	-----
@@ -465,6 +532,62 @@ pnfs_free_layout(struct pnfs_layout_hdr *lo,
 		spin_unlock(&clp->cl_lock);
 		pnfs_set_layout_stateid(lo, &zero_stateid);
 	}
+
+	dprintk("%s:Return\n", __func__);
+}
+
+/*
+ * cmp two layout segments for sorting into layout cache
+ */
+static inline s64
+cmp_layout(struct pnfs_layout_range *l1,
+	   struct pnfs_layout_range *l2)
+{
+	/* read > read/write */
+	return (int)(l1->iomode == IOMODE_READ) -
+	(int)(l2->iomode == IOMODE_READ);
+}
+
+static void
+pnfs_insert_layout(struct pnfs_layout_hdr *lo,
+		   struct pnfs_layout_segment *lseg)
+{
+	struct pnfs_layout_segment *lp;
+	int found = 0;
+
+	dprintk("%s:Begin\n", __func__);
+
+	BUG_ON_UNLOCKED_LO(lo);
+	if (list_empty(&lo->segs)) {
+		struct nfs_client *clp = PNFS_NFS_SERVER(lo)->nfs_client;
+
+		spin_lock(&clp->cl_lock);
+		BUG_ON(!list_empty(&lo->layouts));
+		list_add_tail(&lo->layouts, &clp->cl_layouts);
+		spin_unlock(&clp->cl_lock);
+	}
+	list_for_each_entry (lp, &lo->segs, fi_list) {
+		if (cmp_layout(&lp->range, &lseg->range) > 0)
+			continue;
+		list_add_tail(&lseg->fi_list, &lp->fi_list);
+		dprintk("%s: inserted lseg %p "
+			"iomode %d offset %llu length %llu before "
+			"lp %p iomode %d offset %llu length %llu\n",
+			__func__, lseg, lseg->range.iomode,
+			lseg->range.offset, lseg->range.length,
+			lp, lp->range.iomode, lp->range.offset,
+			lp->range.length);
+		found = 1;
+		break;
+	}
+	if (!found) {
+		list_add_tail(&lseg->fi_list, &lo->segs);
+		dprintk("%s: inserted lseg %p "
+			"iomode %d offset %llu length %llu at tail\n",
+			__func__, lseg, lseg->range.iomode,
+			lseg->range.offset, lseg->range.length);
+	}
+	get_layout(lo);
 
 	dprintk("%s:Return\n", __func__);
 }
@@ -530,16 +653,270 @@ pnfs_alloc_layout(struct inode *ino)
 	return nfsi->layout;
 }
 
+/*
+ * iomode matching rules:
+ * range	lseg	match
+ * -----	-----	-----
+ * ANY		READ	true
+ * ANY		RW	true
+ * RW		READ	false
+ * RW		RW	true
+ * READ		READ	true
+ * READ		RW	true
+ */
+static inline int
+has_matching_lseg(struct pnfs_layout_segment *lseg,
+		  struct pnfs_layout_range *range)
+{
+	return (range->iomode != IOMODE_RW || lseg->range.iomode == IOMODE_RW);
+}
+
+/*
+ * lookup range in layout
+ */
+static struct pnfs_layout_segment *
+pnfs_has_layout(struct pnfs_layout_hdr *lo,
+		struct pnfs_layout_range *range)
+{
+	struct pnfs_layout_segment *lseg, *ret = NULL;
+
+	dprintk("%s:Begin\n", __func__);
+
+	BUG_ON_UNLOCKED_LO(lo);
+	list_for_each_entry (lseg, &lo->segs, fi_list) {
+		if (has_matching_lseg(lseg, range)) {
+			ret = lseg;
+			get_lseg(ret);
+			break;
+		}
+		if (cmp_layout(range, &lseg->range) > 0)
+			break;
+	}
+
+	dprintk("%s:Return lseg %p ref %d valid %d\n",
+		__func__, ret, ret ? atomic_read(&ret->kref.refcount) : 0,
+		ret ? ret->valid : 0);
+	return ret;
+}
+
+/* Update the file's layout for the given range and iomode.
+ * Layout is retreived from the server if needed.
+ * The appropriate layout segment is referenced and returned to the caller.
+ */
+void
+_pnfs_update_layout(struct inode *ino,
+		   struct nfs_open_context *ctx,
+		   enum pnfs_iomode iomode,
+		   struct pnfs_layout_segment **lsegpp)
+{
+	struct pnfs_layout_range arg = {
+		.iomode = iomode,
+		.offset = 0,
+		.length = NFS4_MAX_UINT64,
+	};
+	struct nfs_inode *nfsi = NFS_I(ino);
+	struct pnfs_layout_hdr *lo;
+	struct pnfs_layout_segment *lseg = NULL;
+
+	*lsegpp = NULL;
+	spin_lock(&ino->i_lock);
+	lo = pnfs_alloc_layout(ino);
+	if (lo == NULL) {
+		dprintk("%s ERROR: can't get pnfs_layout_hdr\n", __func__);
+		goto out_unlock;
+	}
+
+	/* Check to see if the layout for the given range already exists */
+	lseg = pnfs_has_layout(lo, &arg);
+	if (lseg && !lseg->valid) {
+		put_lseg_locked(lseg);
+		/* someone is cleaning the layout */
+		lseg = NULL;
+		goto out_unlock;
+	}
+
+	if (lseg) {
+		dprintk("%s: Using cached lseg %p for %llu@%llu iomode %d)\n",
+			__func__,
+			lseg,
+			arg.length,
+			arg.offset,
+			arg.iomode);
+
+		goto out_unlock;
+	}
+
+	/* if get layout already failed once goto out */
+	if (test_bit(lo_fail_bit(iomode), &nfsi->layout->state)) {
+		if (unlikely(nfsi->pnfs_layout_suspend &&
+		    get_seconds() >= nfsi->pnfs_layout_suspend)) {
+			dprintk("%s: layout_get resumed\n", __func__);
+			clear_bit(lo_fail_bit(iomode),
+				  &nfsi->layout->state);
+			nfsi->pnfs_layout_suspend = 0;
+		} else
+			goto out_unlock;
+	}
+
+	/* Reference the layout for layoutget matched in pnfs_layout_release */
+	get_layout(lo);
+	spin_unlock(&ino->i_lock);
+
+	send_layoutget(ino, ctx, &arg, lsegpp, lo);
+out:
+	dprintk("%s end, state 0x%lx lseg %p\n", __func__,
+		nfsi->layout->state, lseg);
+	return;
+out_unlock:
+	*lsegpp = lseg;
+	spin_unlock(&ino->i_lock);
+	goto out;
+}
+
 void
 pnfs_get_layout_done(struct nfs4_layoutget *lgp, int rpc_status)
 {
+	struct pnfs_layout_segment *lseg = NULL;
+	struct nfs_inode *nfsi = NFS_I(lgp->args.inode);
+	time_t suspend = 0;
+
+	dprintk("-->%s\n", __func__);
+
+	lgp->status = rpc_status;
+	if (likely(!rpc_status)) {
+		if (unlikely(lgp->res.layout.len < 0)) {
+			printk(KERN_ERR
+			       "%s: ERROR Returned layout size is ZERO\n", __func__);
+			lgp->status = -EIO;
+		}
+		goto out;
+	}
+
+	dprintk("%s: ERROR retrieving layout %d\n", __func__, rpc_status);
+	switch (rpc_status) {
+	case -NFS4ERR_BADLAYOUT:
+		lgp->status = -ENOENT;
+		/* FALLTHROUGH */
+	case -EACCES:	/* NFS4ERR_ACCESS */
+		/* transient error, don't mark with NFS_INO_LAYOUT_FAILED */
+		goto out;
+
+	case -NFS4ERR_LAYOUTTRYLATER:
+	case -NFS4ERR_RECALLCONFLICT:
+	case -NFS4ERR_OLD_STATEID:
+	case -EAGAIN:	/* NFS4ERR_LOCKED */
+		lgp->status = -NFS4ERR_DELAY;	/* for nfs4_handle_exception */
+		/* FALLTHROUGH */
+	case -NFS4ERR_GRACE:
+	case -NFS4ERR_DELAY:
+		goto out;
+
+	case -NFS4ERR_ADMIN_REVOKED:
+	case -NFS4ERR_DELEG_REVOKED:
+		/* The layout is expected to be returned at this point.
+		 * This should clear the layout stateid as well */
+		suspend = get_seconds() + 1;
+		break;
+
+	case -NFS4ERR_LAYOUTUNAVAILABLE:
+		lgp->status = -ENOTSUPP;
+		break;
+
+	case -NFS4ERR_REP_TOO_BIG:
+	case -NFS4ERR_REP_TOO_BIG_TO_CACHE:
+		lgp->status = -E2BIG;
+		break;
+
+	/* Leave the following errors untranslated */
+	case -NFS4ERR_DEADSESSION:
+	case -NFS4ERR_DQUOT:
+	case -EINVAL:		/* NFS4ERR_INVAL */
+	case -EIO:		/* NFS4ERR_IO */
+	case -NFS4ERR_FHEXPIRED:
+	case -NFS4ERR_MOVED:
+	case -NFS4ERR_NOSPC:
+	case -ESERVERFAULT:	/* NFS4ERR_SERVERFAULT */
+	case -ESTALE:		/* NFS4ERR_STALE */
+	case -ETOOSMALL:	/* NFS4ERR_TOOSMALL */
+		break;
+
+	/* The following errors are our fault and should never happen */
+	case -NFS4ERR_BADIOMODE:
+	case -NFS4ERR_BADXDR:
+	case -NFS4ERR_REQ_TOO_BIG:
+	case -NFS4ERR_UNKNOWN_LAYOUTTYPE:
+	case -NFS4ERR_WRONG_TYPE:
+		lgp->status = -EINVAL;
+		/* FALLTHROUGH */
+	case -NFS4ERR_BAD_STATEID:
+	case -NFS4ERR_NOFILEHANDLE:
+	case -ENOTSUPP:	/* NFS4ERR_NOTSUPP */
+	case -NFS4ERR_OPENMODE:
+	case -NFS4ERR_OP_NOT_IN_SESSION:
+	case -NFS4ERR_TOO_MANY_OPS:
+		dprintk("%s: error %d: should never happen\n", __func__,
+			rpc_status);
+		break;
+
+	/* The following errors are the server's fault */
+	default:
+		dprintk("%s: illegal error %d\n", __func__, rpc_status);
+		lgp->status = -EIO;
+		break;
+	}
+
+	/* remember that get layout failed and suspend trying */
+	nfsi->pnfs_layout_suspend = suspend;
+	set_bit(lo_fail_bit(lgp->args.range.iomode),
+		&nfsi->layout->state);
+	dprintk("%s: layout_get suspended until %ld\n",
+		__func__, suspend);
+out:
+	dprintk("%s end (err:%d) state 0x%lx lseg %p\n",
+		__func__, lgp->status, nfsi->layout->state, lseg);
+	return;
 }
 
 int
 pnfs_layout_process(struct nfs4_layoutget *lgp)
 {
+	struct pnfs_layout_hdr *lo = NFS_I(lgp->args.inode)->layout;
+	struct nfs4_layoutget_res *res = &lgp->res;
+	struct pnfs_layout_segment *lseg;
+	struct inode *ino = PNFS_INODE(lo);
 	int status = 0;
 
+	/* Inject layout blob into I/O device driver */
+	lseg = PNFS_LD_IO_OPS(lo)->alloc_lseg(lo, res);
+	if (!lseg || IS_ERR(lseg)) {
+		if (!lseg)
+			status = -ENOMEM;
+		else
+			status = PTR_ERR(lseg);
+		dprintk("%s: Could not allocate layout: error %d\n",
+		       __func__, status);
+		goto out;
+	}
+
+	spin_lock(&ino->i_lock);
+	init_lseg(lo, lseg);
+	lseg->range = res->range;
+	if (lgp->lsegpp) {
+		get_lseg(lseg);
+		*lgp->lsegpp = lseg;
+	}
+	pnfs_insert_layout(lo, lseg);
+
+	if (res->return_on_close) {
+		lo->roc_iomode |= res->range.iomode;
+		if (!lo->roc_iomode)
+			lo->roc_iomode = IOMODE_ANY;
+	}
+
+	/* Done processing layoutget. Set the layout stateid */
+	pnfs_set_layout_stateid(lo, &res->stateid);
+	spin_unlock(&ino->i_lock);
+out:
 	return status;
 }
 

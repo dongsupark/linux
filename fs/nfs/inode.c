@@ -1445,6 +1445,7 @@ static inline void nfs4_init_once(struct nfs_inode *nfsi)
 	init_rwsem(&nfsi->rwsem);
 #ifdef CONFIG_NFS_V4_1
 	init_waitqueue_head(&nfsi->lo_waitq);
+	nfsi->pnfs_layout_suspend = 0;
 	nfsi->layout = NULL;
 #endif /* CONFIG_NFS_V4_1 */
 #endif

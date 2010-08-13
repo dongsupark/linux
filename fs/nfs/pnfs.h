@@ -27,6 +27,10 @@ extern int nfs4_proc_layoutget(struct nfs4_layoutget *lgp);
 
 /* pnfs.c */
 void put_lseg(struct pnfs_layout_segment *lseg);
+void _pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
+	enum pnfs_iomode access_type,
+	struct pnfs_layout_segment **lsegpp);
+
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unmount_pnfs_layoutdriver(struct nfs_server *);
 int pnfs_initialize(void);
@@ -46,6 +50,12 @@ void pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo);
 
 #define LAYOUT_NFSV4_1_MODULE_PREFIX "nfs-layouttype4"
 
+static inline int lo_fail_bit(u32 iomode)
+{
+	return iomode == IOMODE_RW ?
+			 NFS_INO_RW_LAYOUT_FAILED : NFS_INO_RO_LAYOUT_FAILED;
+}
+
 static inline void get_lseg(struct pnfs_layout_segment *lseg)
 {
 	kref_get(&lseg->kref);
@@ -55,6 +65,21 @@ static inline void get_lseg(struct pnfs_layout_segment *lseg)
 static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 {
 	return nfss->pnfs_curr_ld != NULL;
+}
+
+static inline void pnfs_update_layout(struct inode *ino,
+	struct nfs_open_context *ctx,
+	enum pnfs_iomode access_type,
+	struct pnfs_layout_segment **lsegpp)
+{
+	struct nfs_server *nfss = NFS_SERVER(ino);
+
+	if (pnfs_enabled_sb(nfss))
+		_pnfs_update_layout(ino, ctx, access_type, lsegpp);
+	else {
+		if (lsegpp)
+			*lsegpp = NULL;
+	}
 }
 
 #else  /* CONFIG_NFS_V4_1 */
@@ -73,6 +98,15 @@ static inline void get_lseg(struct pnfs_layout_segment *lseg)
 
 static inline void put_lseg(struct pnfs_layout_segment *lseg)
 {
+}
+
+static inline void
+pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
+	enum pnfs_iomode access_type,
+	struct pnfs_layout_segment **lsegpp)
+{
+	if (lsegpp)
+		*lsegpp = NULL;
 }
 
 #endif /* CONFIG_NFS_V4_1 */
