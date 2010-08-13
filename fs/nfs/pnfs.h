@@ -53,6 +53,7 @@ enum {
 	NFS_LAYOUT_RO_FAILED = 0,	/* get ro layout failed stop trying */
 	NFS_LAYOUT_RW_FAILED,		/* get rw layout failed stop trying */
 	NFS_LAYOUT_STATEID_SET,		/* have a valid layout stateid */
+	NFS_LAYOUT_NEED_LCOMMIT,	/* LAYOUTCOMMIT needed */
 };
 
 /* Per-layout driver specific registration structure */
@@ -101,6 +102,12 @@ struct pnfs_layout_hdr {
 	seqlock_t		seqlock;   /* Protects the stateid */
 	nfs4_stateid		stateid;
 	unsigned long		state;
+	struct rpc_cred		*cred;     /* layoutcommit credential */
+	/* DH: These vars keep track of the maximum write range
+	 * so the values can be used for layoutcommit.
+	 */
+	loff_t			write_begin_pos;
+	loff_t			write_end_pos;
 	struct inode		*inode;
 };
 
@@ -186,6 +193,8 @@ enum pnfs_try_status pnfs_try_to_write_data(struct nfs_write_data *,
 					     const struct rpc_call_ops *, int);
 enum pnfs_try_status pnfs_try_to_read_data(struct nfs_read_data *,
 					    const struct rpc_call_ops *);
+void pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent);
+void pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx);
 unsigned int pnfs_getiosize(struct nfs_server *server);
 enum pnfs_try_status pnfs_try_to_commit(struct nfs_write_data *,
 					 const struct rpc_call_ops *, int);
