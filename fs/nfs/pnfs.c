@@ -197,3 +197,144 @@ struct pnfs_client_operations pnfs_ops = {
 
 EXPORT_SYMBOL(pnfs_unregister_layoutdriver);
 EXPORT_SYMBOL(pnfs_register_layoutdriver);
+
+
+/* Device ID cache. Supports one layout type per struct nfs_client */
+int
+nfs4_alloc_init_deviceid_cache(struct nfs_client *clp,
+			 void (*free_callback)(struct kref *))
+{
+	struct nfs4_deviceid_cache *c;
+
+	c = kzalloc(sizeof(struct nfs4_deviceid_cache), GFP_KERNEL);
+	if (!c)
+		return -ENOMEM;
+	spin_lock(&clp->cl_lock);
+	if (clp->cl_devid_cache != NULL) {
+		kref_get(&clp->cl_devid_cache->dc_kref);
+		spin_unlock(&clp->cl_lock);
+		dprintk("%s [kref [%d]]\n", __func__,
+			atomic_read(&clp->cl_devid_cache->dc_kref.refcount));
+		kfree(c);
+	} else {
+		int i;
+
+		spin_lock_init(&c->dc_lock);
+		for (i = 0; i < NFS4_DEVICE_ID_HASH_SIZE ; i++)
+			INIT_HLIST_HEAD(&c->dc_deviceids[i]);
+		kref_init(&c->dc_kref);
+		c->dc_free_callback = free_callback;
+		clp->cl_devid_cache = c;
+		spin_unlock(&clp->cl_lock);
+		dprintk("%s [new]\n", __func__);
+	}
+	return 0;
+}
+EXPORT_SYMBOL(nfs4_alloc_init_deviceid_cache);
+
+void
+nfs4_init_deviceid_node(struct nfs4_deviceid *d)
+{
+	INIT_HLIST_NODE(&d->de_node);
+	kref_init(&d->de_kref);
+}
+EXPORT_SYMBOL(nfs4_init_deviceid_node);
+
+struct nfs4_deviceid *
+nfs4_find_deviceid(struct nfs4_deviceid_cache *c, struct pnfs_deviceid *id)
+{
+	struct nfs4_deviceid *d;
+	struct hlist_node *n;
+	long hash = nfs4_deviceid_hash(id);
+
+	dprintk("--> %s hash %ld\n", __func__, hash);
+	rcu_read_lock();
+	hlist_for_each_entry_rcu(d, n, &c->dc_deviceids[hash], de_node) {
+		if (!memcmp(&d->de_id, id, NFS4_PNFS_DEVICEID4_SIZE)) {
+			rcu_read_unlock();
+			return d;
+		}
+	}
+	rcu_read_unlock();
+	return NULL;
+}
+EXPORT_SYMBOL(nfs4_find_deviceid);
+
+/*
+ * Add or kref_get a deviceid.
+ * GETDEVICEINFOs for same deviceid can race. If deviceid is found, discard new
+ */
+struct nfs4_deviceid *
+nfs4_add_deviceid(struct nfs4_deviceid_cache *c, struct nfs4_deviceid *new)
+{
+	struct nfs4_deviceid *d;
+	struct hlist_node *n;
+	long hash = nfs4_deviceid_hash(&new->de_id);
+
+	dprintk("--> %s hash %ld\n", __func__, hash);
+	spin_lock(&c->dc_lock);
+	hlist_for_each_entry_rcu(d, n, &c->dc_deviceids[hash], de_node) {
+		if (!memcmp(&d->de_id, &new->de_id, NFS4_PNFS_DEVICEID4_SIZE)) {
+			spin_unlock(&c->dc_lock);
+			dprintk("%s [discard]\n", __func__);
+			c->dc_free_callback(&new->de_kref);
+			return d;
+		}
+	}
+	hlist_add_head_rcu(&new->de_node, &c->dc_deviceids[hash]);
+	spin_unlock(&c->dc_lock);
+	dprintk("%s [new]\n", __func__);
+	return new;
+}
+EXPORT_SYMBOL(nfs4_add_deviceid);
+
+static int
+nfs4_remove_deviceid(struct nfs4_deviceid_cache *c, long hash)
+{
+	struct nfs4_deviceid *d;
+	struct hlist_node *n;
+
+	dprintk("--> %s hash %ld\n", __func__, hash);
+	spin_lock(&c->dc_lock);
+	hlist_for_each_entry_rcu(d, n, &c->dc_deviceids[hash], de_node) {
+		hlist_del_rcu(&d->de_node);
+		spin_unlock(&c->dc_lock);
+		synchronize_rcu();
+		dprintk("%s [%d]\n", __func__,
+			atomic_read(&d->de_kref.refcount));
+		kref_put(&d->de_kref, c->dc_free_callback);
+		return 1;
+	}
+	spin_unlock(&c->dc_lock);
+	return 0;
+}
+
+static void
+nfs4_free_deviceid_cache(struct kref *kref)
+{
+	struct nfs4_deviceid_cache *cache =
+		container_of(kref, struct nfs4_deviceid_cache, dc_kref);
+	long i;
+
+	for (i = 0; i < NFS4_DEVICE_ID_HASH_SIZE; i++)
+		while (nfs4_remove_deviceid(cache, i))
+			;
+	kfree(cache);
+}
+
+void
+nfs4_put_deviceid_cache(struct nfs_client *clp)
+{
+	struct nfs4_deviceid_cache *tmp = clp->cl_devid_cache;
+	int refcount;
+
+	dprintk("--> %s cl_devid_cache %p\n", __func__, clp->cl_devid_cache);
+	spin_lock(&clp->cl_lock);
+	refcount = atomic_read(&clp->cl_devid_cache->dc_kref.refcount);
+	if (refcount == 1)
+		clp->cl_devid_cache = NULL;
+	spin_unlock(&clp->cl_lock);
+	dprintk("%s [%d]\n", __func__, refcount);
+	kref_put(&tmp->dc_kref, nfs4_free_deviceid_cache);
+}
+EXPORT_SYMBOL(nfs4_put_deviceid_cache);

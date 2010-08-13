@@ -12,7 +12,6 @@
 #ifndef LINUX_NFS4_PNFS_H
 #define LINUX_NFS4_PNFS_H
 
-
 /* Per-layout driver specific registration structure */
 struct pnfs_layoutdriver_type {
 	const u32 id;
@@ -34,6 +33,49 @@ struct layoutdriver_io_operations {
 struct layoutdriver_policy_operations {
 };
 
+/*
+ * Device ID RCU cache. A device ID is unique per client ID and layout type.
+ */
+#define NFS4_DEVICE_ID_HASH_BITS	5
+#define NFS4_DEVICE_ID_HASH_SIZE	(1 << NFS4_DEVICE_ID_HASH_BITS)
+#define NFS4_DEVICE_ID_HASH_MASK	(NFS4_DEVICE_ID_HASH_SIZE - 1)
+
+static inline u32
+nfs4_deviceid_hash(struct pnfs_deviceid *id)
+{
+	unsigned char *cptr = (unsigned char *)id->data;
+	unsigned int nbytes = NFS4_PNFS_DEVICEID4_SIZE;
+	u32 x = 0;
+
+	while (nbytes--) {
+		x *= 37;
+		x += *cptr++;
+	}
+	return x & NFS4_DEVICE_ID_HASH_MASK;
+}
+
+struct nfs4_deviceid_cache {
+	spinlock_t		dc_lock;
+	struct kref		dc_kref;
+	void			(*dc_free_callback)(struct kref *);
+	struct hlist_head	dc_deviceids[NFS4_DEVICE_ID_HASH_SIZE];
+};
+
+/* Device ID cache node */
+struct nfs4_deviceid {
+	struct hlist_node	de_node;
+	struct pnfs_deviceid	de_id;
+	struct kref		de_kref;
+};
+
+extern int nfs4_alloc_init_deviceid_cache(struct nfs_client *,
+				void (*free_callback)(struct kref *));
+extern void nfs4_put_deviceid_cache(struct nfs_client *);
+extern void nfs4_init_deviceid_node(struct nfs4_deviceid *);
+extern struct nfs4_deviceid *nfs4_find_deviceid(struct nfs4_deviceid_cache *,
+				struct pnfs_deviceid *);
+extern struct nfs4_deviceid *nfs4_add_deviceid(struct nfs4_deviceid_cache *,
+				struct nfs4_deviceid *);
 /* pNFS client callback functions.
  * These operations allow the layout driver to access pNFS client
  * specific information or call pNFS client->server operations.

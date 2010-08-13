@@ -190,6 +190,12 @@ struct nfs4_get_lease_time_res {
 	struct nfs4_sequence_res	lr_seq_res;
 };
 
+#define NFS4_PNFS_DEVICEID4_SIZE 16
+
+struct pnfs_deviceid {
+	char data[NFS4_PNFS_DEVICEID4_SIZE];
+};
+
 /*
  * Arguments to the open call.
  */
