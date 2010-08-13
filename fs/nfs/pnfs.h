@@ -204,6 +204,8 @@ extern struct pnfs_deviceid_node *pnfs_add_deviceid(
 				struct pnfs_deviceid_node *);
 extern void pnfs_put_deviceid(struct pnfs_deviceid_cache *c,
 			      struct pnfs_deviceid_node *devid);
+extern void pnfs_delete_deviceid(struct pnfs_deviceid_cache *,
+				 struct nfs4_deviceid *);
 
 extern int pnfs_register_layoutdriver(struct pnfs_layoutdriver_type *);
 extern void pnfs_unregister_layoutdriver(struct pnfs_layoutdriver_type *);

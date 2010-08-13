@@ -412,6 +412,36 @@ static void pnfs_recall_all_layouts(struct nfs_client *clp)
 	do_callback_layoutrecall(clp, &args);
 }
 
+__be32 nfs4_callback_devicenotify(struct cb_devicenotifyargs *args,
+				  void *dummy, struct cb_process_state *cps)
+{
+	int i;
+	u32 type, res = 0;
+
+	dprintk("%s: -->\n", __func__);
+
+	if (!cps->clp) {
+		res = NFS4ERR_OP_NOT_IN_SESSION;
+		goto out;
+	}
+
+	for (i = 0; i < args->ndevs; i++) {
+		struct cb_devicenotifyitem *dev = &args->devs[i];
+		type = dev->cbd_notify_type;
+		if (type == NOTIFY_DEVICEID4_DELETE && cps->clp->cl_devid_cache)
+			pnfs_delete_deviceid(cps->clp->cl_devid_cache,
+					     &dev->cbd_dev_id);
+		else if (type == NOTIFY_DEVICEID4_CHANGE)
+			printk(KERN_ERR "%s: NOTIFY_DEVICEID4_CHANGE "
+					"not supported\n", __func__);
+	}
+
+out:
+	dprintk("%s: exit with status = %u\n",
+		__func__, res);
+	return cpu_to_be32(res);
+}
+
 int nfs41_validate_delegation_stateid(struct nfs_delegation *delegation, const nfs4_stateid *stateid)
 {
 	if (delegation == NULL)

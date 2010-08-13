@@ -1522,6 +1522,26 @@ pnfs_alloc_init_deviceid_cache(struct nfs_client *clp,
 }
 EXPORT_SYMBOL_GPL(pnfs_alloc_init_deviceid_cache);
 
+/* Must be called with locked c->dc_lock */
+static struct pnfs_deviceid_node *
+pnfs_unhash_deviceid(struct pnfs_deviceid_cache *c,
+		     struct nfs4_deviceid *id)
+{
+	struct pnfs_deviceid_node *d;
+	struct hlist_node *n;
+	long h = nfs4_deviceid_hash(id);
+
+	dprintk("%s hash %ld\n", __func__, h);
+	hlist_for_each_entry_rcu(d, n, &c->dc_deviceids[h], de_node)
+		if (!memcmp(&d->de_id, id, sizeof(*id))) {
+			hlist_del_rcu(&d->de_node);
+			synchronize_rcu();
+			return d;
+		}
+
+	return NULL;
+}
+
 /*
  * Called from pnfs_layoutdriver_type->free_lseg
  * last layout segment reference frees deviceid
@@ -1530,28 +1550,32 @@ void
 pnfs_put_deviceid(struct pnfs_deviceid_cache *c,
 		  struct pnfs_deviceid_node *devid)
 {
-	struct nfs4_deviceid *id = &devid->de_id;
-	struct pnfs_deviceid_node *d;
-	struct hlist_node *n;
-	long h = nfs4_deviceid_hash(id);
-
 	dprintk("%s [%d]\n", __func__, atomic_read(&devid->de_ref));
 	if (!atomic_dec_and_lock(&devid->de_ref, &c->dc_lock))
 		return;
 
-	hlist_for_each_entry_rcu(d, n, &c->dc_deviceids[h], de_node)
-		if (!memcmp(&d->de_id, id, sizeof(*id))) {
-			hlist_del_rcu(&d->de_node);
-			spin_unlock(&c->dc_lock);
-			synchronize_rcu();
-			c->dc_free_callback(devid);
-			return;
-		}
+	pnfs_unhash_deviceid(c, &devid->de_id);
 	spin_unlock(&c->dc_lock);
-	/* Why wasn't it found in  the list? */
-	BUG();
+
+	c->dc_free_callback(devid);
 }
 EXPORT_SYMBOL_GPL(pnfs_put_deviceid);
+
+void
+pnfs_delete_deviceid(struct pnfs_deviceid_cache *c,
+		     struct nfs4_deviceid *id)
+{
+	struct pnfs_deviceid_node *devid;
+
+	spin_lock(&c->dc_lock);
+	devid = pnfs_unhash_deviceid(c, id);
+	spin_unlock(&c->dc_lock);
+
+	dprintk("%s [%d]\n", __func__, atomic_read(&devid->de_ref));
+	if (atomic_dec_and_test(&devid->de_ref))
+		c->dc_free_callback(devid);
+}
+EXPORT_SYMBOL_GPL(pnfs_delete_deviceid);
 
 /* Find and reference a deviceid */
 struct pnfs_deviceid_node *
