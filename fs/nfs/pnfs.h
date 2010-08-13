@@ -34,6 +34,10 @@ void _pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unmount_pnfs_layoutdriver(struct nfs_server *);
 int pnfs_initialize(void);
+void pnfs_uninitialize(void);
+void pnfs_layoutcommit_free(struct nfs4_layoutcommit_data *data);
+void pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent);
+void pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx);
 void pnfs_get_layout_done(struct nfs4_layoutget *, int rpc_status);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
 void pnfs_layout_release(struct pnfs_layout_hdr *, struct pnfs_layout_range *range);

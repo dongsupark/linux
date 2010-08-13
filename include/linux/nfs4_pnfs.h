@@ -52,6 +52,19 @@ PNFS_LD_IO_OPS(struct pnfs_layout_hdr *lo)
 	return PNFS_LD(lo)->ld_io_ops;
 }
 
+static inline bool
+has_layout(struct nfs_inode *nfsi)
+{
+	return nfsi->layout != NULL;
+}
+
+#else /* CONFIG_NFS_V4_1 */
+
+static inline bool
+has_layout(struct nfs_inode *nfsi)
+{
+	return false;
+}
 
 #endif /* CONFIG_NFS_V4_1 */
 

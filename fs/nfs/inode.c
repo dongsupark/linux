@@ -1577,6 +1577,7 @@ out:
 #endif
 #ifdef CONFIG_NFS_V4_1
 out00:
+	pnfs_uninitialize();
 #endif /* CONFIG_NFS_V4_1 */
 	nfs_destroy_directcache();
 out0:
@@ -1610,6 +1611,9 @@ static void __exit exit_nfs_fs(void)
 	nfs_dns_resolver_destroy();
 #ifdef CONFIG_PROC_FS
 	rpc_proc_unregister("nfs");
+#endif
+#ifdef CONFIG_NFS_V4_1
+	pnfs_uninitialize();
 #endif
 	unregister_nfs_fs();
 	nfs_fs_proc_exit();

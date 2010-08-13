@@ -71,6 +71,23 @@ static spinlock_t pnfs_spinlock = __SPIN_LOCK_UNLOCKED(pnfs_spinlock);
  * pnfs_modules_tbl holds all pnfs modules
  */
 static struct list_head	pnfs_modules_tbl;
+static struct kmem_cache *pnfs_cachep;
+static mempool_t *pnfs_layoutcommit_mempool;
+
+static inline struct nfs4_layoutcommit_data *pnfs_layoutcommit_alloc(void)
+{
+	struct nfs4_layoutcommit_data *p =
+			mempool_alloc(pnfs_layoutcommit_mempool, GFP_NOFS);
+	if (p)
+		memset(p, 0, sizeof(*p));
+
+	return p;
+}
+
+void pnfs_layoutcommit_free(struct nfs4_layoutcommit_data *p)
+{
+	mempool_free(p, pnfs_layoutcommit_mempool);
+}
 
 /*
  * struct pnfs_module - One per pNFS device module.
@@ -85,8 +102,29 @@ pnfs_initialize(void)
 {
 	INIT_LIST_HEAD(&pnfs_modules_tbl);
 
+	pnfs_cachep = kmem_cache_create("nfs4_layoutcommit_data",
+					sizeof(struct nfs4_layoutcommit_data),
+					0, SLAB_HWCACHE_ALIGN, NULL);
+	if (pnfs_cachep == NULL)
+		return -ENOMEM;
+
+	pnfs_layoutcommit_mempool = mempool_create(MIN_POOL_LC,
+						   mempool_alloc_slab,
+						   mempool_free_slab,
+						   pnfs_cachep);
+	if (pnfs_layoutcommit_mempool == NULL) {
+		kmem_cache_destroy(pnfs_cachep);
+		return -ENOMEM;
+	}
+
 	pnfs_initialized = 1;
 	return 0;
+}
+
+void pnfs_uninitialize(void)
+{
+	mempool_destroy(pnfs_layoutcommit_mempool);
+	kmem_cache_destroy(pnfs_cachep);
 }
 
 /* search pnfs_modules_tbl for right pnfs module */
@@ -102,6 +140,52 @@ find_pnfs(u32 id, struct pnfs_module **module) {
 		}
 	}
 	return 0;
+}
+
+/* Set cred to indicate we require a layoutcommit
+ * If we don't even have a layout, we don't need to commit it.
+ */
+void
+pnfs_need_layoutcommit(struct nfs_inode *nfsi, struct nfs_open_context *ctx)
+{
+	dprintk("%s: has_layout=%d ctx=%p\n", __func__, has_layout(nfsi), ctx);
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	if (has_layout(nfsi) &&
+	    !test_bit(NFS_INO_LAYOUTCOMMIT, &nfsi->layout->state)) {
+		nfsi->layout->cred = get_rpccred(ctx->state->owner->so_cred);
+		__set_bit(NFS_INO_LAYOUTCOMMIT,
+			  &nfsi->layout->state);
+		nfsi->change_attr++;
+		spin_unlock(&nfsi->vfs_inode.i_lock);
+		dprintk("%s: Set layoutcommit\n", __func__);
+		return;
+	}
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+}
+
+/* Update last_write_offset for layoutcommit.
+ * TODO: We should only use commited extents, but the current nfs
+ * implementation does not calculate the written range in nfs_commit_done.
+ * We therefore update this field in writeback_done.
+ */
+void
+pnfs_update_last_write(struct nfs_inode *nfsi, loff_t offset, size_t extent)
+{
+	loff_t end_pos;
+
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	if (offset < nfsi->layout->write_begin_pos)
+		nfsi->layout->write_begin_pos = offset;
+	end_pos = offset + extent - 1; /* I'm being inclusive */
+	if (end_pos > nfsi->layout->write_end_pos)
+		nfsi->layout->write_end_pos = end_pos;
+	dprintk("%s: Wrote %lu@%lu bpos %lu, epos: %lu\n",
+		__func__,
+		(unsigned long) extent,
+		(unsigned long) offset ,
+		(unsigned long) nfsi->layout->write_begin_pos,
+		(unsigned long) nfsi->layout->write_end_pos);
+	spin_unlock(&nfsi->vfs_inode.i_lock);
 }
 
 /* Unitialize a mountpoint in a layout driver */
@@ -920,6 +1004,41 @@ out:
 	return status;
 }
 
+/*
+ * Set up the argument/result storage required for the RPC call.
+ */
+static int
+pnfs_layoutcommit_setup(struct inode *inode,
+			struct nfs4_layoutcommit_data *data,
+			loff_t write_begin_pos, loff_t write_end_pos)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	int result = 0;
+
+	dprintk("--> %s\n", __func__);
+
+	data->args.inode = inode;
+	data->args.fh = NFS_FH(inode);
+	data->args.layout_type = nfss->pnfs_curr_ld->id;
+	data->res.fattr = &data->fattr;
+	nfs_fattr_init(&data->fattr);
+
+	/* TODO: Need to determine the correct values */
+	data->args.time_modify_changed = 0;
+
+	/* Set values from inode so it can be reset
+	 */
+	data->args.range.iomode = IOMODE_RW;
+	data->args.range.offset = write_begin_pos;
+	data->args.range.length = write_end_pos - write_begin_pos + 1;
+	data->args.lastbytewritten =  min(write_end_pos,
+					  i_size_read(inode) - 1);
+	data->args.bitmask = nfss->attr_bitmask;
+	data->res.server = nfss;
+
+	dprintk("<-- %s Status %d\n", __func__, result);
+	return result;
+}
 /* Callback operations for layout drivers.
  */
 struct pnfs_client_operations pnfs_ops = {
