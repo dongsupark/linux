@@ -87,6 +87,14 @@ struct pnfs_layoutdriver_type {
 	(*read_pagelist) (struct nfs_read_data *nfs_data, unsigned nr_pages);
 	enum pnfs_try_status
 	(*write_pagelist) (struct nfs_write_data *nfs_data, unsigned nr_pages, int how);
+
+	/* Consistency ops */
+	/* 2 problems:
+	 * 1) the page list contains nfs_pages, NOT pages
+	 * 2) currently the NFS code doesn't create a page array (as it does with read/write)
+	 */
+	enum pnfs_try_status
+	(*commit) (struct nfs_write_data *nfs_data, int how);
 };
 
 struct pnfs_layout_hdr {
@@ -180,6 +188,9 @@ enum pnfs_try_status pnfs_try_to_write_data(struct nfs_write_data *,
 					     const struct rpc_call_ops *, int);
 enum pnfs_try_status pnfs_try_to_read_data(struct nfs_read_data *,
 					    const struct rpc_call_ops *);
+unsigned int pnfs_getiosize(struct nfs_server *server);
+enum pnfs_try_status pnfs_try_to_commit(struct nfs_write_data *,
+					 const struct rpc_call_ops *, int);
 void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *,
 			   struct nfs_open_context *, struct list_head *);
 void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *);

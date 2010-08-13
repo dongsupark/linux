@@ -147,6 +147,14 @@ pnfs_register_layoutdriver(struct pnfs_layoutdriver_type *ld_type)
 		return status;
 	}
 
+	if (!ld_type->read_pagelist || !ld_type->write_pagelist ||
+	    !ld_type->commit) {
+		printk(KERN_ERR "%s Layout driver must provide "
+		       "read_pagelist, write_pagelist, and commit.\n",
+		       __func__);
+		return status;
+	}
+
 	spin_lock(&pnfs_spinlock);
 	tmp = find_pnfs_driver_locked(ld_type->id);
 	if (!tmp) {
@@ -1074,6 +1082,35 @@ pnfs_try_to_read_data(struct nfs_read_data *rdata,
 	} else {
 		nfs_inc_stats(inode, NFSIOS_PNFS_READ);
 	}
+	dprintk("%s End (trypnfs:%d)\n", __func__, trypnfs);
+	return trypnfs;
+}
+
+enum pnfs_try_status
+pnfs_try_to_commit(struct nfs_write_data *data,
+		    const struct rpc_call_ops *call_ops, int sync)
+{
+	struct inode *inode = data->inode;
+	struct nfs_server *nfss = NFS_SERVER(data->inode);
+	enum pnfs_try_status trypnfs;
+
+	dprintk("%s: Begin\n", __func__);
+
+	/* We need to account for possibility that
+	 * each nfs_page can point to a different lseg (or be NULL).
+	 * For the immediate case of whole-file-only layouts, we at
+	 * least know there can be only a single lseg.
+	 * We still have to account for the possibility of some being NULL.
+	 * This will be done by passing the buck to the layout driver.
+	 */
+	data->pdata.call_ops = call_ops;
+	data->pdata.how = sync;
+	data->pdata.lseg = NULL;
+	trypnfs = nfss->pnfs_curr_ld->commit(data, sync);
+	if (trypnfs == PNFS_NOT_ATTEMPTED)
+		_pnfs_clear_lseg_from_pages(&data->pages);
+	else
+		nfs_inc_stats(inode, NFSIOS_PNFS_COMMIT);
 	dprintk("%s End (trypnfs:%d)\n", __func__, trypnfs);
 	return trypnfs;
 }

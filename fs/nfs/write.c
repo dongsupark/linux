@@ -1306,50 +1306,29 @@ static void nfs_commitdata_release(void *data)
 	nfs_commit_free(wdata);
 }
 
-/*
- * Set up the argument/result storage required for the RPC call.
- */
-static int nfs_commit_rpcsetup(struct list_head *head,
-		struct nfs_write_data *data,
-		int how)
+int nfs_initiate_commit(struct nfs_write_data *data,
+			struct rpc_clnt *clnt,
+			const struct rpc_call_ops *call_ops,
+			int how)
 {
-	struct nfs_page *first = nfs_list_entry(head->next);
-	struct inode *inode = first->wb_context->path.dentry->d_inode;
+	struct inode *inode = data->inode;
 	int priority = flush_task_priority(how);
 	struct rpc_task *task;
 	struct rpc_message msg = {
 		.rpc_argp = &data->args,
 		.rpc_resp = &data->res,
-		.rpc_cred = first->wb_context->cred,
+		.rpc_cred = data->cred,
 	};
 	struct rpc_task_setup task_setup_data = {
 		.task = &data->task,
-		.rpc_client = NFS_CLIENT(inode),
+		.rpc_client = clnt,
 		.rpc_message = &msg,
-		.callback_ops = &nfs_commit_ops,
+		.callback_ops = call_ops,
 		.callback_data = data,
 		.workqueue = nfsiod_workqueue,
 		.flags = RPC_TASK_ASYNC,
 		.priority = priority,
 	};
-
-	/* Set up the RPC argument and reply structs
-	 * NB: take care not to mess about with data->commit et al. */
-
-	list_splice_init(head, &data->pages);
-
-	data->inode	  = inode;
-	data->cred	  = msg.rpc_cred;
-
-	data->args.fh     = NFS_FH(data->inode);
-	/* Note: we always request a commit of the entire inode */
-	data->args.offset = 0;
-	data->args.count  = 0;
-	data->args.context = get_nfs_open_context(first->wb_context);
-	data->res.count   = 0;
-	data->res.fattr   = &data->fattr;
-	data->res.verf    = &data->verf;
-	nfs_fattr_init(&data->fattr);
 
 	/* Set up the initial task struct.  */
 	NFS_PROTO(inode)->commit_setup(data, &msg);
@@ -1362,12 +1341,60 @@ static int nfs_commit_rpcsetup(struct list_head *head,
 	rpc_put_task(task);
 	return 0;
 }
+EXPORT_SYMBOL(nfs_initiate_commit);
+
+
+int pnfs_initiate_commit(struct nfs_write_data *data,
+			 struct rpc_clnt *clnt,
+			 const struct rpc_call_ops *call_ops,
+			 int how, int pnfs)
+{
+	if (pnfs &&
+	    (pnfs_try_to_commit(data, &nfs_commit_ops, how) == PNFS_ATTEMPTED))
+		return 0;
+	return nfs_initiate_commit(data, clnt, &nfs_commit_ops, how);
+}
+
+/*
+ * Set up the argument/result storage required for the RPC call.
+ */
+static int nfs_commit_rpcsetup(struct list_head *head,
+		struct nfs_write_data *data,
+		int how, int pnfs)
+{
+	struct nfs_page *first = nfs_list_entry(head->next);
+	struct inode *inode = first->wb_context->path.dentry->d_inode;
+
+	/* Set up the RPC argument and reply structs
+	 * NB: take care not to mess about with data->commit et al. */
+
+	list_splice_init(head, &data->pages);
+
+	data->inode	  = inode;
+	data->cred	  = first->wb_context->cred;
+
+	data->args.fh     = NFS_FH(data->inode);
+	/* Note: we always request a commit of the entire inode */
+	data->args.offset = 0;
+	data->args.count  = 0;
+	data->args.context = get_nfs_open_context(first->wb_context);
+	data->res.count   = 0;
+	data->res.fattr   = &data->fattr;
+	data->res.verf    = &data->verf;
+	nfs_fattr_init(&data->fattr);
+	kref_init(&data->refcount);
+	data->parent      = NULL;
+	data->args.context = first->wb_context;  /* used by commit done */
+
+	return pnfs_initiate_commit(data, NFS_CLIENT(inode), &nfs_commit_ops,
+				    how, pnfs);
+}
 
 /*
  * Commit dirty pages
  */
 static int
-nfs_commit_list(struct inode *inode, struct list_head *head, int how)
+nfs_commit_list(struct inode *inode, struct list_head *head, int how, int pnfs)
 {
 	struct nfs_write_data	*data;
 	struct nfs_page         *req;
@@ -1378,7 +1405,7 @@ nfs_commit_list(struct inode *inode, struct list_head *head, int how)
 		goto out_bad;
 
 	/* Set up the argument struct */
-	return nfs_commit_rpcsetup(head, data, how);
+	return nfs_commit_rpcsetup(head, data, how, pnfs);
  out_bad:
 	while (!list_empty(head)) {
 		req = nfs_list_entry(head->next);
@@ -1408,6 +1435,19 @@ static void nfs_commit_done(struct rpc_task *task, void *calldata)
 		return;
 }
 
+static inline void nfs_commit_cleanup(struct kref *kref)
+{
+	struct nfs_write_data *data;
+
+	data = container_of(kref, struct nfs_write_data, refcount);
+	/* Clear lock only when all cloned commits are finished */
+	if (data->parent)
+		kref_put(&data->parent->refcount, nfs_commit_cleanup);
+	else
+		nfs_commit_clear_lock(NFS_I(data->inode));
+	nfs_commitdata_release(data);
+}
+
 static void nfs_commit_release(void *calldata)
 {
 	struct nfs_write_data	*data = calldata;
@@ -1425,6 +1465,11 @@ static void nfs_commit_release(void *calldata)
 			req->wb_bytes,
 			(long long)req_offset(req));
 		if (status < 0) {
+			if (req->wb_lseg) {
+				nfs_mark_request_nopnfs(req);
+				nfs_mark_request_dirty(req);
+				goto next;
+			}
 			nfs_context_set_write_error(req->wb_context, status);
 			nfs_inode_remove_request(req);
 			dprintk(", error = %d\n", status);
@@ -1441,12 +1486,12 @@ static void nfs_commit_release(void *calldata)
 		}
 		/* We have a mismatch. Write the page again */
 		dprintk(" mismatch\n");
+		nfs_mark_request_nopnfs(req);
 		nfs_mark_request_dirty(req);
 	next:
 		nfs_clear_page_tag_locked(req);
 	}
-	nfs_commit_clear_lock(NFS_I(data->inode));
-	nfs_commitdata_release(calldata);
+	kref_put(&data->refcount, nfs_commit_cleanup);
 }
 
 static const struct rpc_call_ops nfs_commit_ops = {
@@ -1470,7 +1515,7 @@ int nfs_commit_inode(struct inode *inode, int how)
 	res = nfs_scan_commit(inode, &head, 0, 0, &use_pnfs);
 	spin_unlock(&inode->i_lock);
 	if (res) {
-		int error = nfs_commit_list(inode, &head, how);
+		int error = nfs_commit_list(inode, &head, how, use_pnfs);
 		if (error < 0)
 			return error;
 		if (may_wait) {
