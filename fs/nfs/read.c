@@ -118,11 +118,14 @@ int nfs_readpage_async(struct nfs_open_context *ctx, struct inode *inode,
 	LIST_HEAD(one_request);
 	struct nfs_page	*new;
 	unsigned int len;
+	struct pnfs_layout_segment *lseg;
 
 	len = nfs_page_length(page);
 	if (len == 0)
 		return nfs_return_empty_page(page);
-	new = nfs_create_request(ctx, inode, page, 0, len);
+	pnfs_update_layout(inode, ctx, IOMODE_READ, &lseg);
+	new = nfs_create_request(ctx, inode, page, 0, len, lseg);
+	put_lseg(lseg);
 	if (IS_ERR(new)) {
 		unlock_page(page);
 		return PTR_ERR(new);
@@ -570,7 +573,8 @@ readpage_async_filler(void *data, struct page *page)
 	if (len == 0)
 		return nfs_return_empty_page(page);
 
-	new = nfs_create_request(desc->ctx, inode, page, 0, len);
+	new = nfs_create_request(desc->ctx, inode, page, 0, len,
+				 desc->pgio->pg_lseg);
 	if (IS_ERR(new))
 		goto out_error;
 

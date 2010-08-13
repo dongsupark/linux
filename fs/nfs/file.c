@@ -36,6 +36,7 @@
 #include "internal.h"
 #include "iostat.h"
 #include "fscache.h"
+#include "pnfs.h"
 
 #define NFSDBG_FACILITY		NFSDBG_FILE
 
@@ -389,12 +390,17 @@ static int nfs_write_begin(struct file *file, struct address_space *mapping,
 	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
 	struct page *page;
 	int once_thru = 0;
+	struct pnfs_layout_segment *lseg;
 
 	dfprintk(PAGECACHE, "NFS: write_begin(%s/%s(%ld), %u@%lld)\n",
 		file->f_path.dentry->d_parent->d_name.name,
 		file->f_path.dentry->d_name.name,
 		mapping->host->i_ino, len, (long long) pos);
 
+	pnfs_update_layout(mapping->host,
+			   nfs_file_open_context(file),
+			   IOMODE_RW,
+			   &lseg);
 start:
 	/*
 	 * Prevent starvation issues if someone is doing a consistency
@@ -403,14 +409,16 @@ start:
 	ret = wait_on_bit(&NFS_I(mapping->host)->flags, NFS_INO_FLUSHING,
 			nfs_wait_bit_killable, TASK_KILLABLE);
 	if (ret)
-		return ret;
+		goto out;
 
 	page = grab_cache_page_write_begin(mapping, index, flags);
-	if (!page)
-		return -ENOMEM;
+	if (!page) {
+		ret = -ENOMEM;
+		goto out;
+	}
 	*pagep = page;
 
-	ret = nfs_flush_incompatible(file, page);
+	ret = nfs_flush_incompatible(file, page, lseg);
 	if (ret) {
 		unlock_page(page);
 		page_cache_release(page);
@@ -422,6 +430,12 @@ start:
 		if (!ret)
 			goto start;
 	}
+	*fsdata = lseg;
+ out:
+	if (ret) {
+		put_lseg(lseg);
+		*fsdata = NULL;
+	}
 	return ret;
 }
 
@@ -431,6 +445,7 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 {
 	unsigned offset = pos & (PAGE_CACHE_SIZE - 1);
 	int status;
+	struct pnfs_layout_segment *lseg = fsdata;
 
 	dfprintk(PAGECACHE, "NFS: write_end(%s/%s(%ld), %u@%lld)\n",
 		file->f_path.dentry->d_parent->d_name.name,
@@ -457,10 +472,11 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 			zero_user_segment(page, pglen, PAGE_CACHE_SIZE);
 	}
 
-	status = nfs_updatepage(file, page, offset, copied);
+	status = nfs_updatepage(file, page, offset, copied, lseg);
 
 	unlock_page(page);
 	page_cache_release(page);
+	put_lseg(lseg);
 
 	if (status < 0)
 		return status;
@@ -571,6 +587,8 @@ static int nfs_vm_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 	/* make sure the cache has finished storing the page */
 	nfs_fscache_wait_on_page_write(NFS_I(dentry->d_inode), page);
 
+	/* XXX Do we want to call pnfs_update_layout here? */
+
 	lock_page(page);
 	mapping = page->mapping;
 	if (mapping != dentry->d_inode->i_mapping)
@@ -581,11 +599,11 @@ static int nfs_vm_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 	if (pagelen == 0)
 		goto out_unlock;
 
-	ret = nfs_flush_incompatible(filp, page);
+	ret = nfs_flush_incompatible(filp, page, NULL);
 	if (ret != 0)
 		goto out_unlock;
 
-	ret = nfs_updatepage(filp, page, 0, pagelen);
+	ret = nfs_updatepage(filp, page, 0, pagelen, NULL);
 out_unlock:
 	if (!ret)
 		return VM_FAULT_LOCKED;
