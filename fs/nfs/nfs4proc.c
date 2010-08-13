@@ -571,6 +571,7 @@ static int nfs41_setup_sequence(struct nfs4_session *session,
 }
 
 int nfs4_setup_sequence(const struct nfs_server *server,
+		struct nfs4_session *ds_session,
 			struct nfs4_sequence_args *args,
 			struct nfs4_sequence_res *res,
 			int cache_reply,
@@ -579,6 +580,8 @@ int nfs4_setup_sequence(const struct nfs_server *server,
 	struct nfs4_session *session = nfs4_get_session(server);
 	int ret = 0;
 
+	if (ds_session)
+		session = ds_session;
 	if (session == NULL) {
 		args->sa_session = NULL;
 		res->sr_session = NULL;
@@ -609,7 +612,7 @@ static void nfs41_call_sync_prepare(struct rpc_task *task, void *calldata)
 
 	dprintk("--> %s data->seq_server %p\n", __func__, data->seq_server);
 
-	if (nfs4_setup_sequence(data->seq_server, data->seq_args,
+	if (nfs4_setup_sequence(data->seq_server, NULL, data->seq_args,
 				data->seq_res, data->cache_reply, task))
 		return;
 	rpc_call_start(task);
@@ -1397,7 +1400,7 @@ static void nfs4_open_prepare(struct rpc_task *task, void *calldata)
 		nfs_copy_fh(&data->o_res.fh, data->o_arg.fh);
 	}
 	data->timestamp = jiffies;
-	if (nfs4_setup_sequence(data->o_arg.server,
+	if (nfs4_setup_sequence(data->o_arg.server, NULL,
 				&data->o_arg.seq_args,
 				&data->o_res.seq_res, 1, task))
 		return;
@@ -1942,7 +1945,7 @@ static void nfs4_close_prepare(struct rpc_task *task, void *data)
 
 	nfs_fattr_init(calldata->res.fattr);
 	calldata->timestamp = jiffies;
-	if (nfs4_setup_sequence(NFS_SERVER(calldata->inode),
+	if (nfs4_setup_sequence(NFS_SERVER(calldata->inode), NULL,
 				&calldata->arg.seq_args, &calldata->res.seq_res,
 				1, task))
 		return;
@@ -3642,7 +3645,7 @@ static void nfs4_delegreturn_prepare(struct rpc_task *task, void *data)
 
 	d_data = (struct nfs4_delegreturndata *)data;
 
-	if (nfs4_setup_sequence(d_data->res.server,
+	if (nfs4_setup_sequence(d_data->res.server, NULL,
 				&d_data->args.seq_args,
 				&d_data->res.seq_res, 1, task))
 		return;
@@ -3893,7 +3896,7 @@ static void nfs4_locku_prepare(struct rpc_task *task, void *data)
 		return;
 	}
 	calldata->timestamp = jiffies;
-	if (nfs4_setup_sequence(calldata->server,
+	if (nfs4_setup_sequence(calldata->server, NULL,
 				&calldata->arg.seq_args,
 				&calldata->res.seq_res, 1, task))
 		return;
@@ -4047,7 +4050,7 @@ static void nfs4_lock_prepare(struct rpc_task *task, void *calldata)
 	} else
 		data->arg.new_lock_owner = 0;
 	data->timestamp = jiffies;
-	if (nfs4_setup_sequence(data->server,
+	if (nfs4_setup_sequence(data->server, NULL,
 				&data->arg.seq_args,
 				&data->res.seq_res, 1, task))
 		return;
@@ -5332,7 +5335,7 @@ nfs4_layoutget_prepare(struct rpc_task *task, void *calldata)
 	 * However, that is not so catastrophic, and there seems
 	 * to be no way to prevent it completely.
 	 */
-	if (nfs4_setup_sequence(server, &lgp->args.seq_args,
+	if (nfs4_setup_sequence(server, NULL, &lgp->args.seq_args,
 				&lgp->res.seq_res, 0, task))
 		return;
 	rpc_call_start(task);
