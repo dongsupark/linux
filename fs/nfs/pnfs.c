@@ -480,6 +480,110 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	return lseg;
 }
 
+static struct pnfs_layout_segment *
+has_layout_to_return(struct pnfs_layout_hdr *lo, u32 iomode)
+{
+	struct pnfs_layout_segment *out = NULL, *lseg;
+	dprintk("%s:Begin lo %p iomode %d\n", __func__, lo, iomode);
+
+	list_for_each_entry(lseg, &lo->segs, fi_list)
+		if (should_free_lseg(lseg, iomode)) {
+			out = lseg;
+			break;
+		}
+
+	dprintk("%s:Return lseg=%p\n", __func__, out);
+	return out;
+}
+
+static bool
+pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
+{
+	struct pnfs_layout_segment *lseg;
+	bool ret = false;
+
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	list_for_each_entry(lseg, &nfsi->layout->segs, fi_list) {
+		if (!should_free_lseg(lseg, iomode))
+			continue;
+		lseg->valid = false;
+		if (!_pnfs_can_return_lseg(lseg)) {
+			dprintk("%s: wait on lseg %p refcount %d\n",
+				__func__, lseg,
+				atomic_read(&lseg->kref.refcount));
+			ret = true;
+		}
+	}
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+	dprintk("%s:Return %d\n", __func__, ret);
+	return ret;
+}
+
+static int
+return_layout(struct inode *ino, struct pnfs_layout_range *range,
+	      enum pnfs_layoutreturn_type type, struct pnfs_layout_hdr *lo,
+	      bool wait)
+{
+	return 0;
+}
+
+int
+_pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
+		    const nfs4_stateid *stateid, /* optional */
+		    enum pnfs_layoutreturn_type type,
+		    bool wait)
+{
+	struct pnfs_layout_hdr *lo = NULL;
+	struct nfs_inode *nfsi = NFS_I(ino);
+	struct pnfs_layout_range arg;
+	int status = 0;
+
+	dprintk("--> %s type %d\n", __func__, type);
+
+
+	arg.iomode = range ? range->iomode : IOMODE_ANY;
+	arg.offset = 0;
+	arg.length = NFS4_MAX_UINT64;
+
+	if (type == RETURN_FILE) {
+		spin_lock(&ino->i_lock);
+		lo = nfsi->layout;
+		if (lo && !has_layout_to_return(lo, arg.iomode))
+			lo = NULL;
+		if (!lo) {
+			spin_unlock(&ino->i_lock);
+			dprintk("%s: no layout segments to return\n", __func__);
+			goto out;
+		}
+
+		/* Reference matched in pnfs_layoutreturn_release */
+		get_layout_hdr_locked(lo);
+
+		spin_unlock(&ino->i_lock);
+
+		if (pnfs_return_layout_barrier(nfsi, arg.iomode)) {
+			if (stateid) { /* callback */
+				status = -EAGAIN;
+				goto out_put;
+			}
+			dprintk("%s: waiting\n", __func__);
+			wait_event(nfsi->lo_waitq,
+				   !pnfs_return_layout_barrier(nfsi, arg.iomode));
+		}
+
+		if (!stateid)
+			status = return_layout(ino, &arg, type, lo, wait);
+		else
+			pnfs_layoutreturn_release(lo, &arg);
+	}
+out:
+	dprintk("<-- %s status: %d\n", __func__, status);
+	return status;
+out_put:
+	put_layout_hdr(ino);
+	goto out;
+}
+
 /*
  * Compare two layout segments for sorting into layout cache.
  * We want to preferentially return RW over RO layouts, so ensure those
