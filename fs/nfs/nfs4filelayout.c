@@ -66,6 +66,38 @@ filelayout_clear_layoutdriver(struct nfs_server *nfss)
 	return 0;
 }
 
+/* This function is used by the layout driver to calculate the
+ * offset of the file on the dserver based on whether the
+ * layout type is STRIPE_DENSE or STRIPE_SPARSE
+ */
+static loff_t
+filelayout_get_dserver_offset(struct pnfs_layout_segment *lseg, loff_t offset)
+{
+	struct nfs4_filelayout_segment *flseg = FILELAYOUT_LSEG(lseg);
+
+	switch (flseg->stripe_type) {
+	case STRIPE_SPARSE:
+		return offset;
+
+	case STRIPE_DENSE:
+	{
+		u32 stripe_width;
+		u64 tmp, off;
+		u32 unit = flseg->stripe_unit;
+
+		stripe_width = unit * flseg->dsaddr->stripe_count;
+		tmp = off = offset - flseg->pattern_offset;
+		do_div(tmp, stripe_width);
+		return tmp * unit + do_div(off, unit);
+	}
+	default:
+		BUG();
+	}
+
+	/* We should never get here... just to stop the gcc warning */
+	return 0;
+}
+
 /*
  * filelayout_check_layout()
  *

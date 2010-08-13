@@ -404,7 +404,7 @@ static int nfs_sockaddr_match_ipaddr(const struct sockaddr *sa1,
  * Test if two socket addresses represent the same actual socket,
  * by comparing (only) relevant fields, including the port number.
  */
-static int nfs_sockaddr_cmp(const struct sockaddr *sa1,
+int nfs_sockaddr_cmp(const struct sockaddr *sa1,
 			    const struct sockaddr *sa2)
 {
 	if (sa1->sa_family != sa2->sa_family)
@@ -418,6 +418,7 @@ static int nfs_sockaddr_cmp(const struct sockaddr *sa1,
 	}
 	return 0;
 }
+EXPORT_SYMBOL(nfs_sockaddr_cmp);
 
 /* Common match routine for v4.0 and v4.1 callback services */
 bool
@@ -567,6 +568,7 @@ int nfs4_check_client_ready(struct nfs_client *clp)
 		return -EPROTONOSUPPORT;
 	return 0;
 }
+EXPORT_SYMBOL(nfs4_check_client_ready);
 
 /*
  * Initialise the timeout values for a connection
@@ -1355,7 +1357,7 @@ error:
 /*
  * Set up an NFS4 client
  */
-static int nfs4_set_client(struct nfs_server *server,
+int nfs4_set_client(struct nfs_server *server,
 		const char *hostname,
 		const struct sockaddr *addr,
 		const size_t addrlen,
@@ -1398,6 +1400,7 @@ error:
 	dprintk("<-- nfs4_set_client() = xerror %d\n", error);
 	return error;
 }
+EXPORT_SYMBOL(nfs4_set_client);
 
 
 /*
