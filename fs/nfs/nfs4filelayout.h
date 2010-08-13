@@ -42,4 +42,7 @@ extern struct pnfs_client_operations *pnfs_callback_ops;
 
 extern void nfs4_fl_free_deviceid_callback(struct kref *);
 extern void print_ds(struct nfs4_pnfs_ds *ds);
+char *deviceid_fmt(const struct pnfs_deviceid *dev_id);
+extern struct nfs4_file_layout_dsaddr *
+nfs4_pnfs_device_item_find(struct nfs_client *, struct pnfs_deviceid *dev_id);
 #endif /* FS_NFS_NFS4FILELAYOUT_H */

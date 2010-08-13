@@ -83,6 +83,21 @@ print_ds_list(struct nfs4_file_layout_dsaddr *dsaddr)
 		print_ds(dsaddr->ds_list[i]);
 }
 
+/* Debugging function assuming a 64bit major/minor split of the deviceid */
+char *
+deviceid_fmt(const struct pnfs_deviceid *dev_id)
+{
+	static char buf[17];
+	uint32_t *p = (uint32_t *)dev_id->data;
+	uint64_t major, minor;
+
+	p = xdr_decode_hyper(p, &major);
+	p = xdr_decode_hyper(p, &minor);
+
+	sprintf(buf, "%08llu %08llu", major, minor);
+	return buf;
+}
+
 /* nfs4_ds_cache_lock is held */
 static inline struct nfs4_pnfs_ds *
 _data_server_lookup(u32 ip_addr, u32 port)
@@ -112,9 +127,39 @@ destroy_ds(struct nfs4_pnfs_ds *ds)
 	kfree(ds);
 }
 
+static void
+nfs4_fl_free_deviceid(struct nfs4_file_layout_dsaddr *dsaddr)
+{
+	struct nfs4_pnfs_ds *ds;
+	int i;
+
+	dprintk("%s: device id=%s\n", __func__,
+		deviceid_fmt(&dsaddr->deviceid.de_id));
+
+	for (i = 0; i < dsaddr->ds_num; i++) {
+		ds = dsaddr->ds_list[i];
+		if (ds != NULL) {
+			if (atomic_dec_and_lock(&ds->ds_count,
+						&nfs4_ds_cache_lock)) {
+				list_del_init(&ds->ds_node);
+				spin_unlock(&nfs4_ds_cache_lock);
+				destroy_ds(ds);
+			}
+		}
+	}
+	kfree(dsaddr->stripe_indices);
+	kfree(dsaddr);
+}
+
 void
 nfs4_fl_free_deviceid_callback(struct kref *kref)
 {
+	struct nfs4_deviceid *device =
+		container_of(kref, struct nfs4_deviceid, de_kref);
+	struct nfs4_file_layout_dsaddr *dsaddr =
+		container_of(device, struct nfs4_file_layout_dsaddr, deviceid);
+
+	nfs4_fl_free_deviceid(dsaddr);
 }
 
 static void
@@ -152,4 +197,16 @@ nfs4_pnfs_ds_add(struct inode *inode, struct nfs4_pnfs_ds **dsp,
 		spin_unlock(&nfs4_ds_cache_lock);
 		kfree(ds);
 	}
+}
+
+struct nfs4_file_layout_dsaddr *
+nfs4_pnfs_device_item_find(struct nfs_client *clp, struct pnfs_deviceid *id)
+{
+	struct nfs4_deviceid *d;
+
+	d = nfs4_find_deviceid(clp->cl_devid_cache, id);
+	dprintk("%s device id (%s) nfs4_deviceid %p\n", __func__,
+		deviceid_fmt(id), d);
+	return (d == NULL) ? NULL :
+		container_of(d, struct nfs4_file_layout_dsaddr, deviceid);
 }
