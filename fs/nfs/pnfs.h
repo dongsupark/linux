@@ -64,6 +64,7 @@ struct pnfs_layout_hdr {
 	unsigned long		refcount;
 	struct list_head	layouts;   /* other client layouts */
 	struct list_head	segs;      /* layout segments list */
+	int			roc_iomode;/* return on close iomode, 0=none */
 	seqlock_t		seqlock;   /* Protects the stateid */
 	nfs4_stateid		stateid;
 	unsigned long		state;
@@ -133,11 +134,15 @@ extern void pnfs_unregister_layoutdriver(struct pnfs_layoutdriver_type *);
 extern int nfs4_proc_getdeviceinfo(struct nfs_server *server,
 				   struct pnfs_device *dev);
 extern int nfs4_proc_layoutget(struct nfs4_layoutget *lgp);
+extern int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool wait);
 
 /* pnfs.c */
 struct pnfs_layout_segment *
 pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 		   enum pnfs_iomode access_type);
+int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *,
+			const nfs4_stateid *stateid, /* optional */
+			enum pnfs_layoutreturn_type, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unset_pnfs_layoutdriver(struct nfs_server *);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
@@ -151,16 +156,53 @@ void pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo,
 			     struct nfs4_state *open_state);
 
 
+static inline bool
+has_layout(struct nfs_inode *nfsi)
+{
+	return nfsi->layout != NULL;
+}
+
 static inline int lo_fail_bit(u32 iomode)
 {
 	return iomode == IOMODE_RW ?
 			 NFS_LAYOUT_RW_FAILED : NFS_LAYOUT_RO_FAILED;
 }
 
+static inline void pnfs_invalidate_layout_stateid(struct pnfs_layout_hdr *lo)
+{
+	write_seqlock(&lo->seqlock);
+	clear_bit(NFS_LAYOUT_STATEID_SET, &lo->state);
+	write_sequnlock(&lo->seqlock);
+}
+
 /* Return true if a layout driver is being used for this mountpoint */
 static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 {
 	return nfss->pnfs_curr_ld != NULL;
+}
+
+/* Should the pNFS client commit and return the layout on close
+ */
+static inline int
+pnfs_layout_roc_iomode(struct nfs_inode *nfsi)
+{
+	return nfsi->layout->roc_iomode;
+}
+
+static inline int pnfs_return_layout(struct inode *ino,
+				     struct pnfs_layout_range *range,
+				     const nfs4_stateid *stateid, /* optional */
+				     enum pnfs_layoutreturn_type type,
+				     bool wait)
+{
+	struct nfs_inode *nfsi = NFS_I(ino);
+	struct nfs_server *nfss = NFS_SERVER(ino);
+
+	if (pnfs_enabled_sb(nfss) &&
+	    (type != RETURN_FILE || has_layout(nfsi)))
+		return _pnfs_return_layout(ino, range, stateid, type, wait);
+
+	return 0;
 }
 
 #else  /* CONFIG_NFS_V4_1 */
@@ -178,6 +220,33 @@ pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 		   enum pnfs_iomode access_type)
 {
 	return NULL;
+}
+
+static inline bool
+has_layout(struct nfs_inode *nfsi)
+{
+	return false;
+}
+
+static inline bool
+pnfs_ld_layoutret_on_setattr(struct inode *inode)
+{
+	return false;
+}
+
+static inline int
+pnfs_layout_roc_iomode(struct nfs_inode *nfsi)
+{
+	return 0;
+}
+
+static inline int pnfs_return_layout(struct inode *ino,
+				     struct pnfs_layout_range *range,
+				     const nfs4_stateid *stateid, /* optional */
+				     enum pnfs_layoutreturn_type type,
+				     bool wait)
+{
+	return 0;
 }
 
 static inline void set_pnfs_layoutdriver(struct nfs_server *s, u32 id)

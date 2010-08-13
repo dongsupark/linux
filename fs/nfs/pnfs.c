@@ -279,7 +279,6 @@ static void
 pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo, u32 iomode)
 {
 	struct pnfs_layout_segment *lseg, *next;
-	struct nfs_client *clp;
 
 	dprintk("%s:Begin lo %p\n", __func__, lo);
 
@@ -293,14 +292,16 @@ pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo, u32 iomode)
 		list_del(&lseg->fi_list);
 		put_lseg_locked(lseg);
 	}
-	clp = NFS_SERVER(lo->inode)->nfs_client;
-	spin_lock(&clp->cl_lock);
-	/* List does not take a reference, so no need for put here */
-	list_del_init(&lo->layouts);
-	spin_unlock(&clp->cl_lock);
-	write_seqlock(&lo->seqlock);
-	clear_bit(NFS_LAYOUT_STATEID_SET, &lo->state);
-	write_sequnlock(&lo->seqlock);
+	if (list_empty(&lo->segs)) {
+		struct nfs_client *clp;
+
+		clp = NFS_SERVER(lo->inode)->nfs_client;
+		spin_lock(&clp->cl_lock);
+		/* List does not take a reference, so no need for put here */
+		list_del_init(&lo->layouts);
+		spin_unlock(&clp->cl_lock);
+		pnfs_invalidate_layout_stateid(lo);
+	}
 
 	dprintk("%s:Return\n", __func__);
 }
@@ -324,7 +325,7 @@ pnfs_layoutreturn_release(struct pnfs_layout_hdr *lo,
 
 	spin_lock(&nfsi->vfs_inode.i_lock);
 	if (range)
-		pnfs_clear_lseg_list(lo, range);
+		pnfs_clear_lseg_list(lo, range->iomode);
 	put_layout_hdr_locked(lo); /* Matched in _pnfs_return_layout */
 	spin_unlock(&nfsi->vfs_inode.i_lock);
 	wake_up_all(&nfsi->lo_waitq);
@@ -508,7 +509,30 @@ return_layout(struct inode *ino, struct pnfs_layout_range *range,
 	      enum pnfs_layoutreturn_type type, struct pnfs_layout_hdr *lo,
 	      bool wait)
 {
-	return 0;
+	struct nfs4_layoutreturn *lrp;
+	struct nfs_server *server = NFS_SERVER(ino);
+	int status = -ENOMEM;
+
+	dprintk("--> %s\n", __func__);
+
+	BUG_ON(type != RETURN_FILE);
+
+	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
+	if (lrp == NULL) {
+		if (lo && (type == RETURN_FILE))
+			pnfs_layoutreturn_release(lo, NULL);
+		goto out;
+	}
+	lrp->args.reclaim = 0;
+	lrp->args.layout_type = server->pnfs_curr_ld->id;
+	lrp->args.return_type = type;
+	lrp->args.range = *range;
+	lrp->args.inode = ino;
+
+	status = nfs4_proc_layoutreturn(lrp, wait);
+out:
+	dprintk("<-- %s status: %d\n", __func__, status);
+	return status;
 }
 
 int
@@ -786,6 +810,18 @@ pnfs_layout_process(struct nfs4_layoutget *lgp)
 	lseg->range = res->range;
 	*lgp->lsegpp = lseg;
 	pnfs_insert_layout(lo, lseg);
+
+	if (res->return_on_close) {
+		/* FI: This needs to be re-examined.  At lo level,
+		 * all it needs is a bit indicating whether any of
+		 * the lsegs in the list have the flags set.
+		 *
+		 * The IOMODE_ANY line just seems nonsensical.
+		 */
+		lo->roc_iomode |= res->range.iomode;
+		if (!lo->roc_iomode)
+			lo->roc_iomode = IOMODE_ANY;
+	}
 
 	/* Done processing layoutget. Set the layout stateid */
 	pnfs_set_layout_stateid(lo, &res->stateid);
