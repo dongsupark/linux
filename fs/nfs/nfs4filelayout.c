@@ -123,6 +123,93 @@ filelayout_get_dserver_offset(struct pnfs_layout_segment *lseg, loff_t offset)
 }
 
 /*
+ * Call ops for the async read/write cases
+ * In the case of dense layouts, the offset needs to be reset to its
+ * original value.
+ */
+static void filelayout_read_call_done(struct rpc_task *task, void *data)
+{
+	struct nfs_read_data *rdata = (struct nfs_read_data *)data;
+
+	if (rdata->fldata.orig_offset) {
+		dprintk("%s new off %llu orig offset %llu\n", __func__,
+			rdata->args.offset, rdata->fldata.orig_offset);
+		rdata->args.offset = rdata->fldata.orig_offset;
+	}
+
+	/* Note this may cause RPC to be resent */
+	rdata->pdata.call_ops->rpc_call_done(task, data);
+}
+
+static void filelayout_read_release(void *data)
+{
+	struct nfs_read_data *rdata = (struct nfs_read_data *)data;
+
+	put_lseg(rdata->pdata.lseg);
+	rdata->pdata.lseg = NULL;
+	rdata->pdata.call_ops->rpc_release(data);
+}
+
+struct rpc_call_ops filelayout_read_call_ops = {
+	.rpc_call_prepare = nfs_read_prepare,
+	.rpc_call_done = filelayout_read_call_done,
+	.rpc_release = filelayout_read_release,
+};
+
+/* Perform sync or async reads.
+ *
+ * An optimization for the NFS file layout driver
+ * allows the original read/write data structs to be passed in the
+ * last argument.
+ *
+ * TODO: join with write_pagelist?
+ */
+static enum pnfs_try_status
+filelayout_read_pagelist(struct nfs_read_data *data, unsigned nr_pages)
+{
+	struct pnfs_layout_segment *lseg = data->pdata.lseg;
+	struct nfs4_pnfs_ds *ds;
+	loff_t offset = data->args.offset;
+	u32 idx;
+	struct nfs_fh *fh;
+
+	dprintk("--> %s ino %lu nr_pages %d pgbase %u req %Zu@%llu\n",
+		__func__, data->inode->i_ino, nr_pages,
+		data->args.pgbase, (size_t)data->args.count, offset);
+
+	/* Retrieve the correct rpc_client for the byte range */
+	idx = nfs4_fl_calc_ds_index(lseg, offset);
+	ds = nfs4_fl_prepare_ds(lseg, idx);
+	if (!ds) {
+		printk(KERN_ERR "%s: prepare_ds failed, use MDS\n", __func__);
+		return PNFS_NOT_ATTEMPTED;
+	}
+	dprintk("%s USE DS:ip %x %s\n", __func__,
+		htonl(ds->ds_ip_addr), ds->r_addr);
+
+	/* just try the first data server for the index..*/
+	data->fldata.ds_nfs_client = ds->ds_clp;
+	fh = nfs4_fl_select_ds_fh(lseg, offset);
+	if (fh)
+		data->args.fh = fh;
+
+	/*
+	 * Now get the file offset on the dserver
+	 * Set the read offset to this offset, and
+	 * save the original offset in orig_offset
+	 * In the case of aync reads, the offset will be reset in the
+	 * call_ops->rpc_call_done() routine.
+	 */
+	data->args.offset = filelayout_get_dserver_offset(lseg, offset);
+	data->fldata.orig_offset = offset;
+
+	/* Perform an asynchronous read */
+	nfs_initiate_read(data, ds->ds_clp->cl_rpcclient,
+			  &filelayout_read_call_ops);
+	return PNFS_ATTEMPTED;
+}
+
+/*
  * Create a filelayout layout structure and return it.  The pNFS client
  * will use the pnfs_layout_hdr type to refer to the layout for this
  * inode from now on.
@@ -376,6 +463,7 @@ filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 }
 
 struct layoutdriver_io_operations filelayout_io_operations = {
+	.read_pagelist           = filelayout_read_pagelist,
 	.alloc_layout            = filelayout_alloc_layout,
 	.free_layout             = filelayout_free_layout,
 	.alloc_lseg              = filelayout_alloc_lseg,
