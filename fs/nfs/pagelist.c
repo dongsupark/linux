@@ -390,6 +390,7 @@ void nfs_pageio_cond_complete(struct nfs_pageio_descriptor *desc, pgoff_t index)
  * @idx_start: lower bound of page->index to scan
  * @npages: idx_start + npages sets the upper bound to scan.
  * @tag: tag to scan for
+ * @use_pnfs: will be set TRUE if commit needs to be handled by layout driver
  *
  * Moves elements from one of the inode request lists.
  * If the number of requests is set to 0, the entire address_space
@@ -399,7 +400,7 @@ void nfs_pageio_cond_complete(struct nfs_pageio_descriptor *desc, pgoff_t index)
  */
 int nfs_scan_list(struct nfs_inode *nfsi,
 		struct list_head *dst, pgoff_t idx_start,
-		unsigned int npages, int tag)
+		  unsigned int npages, int tag, int *use_pnfs)
 {
 	struct nfs_page *pgvec[NFS_SCAN_MAXENTRIES];
 	struct nfs_page *req;
@@ -430,6 +431,8 @@ int nfs_scan_list(struct nfs_inode *nfsi,
 				radix_tree_tag_clear(&nfsi->nfs_page_tree,
 						req->wb_index, tag);
 				nfs_list_add_request(req, dst);
+				if (req->wb_lseg)
+					*use_pnfs = 1;
 				res++;
 				if (res == INT_MAX)
 					goto out;
