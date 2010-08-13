@@ -252,6 +252,53 @@ filelayout_free_lseg(struct pnfs_layout_segment *lseg)
 	_filelayout_free_lseg(fl);
 }
 
+/*
+ * Return the stripesize for the specified file
+ * Called with inode i_lock held.
+ */
+ssize_t
+filelayout_get_stripesize(struct pnfs_layout_hdr *lo)
+{
+	struct pnfs_layout_range range = {
+		.iomode = IOMODE_READ,
+		.offset = 0,
+		.length = NFS4_MAX_UINT64,
+	};
+	struct pnfs_layout_segment *lseg;
+	struct nfs4_filelayout_segment *fl;
+	ssize_t size;
+
+	/* Horrible hack...ideally upper layer would send lseg */
+	lseg = pnfs_has_layout(lo, &range);
+	fl = container_of(lseg, struct nfs4_filelayout_segment, generic_hdr);
+	size = fl->stripe_unit;
+	put_lseg_locked(lseg);
+	return size;
+}
+
+/*
+ * filelayout_pg_test(). Called by nfs_can_coalesce_requests()
+ *
+ * return 1 :  coalesce page
+ * return 0 :  don't coalesce page
+ */
+int
+filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
+		   struct nfs_page *req)
+{
+	u64 p_stripe, r_stripe;
+
+	if (pgio->pg_boundary == 0)
+		return 1;
+	p_stripe = (u64)prev->wb_index << PAGE_CACHE_SHIFT;
+	r_stripe = (u64)req->wb_index << PAGE_CACHE_SHIFT;
+
+	do_div(p_stripe, pgio->pg_boundary);
+	do_div(r_stripe, pgio->pg_boundary);
+
+	return (p_stripe == r_stripe);
+}
+
 static struct pnfs_layoutdriver_type filelayout_type = {
 	.id = LAYOUT_NFSV4_1_FILES,
 	.name = "LAYOUT_NFSV4_1_FILES",
@@ -260,6 +307,8 @@ static struct pnfs_layoutdriver_type filelayout_type = {
 	.uninitialize_mountpoint = filelayout_uninitialize_mountpoint,
 	.alloc_lseg              = filelayout_alloc_lseg,
 	.free_lseg               = filelayout_free_lseg,
+	.get_stripesize          = filelayout_get_stripesize,
+	.pg_test                 = filelayout_pg_test,
 };
 
 static int __init nfs4filelayout_init(void)

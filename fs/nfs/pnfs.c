@@ -233,7 +233,7 @@ destroy_lseg(struct kref *kref)
 	put_layout_hdr_locked(local);
 }
 
-static void
+void
 put_lseg_locked(struct pnfs_layout_segment *lseg)
 {
 	bool do_wake_up;
@@ -250,6 +250,7 @@ put_lseg_locked(struct pnfs_layout_segment *lseg)
 	if (do_wake_up)
 		wake_up(&nfsi->lo_waitq);
 }
+EXPORT_SYMBOL_GPL(put_lseg_locked);
 
 void
 put_lseg(struct pnfs_layout_segment *lseg)
@@ -743,7 +744,7 @@ is_matching_lseg(struct pnfs_layout_segment *lseg,
 /*
  * lookup range in layout
  */
-static struct pnfs_layout_segment *
+struct pnfs_layout_segment *
 pnfs_has_layout(struct pnfs_layout_hdr *lo,
 		struct pnfs_layout_range *range)
 {
@@ -767,6 +768,7 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo,
 		ret ? ret->valid : 0);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(pnfs_has_layout);
 
 /*
  * Layout segment is retreived from the server if not cached.
