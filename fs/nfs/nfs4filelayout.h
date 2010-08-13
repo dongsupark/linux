@@ -40,6 +40,16 @@ struct nfs4_file_layout_dsaddr {
 	struct nfs4_pnfs_ds	*ds_list[1];
 };
 
+struct nfs4_filelayout {
+	struct pnfs_layout_hdr fl_layout;
+	u32 stripe_unit;
+};
+
+static inline struct nfs4_filelayout *
+FILE_LO(struct pnfs_layout_hdr *lo)
+{
+	return container_of(lo, struct nfs4_filelayout, fl_layout);
+}
 
 extern struct pnfs_client_operations *pnfs_callback_ops;
 

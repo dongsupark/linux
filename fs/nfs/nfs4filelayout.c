@@ -82,7 +82,31 @@ filelayout_uninitialize_mountpoint(struct nfs_server *nfss)
 	return 0;
 }
 
+/*
+ * Create a filelayout layout structure and return it.  The pNFS client
+ * will use the pnfs_layout_hdr type to refer to the layout for this
+ * inode from now on.
+ */
+static struct pnfs_layout_hdr *
+filelayout_alloc_layout(struct inode *inode)
+{
+	struct nfs4_filelayout *flp;
+
+	dprintk("NFS_FILELAYOUT: allocating layout\n");
+	flp =  kzalloc(sizeof(struct nfs4_filelayout), GFP_KERNEL);
+	return flp ? &flp->fl_layout : NULL;
+}
+
+/* Free a filelayout layout structure */
+static void
+filelayout_free_layout(struct pnfs_layout_hdr *lo)
+{
+	dprintk("NFS_FILELAYOUT: freeing layout\n");
+	kfree(FILE_LO(lo));
+}
 struct layoutdriver_io_operations filelayout_io_operations = {
+	.alloc_layout            = filelayout_alloc_layout,
+	.free_layout             = filelayout_free_layout,
 	.initialize_mountpoint   = filelayout_initialize_mountpoint,
 	.uninitialize_mountpoint = filelayout_uninitialize_mountpoint,
 };
