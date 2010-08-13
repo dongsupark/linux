@@ -59,6 +59,7 @@ struct nfs_write_data *nfs_commitdata_alloc(void)
 	}
 	return p;
 }
+EXPORT_SYMBOL(nfs_commitdata_alloc);
 
 void nfs_commit_free(struct nfs_write_data *p)
 {
@@ -1390,23 +1391,11 @@ static int nfs_commit_rpcsetup(struct list_head *head,
 				    how, pnfs);
 }
 
-/*
- * Commit dirty pages
- */
-static int
-nfs_commit_list(struct inode *inode, struct list_head *head, int how, int pnfs)
+/* Handle memory error during commit */
+void nfs_mark_list_commit(struct list_head *head)
 {
-	struct nfs_write_data	*data;
 	struct nfs_page         *req;
 
-	data = nfs_commitdata_alloc();
-
-	if (!data)
-		goto out_bad;
-
-	/* Set up the argument struct */
-	return nfs_commit_rpcsetup(head, data, how, pnfs);
- out_bad:
 	while (!list_empty(head)) {
 		req = nfs_list_entry(head->next);
 		nfs_list_remove_request(req);
@@ -1416,6 +1405,25 @@ nfs_commit_list(struct inode *inode, struct list_head *head, int how, int pnfs)
 				BDI_RECLAIMABLE);
 		nfs_clear_page_tag_locked(req);
 	}
+}
+EXPORT_SYMBOL(nfs_mark_list_commit);
+
+/*
+ * Commit dirty pages
+ */
+static int
+nfs_commit_list(struct inode *inode, struct list_head *head, int how, int pnfs)
+{
+	struct nfs_write_data	*data;
+
+	data = nfs_commitdata_alloc();
+	if (!data)
+		goto out_bad;
+
+	/* Set up the argument struct */
+	return nfs_commit_rpcsetup(head, data, how, pnfs);
+ out_bad:
+	nfs_mark_list_commit(head);
 	nfs_commit_clear_lock(NFS_I(inode));
 	return -ENOMEM;
 }
