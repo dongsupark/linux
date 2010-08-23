@@ -33,7 +33,6 @@
 #define FS_NFS_NFS4BLOCKLAYOUT_H
 
 #include <linux/nfs_fs.h>
-#include <linux/pnfs_xdr.h> /* Needed by nfs4_pnfs.h */
 #include <linux/nfs4_pnfs.h>
 #include <linux/dm-ioctl.h> /* Needed for struct dm_ioctl*/
 
@@ -176,7 +175,7 @@ static inline int choose_list(enum exstate4 state)
 }
 
 struct pnfs_block_layout {
-	struct pnfs_layout_type bl_layout;
+	struct pnfs_layout_hdr bl_layout;
 	struct pnfs_inval_markings bl_inval; /* tracks INVAL->RW transition */
 	spinlock_t		bl_ext_lock;   /* Protects list manipulation */
 	struct list_head	bl_extents[EXTENT_LISTS]; /* R and RW extents */
@@ -195,7 +194,7 @@ struct bl_layoutupdate_data {
 #define BLK_ID(lo) ((struct block_mount_id *)(PNFS_NFS_SERVER(lo)->pnfs_ld_data))
 
 static inline struct pnfs_block_layout *
-BLK_LO2EXT(struct pnfs_layout_type *lo)
+BLK_LO2EXT(struct pnfs_layout_hdr *lo)
 {
 	return container_of(lo, struct pnfs_block_layout, bl_layout);
 }
@@ -257,8 +256,8 @@ int nfs4_blkdev_put(struct block_device *bdev);
 struct pnfs_block_dev *nfs4_blk_decode_device(struct nfs_server *server,
 					      struct pnfs_device *dev,
 					      struct list_head *sdlist);
-int nfs4_blk_process_layoutget(struct pnfs_layout_type *lo,
-			       struct nfs4_pnfs_layoutget_res *lgr);
+int nfs4_blk_process_layoutget(struct pnfs_layout_hdr *lo,
+			       struct nfs4_layoutget_res *lgr);
 int nfs4_blk_create_block_disk_list(struct list_head *);
 void nfs4_blk_destroy_disk_list(struct list_head *);
 /* blocklayoutdm.c */
@@ -277,9 +276,9 @@ struct pnfs_block_extent *get_extent(struct pnfs_block_extent *be);
 int is_sector_initialized(struct pnfs_inval_markings *marks, sector_t isect);
 int encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 				   struct xdr_stream *xdr,
-				   const struct pnfs_layoutcommit_arg *arg);
+				   const struct nfs4_layoutcommit_args *arg);
 void clean_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
-				   const struct pnfs_layoutcommit_arg *arg,
+				   const struct nfs4_layoutcommit_args *arg,
 				   int status);
 int add_and_merge_extent(struct pnfs_block_layout *bl,
 			 struct pnfs_block_extent *new);

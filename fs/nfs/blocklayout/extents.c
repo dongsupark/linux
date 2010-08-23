@@ -738,7 +738,7 @@ find_get_extent_locked(struct pnfs_block_layout *bl, sector_t isect)
 int
 encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 			       struct xdr_stream *xdr,
-			       const struct pnfs_layoutcommit_arg *arg)
+			       const struct nfs4_layoutcommit_args *arg)
 {
 	sector_t start, end;
 	struct pnfs_block_short_extent *lce, *save;
@@ -748,8 +748,8 @@ encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 	__be32 *p, *xdr_start;
 
 	dprintk("%s enter\n", __func__);
-	start = arg->lseg.offset >> 9;
-	end = start + (arg->lseg.length >> 9);
+	start = arg->range.offset >> 9;
+	end = start + (arg->range.length >> 9);
 	dprintk("%s set start=%llu, end=%llu\n",
 		__func__, (u64)start, (u64)end);
 
@@ -922,7 +922,7 @@ set_to_rw(struct pnfs_block_layout *bl, u64 offset, u64 length)
 
 void
 clean_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
-			      const struct pnfs_layoutcommit_arg *arg,
+			      const struct nfs4_layoutcommit_args *arg,
 			      int status)
 {
 	struct bl_layoutupdate_data *bld = arg->layoutdriver_data;

@@ -152,7 +152,7 @@ out_err:
 }
 
 /* Map deviceid returned by the server to constructed block_device */
-static struct block_device *translate_devid(struct pnfs_layout_type *lo,
+static struct block_device *translate_devid(struct pnfs_layout_hdr *lo,
 					    struct pnfs_deviceid *id)
 {
 	struct block_device *rv = NULL;
@@ -231,8 +231,8 @@ static int verify_extent(struct pnfs_block_extent *be,
 
 /* XDR decode pnfs_block_layout4 structure */
 int
-nfs4_blk_process_layoutget(struct pnfs_layout_type *lo,
-			   struct nfs4_pnfs_layoutget_res *lgr)
+nfs4_blk_process_layoutget(struct pnfs_layout_hdr *lo,
+			   struct nfs4_layoutget_res *lgr)
 {
 	struct pnfs_block_layout *bl = BLK_LO2EXT(lo);
 	uint32_t *p = (uint32_t *)lgr->layout.buf;
@@ -242,10 +242,10 @@ nfs4_blk_process_layoutget(struct pnfs_layout_type *lo,
 	struct pnfs_block_extent *be = NULL, *save;
 	uint64_t tmp; /* Used by READSECTOR */
 	struct layout_verification lv = {
-		.mode = lgr->lseg.iomode,
-		.start = lgr->lseg.offset >> 9,
-		.inval = lgr->lseg.offset >> 9,
-		.cowread = lgr->lseg.offset >> 9,
+		.mode = lgr->range.iomode,
+		.start = lgr->range.offset >> 9,
+		.inval = lgr->range.offset >> 9,
+		.cowread = lgr->range.offset >> 9,
 	};
 
 	LIST_HEAD(extents);
@@ -290,7 +290,7 @@ nfs4_blk_process_layoutget(struct pnfs_layout_type *lo,
 		be = NULL;
 		goto out_err;
 	}
-	if (lgr->lseg.offset + lgr->lseg.length != lv.start << 9) {
+	if (lgr->range.offset + lgr->range.length != lv.start << 9) {
 		dprintk("%s Final length mismatch\n", __func__);
 		be = NULL;
 		goto out_err;
