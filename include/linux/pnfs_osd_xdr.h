@@ -43,7 +43,6 @@
 #include <linux/nfs_fs.h>
 #include <linux/nfs_page.h>
 #include <linux/exp_xdr.h>
-#include <linux/pnfs_xdr.h>
 #include <scsi/osd_protocol.h>
 
 #define PNFS_OSD_OSDNAME_MAXSIZE 256
