@@ -515,7 +515,7 @@ bl_write_pagelist(struct nfs_write_data *wdata,
 /* FIXME - range ignored */
 static void
 release_extents(struct pnfs_block_layout *bl,
-		struct nfs4_pnfs_layout_segment *range)
+		struct pnfs_layout_range *range)
 {
 	int i;
 	struct pnfs_block_extent *be;
@@ -547,7 +547,7 @@ release_inval_marks(struct pnfs_inval_markings *marks)
 
 /* Note we are relying on caller locking to prevent nasty races. */
 static void
-bl_free_layout(struct pnfs_layout_type *lo)
+bl_free_layout(struct pnfs_layout_hdr *lo)
 {
 	struct pnfs_block_layout *bl = BLK_LO2EXT(lo);
 
@@ -557,7 +557,7 @@ bl_free_layout(struct pnfs_layout_type *lo)
 	kfree(bl);
 }
 
-static struct pnfs_layout_type *
+static struct pnfs_layout_hdr *
 bl_alloc_layout(struct inode *inode)
 {
 	struct pnfs_block_layout	*bl;
@@ -590,8 +590,8 @@ bl_free_lseg(struct pnfs_layout_segment *lseg)
  * cause lots of unnecessary overlapping LAYOUTGET requests.
  */
 static struct pnfs_layout_segment *
-bl_alloc_lseg(struct pnfs_layout_type *lo,
-	      struct nfs4_pnfs_layoutget_res *lgr)
+bl_alloc_lseg(struct pnfs_layout_hdr *lo,
+	      struct nfs4_layoutget_res *lgr)
 {
 	struct pnfs_layout_segment *lseg;
 	int status;
@@ -617,8 +617,8 @@ bl_alloc_lseg(struct pnfs_layout_type *lo,
 }
 
 static int
-bl_setup_layoutcommit(struct pnfs_layout_type *lo,
-		      struct pnfs_layoutcommit_arg *arg)
+bl_setup_layoutcommit(struct pnfs_layout_hdr *lo,
+		      struct nfs4_layoutcommit_args *arg)
 {
 	struct nfs_server *nfss = PNFS_NFS_SERVER(lo);
 	struct bl_layoutupdate_data *layoutupdate_data;
@@ -627,11 +627,11 @@ bl_setup_layoutcommit(struct pnfs_layout_type *lo,
 	/* Need to ensure commit is block-size aligned */
 	if (nfss->pnfs_blksize) {
 		u64 mask = nfss->pnfs_blksize - 1;
-		u64 offset = arg->lseg.offset & mask;
+		u64 offset = arg->range.offset & mask;
 
-		arg->lseg.offset -= offset;
-		arg->lseg.length += offset + mask;
-		arg->lseg.length &= ~mask;
+		arg->range.offset -= offset;
+		arg->range.length += offset + mask;
+		arg->range.length &= ~mask;
 	}
 
 	layoutupdate_data = kmalloc(sizeof(struct bl_layoutupdate_data),
@@ -645,16 +645,16 @@ bl_setup_layoutcommit(struct pnfs_layout_type *lo,
 }
 
 static void
-bl_encode_layoutcommit(struct pnfs_layout_type *lo, struct xdr_stream *xdr,
-		       const struct pnfs_layoutcommit_arg *arg)
+bl_encode_layoutcommit(struct pnfs_layout_hdr *lo, struct xdr_stream *xdr,
+		       const struct nfs4_layoutcommit_args *arg)
 {
 	dprintk("%s enter\n", __func__);
 	encode_pnfs_block_layoutupdate(BLK_LO2EXT(lo), xdr, arg);
 }
 
 static void
-bl_cleanup_layoutcommit(struct pnfs_layout_type *lo,
-			struct pnfs_layoutcommit_arg *arg, int status)
+bl_cleanup_layoutcommit(struct pnfs_layout_hdr *lo,
+			struct nfs4_layoutcommit_args *arg, int status)
 {
 	dprintk("%s enter\n", __func__);
 	clean_pnfs_block_layoutupdate(BLK_LO2EXT(lo), arg, status);
@@ -1087,7 +1087,7 @@ bl_write_end_cleanup(struct file *filp, struct pnfs_fsdata *fsdata)
 }
 
 static ssize_t
-bl_get_stripesize(struct pnfs_layout_type *lo)
+bl_get_stripesize(struct pnfs_layout_hdr *lo)
 {
 	dprintk("%s enter\n", __func__);
 	return 0;
