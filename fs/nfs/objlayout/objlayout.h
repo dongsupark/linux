@@ -59,7 +59,7 @@ struct objlayout_segment {
  * per-inode layout
  */
 struct objlayout {
-	struct pnfs_layout_type pnfs_layout;
+	struct pnfs_layout_hdr pnfs_layout;
 
 	 /* for layout_commit */
 	enum osd_delta_space_valid_enum {
@@ -75,7 +75,7 @@ struct objlayout {
 };
 
 static inline struct objlayout *
-OBJLAYOUT(struct pnfs_layout_type *lo)
+OBJLAYOUT(struct pnfs_layout_hdr *lo)
 {
 	return container_of(lo, struct objlayout, pnfs_layout);
 }
@@ -117,7 +117,7 @@ extern void *objio_init_mt(void);
 extern void objio_fini_mt(void *mt);
 
 extern int objio_alloc_lseg(void **outp,
-	struct pnfs_layout_type *pnfslay,
+	struct pnfs_layout_hdr *pnfslay,
 	struct pnfs_layout_segment *lseg,
 	struct pnfs_osd_layout *layout);
 extern void objio_free_lseg(void *p);
@@ -158,7 +158,7 @@ extern void objlayout_read_done(struct objlayout_io_state *state,
 extern void objlayout_write_done(struct objlayout_io_state *state,
 				 ssize_t status, bool sync);
 
-extern int objlayout_get_deviceinfo(struct pnfs_layout_type *pnfslay,
+extern int objlayout_get_deviceinfo(struct pnfs_layout_hdr *pnfslay,
 	struct pnfs_deviceid *d_id, struct pnfs_osd_deviceaddr **deviceaddr);
 extern void objlayout_put_deviceinfo(struct pnfs_osd_deviceaddr *deviceaddr);
 
