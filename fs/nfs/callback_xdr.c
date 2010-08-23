@@ -221,9 +221,9 @@ out:
 
 #if defined(CONFIG_NFS_V4_1)
 
-static __be32 decode_pnfs_layoutrecall_args(struct svc_rqst *rqstp,
-					    struct xdr_stream *xdr,
-					    struct cb_pnfs_layoutrecallargs *args)
+static __be32 decode_layoutrecall_args(struct svc_rqst *rqstp,
+				       struct xdr_stream *xdr,
+				       struct cb_layoutrecallargs *args)
 {
 	__be32 *p;
 	__be32 status = 0;
@@ -795,9 +795,9 @@ static struct callback_op callback_ops[] = {
 	},
 #if defined(CONFIG_NFS_V4_1)
 	[OP_CB_LAYOUTRECALL] = {
-		.process_op = (callback_process_op_t)pnfs_cb_layoutrecall,
+		.process_op = (callback_process_op_t)nfs4_callback_layoutrecall,
 		.decode_args =
-			(callback_decode_arg_t)decode_pnfs_layoutrecall_args,
+			(callback_decode_arg_t)decode_layoutrecall_args,
 		.res_maxsize = CB_OP_LAYOUTRECALL_RES_MAXSZ,
 	},
 	[OP_CB_SEQUENCE] = {

@@ -134,7 +134,7 @@ struct cb_recallslotargs {
 extern unsigned nfs4_callback_recallslot(struct cb_recallslotargs *args,
 					  void *dummy);
 
-struct cb_pnfs_layoutrecallargs {
+struct cb_layoutrecallargs {
 	struct sockaddr		*cbl_addr;
 	struct nfs_fh		cbl_fh;
 	struct pnfs_layout_range cbl_seg;
@@ -145,8 +145,9 @@ struct cb_pnfs_layoutrecallargs {
 	nfs4_stateid		cbl_stateid;
 };
 
-extern unsigned pnfs_cb_layoutrecall(struct cb_pnfs_layoutrecallargs *args,
-				     void *dummy);
+extern unsigned nfs4_callback_layoutrecall(
+	struct cb_layoutrecallargs *args,
+	void *dummy);
 
 #endif /* CONFIG_NFS_V4_1 */
 

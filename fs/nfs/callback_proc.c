@@ -158,7 +158,7 @@ pnfs_is_next_layout_stateid(const struct pnfs_layout_hdr *lo,
  */
 static struct inode *
 nfs_layoutrecall_find_inode(struct nfs_client *clp,
-			    const struct cb_pnfs_layoutrecallargs *args)
+			    const struct cb_layoutrecallargs *args)
 {
 	struct nfs_inode *nfsi;
 	struct pnfs_layout_hdr *lo;
@@ -204,7 +204,7 @@ struct recall_layout_threadargs {
 	struct inode *inode;
 	struct nfs_client *clp;
 	struct completion started;
-	struct cb_pnfs_layoutrecallargs *rl;
+	struct cb_layoutrecallargs *rl;
 	int result;
 };
 
@@ -212,7 +212,7 @@ static int pnfs_recall_layout(void *data)
 {
 	struct inode *inode, *ino;
 	struct nfs_client *clp;
-	struct cb_pnfs_layoutrecallargs rl;
+	struct cb_layoutrecallargs rl;
 	struct nfs4_layoutreturn *lrp;
 	struct recall_layout_threadargs *args =
 		(struct recall_layout_threadargs *)data;
@@ -288,7 +288,7 @@ out:
  * Asynchronous layout recall!
  */
 static int pnfs_async_return_layout(struct nfs_client *clp, struct inode *inode,
-				    struct cb_pnfs_layoutrecallargs *rl)
+				    struct cb_layoutrecallargs *rl)
 {
 	struct recall_layout_threadargs data = {
 		.clp = clp,
@@ -330,7 +330,7 @@ out_put_no_client:
 
 static int pnfs_recall_all_layouts(struct nfs_client *clp)
 {
-	struct cb_pnfs_layoutrecallargs rl;
+	struct cb_layoutrecallargs rl;
 	struct inode *inode;
 	int status = 0;
 
@@ -349,8 +349,8 @@ static int pnfs_recall_all_layouts(struct nfs_client *clp)
 	return status;
 }
 
-__be32 pnfs_cb_layoutrecall(struct cb_pnfs_layoutrecallargs *args,
-			    void *dummy)
+__be32 nfs4_callback_layoutrecall(struct cb_layoutrecallargs *args,
+				  void *dummy)
 {
 	struct nfs_client *clp;
 	struct inode *inode = NULL;
