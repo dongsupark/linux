@@ -49,7 +49,7 @@ struct pnfs_client_operations *pnfs_client_ops;
 /*
  * Create a objlayout layout structure for the given inode and return it.
  */
-static struct pnfs_layout_type *
+static struct pnfs_layout_hdr *
 objlayout_alloc_layout(struct inode *inode)
 {
 	struct objlayout *objlay;
@@ -67,7 +67,7 @@ objlayout_alloc_layout(struct inode *inode)
  * Free an objlayout layout structure
  */
 static void
-objlayout_free_layout(struct pnfs_layout_type *lo)
+objlayout_free_layout(struct pnfs_layout_hdr *lo)
 {
 	struct objlayout *objlay = OBJLAYOUT(lo);
 
@@ -81,8 +81,8 @@ objlayout_free_layout(struct pnfs_layout_type *lo)
  * Unmarshall layout and store it in pnfslay.
  */
 static struct pnfs_layout_segment *
-objlayout_alloc_lseg(struct pnfs_layout_type *pnfslay,
-		     struct nfs4_pnfs_layoutget_res *lgr)
+objlayout_alloc_lseg(struct pnfs_layout_hdr *pnfslay,
+		     struct nfs4_layoutget_res *lgr)
 {
 	int status;
 	void *layout = lgr->layout.buf;
@@ -159,7 +159,7 @@ last_byte_offset(u64 start, u64 len)
 }
 
 static struct objlayout_io_state *
-objlayout_alloc_io_state(struct pnfs_layout_type *pnfs_layout_type,
+objlayout_alloc_io_state(struct pnfs_layout_hdr *pnfs_layout_type,
 			struct page **pages,
 			unsigned pgbase,
 			unsigned nr_pages,
@@ -474,9 +474,9 @@ objlayout_write_pagelist(struct nfs_write_data *wdata,
 }
 
 void
-objlayout_encode_layoutcommit(struct pnfs_layout_type *pnfslay,
+objlayout_encode_layoutcommit(struct pnfs_layout_hdr *pnfslay,
 			      struct xdr_stream *xdr,
-			      const struct pnfs_layoutcommit_arg *args)
+			      const struct nfs4_layoutcommit_args *args)
 {
 	struct objlayout *objlay = OBJLAYOUT(pnfslay);
 	struct pnfs_osd_layoutupdate lou;
@@ -610,9 +610,9 @@ encode_accumulated_error(struct objlayout *objlay, struct xdr_stream *xdr)
 }
 
 void
-objlayout_encode_layoutreturn(struct pnfs_layout_type *pnfslay,
+objlayout_encode_layoutreturn(struct pnfs_layout_hdr *pnfslay,
 			      struct xdr_stream *xdr,
-			      const struct nfs4_pnfs_layoutreturn_arg *args)
+			      const struct nfs4_layoutreturn_args *args)
 {
 	struct objlayout *objlay = OBJLAYOUT(pnfslay);
 	struct objlayout_io_state *state, *tmp;
@@ -682,7 +682,7 @@ struct objlayout_deviceinfo {
  * "struct pnfs_osd_deviceaddr *" Eventually objlayout_put_deviceinfo()
  * should be called.
  */
-int objlayout_get_deviceinfo(struct pnfs_layout_type *pnfslay,
+int objlayout_get_deviceinfo(struct pnfs_layout_hdr *pnfslay,
 	struct pnfs_deviceid *d_id, struct pnfs_osd_deviceaddr **deviceaddr)
 {
 	struct objlayout_deviceinfo *odi;

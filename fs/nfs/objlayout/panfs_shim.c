@@ -193,7 +193,7 @@ err:
  */
 int
 objio_alloc_lseg(void **outp,
-	struct pnfs_layout_type *pnfslay,
+	struct pnfs_layout_hdr *pnfslay,
 	struct pnfs_layout_segment *lseg,
 	struct pnfs_osd_layout *layout)
 {
@@ -627,7 +627,7 @@ EXPORT_SYMBOL(panfs_shim_unregister);
  * Return the stripe size for the specified file
  */
 ssize_t
-panlayout_get_stripesize(struct pnfs_layout_type *pnfslay)
+panlayout_get_stripesize(struct pnfs_layout_hdr *pnfslay)
 {
 	ssize_t sz, maxsz = -1;
 	struct pnfs_layout_segment *lseg;
