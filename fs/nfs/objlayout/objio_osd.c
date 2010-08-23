@@ -175,7 +175,7 @@ struct objio_state {
 
 /* Send and wait for a get_device_info of devices in the layout,
    then look them up with the osd_initiator library */
-static struct osd_dev *_device_lookup(struct pnfs_layout_type *pnfslay,
+static struct osd_dev *_device_lookup(struct pnfs_layout_hdr *pnfslay,
 			       struct objio_segment *objio_seg, unsigned comp)
 {
 	struct pnfs_osd_layout *layout = objio_seg->layout;
@@ -230,7 +230,7 @@ out:
 	return err ? ERR_PTR(err) : od;
 }
 
-static int objio_devices_lookup(struct pnfs_layout_type *pnfslay,
+static int objio_devices_lookup(struct pnfs_layout_hdr *pnfslay,
 	struct objio_segment *objio_seg)
 {
 	struct pnfs_osd_layout *layout = objio_seg->layout;
@@ -297,7 +297,7 @@ static int _verify_data_map(struct pnfs_osd_layout *layout)
 }
 
 int objio_alloc_lseg(void **outp,
-	struct pnfs_layout_type *pnfslay,
+	struct pnfs_layout_hdr *pnfslay,
 	struct pnfs_layout_segment *lseg,
 	struct pnfs_osd_layout *layout)
 {
@@ -974,7 +974,7 @@ ssize_t objio_write_pagelist(struct objlayout_io_state *ol_state, bool stable)
  * Return the stripe size for the specified file
  */
 ssize_t
-objlayout_get_stripesize(struct pnfs_layout_type *pnfslay)
+objlayout_get_stripesize(struct pnfs_layout_hdr *pnfslay)
 {
 	ssize_t sz, maxsz = -1;
 	struct pnfs_layout_segment *lseg;
