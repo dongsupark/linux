@@ -910,7 +910,7 @@ static int _write_mirrors(struct objio_state *ios, unsigned cur_comp)
 		} else {
 			bio = master_dev->bio;
 			/* FIXME: bio_set_dir() */
-			bio->bi_rw |= (1 << BIO_RW);
+			bio->bi_rw |= (1 << REQ_WRITE);
 		}
 
 		osd_req_write(or, &obj, per_dev->offset, bio, per_dev->length);
