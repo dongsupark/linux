@@ -40,6 +40,8 @@ struct pnfs_layout_segment {
 
 #ifdef CONFIG_NFS_V4_1
 
+#include <linux/nfs_page.h> /* For struct nfs_pageio_descriptor */
+
 #define LAYOUT_NFSV4_1_MODULE_PREFIX "nfs-layouttype4"
 
 enum {
@@ -58,6 +60,12 @@ struct pnfs_layoutdriver_type {
 	int (*uninitialize_mountpoint) (struct nfs_server *);
 	struct pnfs_layout_segment * (*alloc_lseg) (struct pnfs_layout_hdr *layoutid, struct nfs4_layoutget_res *lgr);
 	void (*free_lseg) (struct pnfs_layout_segment *lseg);
+
+	/* The stripe size of the file system */
+	ssize_t (*get_stripesize) (struct pnfs_layout_hdr *layoutid);
+
+	/* test for nfs page cache coalescing */
+	int (*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
 };
 
 struct pnfs_layout_hdr {
@@ -145,6 +153,9 @@ int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *,
 			enum pnfs_layoutreturn_type, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unset_pnfs_layoutdriver(struct nfs_server *);
+void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *,
+			   struct nfs_open_context *, struct list_head *);
+void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
 void pnfs_layoutget_release(struct pnfs_layout_hdr *);
 void pnfs_layoutreturn_release(struct pnfs_layout_hdr *,

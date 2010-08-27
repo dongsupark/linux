@@ -851,6 +851,82 @@ out:
 	return status;
 }
 
+void
+pnfs_set_pg_test(struct inode *inode, struct nfs_pageio_descriptor *pgio)
+{
+	struct pnfs_layout_hdr *lo;
+	struct pnfs_layoutdriver_type *ld;
+
+	pgio->pg_test = NULL;
+
+	lo = NFS_I(inode)->layout;
+	ld = NFS_SERVER(inode)->pnfs_curr_ld;
+	if (!ld || !lo)
+		return;
+
+	pgio->pg_test = ld->pg_test;
+}
+
+static u32
+pnfs_getboundary(struct inode *inode)
+{
+	u32 stripe_size = 0;
+	struct pnfs_layoutdriver_type *ld = NFS_SERVER(inode)->pnfs_curr_ld;
+
+	if (!ld || !ld->get_stripesize)
+		goto out;
+
+	spin_lock(&inode->i_lock);
+	if (NFS_I(inode)->layout)
+		stripe_size = ld->get_stripesize(NFS_I(inode)->layout);
+	spin_unlock(&inode->i_lock);
+out:
+	return stripe_size;
+}
+
+/*
+ * rsize is already set by caller to MDS rsize.
+ */
+void
+pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
+		  struct inode *inode,
+		  struct nfs_open_context *ctx,
+		  struct list_head *pages)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	pgio->pg_iswrite = 0;
+	pgio->pg_boundary = 0;
+	pgio->pg_test = NULL;
+	pgio->pg_lseg = NULL;
+
+	if (!pnfs_enabled_sb(nfss))
+		return;
+
+	pgio->pg_lseg = pnfs_update_layout(inode, ctx, IOMODE_READ);
+	if (!pgio->pg_lseg)
+		return;
+
+	pgio->pg_boundary = pnfs_getboundary(inode);
+	if (pgio->pg_boundary)
+		pnfs_set_pg_test(inode, pgio);
+}
+
+void
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
+{
+	struct nfs_server *server = NFS_SERVER(inode);
+
+	pgio->pg_iswrite = 1;
+	if (!pnfs_enabled_sb(server)) {
+		pgio->pg_boundary = 0;
+		pgio->pg_test = NULL;
+		return;
+	}
+	pgio->pg_boundary = pnfs_getboundary(inode);
+	pnfs_set_pg_test(inode, pgio);
+}
+
 /*
  * Device ID cache. Currently supports one layout type per struct nfs_client.
  * Add layout type to the lookup key to expand to support multiple types.
