@@ -49,6 +49,7 @@ struct nfs_page {
 	struct kref		wb_kref;	/* reference count */
 	unsigned long		wb_flags;
 	struct nfs_writeverf	wb_verf;	/* Commit cookie */
+	struct pnfs_layout_segment *wb_lseg;	/* Pnfs layout info */
 };
 
 struct nfs_pageio_descriptor {
@@ -62,6 +63,11 @@ struct nfs_pageio_descriptor {
 	int			(*pg_doio)(struct inode *, struct list_head *, unsigned int, size_t, int);
 	int 			pg_ioflags;
 	int			pg_error;
+	struct pnfs_layout_segment *pg_lseg;
+#ifdef CONFIG_NFS_V4_1
+	int			pg_iswrite;
+	int			(*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
+#endif /* CONFIG_NFS_V4_1 */
 };
 
 #define NFS_WBACK_BUSY(req)	(test_bit(PG_BUSY,&(req)->wb_flags))

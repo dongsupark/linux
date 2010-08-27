@@ -935,6 +935,59 @@ out_forget_reply:
 	goto out;
 }
 
+void
+pnfs_set_pg_test(struct inode *inode, struct nfs_pageio_descriptor *pgio)
+{
+	struct pnfs_layout_hdr *lo;
+	struct pnfs_layoutdriver_type *ld;
+
+	pgio->pg_test = NULL;
+
+	lo = NFS_I(inode)->layout;
+	ld = NFS_SERVER(inode)->pnfs_curr_ld;
+	if (!ld || !lo)
+		return;
+
+	pgio->pg_test = ld->pg_test;
+}
+
+/*
+ * rsize is already set by caller to MDS rsize.
+ */
+void
+pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
+		  struct inode *inode,
+		  struct nfs_open_context *ctx,
+		  struct list_head *pages)
+{
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	pgio->pg_iswrite = 0;
+	pgio->pg_test = NULL;
+	pgio->pg_lseg = NULL;
+
+	if (!pnfs_enabled_sb(nfss))
+		return;
+
+	pgio->pg_lseg = pnfs_update_layout(inode, ctx, IOMODE_READ);
+	if (!pgio->pg_lseg)
+		return;
+
+	pnfs_set_pg_test(inode, pgio);
+}
+
+void
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
+{
+	struct nfs_server *server = NFS_SERVER(inode);
+
+	pgio->pg_iswrite = 1;
+	if (!pnfs_enabled_sb(server))
+		pgio->pg_test = NULL;
+	else
+		pnfs_set_pg_test(inode, pgio);
+}
+
 /*
  * Device ID cache. Currently supports one layout type per struct nfs_client.
  * Add layout type to the lookup key to expand to support multiple types.
