@@ -145,6 +145,7 @@ extern int nfs4_proc_layoutget(struct nfs4_layoutget *lgp);
 extern int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool wait);
 
 /* pnfs.c */
+void put_lseg(struct pnfs_layout_segment *lseg);
 struct pnfs_layout_segment *
 pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 		   enum pnfs_iomode access_type);
@@ -186,6 +187,11 @@ static inline void pnfs_invalidate_layout_stateid(struct pnfs_layout_hdr *lo)
 	write_sequnlock(&lo->seqlock);
 }
 
+static inline void get_lseg(struct pnfs_layout_segment *lseg)
+{
+	kref_get(&lseg->kref);
+}
+
 /* Return true if a layout driver is being used for this mountpoint */
 static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 {
@@ -223,6 +229,14 @@ static inline void pnfs_destroy_all_layouts(struct nfs_client *clp)
 }
 
 static inline void pnfs_destroy_layout(struct nfs_inode *nfsi)
+{
+}
+
+static inline void get_lseg(struct pnfs_layout_segment *lseg)
+{
+}
+
+static inline void put_lseg(struct pnfs_layout_segment *lseg)
 {
 }
 

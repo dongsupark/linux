@@ -251,6 +251,27 @@ put_lseg_locked(struct pnfs_layout_segment *lseg)
 		wake_up(&nfsi->lo_waitq);
 }
 
+void
+put_lseg(struct pnfs_layout_segment *lseg)
+{
+	bool do_wake_up;
+	struct nfs_inode *nfsi;
+
+	if (!lseg)
+		return;
+
+	dprintk("%s: lseg %p ref %d valid %d\n", __func__, lseg,
+		atomic_read(&lseg->kref.refcount), lseg->valid);
+	do_wake_up = !lseg->valid;
+	nfsi = NFS_I(lseg->layout->inode);
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	kref_put(&lseg->kref, destroy_lseg);
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+	if (do_wake_up)
+		wake_up(&nfsi->lo_waitq);
+}
+EXPORT_SYMBOL_GPL(put_lseg);
+
 /*
  * iomode matching rules:
  * iomode	lseg	match
@@ -734,6 +755,7 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo,
 	list_for_each_entry(lseg, &lo->segs, fi_list) {
 		if (is_matching_lseg(lseg, range)) {
 			ret = lseg;
+			get_lseg(ret);
 			break;
 		}
 		if (cmp_layout(range, &lseg->range) > 0)
@@ -829,6 +851,7 @@ pnfs_layout_process(struct nfs4_layoutget *lgp)
 	spin_lock(&ino->i_lock);
 	init_lseg(lo, lseg);
 	lseg->range = res->range;
+	get_lseg(lseg);
 	*lgp->lsegpp = lseg;
 	pnfs_insert_layout(lo, lseg);
 
@@ -925,6 +948,16 @@ pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
 	}
 	pgio->pg_boundary = pnfs_getboundary(inode);
 	pnfs_set_pg_test(inode, pgio);
+}
+
+static void _pnfs_clear_lseg_from_pages(struct list_head *head)
+{
+	struct nfs_page *req;
+
+	list_for_each_entry(req, head, wb_list) {
+		put_lseg(req->wb_lseg);
+		req->wb_lseg = NULL;
+	}
 }
 
 /*
