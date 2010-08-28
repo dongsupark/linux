@@ -216,6 +216,7 @@ init_lseg(struct pnfs_layout_hdr *lo, struct pnfs_layout_segment *lseg)
 {
 	INIT_LIST_HEAD(&lseg->fi_list);
 	kref_init(&lseg->kref);
+	lseg->valid = true;
 	lseg->layout = lo;
 }
 
@@ -235,16 +236,47 @@ destroy_lseg(struct kref *kref)
 static void
 put_lseg_locked(struct pnfs_layout_segment *lseg)
 {
+	bool do_wake_up;
+	struct nfs_inode *nfsi;
+
 	if (!lseg)
 		return;
 
-	dprintk("%s: lseg %p ref %d\n", __func__, lseg,
-		atomic_read(&lseg->kref.refcount));
+	dprintk("%s: lseg %p ref %d valid %d\n", __func__, lseg,
+		atomic_read(&lseg->kref.refcount), lseg->valid);
+	do_wake_up = !lseg->valid;
+	nfsi = NFS_I(lseg->layout->inode);
 	kref_put(&lseg->kref, destroy_lseg);
+	if (do_wake_up)
+		wake_up(&nfsi->lo_waitq);
+}
+
+/*
+ * iomode matching rules:
+ * iomode	lseg	match
+ * -----	-----	-----
+ * ANY		READ	true
+ * ANY		RW	true
+ * RW		READ	false
+ * RW		RW	true
+ * READ		READ	true
+ * READ		RW	false
+ */
+static inline int
+should_free_lseg(struct pnfs_layout_segment *lseg, u32 iomode)
+{
+	return (iomode == IOMODE_ANY ||
+		lseg->range.iomode == iomode);
+}
+
+static inline bool
+_pnfs_can_return_lseg(struct pnfs_layout_segment *lseg)
+{
+	return atomic_read(&lseg->kref.refcount) == 1;
 }
 
 static void
-pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo)
+pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo, u32 iomode)
 {
 	struct pnfs_layout_segment *lseg, *next;
 	struct nfs_client *clp;
@@ -253,7 +285,11 @@ pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo)
 
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry_safe(lseg, next, &lo->segs, fi_list) {
-		dprintk("%s: freeing lseg %p\n", __func__, lseg);
+		if (!should_free_lseg(lseg, iomode) ||
+		    !_pnfs_can_return_lseg(lseg))
+			continue;
+		dprintk("%s: freeing lseg %p iomode %d\n", __func__,
+			lseg, lseg->range.iomode);
 		list_del(&lseg->fi_list);
 		put_lseg_locked(lseg);
 	}
@@ -270,6 +306,39 @@ pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo)
 }
 
 void
+pnfs_layoutget_release(struct pnfs_layout_hdr *lo)
+{
+	struct nfs_inode *nfsi = NFS_I(lo->inode);
+
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	/*
+	 * Matched in _pnfs_update_layout for layoutget
+	 * and by get_layout in _pnfs_return_layout for layoutreturn
+	 */
+	put_layout_hdr_locked(lo);
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+	wake_up_all(&nfsi->lo_waitq);
+}
+
+void
+pnfs_layoutreturn_release(struct pnfs_layout_hdr *lo,
+			  struct pnfs_layout_range *range)
+{
+	struct nfs_inode *nfsi = NFS_I(lo->inode);
+
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	if (range)
+		pnfs_clear_lseg_list(lo, range->iomode);
+	/*
+	 * Matched in _pnfs_update_layout for layoutget
+	 * and by get_layout in _pnfs_return_layout for layoutreturn
+	 */
+	put_layout_hdr_locked(lo);
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+	wake_up_all(&nfsi->lo_waitq);
+}
+
+void
 pnfs_destroy_layout(struct nfs_inode *nfsi)
 {
 	struct pnfs_layout_hdr *lo;
@@ -277,7 +346,7 @@ pnfs_destroy_layout(struct nfs_inode *nfsi)
 	spin_lock(&nfsi->vfs_inode.i_lock);
 	lo = nfsi->layout;
 	if (lo) {
-		pnfs_clear_lseg_list(lo);
+		pnfs_clear_lseg_list(lo, IOMODE_ANY);
 		/* Matched by refcount set to 1 in alloc_init_layout_hdr */
 		put_layout_hdr_locked(lo);
 	}
@@ -378,7 +447,7 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	BUG_ON(ctx == NULL);
 	lgp = kzalloc(sizeof(*lgp), GFP_KERNEL);
 	if (lgp == NULL) {
-		put_layout_hdr(lo->inode);
+		pnfs_layoutget_release(lo);
 		return NULL;
 	}
 	lgp->args.minlength = NFS4_MAX_UINT64;
@@ -534,8 +603,9 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo, u32 iomode)
 			break;
 	}
 
-	dprintk("%s:Return lseg %p ref %d\n",
-		__func__, ret, ret ? atomic_read(&ret->kref.refcount) : 0);
+	dprintk("%s:Return lseg %p ref %d valid %d\n",
+		__func__, ret, ret ? atomic_read(&ret->kref.refcount) : 0,
+		ret ? ret->valid : 0);
 	return ret;
 }
 
@@ -563,6 +633,13 @@ pnfs_update_layout(struct inode *ino,
 
 	/* Check to see if the layout for the given range already exists */
 	lseg = pnfs_has_layout(lo, iomode);
+	if (lseg && !lseg->valid) {
+		put_lseg_locked(lseg);
+		/* someone is cleaning the layout */
+		lseg = NULL;
+		goto out_unlock;
+	}
+
 	if (lseg) {
 		dprintk("%s: Using cached lseg %p for iomode %d)\n",
 			__func__, lseg, iomode);
@@ -573,7 +650,7 @@ pnfs_update_layout(struct inode *ino,
 	if (test_bit(lo_fail_bit(iomode), &nfsi->layout->state))
 		goto out_unlock;
 
-	get_layout_hdr_locked(lo); /* Matched in nfs4_layoutget_release */
+	get_layout_hdr_locked(lo); /* Matched in pnfs_layoutget_release */
 	spin_unlock(&ino->i_lock);
 
 	lseg = send_layoutget(lo, ctx, iomode);
