@@ -427,6 +427,17 @@ static void nfs_inode_remove_request(struct nfs_page *req)
 		spin_unlock(&inode->i_lock);
 	nfs_release_request(req);
 }
+static void
+nfs_mark_request_nopnfs(struct nfs_page *req)
+{
+	struct pnfs_layout_segment *lseg = req->wb_lseg;
+
+	if (req->wb_lseg == NULL)
+		return;
+	req->wb_lseg = NULL;
+	put_lseg(lseg);
+	dprintk(" retry through MDS\n");
+}
 
 static void
 nfs_mark_request_dirty(struct nfs_page *req)
@@ -569,7 +580,8 @@ static inline int nfs_scan_commit(struct inode *inode, struct list_head *dst, pg
 static struct nfs_page *nfs_try_to_update_request(struct inode *inode,
 		struct page *page,
 		unsigned int offset,
-		unsigned int bytes)
+		unsigned int bytes,
+		struct pnfs_layout_segment *lseg)
 {
 	struct nfs_page *req;
 	unsigned int rqend;
@@ -594,8 +606,8 @@ static struct nfs_page *nfs_try_to_update_request(struct inode *inode,
 		 * Note: nfs_flush_incompatible() will already
 		 * have flushed out requests having wrong owners.
 		 */
-		if (offset > rqend
-		    || end < req->wb_offset)
+		if (offset > rqend || end < req->wb_offset ||
+		    req->wb_lseg != lseg)
 			goto out_flushme;
 
 		if (nfs_set_page_tag_locked(req))
@@ -643,16 +655,17 @@ out_err:
  * already called nfs_flush_incompatible() if necessary.
  */
 static struct nfs_page * nfs_setup_write_request(struct nfs_open_context* ctx,
-		struct page *page, unsigned int offset, unsigned int bytes)
+		struct page *page, unsigned int offset, unsigned int bytes,
+		struct pnfs_layout_segment *lseg)
 {
 	struct inode *inode = page->mapping->host;
 	struct nfs_page	*req;
 	int error;
 
-	req = nfs_try_to_update_request(inode, page, offset, bytes);
+	req = nfs_try_to_update_request(inode, page, offset, bytes, lseg);
 	if (req != NULL)
 		goto out;
-	req = nfs_create_request(ctx, inode, page, offset, bytes);
+	req = nfs_create_request(ctx, inode, page, offset, bytes, lseg);
 	if (IS_ERR(req))
 		goto out;
 	error = nfs_inode_add_request(inode, req);
@@ -665,11 +678,12 @@ out:
 }
 
 static int nfs_writepage_setup(struct nfs_open_context *ctx, struct page *page,
-		unsigned int offset, unsigned int count)
+			       unsigned int offset, unsigned int count,
+			       struct pnfs_layout_segment *lseg)
 {
 	struct nfs_page	*req;
 
-	req = nfs_setup_write_request(ctx, page, offset, count);
+	req = nfs_setup_write_request(ctx, page, offset, count, lseg);
 	if (IS_ERR(req))
 		return PTR_ERR(req);
 	nfs_mark_request_dirty(req);
@@ -681,7 +695,8 @@ static int nfs_writepage_setup(struct nfs_open_context *ctx, struct page *page,
 	return 0;
 }
 
-int nfs_flush_incompatible(struct file *file, struct page *page)
+int nfs_flush_incompatible(struct file *file, struct page *page,
+			   struct pnfs_layout_segment *lseg)
 {
 	struct nfs_open_context *ctx = nfs_file_open_context(file);
 	struct nfs_page	*req;
@@ -700,7 +715,8 @@ int nfs_flush_incompatible(struct file *file, struct page *page)
 			return 0;
 		do_flush = req->wb_page != page || req->wb_context != ctx ||
 			req->wb_lock_context->lockowner != current->files ||
-			req->wb_lock_context->pid != current->tgid;
+			req->wb_lock_context->pid != current->tgid ||
+			req->wb_lseg != lseg;
 		nfs_release_request(req);
 		if (!do_flush)
 			return 0;
@@ -727,7 +743,8 @@ static int nfs_write_pageuptodate(struct page *page, struct inode *inode)
  * things with a page scheduled for an RPC call (e.g. invalidate it).
  */
 int nfs_updatepage(struct file *file, struct page *page,
-		unsigned int offset, unsigned int count)
+		   unsigned int offset, unsigned int count,
+		   struct pnfs_layout_segment *lseg)
 {
 	struct nfs_open_context *ctx = nfs_file_open_context(file);
 	struct inode	*inode = page->mapping->host;
@@ -752,7 +769,7 @@ int nfs_updatepage(struct file *file, struct page *page,
 		offset = 0;
 	}
 
-	status = nfs_writepage_setup(ctx, page, offset, count);
+	status = nfs_writepage_setup(ctx, page, offset, count, lseg);
 	if (status < 0)
 		nfs_set_pageerror(page);
 
@@ -871,6 +888,7 @@ static void nfs_redirty_request(struct nfs_page *req)
 {
 	struct page *page = req->wb_page;
 
+	nfs_mark_request_nopnfs(req);
 	nfs_mark_request_dirty(req);
 	nfs_clear_page_tag_locked(req);
 	nfs_end_page_writeback(page);

@@ -20,6 +20,7 @@
 #include <linux/nfs_mount.h>
 
 #include "internal.h"
+#include "pnfs.h"
 
 static struct kmem_cache *nfs_page_cachep;
 
@@ -56,7 +57,8 @@ nfs_page_free(struct nfs_page *p)
 struct nfs_page *
 nfs_create_request(struct nfs_open_context *ctx, struct inode *inode,
 		   struct page *page,
-		   unsigned int offset, unsigned int count)
+		   unsigned int offset, unsigned int count,
+		   struct pnfs_layout_segment *lseg)
 {
 	struct nfs_page		*req;
 
@@ -87,6 +89,9 @@ nfs_create_request(struct nfs_open_context *ctx, struct inode *inode,
 	req->wb_bytes   = count;
 	req->wb_context = get_nfs_open_context(ctx);
 	kref_init(&req->wb_kref);
+	req->wb_lseg    = lseg;
+	if (lseg)
+		get_lseg(lseg);
 	return req;
 }
 
@@ -162,8 +167,11 @@ void nfs_clear_request(struct nfs_page *req)
 		put_nfs_open_context(ctx);
 		req->wb_context = NULL;
 	}
+	if (req->wb_lseg != NULL) {
+		put_lseg(req->wb_lseg);
+		req->wb_lseg = NULL;
+	}
 }
-
 
 /**
  * nfs_release_request - Release the count on an NFS read/write request

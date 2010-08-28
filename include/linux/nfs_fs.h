@@ -501,8 +501,12 @@ extern int  nfs_sillyrename(struct inode *dir, struct dentry *dentry);
 extern int  nfs_congestion_kb;
 extern int  nfs_writepage(struct page *page, struct writeback_control *wbc);
 extern int  nfs_writepages(struct address_space *, struct writeback_control *);
-extern int  nfs_flush_incompatible(struct file *file, struct page *page);
-extern int  nfs_updatepage(struct file *, struct page *, unsigned int, unsigned int);
+struct pnfs_layout_segment;
+extern int  nfs_flush_incompatible(struct file *file, struct page *page,
+				   struct pnfs_layout_segment *lseg);
+extern int  nfs_updatepage(struct file *, struct page *,
+			   unsigned int offset, unsigned int count,
+			   struct pnfs_layout_segment *lseg);
 extern int nfs_writeback_done(struct rpc_task *, struct nfs_write_data *);
 
 /*
