@@ -734,6 +734,7 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo, u32 iomode)
 	list_for_each_entry(lseg, &lo->segs, fi_list) {
 		if (is_matching_lseg(lseg, iomode)) {
 			ret = lseg;
+			get_lseg(ret);
 			break;
 		}
 		if (cmp_layout(iomode, lseg->range.iomode) > 0)
@@ -793,6 +794,7 @@ pnfs_update_layout(struct inode *ino,
 out:
 	dprintk("%s end, state 0x%lx lseg %p\n", __func__,
 		nfsi->layout->state, lseg);
+	put_lseg(lseg); /* STUB - callers currently ignore return value */
 	return lseg;
 out_unlock:
 	spin_unlock(&ino->i_lock);
@@ -823,6 +825,7 @@ pnfs_layout_process(struct nfs4_layoutget *lgp)
 	spin_lock(&ino->i_lock);
 	init_lseg(lo, lseg);
 	lseg->range = res->range;
+	get_lseg(lseg);
 	*lgp->lsegpp = lseg;
 	pnfs_insert_layout(lo, lseg);
 
