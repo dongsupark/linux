@@ -356,6 +356,10 @@ pnfs_destroy_layout(struct nfs_inode *nfsi)
 	lo = nfsi->layout;
 	if (lo) {
 		pnfs_clear_lseg_list(lo, &tmp_list, IOMODE_ANY);
+		WARN_ON(!list_empty(&nfsi->layout->segs));
+		WARN_ON(!list_empty(&nfsi->layout->layouts));
+		WARN_ON(atomic_read(&nfsi->layout->plh_refcount) != 1);
+
 		/* Matched by refcount set to 1 in alloc_init_layout_hdr */
 		put_layout_hdr_locked(lo);
 	}
