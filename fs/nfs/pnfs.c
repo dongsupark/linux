@@ -383,6 +383,11 @@ pnfs_destroy_layout(struct nfs_inode *nfsi)
 	if (lo) {
 		lo->plh_block_lgets++; /* permanently block new LAYOUTGETs */
 		mark_matching_lsegs_invalid(lo, &tmp_list, IOMODE_ANY);
+		WARN_ON(!list_empty(&nfsi->layout->plh_segs));
+		WARN_ON(!list_empty(&nfsi->layout->plh_layouts));
+
+		/* Matched by refcount set to 1 in alloc_init_layout_hdr */
+		put_layout_hdr_locked(lo);
 	}
 	spin_unlock(&nfsi->vfs_inode.i_lock);
 	pnfs_free_lseg_list(&tmp_list);
