@@ -5435,11 +5435,13 @@ _nfs4_proc_getdeviceinfo(struct nfs_server *server, struct pnfs_device *pdev)
 		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_GETDEVICEINFO],
 		.rpc_argp = &args,
 		.rpc_resp = &res,
+		.rpc_cred = nfs4_get_machine_cred(server->nfs_client),
 	};
 	int status;
 
 	dprintk("--> %s\n", __func__);
 	status = nfs4_call_sync(server, &msg, &args, &res, 0);
+	put_rpccred(msg.rpc_cred);
 	dprintk("<-- %s status=%d\n", __func__, status);
 
 	return status;
