@@ -115,6 +115,7 @@ struct nfs_fsinfo {
 	__u32			dtpref;	/* pref. readdir transfer size */
 	__u64			maxfilesize;
 	__u32			lease_time; /* in seconds */
+	__u32			layouttype; /* supported pnfs layout driver */
 };
 
 struct nfs_fsstat {
