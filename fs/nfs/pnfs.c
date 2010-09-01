@@ -330,7 +330,7 @@ EXPORT_SYMBOL_GPL(put_lseg);
 
 /*
  * iomode matching rules:
- * iomode	lseg	match
+ * range	lseg	match
  * -----	-----	-----
  * ANY		READ	true
  * ANY		RW	true
@@ -340,10 +340,11 @@ EXPORT_SYMBOL_GPL(put_lseg);
  * READ		RW	false
  */
 static int
-should_free_lseg(struct pnfs_layout_segment *lseg, u32 iomode)
+should_free_lseg(struct pnfs_layout_segment *lseg,
+		   struct pnfs_layout_range *range)
 {
-	return (iomode == IOMODE_ANY ||
-		lseg->range.iomode == iomode);
+	return (range->iomode == IOMODE_ANY ||
+		lseg->range.iomode == range->iomode);
 }
 
 static bool
@@ -362,7 +363,7 @@ pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo,
 
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry_safe(lseg, next, &lo->segs, fi_list) {
-		if (!should_free_lseg(lseg, range->iomode) ||
+		if (!should_free_lseg(lseg, range) ||
 		    !_pnfs_can_return_lseg(lseg))
 			continue;
 		dprintk("%s: freeing lseg %p iomode %d "
@@ -554,14 +555,16 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 }
 
 static struct pnfs_layout_segment *
-has_layout_to_return(struct pnfs_layout_hdr *lo, u32 iomode)
+has_layout_to_return(struct pnfs_layout_hdr *lo,
+		     struct pnfs_layout_range *range)
 {
 	struct pnfs_layout_segment *out = NULL, *lseg;
-	dprintk("%s:Begin lo %p iomode %d\n", __func__, lo, iomode);
+	dprintk("%s:Begin lo %p offset %llu length %llu iomode %d\n",
+		__func__, lo, range->offset, range->length, range->iomode);
 
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry(lseg, &lo->segs, fi_list)
-		if (should_free_lseg(lseg, iomode)) {
+		if (should_free_lseg(lseg, range)) {
 			out = lseg;
 			break;
 		}
@@ -571,14 +574,15 @@ has_layout_to_return(struct pnfs_layout_hdr *lo, u32 iomode)
 }
 
 static bool
-pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
+pnfs_return_layout_barrier(struct nfs_inode *nfsi,
+			   struct pnfs_layout_range *range)
 {
 	struct pnfs_layout_segment *lseg;
 	bool ret = false;
 
 	spin_lock(&nfsi->vfs_inode.i_lock);
 	list_for_each_entry(lseg, &nfsi->layout->segs, fi_list) {
-		if (!should_free_lseg(lseg, iomode))
+		if (!should_free_lseg(lseg, range))
 			continue;
 		lseg->valid = false;
 		if (!_pnfs_can_return_lseg(lseg)) {
@@ -645,7 +649,7 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 	if (type == RETURN_FILE) {
 		spin_lock(&ino->i_lock);
 		lo = nfsi->layout;
-		if (lo && !has_layout_to_return(lo, arg.iomode))
+		if (lo && !has_layout_to_return(lo, &arg))
 			lo = NULL;
 		if (!lo) {
 			spin_unlock(&ino->i_lock);
@@ -658,14 +662,14 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 
 		spin_unlock(&ino->i_lock);
 
-		if (pnfs_return_layout_barrier(nfsi, arg.iomode)) {
+		if (pnfs_return_layout_barrier(nfsi, &arg)) {
 			if (stateid) { /* callback */
 				status = -EAGAIN;
 				goto out_put;
 			}
 			dprintk("%s: waiting\n", __func__);
 			wait_event(nfsi->lo_waitq,
-				   !pnfs_return_layout_barrier(nfsi, arg.iomode));
+				   !pnfs_return_layout_barrier(nfsi, &arg));
 		}
 
 		if (layoutcommit_needed(nfsi)) {
