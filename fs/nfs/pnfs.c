@@ -315,16 +315,17 @@ static void mark_lseg_invalid(struct pnfs_layout_segment *lseg,
 /* Returns false if there was nothing to do, true otherwise */
 static bool
 pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo, struct list_head *tmp_list,
-		     u32 iomode)
+		     struct pnfs_layout_range *range)
 {
 	struct pnfs_layout_segment *lseg, *next;
 	bool rv = false;
 
-	dprintk("%s:Begin lo %p\n", __func__, lo);
+	dprintk("%s:Begin lo %p offset %llu length %llu iomode %d\n",
+		__func__, lo, range->offset, range->length, range->iomode);
 
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry_safe(lseg, next, &lo->segs, fi_list)
-		if (should_free_lseg(&lseg->range, iomode)) {
+		if (should_free_lseg(&lseg->range, range->iomode)) {
 			dprintk("%s: freeing lseg %p iomode %d "
 				"offset %llu length %llu\n", __func__,
 				lseg, lseg->range.iomode, lseg->range.offset,
@@ -350,12 +351,17 @@ void
 pnfs_destroy_layout(struct nfs_inode *nfsi)
 {
 	struct pnfs_layout_hdr *lo;
+	struct pnfs_layout_range range = {
+		.iomode = IOMODE_ANY,
+		.offset = 0,
+		.length = NFS4_MAX_UINT64,
+	};
 	LIST_HEAD(tmp_list);
 
 	spin_lock(&nfsi->vfs_inode.i_lock);
 	lo = nfsi->layout;
 	if (lo) {
-		pnfs_clear_lseg_list(lo, &tmp_list, IOMODE_ANY);
+		pnfs_clear_lseg_list(lo, &tmp_list, &range);
 		WARN_ON(!list_empty(&nfsi->layout->segs));
 		WARN_ON(!list_empty(&nfsi->layout->layouts));
 		WARN_ON(atomic_read(&nfsi->layout->plh_refcount) != 1);
@@ -473,7 +479,7 @@ pnfs_choose_layoutget_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo,
 static struct pnfs_layout_segment *
 send_layoutget(struct pnfs_layout_hdr *lo,
 	   struct nfs_open_context *ctx,
-	   u32 iomode)
+	   struct pnfs_layout_range *range)
 {
 	struct inode *ino = lo->inode;
 	struct nfs_server *server = NFS_SERVER(ino);
@@ -488,7 +494,7 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 		return NULL;
 	lgp->args.minlength = NFS4_MAX_UINT64;
 	lgp->args.maxcount = PNFS_LAYOUT_MAXSIZE;
-	lgp->args.range.iomode = iomode;
+	lgp->args.range.iomode = range->iomode;
 	lgp->args.range.offset = 0;
 	lgp->args.range.length = NFS4_MAX_UINT64;
 	lgp->args.type = server->pnfs_curr_ld->id;
@@ -502,7 +508,7 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	nfs4_proc_layoutget(lgp);
 	if (!lseg) {
 		/* remember that LAYOUTGET failed and suspend trying */
-		set_bit(lo_fail_bit(iomode), &lo->plh_flags);
+		set_bit(lo_fail_bit(range->iomode), &lo->plh_flags);
 	}
 	return lseg;
 }
@@ -543,7 +549,7 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 
 	spin_lock(&ino->i_lock);
 	lo = nfsi->layout;
-	if (!lo || !pnfs_clear_lseg_list(lo, &tmp_list, arg.iomode)) {
+	if (!lo || !pnfs_clear_lseg_list(lo, &tmp_list, &arg)) {
 		spin_unlock(&ino->i_lock);
 		dprintk("%s: no layout segments to return\n", __func__);
 		goto out;
@@ -649,10 +655,12 @@ void pnfs_roc_drain(bool needed, struct inode *ino, u32 *barrier,
  * are seen first.
  */
 static s64
-cmp_layout(u32 iomode1, u32 iomode2)
+cmp_layout(struct pnfs_layout_range *l1,
+	   struct pnfs_layout_range *l2)
 {
 	/* read > read/write */
-	return (int)(iomode2 == IOMODE_READ) - (int)(iomode1 == IOMODE_READ);
+	return (int)(l2->iomode == IOMODE_READ) -
+		(int)(l1->iomode == IOMODE_READ);
 }
 
 static void
@@ -666,7 +674,7 @@ pnfs_insert_layout(struct pnfs_layout_hdr *lo,
 
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry(lp, &lo->segs, fi_list) {
-		if (cmp_layout(lp->range.iomode, lseg->range.iomode) > 0)
+		if (cmp_layout(&lp->range, &lseg->range) > 0)
 			continue;
 		list_add_tail(&lseg->fi_list, &lp->fi_list);
 		dprintk("%s: inserted lseg %p "
@@ -732,7 +740,7 @@ pnfs_find_alloc_layout(struct inode *ino)
 
 /*
  * iomode matching rules:
- * iomode	lseg	match
+ * range	lseg	match
  * -----	-----	-----
  * ANY		READ	true
  * ANY		RW	true
@@ -742,16 +750,18 @@ pnfs_find_alloc_layout(struct inode *ino)
  * READ		RW	true
  */
 static int
-is_matching_lseg(struct pnfs_layout_segment *lseg, u32 iomode)
+is_matching_lseg(struct pnfs_layout_segment *lseg,
+		 struct pnfs_layout_range *range)
 {
-	return (iomode != IOMODE_RW || lseg->range.iomode == IOMODE_RW);
+	return (range->iomode != IOMODE_RW || lseg->range.iomode == IOMODE_RW);
 }
 
 /*
  * lookup range in layout
  */
 static struct pnfs_layout_segment *
-pnfs_find_lseg(struct pnfs_layout_hdr *lo, u32 iomode)
+pnfs_find_lseg(struct pnfs_layout_hdr *lo,
+		struct pnfs_layout_range *range)
 {
 	struct pnfs_layout_segment *lseg, *ret = NULL;
 
@@ -760,12 +770,12 @@ pnfs_find_lseg(struct pnfs_layout_hdr *lo, u32 iomode)
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry(lseg, &lo->segs, fi_list) {
 		if (test_bit(NFS_LSEG_VALID, &lseg->pls_flags) &&
-		    is_matching_lseg(lseg, iomode)) {
+		    is_matching_lseg(lseg, range)) {
 			get_lseg(lseg);
 			ret = lseg;
 			break;
 		}
-		if (cmp_layout(iomode, lseg->range.iomode) > 0)
+		if (cmp_layout(range, &lseg->range) > 0)
 			break;
 	}
 
@@ -784,6 +794,11 @@ pnfs_update_layout(struct inode *ino,
 		   struct nfs_open_context *ctx,
 		   enum pnfs_iomode iomode)
 {
+	struct pnfs_layout_range arg = {
+		.iomode = iomode,
+		.offset = 0,
+		.length = NFS4_MAX_UINT64,
+	};
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct nfs_client *clp = NFS_SERVER(ino)->nfs_client;
 	struct pnfs_layout_hdr *lo;
@@ -805,7 +820,7 @@ pnfs_update_layout(struct inode *ino,
 		goto out_unlock;
 	}
 	/* Check to see if the layout for the given range already exists */
-	lseg = pnfs_find_lseg(lo, iomode);
+	lseg = pnfs_find_lseg(lo, &arg);
 	if (lseg)
 		goto out_unlock;
 
@@ -829,7 +844,7 @@ pnfs_update_layout(struct inode *ino,
 	}
 	spin_unlock(&ino->i_lock);
 
-	lseg = send_layoutget(lo, ctx, iomode);
+	lseg = send_layoutget(lo, ctx, &arg);
 	if (!lseg) {
 		spin_lock(&ino->i_lock);
 		if (list_empty(&lo->segs)) {
