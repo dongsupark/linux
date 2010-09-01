@@ -349,10 +349,11 @@ put_lseg(struct pnfs_layout_segment *lseg)
 EXPORT_SYMBOL_GPL(put_lseg);
 
 bool
-should_free_lseg(struct pnfs_layout_range *lseg_range, u32 iomode)
+should_free_lseg(struct pnfs_layout_range *lseg_range,
+		 struct pnfs_layout_range *recall_range)
 {
-	return (iomode == IOMODE_ANY ||
-		lseg_range->iomode == iomode);
+	return (recall_range->iomode == IOMODE_ANY ||
+		lseg_range->iomode == recall_range->iomode);
 }
 
 static void mark_lseg_invalid(struct pnfs_layout_segment *lseg,
@@ -381,7 +382,7 @@ pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo, struct list_head *tmp_list,
 
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry_safe(lseg, next, &lo->segs, fi_list)
-		if (should_free_lseg(&lseg->range, range->iomode)) {
+		if (should_free_lseg(&lseg->range, range)) {
 			dprintk("%s: freeing lseg %p iomode %d "
 				"offset %llu length %llu\n", __func__,
 				lseg, lseg->range.iomode, lseg->range.offset,
@@ -577,7 +578,7 @@ void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry_safe(lseg, tmp, &lo->segs, fi_list)
-		if (should_free_lseg(&lseg->range, range->iomode)) {
+		if (should_free_lseg(&lseg->range, range)) {
 			lseg->pls_recall_count++;
 			atomic_inc(&NFS_SERVER(lo->inode)->nfs_client->cl_recall_count);
 			mark_lseg_invalid(lseg, tmp_list);

@@ -186,7 +186,8 @@ extern int nfs4_proc_layoutcommit(struct nfs4_layoutcommit_data *data,
 /* pnfs.c */
 void get_layout_hdr(struct pnfs_layout_hdr *lo);
 void put_lseg(struct pnfs_layout_segment *lseg);
-bool should_free_lseg(struct pnfs_layout_range *lseg_range, u32 iomode);
+bool should_free_lseg(struct pnfs_layout_range *lseg_range,
+		      struct pnfs_layout_range *recall_range);
 struct pnfs_layout_segment *
 pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 		   enum pnfs_iomode access_type);
