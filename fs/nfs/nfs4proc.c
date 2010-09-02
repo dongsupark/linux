@@ -5437,9 +5437,17 @@ nfs4_layoutreturn_prepare(struct rpc_task *task, void *calldata)
 {
 	struct nfs4_layoutreturn *lrp = calldata;
 	struct inode *ino = lrp->args.inode;
+	struct nfs_inode *nfsi = NFS_I(ino);
 	struct nfs_server *server = NFS_SERVER(ino);
 
 	dprintk("--> %s\n", __func__);
+	if ((lrp->args.return_type == RETURN_FILE) &&
+	    pnfs_return_layout_barrier(nfsi, lrp->args.range.iomode)) {
+		dprintk("%s: waiting on barrier\n", __func__);
+		rpc_sleep_on(&nfsi->lo_rpcwaitq, task, NULL);
+		return;
+	}
+
 	if (nfs4_setup_sequence(server, &lrp->args.seq_args,
 				&lrp->res.seq_res, 0, task))
 		return;

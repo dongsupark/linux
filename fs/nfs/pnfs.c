@@ -499,7 +499,7 @@ has_layout_to_return(struct pnfs_layout_hdr *lo, u32 iomode)
 	return out;
 }
 
-static bool
+bool
 pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
 {
 	struct pnfs_layout_segment *lseg;
@@ -587,16 +587,6 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 
 		spin_unlock(&ino->i_lock);
 
-		if (pnfs_return_layout_barrier(nfsi, arg.iomode)) {
-			if (stateid) { /* callback */
-				status = -EAGAIN;
-				goto out_put;
-			}
-			dprintk("%s: waiting\n", __func__);
-			wait_event(nfsi->lo_waitq,
-				   !pnfs_return_layout_barrier(nfsi, arg.iomode));
-		}
-
 		if (!stateid)
 			status = return_layout(ino, &arg, type, lo, wait);
 		else
@@ -605,9 +595,6 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 out:
 	dprintk("<-- %s status: %d\n", __func__, status);
 	return status;
-out_put:
-	put_layout_hdr(ino);
-	goto out;
 }
 
 /*
