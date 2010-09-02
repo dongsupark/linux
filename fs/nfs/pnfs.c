@@ -303,8 +303,10 @@ put_lseg(struct pnfs_layout_segment *lseg)
 	do_wake_up = !lseg->valid;
 	nfsi = NFS_I(lseg->layout->inode);
 	kref_put(&lseg->kref, destroy_lseg);
-	if (do_wake_up)
+	if (do_wake_up) {
 		wake_up(&nfsi->lo_waitq);
+		rpc_wake_up(&nfsi->lo_rpcwaitq);
+	}
 }
 EXPORT_SYMBOL_GPL(put_lseg);
 
@@ -885,17 +887,20 @@ pnfs_update_layout(struct inode *ino,
 
 	/* Check to see if the layout for the given range already exists */
 	lseg = pnfs_has_layout(lo, &arg);
-	if (lseg && !lseg->valid) {
+	if (lseg) {
+		if (lseg->valid) {
+			dprintk("%s: Using cached lseg %p for %llu@%llu "
+				"iomode %d)\n",
+				__func__,
+				lseg,
+				arg.length,
+				arg.offset,
+				arg.iomode);
+			get_lseg(lseg);
+			goto out_unlock;
+		}
 		/* someone is cleaning the layout */
 		lseg = NULL;
-		goto out_unlock;
-	}
-
-	if (lseg) {
-		dprintk("%s: Using cached lseg %p for iomode %d)\n",
-			__func__, lseg, iomode);
-		get_lseg(lseg);
-		goto out_unlock;
 	}
 
 	/* if LAYOUTGET already failed once we don't try again */
