@@ -5315,13 +5315,32 @@ nfs4_layoutget_prepare(struct rpc_task *task, void *calldata)
 {
 	struct nfs4_layoutget *lgp = calldata;
 	struct inode *ino = lgp->args.inode;
+	struct nfs_inode *nfsi = NFS_I(ino);
 	struct nfs_server *server = NFS_SERVER(ino);
+	struct pnfs_layout_segment *lseg;
 
 	dprintk("--> %s\n", __func__);
-	if (nfs4_setup_sequence(server, &lgp->args.seq_args,
-				&lgp->res.seq_res, 0, task))
+	spin_lock(&ino->i_lock);
+	lseg = pnfs_has_layout(nfsi->layout, lgp->args.range.iomode);
+	if (likely(!lseg)) {
+		spin_unlock(&ino->i_lock);
+		dprintk("%s: no lseg found, proceeding\n", __func__);
+		if (!nfs4_setup_sequence(server, &lgp->args.seq_args,
+					 &lgp->res.seq_res, 0, task))
+			rpc_call_start(task);
 		return;
-	rpc_call_start(task);
+	}
+	if (!lseg->valid) {
+		spin_unlock(&ino->i_lock);
+		dprintk("%s: invalid lseg found, waiting\n", __func__);
+		rpc_sleep_on(&nfsi->lo_rpcwaitq, task, NULL);
+		return;
+	}
+	get_lseg(lseg);
+	*lgp->lsegpp = lseg;
+	spin_unlock(&ino->i_lock);
+	dprintk("%s: valid lseg found, no rpc required\n", __func__);
+	rpc_exit(task, NFS4_OK);
 }
 
 static void nfs4_layoutget_done(struct rpc_task *task, void *calldata)

@@ -138,6 +138,8 @@ extern int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool wait);
 
 /* pnfs.c */
 struct pnfs_layout_segment *
+pnfs_has_layout(struct pnfs_layout_hdr *lo, u32 iomode);
+struct pnfs_layout_segment *
 pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 		   enum pnfs_iomode access_type);
 int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *,
