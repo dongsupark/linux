@@ -589,7 +589,7 @@ has_layout_to_return(struct pnfs_layout_hdr *lo,
 	return out;
 }
 
-static bool
+bool
 pnfs_return_layout_barrier(struct nfs_inode *nfsi,
 			   struct pnfs_layout_range *range)
 {
@@ -677,16 +677,6 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 		get_layout_hdr_locked(lo);
 
 		spin_unlock(&ino->i_lock);
-
-		if (pnfs_return_layout_barrier(nfsi, &arg)) {
-			if (stateid) { /* callback */
-				status = -EAGAIN;
-				goto out_put;
-			}
-			dprintk("%s: waiting\n", __func__);
-			wait_event(nfsi->lo_waitq,
-				   !pnfs_return_layout_barrier(nfsi, &arg));
-		}
 
 		if (layoutcommit_needed(nfsi)) {
 			if (stateid && !wait) { /* callback */
