@@ -190,7 +190,6 @@ struct nfs_inode {
 	struct rw_semaphore	rwsem;
 
 	/* pNFS layout information */
-	wait_queue_head_t lo_waitq;
 	struct rpc_wait_queue lo_rpcwaitq;
 	struct pnfs_layout_hdr *layout;
 #endif /* CONFIG_NFS_V4*/

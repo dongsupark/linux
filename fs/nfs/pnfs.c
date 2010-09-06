@@ -303,10 +303,8 @@ put_lseg(struct pnfs_layout_segment *lseg)
 	do_wake_up = !lseg->valid;
 	nfsi = NFS_I(lseg->layout->inode);
 	kref_put(&lseg->kref, destroy_lseg);
-	if (do_wake_up) {
-		wake_up(&nfsi->lo_waitq);
+	if (do_wake_up)
 		rpc_wake_up(&nfsi->lo_rpcwaitq);
-	}
 }
 EXPORT_SYMBOL_GPL(put_lseg);
 
@@ -392,7 +390,6 @@ pnfs_layoutget_release(struct pnfs_layout_hdr *lo)
 	spin_lock(&nfsi->vfs_inode.i_lock);
 	put_layout_hdr_locked(lo); /* Matched in _pnfs_update_layout */
 	spin_unlock(&nfsi->vfs_inode.i_lock);
-	wake_up_all(&nfsi->lo_waitq);
 }
 
 void
@@ -408,7 +405,6 @@ pnfs_layoutreturn_release(struct pnfs_layout_hdr *lo,
 	put_layout_hdr_locked(lo); /* Matched in _pnfs_return_layout */
 	spin_unlock(&nfsi->vfs_inode.i_lock);
 	pnfs_free_lseg_list(&tmp_list);
-	wake_up_all(&nfsi->lo_waitq);
 }
 
 void
