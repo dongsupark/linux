@@ -1693,6 +1693,8 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 
 	dprintk("%s: Begin\n", __func__);
 
+	if (!pnfs_use_rpc(nfss))
+		data->pdata.pnfsflags |= PNFS_NO_RPC;
 	/* We need to account for possibility that
 	 * each nfs_page can point to a different lseg (or be NULL).
 	 * For the immediate case of whole-file-only layouts, we at
