@@ -29,6 +29,7 @@
  */
 
 #include <linux/nfs_fs.h>
+#include <linux/vmalloc.h>
 
 #include "internal.h"
 #include "nfs4filelayout.h"
