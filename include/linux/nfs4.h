@@ -616,6 +616,12 @@ enum filelayout_hint_care4 {
 	NFLH4_CARE_STRIPE_COUNT		= 0x00000080
 };
 
+#define NFS4_DEVICEID4_SIZE 16
+
+struct nfs4_deviceid {
+	char data[NFS4_DEVICEID4_SIZE];
+};
+
 #endif
 #endif
 

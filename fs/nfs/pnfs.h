@@ -37,8 +37,6 @@ struct pnfs_layout_segment {
 	struct pnfs_layout_hdr *layout;
 };
 
-#define NFS4_DEVICEID4_SIZE 16
-
 #ifdef CONFIG_NFS_V4_1
 
 #define LAYOUT_NFSV4_1_MODULE_PREFIX "nfs-layouttype4"
@@ -69,10 +67,6 @@ struct pnfs_layout_hdr {
 	nfs4_stateid		stateid;
 	unsigned long		state;
 	struct inode		*inode;
-};
-
-struct nfs4_deviceid {
-	char data[NFS4_DEVICEID4_SIZE];
 };
 
 struct pnfs_device {
