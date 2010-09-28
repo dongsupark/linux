@@ -64,7 +64,7 @@ struct objio_mount_type {
 
 struct _dev_ent {
 	struct list_head list;
-	struct pnfs_deviceid d_id;
+	struct nfs4_deviceid d_id;
 	struct osd_dev *od;
 };
 
@@ -85,7 +85,7 @@ static void _dev_list_remove_all(struct objio_mount_type *omt)
 }
 
 static struct osd_dev *___dev_list_find(struct objio_mount_type *omt,
-	struct pnfs_deviceid *d_id)
+	struct nfs4_deviceid *d_id)
 {
 	struct list_head *le;
 
@@ -100,7 +100,7 @@ static struct osd_dev *___dev_list_find(struct objio_mount_type *omt,
 }
 
 static struct osd_dev *_dev_list_find(struct objio_mount_type *omt,
-	struct pnfs_deviceid *d_id)
+	struct nfs4_deviceid *d_id)
 {
 	struct osd_dev *od;
 
@@ -111,7 +111,7 @@ static struct osd_dev *_dev_list_find(struct objio_mount_type *omt,
 }
 
 static int _dev_list_add(struct objio_mount_type *omt,
-	struct pnfs_deviceid *d_id, struct osd_dev *od)
+	struct nfs4_deviceid *d_id, struct osd_dev *od)
 {
 	struct _dev_ent *de = kzalloc(sizeof(*de), GFP_KERNEL);
 
@@ -180,10 +180,10 @@ static struct osd_dev *_device_lookup(struct pnfs_layout_hdr *pnfslay,
 {
 	struct pnfs_osd_layout *layout = objio_seg->layout;
 	struct pnfs_osd_deviceaddr *deviceaddr;
-	struct pnfs_deviceid *d_id;
+	struct nfs4_deviceid *d_id;
 	struct osd_dev *od;
 	struct osd_dev_info odi;
-	struct objio_mount_type *omt = PNFS_NFS_SERVER(pnfslay)->pnfs_ld_data;
+	struct objio_mount_type *omt = NFS_SERVER(pnfslay->inode)->pnfs_ld_data;
 	int err;
 
 	d_id = &layout->olo_comps[comp].oc_object_id.oid_device_id;
@@ -981,7 +981,8 @@ objlayout_get_stripesize(struct pnfs_layout_hdr *pnfslay)
 
 	list_for_each_entry(lseg, &pnfslay->segs, fi_list) {
 		int n;
-		struct objlayout_segment *objlseg = LSEG_LD_DATA(lseg);
+		struct objlayout_segment *objlseg =
+			container_of(lseg, struct objlayout_segment, lseg);
 		struct pnfs_osd_layout *lo =
 			(struct pnfs_osd_layout *)objlseg->pnfs_osd_layout;
 		struct pnfs_osd_data_map *map = &lo->olo_map;
@@ -1025,23 +1026,35 @@ objlayout_get_blocksize(void)
 	return sz;
 }
 
-static struct layoutdriver_policy_operations objlayout_policy_operations = {
 /*
  * Don't gather across stripes, but rather gather (coalesce) up to
  * the stripe size.
  *
  * FIXME: change interface to use merge_align, merge_count
  */
-	.flags                 = PNFS_LAYOUTRET_ON_SETATTR,
-	.get_stripesize        = objlayout_get_stripesize,
-	.get_blocksize         = objlayout_get_blocksize,
-};
-
 static struct pnfs_layoutdriver_type objlayout_type = {
 	.id = LAYOUT_OSD2_OBJECTS,
 	.name = "LAYOUT_OSD2_OBJECTS",
-	.ld_io_ops = &objlayout_io_operations,
-	.ld_policy_ops = &objlayout_policy_operations,
+	.flags                   = PNFS_LAYOUTRET_ON_SETATTR,
+
+	.initialize_mountpoint   = objlayout_initialize_mountpoint,
+	.uninitialize_mountpoint = objlayout_uninitialize_mountpoint,
+
+	.alloc_layout_hdr        = objlayout_alloc_layout_hdr,
+	.free_layout_hdr         = objlayout_free_layout_hdr,
+
+	.alloc_lseg              = objlayout_alloc_lseg,
+	.free_lseg               = objlayout_free_lseg,
+
+	.get_stripesize          = objlayout_get_stripesize,
+	.get_blocksize           = objlayout_get_blocksize,
+
+	.read_pagelist           = objlayout_read_pagelist,
+	.write_pagelist          = objlayout_write_pagelist,
+	.commit                  = objlayout_commit,
+
+	.encode_layoutcommit	 = objlayout_encode_layoutcommit,
+	.encode_layoutreturn     = objlayout_encode_layoutreturn,
 };
 
 void *objio_init_mt(void)
@@ -1069,10 +1082,16 @@ MODULE_LICENSE("GPL");
 static int __init
 objlayout_init(void)
 {
-	pnfs_client_ops = pnfs_register_layoutdriver(&objlayout_type);
-	printk(KERN_INFO "%s: Registered OSD pNFS Layout Driver\n",
-	       __func__);
-	return 0;
+	int ret = pnfs_register_layoutdriver(&objlayout_type);
+
+	if (ret)
+		printk(KERN_INFO
+			"%s: Registering OSD pNFS Layout Driver failed: error=%d\n",
+			__func__, ret);
+	else
+		printk(KERN_INFO "%s: Registered OSD pNFS Layout Driver\n",
+			__func__);
+	return ret;
 }
 
 static void __exit

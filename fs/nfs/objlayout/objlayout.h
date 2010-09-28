@@ -44,13 +44,14 @@
 #define _OBJLAYOUT_H
 
 #include <linux/nfs_fs.h>
-#include <linux/nfs4_pnfs.h>
 #include <linux/pnfs_osd_xdr.h>
+#include "../pnfs.h"
 
 /*
  * in-core layout segment
  */
 struct objlayout_segment {
+	struct pnfs_layout_segment lseg;
 	void *internal;    /* for provider internal use */
 	u8 pnfs_osd_layout[];
 };
@@ -85,7 +86,7 @@ OBJLAYOUT(struct pnfs_layout_hdr *lo)
  * embedded in objects provider io_state data structure
  */
 struct objlayout_io_state {
-	struct pnfs_layout_segment *lseg;
+	struct objlayout_segment *objlseg;
 
 	struct page **pages;
 	unsigned pgbase;
@@ -139,7 +140,7 @@ extern void objlayout_io_set_result(struct objlayout_io_state *state,
 static inline void
 objlayout_add_delta_space_used(struct objlayout_io_state *state, s64 space_used)
 {
-	struct objlayout *objlay = OBJLAYOUT(state->lseg->layout);
+	struct objlayout *objlay = OBJLAYOUT(state->objlseg->lseg.layout);
 
 	/* If one of the I/Os errored out and the delta_space_used was
 	 * invalid we render the complete report as invalid. Protocol mandate
@@ -159,13 +160,47 @@ extern void objlayout_write_done(struct objlayout_io_state *state,
 				 ssize_t status, bool sync);
 
 extern int objlayout_get_deviceinfo(struct pnfs_layout_hdr *pnfslay,
-	struct pnfs_deviceid *d_id, struct pnfs_osd_deviceaddr **deviceaddr);
+	struct nfs4_deviceid *d_id, struct pnfs_osd_deviceaddr **deviceaddr);
 extern void objlayout_put_deviceinfo(struct pnfs_osd_deviceaddr *deviceaddr);
 
 /*
  * exported generic objects function vectors
  */
-extern struct layoutdriver_io_operations objlayout_io_operations;
-extern struct pnfs_client_operations *pnfs_client_ops;
+
+extern int objlayout_initialize_mountpoint(
+	struct nfs_server *,
+	const struct nfs_fh *);
+extern int objlayout_uninitialize_mountpoint(struct nfs_server *);
+
+extern struct pnfs_layout_hdr *objlayout_alloc_layout_hdr(struct inode *);
+extern void objlayout_free_layout_hdr(struct pnfs_layout_hdr *);
+
+extern struct pnfs_layout_segment *objlayout_alloc_lseg(
+	struct pnfs_layout_hdr *,
+	struct nfs4_layoutget_res *);
+extern void objlayout_free_lseg(struct pnfs_layout_segment *);
+
+extern enum pnfs_try_status objlayout_read_pagelist(
+	struct nfs_read_data *,
+	unsigned nr_pages);
+
+extern enum pnfs_try_status objlayout_write_pagelist(
+	struct nfs_write_data *,
+	unsigned nr_pages,
+	int how);
+
+extern enum pnfs_try_status objlayout_commit(
+	struct nfs_write_data *,
+	int how);
+
+extern void objlayout_encode_layoutcommit(
+	struct pnfs_layout_hdr *,
+	struct xdr_stream *,
+	const struct nfs4_layoutcommit_args *);
+
+extern void objlayout_encode_layoutreturn(
+	struct pnfs_layout_hdr *,
+	struct xdr_stream *,
+	const struct nfs4_layoutreturn_args *);
 
 #endif /* _OBJLAYOUT_H */
