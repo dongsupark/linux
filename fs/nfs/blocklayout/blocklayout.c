@@ -725,7 +725,6 @@ nfs4_blk_get_deviceinfo(struct nfs_server *server, const struct nfs_fh *fh,
 
 	memcpy(&dev->dev_id, d_id, sizeof(*d_id));
 	dev->layout_type = LAYOUT_BLOCK_VOLUME;
-	dev->dev_notify_types = 0;
 	dev->pages = pages;
 	dev->pgbase = 0;
 	dev->pglen = PAGE_SIZE * max_pages;
