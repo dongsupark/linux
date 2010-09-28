@@ -32,7 +32,7 @@ static int exofs_layout_type(struct super_block *sb)
 	return LAYOUT_OSD2_OBJECTS;
 }
 
-static void set_dev_id(struct pnfs_deviceid *pnfs_devid, u64 sbid, u64 devid)
+static void set_dev_id(struct nfs4_deviceid *pnfs_devid, u64 sbid, u64 devid)
 {
 	struct nfsd4_pnfs_deviceid *dev_id =
 		(struct nfsd4_pnfs_deviceid *)pnfs_devid;
