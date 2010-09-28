@@ -463,8 +463,7 @@ objio_read_pagelist(struct objlayout_io_state *ol_state)
 {
 	struct panfs_shim_io_state *state = container_of(ol_state,
 					struct panfs_shim_io_state, ol_state);
-	struct objlayout_segment *lseg = LSEG_LD_DATA(ol_state->lseg);
-	pan_sm_map_cap_t *mcs = (pan_sm_map_cap_t *)lseg->internal;
+	pan_sm_map_cap_t *mcs = (pan_sm_map_cap_t *)ol_state->objlseg->internal;
 	ssize_t status = 0;
 	pan_status_t rc = PAN_SUCCESS;
 
@@ -544,8 +543,7 @@ objio_write_pagelist(struct objlayout_io_state *ol_state,
 {
 	struct panfs_shim_io_state *state = container_of(ol_state,
 					struct panfs_shim_io_state, ol_state);
-	struct objlayout_segment *lseg = LSEG_LD_DATA(ol_state->lseg);
-	pan_sm_map_cap_t *mcs = (pan_sm_map_cap_t *)lseg->internal;
+	pan_sm_map_cap_t *mcs = (pan_sm_map_cap_t *)ol_state->objlseg->internal;
 	ssize_t status = 0;
 	pan_status_t rc = PAN_SUCCESS;
 
@@ -636,7 +634,8 @@ panlayout_get_stripesize(struct pnfs_layout_hdr *pnfslay)
 
 	list_for_each_entry(lseg, &pnfslay->segs, fi_list) {
 		int n;
-		struct objlayout_segment *panlseg = LSEG_LD_DATA(lseg);
+		struct objlayout_segment *panlseg =
+			container_of(lseg, struct objlayout_segment, lseg);
 		struct pnfs_osd_layout *lo =
 			(struct pnfs_osd_layout *)panlseg->pnfs_osd_layout;
 		struct pnfs_osd_data_map *map = &lo->olo_map;
@@ -688,25 +687,37 @@ panlayout_get_blocksize(void)
 	return sz;
 }
 
-static struct layoutdriver_policy_operations panlayout_policy_operations = {
 /*
  * Don't gather across stripes, but rather gather (coalesce) up to
  * the stripe size.
  *
  * FIXME: change interface to use merge_align, merge_count
  */
-	.flags                 = PNFS_LAYOUTRET_ON_SETATTR,
-	.get_stripesize        = panlayout_get_stripesize,
-	.get_blocksize         = panlayout_get_blocksize,
-};
-
 #define PNFS_LAYOUT_PANOSD (NFS4_PNFS_PRIVATE_LAYOUT | LAYOUT_OSD2_OBJECTS)
 
 static struct pnfs_layoutdriver_type panlayout_type = {
 	.id = PNFS_LAYOUT_PANOSD,
 	.name = "PNFS_LAYOUT_PANOSD",
-	.ld_io_ops = &objlayout_io_operations,
-	.ld_policy_ops = &panlayout_policy_operations,
+	.flags                   = PNFS_LAYOUTRET_ON_SETATTR,
+
+	.initialize_mountpoint   = objlayout_initialize_mountpoint,
+	.uninitialize_mountpoint = objlayout_uninitialize_mountpoint,
+
+	.alloc_layout_hdr        = objlayout_alloc_layout_hdr,
+	.free_layout_hdr         = objlayout_free_layout_hdr,
+
+	.alloc_lseg              = objlayout_alloc_lseg,
+	.free_lseg               = objlayout_free_lseg,
+
+	.get_stripesize          = panlayout_get_stripesize,
+	.get_blocksize           = panlayout_get_blocksize,
+
+	.read_pagelist           = objlayout_read_pagelist,
+	.write_pagelist          = objlayout_write_pagelist,
+	.commit                  = objlayout_commit,
+
+	.encode_layoutcommit	 = objlayout_encode_layoutcommit,
+	.encode_layoutreturn     = objlayout_encode_layoutreturn,
 };
 
 MODULE_DESCRIPTION("pNFS Layout Driver for Panasas OSDs");
@@ -716,10 +727,16 @@ MODULE_LICENSE("GPL");
 static int __init
 panlayout_init(void)
 {
-	pnfs_client_ops = pnfs_register_layoutdriver(&panlayout_type);
-	printk(KERN_INFO "%s: Registered Panasas OSD pNFS Layout Driver\n",
-	       __func__);
-	return 0;
+	int ret = pnfs_register_layoutdriver(&panlayout_type);
+
+	if (ret)
+		printk(KERN_INFO
+			"%s: Registering Panasas OSD pNFS Layout Driver failed: error=%d\n",
+			__func__, ret);
+	else
+		printk(KERN_INFO "%s: Registered Panasas OSD pNFS Layout Driver\n",
+			__func__);
+	return ret;
 }
 
 static void __exit

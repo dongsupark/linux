@@ -49,8 +49,8 @@ struct pnfs_client_operations *pnfs_client_ops;
 /*
  * Create a objlayout layout structure for the given inode and return it.
  */
-static struct pnfs_layout_hdr *
-objlayout_alloc_layout(struct inode *inode)
+struct pnfs_layout_hdr *
+objlayout_alloc_layout_hdr(struct inode *inode)
 {
 	struct objlayout *objlay;
 
@@ -66,8 +66,8 @@ objlayout_alloc_layout(struct inode *inode)
 /*
  * Free an objlayout layout structure
  */
-static void
-objlayout_free_layout(struct pnfs_layout_hdr *lo)
+void
+objlayout_free_layout_hdr(struct pnfs_layout_hdr *lo)
 {
 	struct objlayout *objlay = OBJLAYOUT(lo);
 
@@ -80,13 +80,12 @@ objlayout_free_layout(struct pnfs_layout_hdr *lo)
 /*
  * Unmarshall layout and store it in pnfslay.
  */
-static struct pnfs_layout_segment *
+struct pnfs_layout_segment *
 objlayout_alloc_lseg(struct pnfs_layout_hdr *pnfslay,
 		     struct nfs4_layoutget_res *lgr)
 {
 	int status;
 	void *layout = lgr->layout.buf;
-	struct pnfs_layout_segment *lseg;
 	struct objlayout_segment *objlseg;
 	struct pnfs_osd_layout *pnfs_osd_layout;
 
@@ -95,32 +94,31 @@ objlayout_alloc_lseg(struct pnfs_layout_hdr *pnfslay,
 	BUG_ON(!layout);
 
 	status = -ENOMEM;
-	lseg = kzalloc(sizeof(*lseg) + sizeof(*objlseg) +
-		       pnfs_osd_layout_incore_sz(layout), GFP_KERNEL);
-	if (!lseg)
+	objlseg = kzalloc(sizeof(*objlseg) +
+			  pnfs_osd_layout_incore_sz(layout), GFP_KERNEL);
+	if (!objlseg)
 		goto err;
 
-	objlseg = LSEG_LD_DATA(lseg);
 	pnfs_osd_layout = (struct pnfs_osd_layout *)objlseg->pnfs_osd_layout;
 	pnfs_osd_xdr_decode_layout(pnfs_osd_layout, layout);
 
-	status = objio_alloc_lseg(&objlseg->internal, pnfslay, lseg,
+	status = objio_alloc_lseg(&objlseg->internal, pnfslay, &objlseg->lseg,
 				  pnfs_osd_layout);
 	if (status)
 		goto err;
 
-	dprintk("%s: Return %p\n", __func__, lseg);
-	return lseg;
+	dprintk("%s: Return %p\n", __func__, &objlseg->lseg);
+	return &objlseg->lseg;
 
  err:
-	kfree(lseg);
+	kfree(objlseg);
 	return ERR_PTR(status);
 }
 
 /*
  * Free a layout segement
  */
-static void
+void
 objlayout_free_lseg(struct pnfs_layout_segment *lseg)
 {
 	struct objlayout_segment *objlseg;
@@ -130,9 +128,9 @@ objlayout_free_lseg(struct pnfs_layout_segment *lseg)
 	if (unlikely(!lseg))
 		return;
 
-	objlseg = LSEG_LD_DATA(lseg);
+	objlseg = container_of(lseg, struct objlayout_segment, lseg);
 	objio_free_lseg(objlseg->internal);
-	kfree(lseg);
+	kfree(objlseg);
 }
 
 /*
@@ -168,7 +166,8 @@ objlayout_alloc_io_state(struct pnfs_layout_hdr *pnfs_layout_type,
 			struct pnfs_layout_segment *lseg,
 			void *rpcdata)
 {
-	struct objlayout_segment *objlseg = LSEG_LD_DATA(lseg);
+	struct objlayout_segment *objlseg =
+		container_of(lseg, struct objlayout_segment, lseg);
 	struct objlayout_io_state *state;
 	u64 lseg_end_offset;
 	size_t size_nr_pages;
@@ -199,7 +198,7 @@ objlayout_alloc_io_state(struct pnfs_layout_hdr *pnfs_layout_type,
 		nr_pages = size_nr_pages;
 
 	INIT_LIST_HEAD(&state->err_list);
-	state->lseg = lseg;
+	state->objlseg = objlseg;
 	state->rpcdata = rpcdata;
 	state->pages = pages;
 	state->pgbase = pgbase;
@@ -232,7 +231,7 @@ objlayout_iodone(struct objlayout_io_state *state)
 	if (likely(state->status >= 0)) {
 		objlayout_free_io_state(state);
 	} else {
-		struct objlayout *objlay = OBJLAYOUT(state->lseg->layout);
+		struct objlayout *objlay = OBJLAYOUT(state->objlseg->lseg.layout);
 
 		spin_lock(&objlay->lock);
 		objlay->delta_space_valid = OBJ_DSU_INVALID;
@@ -255,9 +254,8 @@ objlayout_io_set_result(struct objlayout_io_state *state, unsigned index,
 
 	BUG_ON(index >= state->num_comps);
 	if (osd_error) {
-		struct objlayout_segment *objlseg = LSEG_LD_DATA(state->lseg);
 		struct pnfs_osd_layout *layout =
-				(typeof(layout))objlseg->pnfs_osd_layout;
+			(typeof(layout))state->objlseg->pnfs_osd_layout;
 
 		ioerr->oer_component = layout->olo_comps[index].oc_object_id;
 		ioerr->oer_comp_offset = offset;
@@ -290,7 +288,7 @@ static void _rpc_commit_complete(struct work_struct *work)
 	task = container_of(work, struct rpc_task, u.tk_work);
 	wdata = container_of(task, struct nfs_write_data, task);
 
-	pnfs_client_ops->nfs_commit_complete(wdata);
+	pnfs_commit_done(wdata);
 }
 
 /*
@@ -320,7 +318,7 @@ static void _rpc_read_complete(struct work_struct *work)
 	task = container_of(work, struct rpc_task, u.tk_work);
 	rdata = container_of(task, struct nfs_read_data, task);
 
-	pnfs_client_ops->nfs_readlist_complete(rdata);
+	pnfs_read_done(rdata);
 }
 
 void
@@ -341,7 +339,7 @@ objlayout_read_done(struct objlayout_io_state *state, ssize_t status, bool sync)
 	/* must not use state after this point */
 
 	if (sync)
-		pnfs_client_ops->nfs_readlist_complete(rdata);
+		pnfs_read_done(rdata);
 	else {
 		INIT_WORK(&rdata->task.u.tk_work, _rpc_read_complete);
 		schedule_work(&rdata->task.u.tk_work);
@@ -405,7 +403,7 @@ static void _rpc_write_complete(struct work_struct *work)
 	task = container_of(work, struct rpc_task, u.tk_work);
 	wdata = container_of(task, struct nfs_write_data, task);
 
-	pnfs_client_ops->nfs_writelist_complete(wdata);
+	pnfs_writeback_done(wdata);
 }
 
 void
@@ -431,7 +429,7 @@ objlayout_write_done(struct objlayout_io_state *state, ssize_t status,
 	/* must not use state after this point */
 
 	if (sync)
-		pnfs_client_ops->nfs_writelist_complete(wdata);
+		pnfs_writeback_done(wdata);
 	else {
 		INIT_WORK(&wdata->task.u.tk_work, _rpc_write_complete);
 		schedule_work(&wdata->task.u.tk_work);
@@ -683,7 +681,7 @@ struct objlayout_deviceinfo {
  * should be called.
  */
 int objlayout_get_deviceinfo(struct pnfs_layout_hdr *pnfslay,
-	struct pnfs_deviceid *d_id, struct pnfs_osd_deviceaddr **deviceaddr)
+	struct nfs4_deviceid *d_id, struct pnfs_osd_deviceaddr **deviceaddr)
 {
 	struct objlayout_deviceinfo *odi;
 	struct pnfs_device pd;
@@ -701,14 +699,13 @@ int objlayout_get_deviceinfo(struct pnfs_layout_hdr *pnfslay,
 
 	memcpy(&pd.dev_id, d_id, sizeof(*d_id));
 	pd.layout_type = LAYOUT_OSD2_OBJECTS;
-	pd.dev_notify_types = 0;
 	pd.pages = &page;
 	pd.pgbase = 0;
 	pd.pglen = PAGE_SIZE;
 	pd.mincount = 0;
 
-	sb = PNFS_INODE(pnfslay)->i_sb;
-	err = pnfs_client_ops->nfs_getdeviceinfo(PNFS_NFS_SERVER(pnfslay), &pd);
+	sb = pnfslay->inode->i_sb;
+	err = nfs4_proc_getdeviceinfo(NFS_SERVER(pnfslay->inode), &pd);
 	dprintk("%s nfs_getdeviceinfo returned %d\n", __func__, err);
 	if (err)
 		goto err_out;
@@ -746,7 +743,7 @@ void objlayout_put_deviceinfo(struct pnfs_osd_deviceaddr *deviceaddr)
  * Return the pnfs_mount_type structure so the
  * pNFS_client can refer to the mount point later on.
  */
-static int
+int
 objlayout_initialize_mountpoint(struct nfs_server *server,
 				const struct nfs_fh *mntfh)
 {
@@ -767,24 +764,10 @@ objlayout_initialize_mountpoint(struct nfs_server *server,
 /*
  * Uninitialize a mountpoint
  */
-static int
+int
 objlayout_uninitialize_mountpoint(struct nfs_server *server)
 {
 	dprintk("%s: Begin %p\n", __func__, server->pnfs_ld_data);
 	objio_fini_mt(server->pnfs_ld_data);
 	return 0;
 }
-
-struct layoutdriver_io_operations objlayout_io_operations = {
-	.commit                  = objlayout_commit,
-	.read_pagelist           = objlayout_read_pagelist,
-	.write_pagelist          = objlayout_write_pagelist,
-	.alloc_layout            = objlayout_alloc_layout,
-	.free_layout             = objlayout_free_layout,
-	.alloc_lseg              = objlayout_alloc_lseg,
-	.free_lseg               = objlayout_free_lseg,
-	.encode_layoutcommit	 = objlayout_encode_layoutcommit,
-	.encode_layoutreturn     = objlayout_encode_layoutreturn,
-	.initialize_mountpoint   = objlayout_initialize_mountpoint,
-	.uninitialize_mountpoint = objlayout_uninitialize_mountpoint,
-};
