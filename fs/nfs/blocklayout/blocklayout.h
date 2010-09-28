@@ -33,8 +33,8 @@
 #define FS_NFS_NFS4BLOCKLAYOUT_H
 
 #include <linux/nfs_fs.h>
-#include <linux/nfs4_pnfs.h>
 #include <linux/dm-ioctl.h> /* Needed for struct dm_ioctl*/
+#include <../pnfs.h>
 
 #define PAGE_CACHE_SECTORS (PAGE_CACHE_SIZE >> 9)
 
