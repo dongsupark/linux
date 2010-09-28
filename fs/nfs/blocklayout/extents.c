@@ -794,7 +794,7 @@ _prep_new_extent(struct pnfs_block_extent *new,
 {
 	kref_init(&new->be_refcnt);
 	/* don't need to INIT_LIST_HEAD(&new->be_node) */
-	memcpy(&new->be_devid, &orig->be_devid, sizeof(struct pnfs_deviceid));
+	memcpy(&new->be_devid, &orig->be_devid, sizeof(struct nfs4_deviceid));
 	new->be_mdev = orig->be_mdev;
 	new->be_f_offset = offset;
 	new->be_length = length;
