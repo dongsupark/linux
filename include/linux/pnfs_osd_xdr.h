@@ -118,7 +118,7 @@ pnfs_osd_data_map_incore_sz(void)
  *   };
  */
 struct pnfs_osd_objid {
-	struct pnfs_deviceid	oid_device_id;
+	struct nfs4_deviceid	oid_device_id;
 	u64			oid_partition_id;
 	u64			oid_object_id;
 };
@@ -133,7 +133,7 @@ struct pnfs_osd_objid {
 static inline int
 pnfs_osd_objid_xdr_sz(void)
 {
-	return (NFS4_PNFS_DEVICEID4_SIZE / 4) + 2 + 2;
+	return (NFS4_DEVICEID4_SIZE / 4) + 2 + 2;
 }
 
 static inline size_t
