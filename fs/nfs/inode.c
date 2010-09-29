@@ -1214,6 +1214,14 @@ static int nfs_update_inode(struct inode *inode, struct nfs_fattr *fattr)
 		server->fsid = fattr->fsid;
 
 	/*
+	 * file needs layout commit, server attributes may be stale
+	 */
+	if (layoutcommit_needed(nfsi) && nfsi->change_attr >= fattr->change_attr) {
+		dprintk("NFS: %s: layoutcommit is needed for file %s/%ld\n",
+			__func__, inode->i_sb->s_id, inode->i_ino);
+		return 0;
+	}
+	/*
 	 * Update the read time so we don't revalidate too often.
 	 */
 	nfsi->read_cache_jiffies = fattr->time_start;
