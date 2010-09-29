@@ -629,6 +629,8 @@ filelayout_get_stripesize(struct pnfs_layout_hdr *lo)
 
 	/* Horrible hack...ideally upper layer would send lseg */
 	lseg = pnfs_has_layout(lo, &range);
+	if (!lseg)
+		return 0;
 	fl = container_of(lseg, struct nfs4_filelayout_segment, generic_hdr);
 	size = fl->stripe_unit;
 	put_lseg_locked(lseg);
