@@ -942,6 +942,7 @@ static int nfs_probe_fsinfo(struct nfs_server *server, struct nfs_fh *mntfh, str
 			goto out_error;
 	}
 
+	memset(&fsinfo, 0, sizeof(fsinfo));
 	fsinfo.fattr = fattr;
 	error = clp->rpc_ops->fsinfo(server, mntfh, &fsinfo);
 	if (error < 0)
