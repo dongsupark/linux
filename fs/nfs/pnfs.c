@@ -92,10 +92,14 @@ set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
 {
 	struct pnfs_layoutdriver_type *ld_type = NULL;
 
-	BUG_ON(!(server->nfs_client->cl_exchange_flags &
-		 (EXCHGID4_FLAG_USE_NON_PNFS | EXCHGID4_FLAG_USE_PNFS_MDS)));
 	if (id == 0)
 		goto out_no_driver;
+	if (!(server->nfs_client->cl_exchange_flags &
+		 (EXCHGID4_FLAG_USE_NON_PNFS | EXCHGID4_FLAG_USE_PNFS_MDS))) {
+		printk(KERN_ERR "%s: id %u cl_exchange_flags 0x%x\n", __func__,
+		       id, server->nfs_client->cl_exchange_flags);
+		goto out_no_driver;
+	}
 	ld_type = find_pnfs_driver(id);
 	if (!ld_type) {
 		request_module("%s-%u", LAYOUT_NFSV4_1_MODULE_PREFIX, id);
