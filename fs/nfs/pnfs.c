@@ -114,6 +114,7 @@ set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
 		dprintk("%s: Could not grab reference on module\n", __func__);
 		goto out_no_driver;
 	}
+	server->pnfs_curr_ld = ld_type;
 	if (ld_type->initialize_mountpoint(server)) {
 		printk(KERN_ERR
 		       "%s: Error initializing mount point for layout driver %u.\n",
@@ -121,7 +122,6 @@ set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
 		module_put(ld_type->owner);
 		goto out_no_driver;
 	}
-	server->pnfs_curr_ld = ld_type;
 	dprintk("%s: pNFS module for %u set\n", __func__, id);
 	return;
 
