@@ -34,7 +34,7 @@
 
 #include <linux/nfs_fs.h>
 #include <linux/dm-ioctl.h> /* Needed for struct dm_ioctl*/
-#include <../pnfs.h>
+#include "../pnfs.h"
 
 #define PAGE_CACHE_SECTORS (PAGE_CACHE_SIZE >> 9)
 
