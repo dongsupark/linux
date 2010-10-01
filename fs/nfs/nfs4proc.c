@@ -5561,8 +5561,8 @@ static const struct rpc_call_ops nfs4_layoutcommit_ops = {
 };
 
 /* Execute a layoutcommit to the server */
-static int
-_nfs4_proc_layoutcommit(struct nfs4_layoutcommit_data *data, int issync)
+int
+nfs4_proc_layoutcommit(struct nfs4_layoutcommit_data *data, int issync)
 {
 	struct rpc_message msg = {
 		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_LAYOUTCOMMIT],
@@ -5603,20 +5603,6 @@ out:
 	dprintk("%s: status %d\n", __func__, status);
 	rpc_put_task(task);
 	return 0;
-}
-
-int nfs4_proc_layoutcommit(struct nfs4_layoutcommit_data *data, int issync)
-{
-	struct nfs4_exception exception = { };
-	struct nfs_server *server = NFS_SERVER(data->args.inode);
-	int err;
-
-	do {
-		err = nfs4_handle_exception(server,
-					_nfs4_proc_layoutcommit(data, issync),
-					&exception);
-	} while (exception.retry);
-	return err;
 }
 
 static void
