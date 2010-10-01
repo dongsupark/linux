@@ -5662,7 +5662,7 @@ static const struct rpc_call_ops nfs4_layoutreturn_call_ops = {
 	.rpc_release = nfs4_layoutreturn_release,
 };
 
-int _nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool issync)
+int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool issync)
 {
 	struct inode *ino = lrp->args.inode;
 	struct nfs_server *server = NFS_SERVER(ino);
@@ -5696,19 +5696,6 @@ out:
 	dprintk("<-- %s\n", __func__);
 	rpc_put_task(task);
 	return status;
-}
-
-int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool issync)
-{
-	struct nfs_server *server = NFS_SERVER(lrp->args.inode);
-	struct nfs4_exception exception = { };
-	int err;
-	do {
-		err = nfs4_handle_exception(server,
-				_nfs4_proc_layoutreturn(lrp, issync),
-				&exception);
-	} while (exception.retry);
-	return err;
 }
 
 static int
