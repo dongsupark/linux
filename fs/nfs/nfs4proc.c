@@ -5352,15 +5352,26 @@ nfs4_layoutget_prepare(struct rpc_task *task, void *calldata)
 static void nfs4_layoutget_done(struct rpc_task *task, void *calldata)
 {
 	struct nfs4_layoutget *lgp = calldata;
+	struct nfs_server *server = NFS_SERVER(lgp->args.inode);
 
 	dprintk("--> %s\n", __func__);
 
 	if (!nfs4_sequence_done(task, &lgp->res.seq_res))
 		return;
 
-	/* Error handling done later using nfs4_handle_exception to get
-	 * exponential backoff.
-	 */
+	switch (task->tk_status) {
+	case 0:
+		break;
+	case -NFS4ERR_LAYOUTTRYLATER:
+	case -NFS4ERR_RECALLCONFLICT:
+		task->tk_status = -NFS4ERR_DELAY;
+		/* Fall through */
+	default:
+		if (nfs4_async_handle_error(task, server, NULL) == -EAGAIN) {
+			rpc_restart_call_prepare(task);
+			return;
+		}
+	}
 	lgp->status = task->tk_status;
 	dprintk("<-- %s\n", __func__);
 }
@@ -5384,7 +5395,7 @@ static const struct rpc_call_ops nfs4_layoutget_call_ops = {
 	.rpc_release = nfs4_layoutget_release,
 };
 
-static int _nfs4_proc_layoutget(struct nfs4_layoutget *lgp)
+int nfs4_proc_layoutget(struct nfs4_layoutget *lgp)
 {
 	struct nfs_server *server = NFS_SERVER(lgp->args.inode);
 	struct rpc_task *task;
@@ -5425,25 +5436,6 @@ out:
 	rpc_put_task(task);
 	dprintk("<-- %s status=%d\n", __func__, status);
 	return status;
-}
-
-int nfs4_proc_layoutget(struct nfs4_layoutget *lgp)
-{
-	struct nfs_server *server = NFS_SERVER(lgp->args.inode);
-	struct nfs4_exception exception = { };
-	int err;
-	do {
-		err = _nfs4_proc_layoutget(lgp);
-		switch (err) {
-		case -NFS4ERR_LAYOUTTRYLATER:
-		case -NFS4ERR_RECALLCONFLICT:
-			err = -NFS4ERR_DELAY;
-			/* Fall through */
-		default:
-			err = nfs4_handle_exception(server, err, &exception);
-		}
-	} while (exception.retry);
-	return err;
 }
 
 static int
