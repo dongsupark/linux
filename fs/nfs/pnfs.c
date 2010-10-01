@@ -339,14 +339,14 @@ EXPORT_SYMBOL_GPL(put_lseg);
  * READ		READ	true
  * READ		RW	false
  */
-static inline int
+static int
 should_free_lseg(struct pnfs_layout_segment *lseg, u32 iomode)
 {
 	return (iomode == IOMODE_ANY ||
 		lseg->range.iomode == iomode);
 }
 
-static inline bool
+static bool
 _pnfs_can_return_lseg(struct pnfs_layout_segment *lseg)
 {
 	return atomic_read(&lseg->kref.refcount) == 1;

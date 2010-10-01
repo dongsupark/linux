@@ -559,7 +559,7 @@ nfs4_fl_find_get_deviceid(struct nfs_client *clp, struct nfs4_deviceid *id)
  * Want res = (offset - layout->pattern_offset)/ layout->stripe_unit
  * Then: ((res + fsi) % dsaddr->stripe_count)
  */
-static inline u32
+static u32
 _nfs4_fl_calc_j_index(struct pnfs_layout_segment *lseg, loff_t offset)
 {
 	struct nfs4_filelayout_segment *flseg = FILELAYOUT_LSEG(lseg);
