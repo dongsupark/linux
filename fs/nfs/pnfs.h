@@ -111,7 +111,6 @@ struct pnfs_deviceid_cache {
 	atomic_t		dc_ref;
 	void			(*dc_free_callback)(struct pnfs_deviceid_node *);
 	struct hlist_head	dc_deviceids[NFS4_DEVICE_ID_HASH_SIZE];
-	struct hlist_head	dc_to_free;
 };
 
 extern int pnfs_alloc_init_deviceid_cache(struct nfs_client *,

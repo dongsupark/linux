@@ -247,9 +247,7 @@ out_err:
 	return ds;
 }
 
-
-
-/*Decode opaque device data and return the result */
+/* Decode opaque device data and return the result */
 static struct nfs4_file_layout_dsaddr*
 decode_device(struct inode *ino, struct pnfs_device *pdev)
 {

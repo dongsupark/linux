@@ -49,7 +49,7 @@ static LIST_HEAD(pnfs_modules_tbl);
 static struct pnfs_layoutdriver_type *
 find_pnfs_driver_locked(u32 id)
 {
-	struct  pnfs_layoutdriver_type *local;
+	struct pnfs_layoutdriver_type *local;
 
 	list_for_each_entry(local, &pnfs_modules_tbl, pnfs_tblid)
 		if (local->id == id)
@@ -63,7 +63,7 @@ out:
 static struct pnfs_layoutdriver_type *
 find_pnfs_driver(u32 id)
 {
-	struct  pnfs_layoutdriver_type *local;
+	struct pnfs_layoutdriver_type *local;
 
 	spin_lock(&pnfs_spinlock);
 	local = find_pnfs_driver_locked(id);
