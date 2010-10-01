@@ -311,11 +311,7 @@ pnfs_layoutget_release(struct pnfs_layout_hdr *lo)
 	struct nfs_inode *nfsi = NFS_I(lo->inode);
 
 	spin_lock(&nfsi->vfs_inode.i_lock);
-	/*
-	 * Matched in _pnfs_update_layout for layoutget
-	 * and by get_layout in _pnfs_return_layout for layoutreturn
-	 */
-	put_layout_hdr_locked(lo);
+	put_layout_hdr_locked(lo); /* Matched in _pnfs_update_layout */
 	spin_unlock(&nfsi->vfs_inode.i_lock);
 	wake_up_all(&nfsi->lo_waitq);
 }
@@ -328,12 +324,8 @@ pnfs_layoutreturn_release(struct pnfs_layout_hdr *lo,
 
 	spin_lock(&nfsi->vfs_inode.i_lock);
 	if (range)
-		pnfs_clear_lseg_list(lo, range->iomode);
-	/*
-	 * Matched in _pnfs_update_layout for layoutget
-	 * and by get_layout in _pnfs_return_layout for layoutreturn
-	 */
-	put_layout_hdr_locked(lo);
+		pnfs_clear_lseg_list(lo, range);
+	put_layout_hdr_locked(lo); /* Matched in _pnfs_return_layout */
 	spin_unlock(&nfsi->vfs_inode.i_lock);
 	wake_up_all(&nfsi->lo_waitq);
 }
