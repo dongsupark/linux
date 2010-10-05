@@ -30,6 +30,8 @@
 #ifndef FS_NFS_PNFS_H
 #define FS_NFS_PNFS_H
 
+#include <linux/nfs_page.h>
+
 struct pnfs_layout_segment {
 	struct list_head fi_list;
 	struct pnfs_layout_range range;
@@ -44,8 +46,6 @@ enum pnfs_try_status {
 };
 
 #ifdef CONFIG_NFS_V4_1
-
-#include <linux/nfs_page.h> /* For struct nfs_pageio_descriptor */
 
 #define LAYOUT_NFSV4_1_MODULE_PREFIX "nfs-layouttype4"
 
@@ -366,6 +366,19 @@ static inline void set_pnfs_layoutdriver(struct nfs_server *s, u32 id)
 
 static inline void unset_pnfs_layoutdriver(struct nfs_server *s)
 {
+}
+
+static inline void
+pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio, struct inode *ino,
+		      struct nfs_open_context *ctx, struct list_head *pages)
+{
+	pgio->pg_lseg = NULL;
+}
+
+static inline void
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *ino)
+{
+	pgio->pg_lseg = NULL;
 }
 
 #endif /* CONFIG_NFS_V4_1 */
