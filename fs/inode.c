@@ -172,15 +172,21 @@ int inode_init_always(struct super_block *sb, struct inode *inode)
 	mapping->writeback_index = 0;
 
 	/*
-	 * If the block_device provides a backing_dev_info for client
-	 * inodes then use that.  Otherwise the inode share the bdev's
-	 * backing_dev_info.
+	 * If the filesystem provides a backing_dev_info for client inodes
+	 * then use that. Otherwise inodes share default_backing_dev_info.
 	 */
-	if (sb->s_bdev) {
-		struct backing_dev_info *bdi;
-
-		bdi = sb->s_bdev->bd_inode->i_mapping->backing_dev_info;
-		mapping->backing_dev_info = bdi;
+	if (sb->s_bdi && sb->s_bdi != &noop_backing_dev_info) {
+		/*
+		 * Catch cases where filesystem might be bitten by using s_bdi
+		 * instead of sb->s_bdev. Can be removed in 2.6.38.
+		 */
+		if (sb->s_bdev) {
+			struct backing_dev_info *bdi =
+			  sb->s_bdev->bd_inode->i_mapping->backing_dev_info;
+			WARN(bdi != sb->s_bdi, "s_bdev bdi %s != s_bdi %s\n",
+			     bdi->name, sb->s_bdi->name);
+		}
+		mapping->backing_dev_info = sb->s_bdi;
 	}
 	inode->i_private = NULL;
 	inode->i_mapping = mapping;
