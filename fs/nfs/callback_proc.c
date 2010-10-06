@@ -355,25 +355,17 @@ __be32 nfs4_callback_layoutrecall(struct cb_layoutrecallargs *args,
 		goto out;
 
 	res = cpu_to_be32(NFS4ERR_NOMATCHING_LAYOUT);
-	if (args->cbl_recall_type == RETURN_FILE) {
-		inode = nfs_layoutrecall_find_inode(cps->clp, args);
-		if (inode != NULL) {
-			status = pnfs_async_return_layout(cps->clp, inode,
-							  args);
-			if (status)
-				res = cpu_to_be32(NFS4ERR_DELAY);
-			iput(inode);
-		}
-	} else { /* _ALL or _FSID */
-		/* we need the inode to get the nfs_server struct */
-		inode = nfs_layoutrecall_find_inode(cps->clp, args);
-		if (!inode)
-			goto out;
-		status = pnfs_async_return_layout(cps->clp, inode, args);
-		if (status)
-			res = cpu_to_be32(NFS4ERR_DELAY);
-		iput(inode);
-	}
+	/*
+	 * In the _ALL or _FSID case, we need the inode to get
+	 * the nfs_server struct.
+	 */
+	inode = nfs_layoutrecall_find_inode(cps->clp, args);
+	if (!inode)
+		goto out;
+	status = pnfs_async_return_layout(cps->clp, inode, args);
+	if (status)
+		res = cpu_to_be32(NFS4ERR_DELAY);
+	iput(inode);
 out:
 	dprintk("%s: exit with status = %d\n", __func__, ntohl(res));
 	return res;
