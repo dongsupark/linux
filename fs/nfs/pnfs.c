@@ -94,6 +94,9 @@ set_pnfs_layoutdriver(struct nfs_server *server, u32 id)
 
 	if (id == 0)
 		goto out_no_driver;
+	if ((server->nfs_client->rpc_ops->version != 4) ||
+	    (server->nfs_client->cl_minorversion != 1))
+		goto out_no_driver;
 	if (!(server->nfs_client->cl_exchange_flags &
 		 (EXCHGID4_FLAG_USE_NON_PNFS | EXCHGID4_FLAG_USE_PNFS_MDS))) {
 		printk(KERN_ERR "%s: id %u cl_exchange_flags 0x%x\n", __func__,
