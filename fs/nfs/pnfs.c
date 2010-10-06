@@ -935,12 +935,8 @@ pnfs_layout_process(struct nfs4_layoutget *lgp)
 		/* FI: This needs to be re-examined.  At lo level,
 		 * all it needs is a bit indicating whether any of
 		 * the lsegs in the list have the flags set.
-		 *
-		 * The IOMODE_ANY line just seems nonsensical.
 		 */
 		lo->roc_iomode |= res->range.iomode;
-		if (!lo->roc_iomode)
-			lo->roc_iomode = IOMODE_ANY;
 	}
 
 	/* Done processing layoutget. Set the layout stateid */
