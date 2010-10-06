@@ -298,8 +298,7 @@ static int pnfs_async_return_layout(struct nfs_client *clp, struct inode *inode,
 
 	init_completion(&data.started);
 	__module_get(THIS_MODULE);
-	if (!atomic_inc_not_zero(&clp->cl_count))
-		goto out_put_no_client;
+	atomic_inc(&clp->cl_count);
 
 	t = kthread_run(pnfs_recall_layout, &data, "%s", "pnfs_recall_layout");
 	if (IS_ERR(t)) {
@@ -314,7 +313,6 @@ static int pnfs_async_return_layout(struct nfs_client *clp, struct inode *inode,
 	return data.result;
 out_module_put:
 	nfs_put_client(clp);
-out_put_no_client:
 	clear_bit(NFS4CLNT_LAYOUT_RECALL, &clp->cl_state);
 	module_put(THIS_MODULE);
 	return status;
