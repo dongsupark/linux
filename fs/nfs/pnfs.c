@@ -459,16 +459,31 @@ pnfs_destroy_all_layouts(struct nfs_client *clp)
 	}
 }
 
+/* update lo->stateid with new if is more recent
+ *
+ * lo->stateid could be the open stateid, in which case we just use what given.
+ */
 static void
 pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
-			const nfs4_stateid *stateid)
+			const nfs4_stateid *new)
 {
-	/* TODO - should enforce that embedded seqid, in the case
-	 * that the two stateid.others are equal,  only increases.
-	 * Complicated by wrap-around.
-	 */
+	nfs4_stateid *old = &lo->stateid;
+	bool overwrite = false;
+
 	write_seqlock(&lo->seqlock);
-	memcpy(lo->stateid.data, stateid->data, sizeof(lo->stateid.data));
+	if (!test_bit(NFS_LAYOUT_STATEID_SET, &lo->state) ||
+	    memcmp(old->stateid.other, new->stateid.other, sizeof(new->stateid.other)))
+		overwrite = true;
+	else {
+		u32 oldseq, newseq;
+
+		oldseq = be32_to_cpu(old->stateid.seqid);
+		newseq = be32_to_cpu(new->stateid.seqid);
+		if ((int)(newseq - oldseq) > 0)
+			overwrite = true;
+	}
+	if (overwrite)
+		memcpy(&old->stateid, &new->stateid, sizeof(new->stateid));
 	write_sequnlock(&lo->seqlock);
 }
 
