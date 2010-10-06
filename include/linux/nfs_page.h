@@ -65,7 +65,6 @@ struct nfs_pageio_descriptor {
 	struct pnfs_layout_segment *pg_lseg;
 #ifdef CONFIG_NFS_V4_1
 	int			pg_iswrite;
-	int			pg_boundary;
 	int			(*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
 #endif /* CONFIG_NFS_V4_1 */
 };

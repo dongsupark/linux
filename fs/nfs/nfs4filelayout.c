@@ -612,50 +612,28 @@ filelayout_commit(struct nfs_write_data *data, int sync)
 }
 
 /*
- * Return the stripesize for the specified file
- * Called with inode i_lock held.
- */
-ssize_t
-filelayout_get_stripesize(struct pnfs_layout_hdr *lo)
-{
-	struct pnfs_layout_range range = {
-		.iomode = IOMODE_READ,
-		.offset = 0,
-		.length = NFS4_MAX_UINT64,
-	};
-	struct pnfs_layout_segment *lseg;
-	struct nfs4_filelayout_segment *fl;
-	ssize_t size;
-
-	/* Horrible hack...ideally upper layer would send lseg */
-	lseg = pnfs_has_layout(lo, &range);
-	if (!lseg)
-		return 0;
-	fl = FILELAYOUT_LSEG(lseg);
-	size = fl->stripe_unit;
-	put_lseg_locked(lseg);
-	return size;
-}
-
-/*
  * filelayout_pg_test(). Called by nfs_can_coalesce_requests()
  *
  * return 1 :  coalesce page
  * return 0 :  don't coalesce page
+ *
+ * By the time this is called, we know req->wb_lseg == prev->wb_lseg
  */
 int
 filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 		   struct nfs_page *req)
 {
 	u64 p_stripe, r_stripe;
+	u32 stripe_unit;
 
-	if (pgio->pg_boundary == 0)
+	if (!req->wb_lseg)
 		return 1;
 	p_stripe = (u64)prev->wb_index << PAGE_CACHE_SHIFT;
 	r_stripe = (u64)req->wb_index << PAGE_CACHE_SHIFT;
+	stripe_unit = FILELAYOUT_LSEG(req->wb_lseg)->stripe_unit;
 
-	do_div(p_stripe, pgio->pg_boundary);
-	do_div(r_stripe, pgio->pg_boundary);
+	do_div(p_stripe, stripe_unit);
+	do_div(r_stripe, stripe_unit);
 
 	return (p_stripe == r_stripe);
 }
@@ -668,7 +646,6 @@ static struct pnfs_layoutdriver_type filelayout_type = {
 	.uninitialize_mountpoint = filelayout_uninitialize_mountpoint,
 	.alloc_lseg              = filelayout_alloc_lseg,
 	.free_lseg               = filelayout_free_lseg,
-	.get_stripesize          = filelayout_get_stripesize,
 	.pg_test                 = filelayout_pg_test,
 	.read_pagelist           = filelayout_read_pagelist,
 	.write_pagelist          = filelayout_write_pagelist,

@@ -977,23 +977,6 @@ pnfs_set_pg_test(struct inode *inode, struct nfs_pageio_descriptor *pgio)
 	pgio->pg_test = ld->pg_test;
 }
 
-static u32
-pnfs_getboundary(struct inode *inode)
-{
-	u32 stripe_size = 0;
-	struct pnfs_layoutdriver_type *ld = NFS_SERVER(inode)->pnfs_curr_ld;
-
-	if (!ld || !ld->get_stripesize)
-		goto out;
-
-	spin_lock(&inode->i_lock);
-	if (NFS_I(inode)->layout)
-		stripe_size = ld->get_stripesize(NFS_I(inode)->layout);
-	spin_unlock(&inode->i_lock);
-out:
-	return stripe_size;
-}
-
 /*
  * rsize is already set by caller to MDS rsize.
  */
@@ -1006,7 +989,6 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 	struct nfs_server *nfss = NFS_SERVER(inode);
 
 	pgio->pg_iswrite = 0;
-	pgio->pg_boundary = 0;
 	pgio->pg_test = NULL;
 	pgio->pg_lseg = NULL;
 
@@ -1017,9 +999,7 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 	if (!pgio->pg_lseg)
 		return;
 
-	pgio->pg_boundary = pnfs_getboundary(inode);
-	if (pgio->pg_boundary)
-		pnfs_set_pg_test(inode, pgio);
+	pnfs_set_pg_test(inode, pgio);
 }
 
 void
@@ -1028,13 +1008,10 @@ pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
 	struct nfs_server *server = NFS_SERVER(inode);
 
 	pgio->pg_iswrite = 1;
-	if (!pnfs_enabled_sb(server)) {
-		pgio->pg_boundary = 0;
+	if (!pnfs_enabled_sb(server))
 		pgio->pg_test = NULL;
-		return;
-	}
-	pgio->pg_boundary = pnfs_getboundary(inode);
-	pnfs_set_pg_test(inode, pgio);
+	else
+		pnfs_set_pg_test(inode, pgio);
 }
 
 static void _pnfs_clear_lseg_from_pages(struct list_head *head)
