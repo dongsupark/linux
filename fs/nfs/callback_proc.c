@@ -304,8 +304,7 @@ static int pnfs_async_return_layout(struct nfs_client *clp, struct inode *inode,
 
 	init_completion(&data.started);
 	__module_get(THIS_MODULE);
-	if (!atomic_inc_not_zero(&clp->cl_count))
-		goto out_put_no_client;
+	atomic_inc(&clp->cl_count);
 
 	t = kthread_run(pnfs_recall_layout, &data, "%s", "pnfs_recall_layout");
 	if (IS_ERR(t)) {
@@ -320,7 +319,6 @@ static int pnfs_async_return_layout(struct nfs_client *clp, struct inode *inode,
 	return data.result;
 out_module_put:
 	nfs_put_client(clp);
-out_put_no_client:
 	clear_bit(NFS4CLNT_LAYOUT_RECALL, &clp->cl_state);
 	module_put(THIS_MODULE);
 	return status;
@@ -643,7 +641,7 @@ __be32 nfs4_callback_recallany(struct cb_recallanyargs *args, void *dummy)
 	status = cpu_to_be32(NFS4ERR_INVAL);
 	if (!validate_bitmap_values((const unsigned long *)
 				    &args->craa_type_mask))
-		return status;
+		goto out_put;
 
 	status = cpu_to_be32(NFS4_OK);
 	if (test_bit(RCA4_TYPE_MASK_RDATA_DLG, (const unsigned long *)
@@ -659,6 +657,8 @@ __be32 nfs4_callback_recallany(struct cb_recallanyargs *args, void *dummy)
 
 	if (flags)
 		nfs_expire_all_delegation_types(clp, flags);
+out_put:
+	nfs_put_client(clp);
 out:
 	dprintk("%s: exit with status = %d\n", __func__, ntohl(status));
 	return status;
