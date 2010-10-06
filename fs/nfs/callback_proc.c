@@ -370,25 +370,16 @@ __be32 nfs4_callback_layoutrecall(struct cb_layoutrecallargs *args,
 		/* the callback must come from the MDS personality */
 		if (!(clp->cl_exchange_flags & EXCHGID4_FLAG_USE_PNFS_MDS))
 			goto loop;
-		if (args->cbl_recall_type == RETURN_FILE) {
-			inode = nfs_layoutrecall_find_inode(clp, args);
-			if (inode != NULL) {
-				status = pnfs_async_return_layout(clp, inode,
-								  args);
-				if (status)
-					res = cpu_to_be32(NFS4ERR_DELAY);
-				iput(inode);
-			}
-		} else { /* _ALL or _FSID */
-			/* we need the inode to get the nfs_server struct */
-			inode = nfs_layoutrecall_find_inode(clp, args);
-			if (!inode)
-				goto loop;
-			status = pnfs_async_return_layout(clp, inode, args);
-			if (status)
-				res = cpu_to_be32(NFS4ERR_DELAY);
-			iput(inode);
-		}
+		/* In the _ALL or _FSID case, we need the inode to get
+		 * the nfs_server struct.
+		 */
+		inode = nfs_layoutrecall_find_inode(clp, args);
+		if (!inode)
+			goto loop;
+		status = pnfs_async_return_layout(clp, inode, args);
+		if (status)
+			res = cpu_to_be32(NFS4ERR_DELAY);
+		iput(inode);
 loop:
 		clp = nfs_find_client_next(prev);
 		nfs_put_client(prev);
