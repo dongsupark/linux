@@ -177,7 +177,6 @@ extern int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool wait);
 
 /* pnfs.c */
 void put_lseg(struct pnfs_layout_segment *lseg);
-void put_lseg_locked(struct pnfs_layout_segment *lseg);
 struct pnfs_layout_segment *
 pnfs_has_layout(struct pnfs_layout_hdr *lo, struct pnfs_layout_range *range);
 struct pnfs_layout_segment *
