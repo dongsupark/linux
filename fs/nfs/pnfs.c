@@ -734,7 +734,8 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo, u32 iomode)
 	list_for_each_entry(lseg, &lo->segs, fi_list) {
 		if (is_matching_lseg(lseg, iomode)) {
 			ret = lseg;
-			get_lseg(ret);
+			if (lseg->valid)
+				get_lseg(ret);
 			break;
 		}
 		if (cmp_layout(iomode, lseg->range.iomode) > 0)
