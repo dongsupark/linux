@@ -613,6 +613,8 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 		return NULL;
 	}
 	lgp->args.minlength = PAGE_CACHE_SIZE;
+	if (lgp->args.minlength > range->length)
+		lgp->args.minlength = range->length;
 	lgp->args.maxcount = PNFS_LAYOUT_MAXSIZE;
 	lgp->args.range = *range;
 	lgp->args.type = server->pnfs_curr_ld->id;
