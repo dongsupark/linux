@@ -183,11 +183,6 @@ nfs4_pnfs_ds_create(struct nfs_server *mds_srv, struct nfs4_pnfs_ds *ds)
 		goto out_put;
 	}
 	/*
-	 * Mask the (possibly) returned EXCHGID4_FLAG_USE_PNFS_MDS pNFS role
-	 * The is_ds_only_session depends on this.
-	 */
-	clp->cl_exchange_flags &= ~EXCHGID4_FLAG_USE_PNFS_MDS;
-	/*
 	 * Set DS lease equal to the MDS lease, renewal is scheduled in
 	 * create_session
 	 */
