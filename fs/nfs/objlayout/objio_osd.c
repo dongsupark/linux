@@ -971,51 +971,6 @@ ssize_t objio_write_pagelist(struct objlayout_io_state *ol_state, bool stable)
  */
 
 /*
- * Return the stripe size for the specified file
- */
-ssize_t
-objlayout_get_stripesize(struct pnfs_layout_hdr *pnfslay)
-{
-	ssize_t sz, maxsz = -1;
-	struct pnfs_layout_segment *lseg;
-
-	list_for_each_entry(lseg, &pnfslay->segs, fi_list) {
-		int n;
-		struct objlayout_segment *objlseg =
-			container_of(lseg, struct objlayout_segment, lseg);
-		struct pnfs_osd_layout *lo =
-			(struct pnfs_osd_layout *)objlseg->pnfs_osd_layout;
-		struct pnfs_osd_data_map *map = &lo->olo_map;
-
-		n = map->odm_group_width;
-		if (n == 0)
-			n = map->odm_num_comps / (map->odm_mirror_cnt + 1);
-
-		switch (map->odm_raid_algorithm) {
-		case PNFS_OSD_RAID_0:
-			break;
-
-		case PNFS_OSD_RAID_4:
-		case PNFS_OSD_RAID_5:
-			n -= 1;
-			break;
-
-		case PNFS_OSD_RAID_PQ:
-			n -= 2;
-			break;
-
-		default:
-			BUG_ON(1);
-		}
-		sz = map->odm_stripe_unit * n;
-		if (sz > maxsz)
-			maxsz = sz;
-	}
-	dprintk("%s: Return %Zx\n", __func__, maxsz);
-	return maxsz;
-}
-
-/*
  * Get the max [rw]size
  */
 static ssize_t
@@ -1046,7 +1001,6 @@ static struct pnfs_layoutdriver_type objlayout_type = {
 	.alloc_lseg              = objlayout_alloc_lseg,
 	.free_lseg               = objlayout_free_lseg,
 
-	.get_stripesize          = objlayout_get_stripesize,
 	.get_blocksize           = objlayout_get_blocksize,
 
 	.read_pagelist           = objlayout_read_pagelist,
