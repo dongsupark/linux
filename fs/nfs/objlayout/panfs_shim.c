@@ -621,54 +621,6 @@ EXPORT_SYMBOL(panfs_shim_unregister);
  * Policy Operations
  */
 
-/*
- * Return the stripe size for the specified file
- */
-ssize_t
-panlayout_get_stripesize(struct pnfs_layout_hdr *pnfslay)
-{
-	ssize_t sz, maxsz = -1;
-	struct pnfs_layout_segment *lseg;
-
-	dprintk("%s: Begin\n", __func__);
-
-	list_for_each_entry(lseg, &pnfslay->segs, fi_list) {
-		int n;
-		struct objlayout_segment *panlseg =
-			container_of(lseg, struct objlayout_segment, lseg);
-		struct pnfs_osd_layout *lo =
-			(struct pnfs_osd_layout *)panlseg->pnfs_osd_layout;
-		struct pnfs_osd_data_map *map = &lo->olo_map;
-
-		n = map->odm_group_width;
-		if (n == 0)
-			n = map->odm_num_comps / (map->odm_mirror_cnt + 1);
-
-		switch (map->odm_raid_algorithm) {
-		case PNFS_OSD_RAID_0:
-			break;
-
-		case PNFS_OSD_RAID_4:
-		case PNFS_OSD_RAID_5:
-			n -= 1;
-			n *= 8;	/* FIXME: until we have 2-D coalescing */
-			break;
-
-		case PNFS_OSD_RAID_PQ:
-			n -= 2;
-			break;
-
-		default:
-			BUG_ON(1);
-		}
-		sz = map->odm_stripe_unit * n;
-		if (sz > maxsz)
-			maxsz = sz;
-	}
-	dprintk("%s: Return %Zd\n", __func__, maxsz);
-	return maxsz;
-}
-
 #define PANLAYOUT_DEF_STRIPE_UNIT    (64*1024)
 #define PANLAYOUT_DEF_STRIPE_WIDTH   9
 #define PANLAYOUT_MAX_STRIPE_WIDTH   11
@@ -709,7 +661,6 @@ static struct pnfs_layoutdriver_type panlayout_type = {
 	.alloc_lseg              = objlayout_alloc_lseg,
 	.free_lseg               = objlayout_free_lseg,
 
-	.get_stripesize          = panlayout_get_stripesize,
 	.get_blocksize           = panlayout_get_blocksize,
 
 	.read_pagelist           = objlayout_read_pagelist,
