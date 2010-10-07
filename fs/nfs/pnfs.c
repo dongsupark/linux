@@ -845,7 +845,8 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo,
 	list_for_each_entry(lseg, &lo->segs, fi_list) {
 		if (is_matching_lseg(lseg, range)) {
 			ret = lseg;
-			get_lseg(ret);
+			if (lseg->valid)
+				get_lseg(ret);
 			break;
 		}
 		if (cmp_layout(range, &lseg->range) > 0)
@@ -889,7 +890,6 @@ pnfs_update_layout(struct inode *ino,
 	/* Check to see if the layout for the given range already exists */
 	lseg = pnfs_has_layout(lo, &arg);
 	if (lseg && !lseg->valid) {
-		put_lseg_locked(lseg);
 		/* someone is cleaning the layout */
 		lseg = NULL;
 		goto out_unlock;
