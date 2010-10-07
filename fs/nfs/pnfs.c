@@ -734,8 +734,6 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo, u32 iomode)
 	list_for_each_entry(lseg, &lo->segs, fi_list) {
 		if (is_matching_lseg(lseg, iomode)) {
 			ret = lseg;
-			if (lseg->valid)
-				get_lseg(ret);
 			break;
 		}
 		if (cmp_layout(iomode, lseg->range.iomode) > 0)
@@ -781,6 +779,7 @@ pnfs_update_layout(struct inode *ino,
 	if (lseg) {
 		dprintk("%s: Using cached lseg %p for iomode %d)\n",
 			__func__, lseg, iomode);
+		get_lseg(lseg);
 		goto out_unlock;
 	}
 
