@@ -1083,13 +1083,6 @@ bl_write_end_cleanup(struct file *filp, struct pnfs_fsdata *fsdata)
 	fsdata->private = NULL;
 }
 
-static ssize_t
-bl_get_stripesize(struct pnfs_layout_hdr *lo)
-{
-	dprintk("%s enter\n", __func__);
-	return 0;
-}
-
 /* This is called by nfs_can_coalesce_requests via nfs_pageio_do_add_request.
  * Should return False if there is a reason requests can not be coalesced,
  * otherwise, should default to returning True.
@@ -1123,7 +1116,6 @@ static struct pnfs_layoutdriver_type blocklayout_type = {
 	.cleanup_layoutcommit		= bl_cleanup_layoutcommit,
 	.initialize_mountpoint		= bl_initialize_mountpoint,
 	.uninitialize_mountpoint	= bl_uninitialize_mountpoint,
-	.get_stripesize			= bl_get_stripesize,
 	.pg_test			= bl_pg_test,
 };
 
