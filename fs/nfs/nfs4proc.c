@@ -5430,12 +5430,12 @@ nfs4_layoutget_prepare(struct rpc_task *task, void *calldata)
 		return;
 	}
 	if (!lseg->valid) {
-		put_lseg_locked(lseg);
 		spin_unlock(&ino->i_lock);
 		dprintk("%s: invalid lseg found, waiting\n", __func__);
 		rpc_sleep_on(&nfsi->lo_rpcwaitq, task, NULL);
 		return;
 	}
+	get_lseg(lseg);
 	*lgp->lsegpp = lseg;
 	spin_unlock(&ino->i_lock);
 	dprintk("%s: valid lseg found, no rpc required\n", __func__);
