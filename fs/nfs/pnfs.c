@@ -844,8 +844,6 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo,
 	list_for_each_entry(lseg, &lo->segs, fi_list) {
 		if (is_matching_lseg(lseg, range)) {
 			ret = lseg;
-			if (lseg->valid)
-				get_lseg(ret);
 			break;
 		}
 		if (cmp_layout(range, &lseg->range) > 0)
@@ -857,7 +855,6 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo,
 		ret ? ret->valid : 0);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(pnfs_has_layout);
 
 /*
  * Layout segment is retreived from the server if not cached.
@@ -897,6 +894,7 @@ pnfs_update_layout(struct inode *ino,
 	if (lseg) {
 		dprintk("%s: Using cached lseg %p for iomode %d)\n",
 			__func__, lseg, iomode);
+		get_lseg(lseg);
 		goto out_unlock;
 	}
 
