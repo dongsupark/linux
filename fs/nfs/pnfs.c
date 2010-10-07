@@ -521,7 +521,7 @@ pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
 static int
 return_layout(struct inode *ino, struct pnfs_layout_range *range,
 	      enum pnfs_layoutreturn_type type, struct pnfs_layout_hdr *lo,
-	      bool wait)
+	      bool wait, const nfs4_stateid *stateid)
 {
 	struct nfs4_layoutreturn *lrp;
 	struct nfs_server *server = NFS_SERVER(ino);
@@ -542,6 +542,7 @@ return_layout(struct inode *ino, struct pnfs_layout_range *range,
 	lrp->args.return_type = type;
 	lrp->args.range = *range;
 	lrp->args.inode = ino;
+	lrp->stateid = stateid;
 
 	status = nfs4_proc_layoutreturn(lrp, wait);
 out:
@@ -583,10 +584,7 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 
 		spin_unlock(&ino->i_lock);
 
-		if (!stateid)
-			status = return_layout(ino, &arg, type, lo, wait);
-		else
-			pnfs_layoutreturn_release(lo, &arg);
+		status = return_layout(ino, &arg, type, lo, wait, stateid);
 	}
 out:
 	dprintk("<-- %s status: %d\n", __func__, status);

@@ -5447,7 +5447,11 @@ nfs4_layoutreturn_prepare(struct rpc_task *task, void *calldata)
 		rpc_sleep_on(&nfsi->lo_rpcwaitq, task, NULL);
 		return;
 	}
-
+	if (lrp->stateid) {
+		/* Forget the layout, without sending the return */
+		rpc_exit(task, 0);
+		return;
+	}
 	if (nfs4_setup_sequence(server, &lrp->args.seq_args,
 				&lrp->res.seq_res, 0, task))
 		return;

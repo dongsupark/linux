@@ -245,6 +245,7 @@ struct nfs4_layoutreturn {
 	struct nfs4_layoutreturn_args args;
 	struct nfs4_layoutreturn_res res;
 	struct rpc_cred *cred;
+	const nfs4_stateid *stateid;
 	int rpc_status;
 };
 
