@@ -603,24 +603,24 @@ readpage_async_filler(void *data, struct page *page)
 {
 	struct nfs_readdesc *desc = (struct nfs_readdesc *)data;
 	struct inode *inode = page->mapping->host;
-	struct pnfs_layout_range *range;
 	struct nfs_page *new;
 	unsigned int len;
-	loff_t pgoff;
 	int error;
 
 	len = nfs_page_length(page);
 	if (len == 0)
 		return nfs_return_empty_page(page);
 
-	pgoff = (loff_t)page->index << PAGE_CACHE_SHIFT;
-	range = desc->pgio->pg_lseg ? &desc->pgio->pg_lseg->range : NULL;
-	if (!range ||
-	    (range->offset > pgoff + len) ||
-	    (range->offset + range->length < pgoff)) {
-		put_lseg(desc->pgio->pg_lseg);
-		desc->pgio->pg_lseg = pnfs_update_layout(inode, desc->ctx,
-			pgoff, len, IOMODE_READ);
+	if (desc->pgio->pg_lseg) {
+		loff_t pgoff = (loff_t)page->index << PAGE_CACHE_SHIFT;
+		struct pnfs_layout_range *range = &desc->pgio->pg_lseg->range;
+
+		/* retry later with the right lseg? */
+		if (range->offset > pgoff + len ||
+		    range->offset + range->length < pgoff) {
+			new = ERR_PTR(-EAGAIN);
+			goto out_error;
+		}
 	}
 
 	new = nfs_create_request(desc->ctx, inode, page, 0, len,
