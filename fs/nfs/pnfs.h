@@ -149,7 +149,6 @@ int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *,
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unset_pnfs_layoutdriver(struct nfs_server *);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
-void pnfs_layoutget_release(struct pnfs_layout_hdr *);
 void pnfs_layoutreturn_release(struct nfs4_layoutreturn *lpr);
 void pnfs_destroy_layout(struct nfs_inode *);
 void pnfs_destroy_all_layouts(struct nfs_client *);

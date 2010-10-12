@@ -307,14 +307,6 @@ pnfs_free_lseg_list(struct list_head *tmp_list)
 }
 
 void
-pnfs_layoutget_release(struct pnfs_layout_hdr *lo)
-{
-	struct inode *ino = lo->inode;
-
-	put_layout_hdr(ino); /* Matched in pnfs_update_layout */
-}
-
-void
 pnfs_destroy_layout(struct nfs_inode *nfsi)
 {
 	struct pnfs_layout_hdr *lo;
@@ -440,7 +432,7 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	BUG_ON(ctx == NULL);
 	lgp = kzalloc(sizeof(*lgp), GFP_KERNEL);
 	if (lgp == NULL) {
-		pnfs_layoutget_release(lo);
+		put_layout_hdr(ino);
 		return NULL;
 	}
 	lgp->args.minlength = NFS4_MAX_UINT64;
