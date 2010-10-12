@@ -381,17 +381,6 @@ pnfs_free_lseg_list(struct list_head *tmp_list)
 	}
 }
 
-
-void
-pnfs_layoutget_release(struct pnfs_layout_hdr *lo)
-{
-	struct nfs_inode *nfsi = NFS_I(lo->inode);
-
-	spin_lock(&nfsi->vfs_inode.i_lock);
-	put_layout_hdr_locked(lo); /* Matched in _pnfs_update_layout */
-	spin_unlock(&nfsi->vfs_inode.i_lock);
-}
-
 void
 pnfs_destroy_layout(struct nfs_inode *nfsi)
 {
@@ -527,7 +516,7 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	BUG_ON(ctx == NULL);
 	lgp = kzalloc(sizeof(*lgp), GFP_KERNEL);
 	if (lgp == NULL) {
-		pnfs_layoutget_release(lo);
+		put_layout_hdr(ino);
 		return NULL;
 	}
 	lgp->args.minlength = NFS4_MAX_UINT64;
