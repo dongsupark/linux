@@ -5486,11 +5486,7 @@ static void nfs4_layoutreturn_release(void *calldata)
 	dprintk("--> %s return_type %d lo %p\n", __func__,
 		lrp->args.return_type, lo);
 
-	if (lrp->args.return_type == RETURN_FILE) {
-		if (!lrp->res.lrs_present)
-			pnfs_invalidate_layout_stateid(lo);
-		pnfs_layoutreturn_release(lo, &lrp->args.range);
-	}
+	pnfs_layoutreturn_release(lrp);
 	kfree(calldata);
 	dprintk("<-- %s\n", __func__);
 }

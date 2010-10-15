@@ -315,21 +315,6 @@ pnfs_layoutget_release(struct pnfs_layout_hdr *lo)
 }
 
 void
-pnfs_layoutreturn_release(struct pnfs_layout_hdr *lo,
-			  struct pnfs_layout_range *range)
-{
-	struct nfs_inode *nfsi = NFS_I(lo->inode);
-	LIST_HEAD(tmp_list);
-
-	spin_lock(&nfsi->vfs_inode.i_lock);
-	if (range)
-		pnfs_clear_lseg_list(lo, &tmp_list, range->iomode);
-	put_layout_hdr_locked(lo); /* Matched in _pnfs_return_layout */
-	spin_unlock(&nfsi->vfs_inode.i_lock);
-	pnfs_free_lseg_list(&tmp_list);
-}
-
-void
 pnfs_destroy_layout(struct nfs_inode *nfsi)
 {
 	struct pnfs_layout_hdr *lo;
@@ -518,6 +503,25 @@ pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
 	return ret;
 }
 
+void
+pnfs_layoutreturn_release(struct nfs4_layoutreturn *lrp)
+{
+	struct pnfs_layout_hdr *lo = NFS_I(lrp->args.inode)->layout;
+	LIST_HEAD(tmp_list);
+
+	if (lrp->args.return_type != RETURN_FILE)
+		return;
+	spin_lock(&lrp->args.inode->i_lock);
+	pnfs_clear_lseg_list(lo, &tmp_list, lrp->args.range.iomode);
+	if (!lrp->res.lrs_present)
+		pnfs_invalidate_layout_stateid(lo);
+	else
+		pnfs_set_layout_stateid(lo, &lrp->res.stateid);
+	put_layout_hdr_locked(lo); /* Matched in _pnfs_return_layout */
+	spin_unlock(&lrp->args.inode->i_lock);
+	pnfs_free_lseg_list(&tmp_list);
+}
+
 static int
 return_layout(struct inode *ino, struct pnfs_layout_range *range,
 	      enum pnfs_layoutreturn_type type, struct pnfs_layout_hdr *lo,
@@ -534,7 +538,7 @@ return_layout(struct inode *ino, struct pnfs_layout_range *range,
 	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
 	if (lrp == NULL) {
 		if (lo && (type == RETURN_FILE))
-			pnfs_layoutreturn_release(lo, NULL);
+			put_layout_hdr(lo->inode);
 		goto out;
 	}
 	lrp->args.reclaim = 0;
