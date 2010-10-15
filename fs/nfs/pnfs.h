@@ -203,14 +203,12 @@ void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *,
 void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
 void pnfs_layoutget_release(struct pnfs_layout_hdr *);
-void pnfs_layoutreturn_release(struct pnfs_layout_hdr *,
-			       struct pnfs_layout_range *range);
+void pnfs_layoutreturn_release(struct nfs4_layoutreturn *lpr);
 void pnfs_destroy_layout(struct nfs_inode *);
 void pnfs_destroy_all_layouts(struct nfs_client *);
 void put_layout_hdr(struct inode *inode);
 void pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo,
 			     struct nfs4_state *open_state);
-
 
 static inline bool
 has_layout(struct nfs_inode *nfsi)
