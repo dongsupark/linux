@@ -38,9 +38,8 @@
  *  With thanks to CITI's project sponsor and partner, IBM.
  */
 
-#include <linux/completion.h>
-#include <linux/uaccess.h>
-#include <linux/module.h>
+#include <linux/mount.h>
+#include <linux/sunrpc/clnt.h>
 #include <linux/sunrpc/simple_rpc_pipefs.h>
 
 
