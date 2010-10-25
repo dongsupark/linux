@@ -505,7 +505,9 @@ pnfs_layoutreturn_release(struct nfs4_layoutreturn *lrp)
 		return;
 	spin_lock(&lrp->args.inode->i_lock);
 	pnfs_clear_lseg_list(lo, &tmp_list, lrp->args.range.iomode);
-	if (!lrp->res.lrs_present)
+	if (!lrp->res.valid)
+		;	/* forgetful model internal release */
+	else if (!lrp->res.lrs_present)
 		pnfs_invalidate_layout_stateid(lo);
 	else
 		pnfs_set_layout_stateid(lo, &lrp->res.stateid);

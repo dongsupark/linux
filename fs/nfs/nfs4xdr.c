@@ -5157,6 +5157,7 @@ static int decode_layoutreturn(struct xdr_stream *xdr,
 	p = xdr_inline_decode(xdr, 4);
 	if (unlikely(!p))
 		goto out_overflow;
+	res->valid = true;
 	res->lrs_present = be32_to_cpup(p);
 	if (res->lrs_present)
 		status = decode_stateid(xdr, &res->stateid);
