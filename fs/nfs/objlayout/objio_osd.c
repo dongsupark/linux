@@ -992,8 +992,8 @@ static struct pnfs_layoutdriver_type objlayout_type = {
 	.name = "LAYOUT_OSD2_OBJECTS",
 	.flags                   = PNFS_LAYOUTRET_ON_SETATTR,
 
-	.initialize_mountpoint   = objlayout_initialize_mountpoint,
-	.uninitialize_mountpoint = objlayout_uninitialize_mountpoint,
+	.set_layoutdriver        = objlayout_set_layoutdriver,
+	.clear_layoutdriver      = objlayout_clear_layoutdriver,
 
 	.alloc_layout_hdr        = objlayout_alloc_layout_hdr,
 	.free_layout_hdr         = objlayout_free_layout_hdr,

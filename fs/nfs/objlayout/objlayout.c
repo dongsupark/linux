@@ -738,14 +738,12 @@ void objlayout_put_deviceinfo(struct pnfs_osd_deviceaddr *deviceaddr)
 }
 
 /*
- * Initialize a mountpoint by retrieving the list of
- * available devices for it.
- * Return the pnfs_mount_type structure so the
- * pNFS_client can refer to the mount point later on.
+ * Perform the objio specific init_mt method.
+ * Set the layout driver private data pointer for later use.
  */
 int
-objlayout_initialize_mountpoint(struct nfs_server *server,
-				const struct nfs_fh *mntfh)
+objlayout_set_layoutdriver(struct nfs_server *server,
+			   const struct nfs_fh *mntfh)
 {
 	void *data;
 
@@ -762,10 +760,11 @@ objlayout_initialize_mountpoint(struct nfs_server *server,
 }
 
 /*
- * Uninitialize a mountpoint
+ * Perform the objio specific fini_mt method to release the
+ * layoutdriver private data.
  */
 int
-objlayout_uninitialize_mountpoint(struct nfs_server *server)
+objlayout_clear_layoutdriver(struct nfs_server *server)
 {
 	dprintk("%s: Begin %p\n", __func__, server->pnfs_ld_data);
 	objio_fini_mt(server->pnfs_ld_data);
