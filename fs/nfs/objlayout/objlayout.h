@@ -167,10 +167,10 @@ extern void objlayout_put_deviceinfo(struct pnfs_osd_deviceaddr *deviceaddr);
  * exported generic objects function vectors
  */
 
-extern int objlayout_initialize_mountpoint(
+extern int objlayout_set_layoutdriver(
 	struct nfs_server *,
 	const struct nfs_fh *);
-extern int objlayout_uninitialize_mountpoint(struct nfs_server *);
+extern int objlayout_clear_layoutdriver(struct nfs_server *);
 
 extern struct pnfs_layout_hdr *objlayout_alloc_layout_hdr(struct inode *);
 extern void objlayout_free_layout_hdr(struct pnfs_layout_hdr *);
