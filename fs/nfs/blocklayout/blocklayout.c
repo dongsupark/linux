@@ -752,7 +752,7 @@ nfs4_blk_get_deviceinfo(struct nfs_server *server, const struct nfs_fh *fh,
  * Retrieve the list of available devices for the mountpoint.
  */
 static int
-bl_initialize_mountpoint(struct nfs_server *server, const struct nfs_fh *fh)
+bl_set_layoutdriver(struct nfs_server *server, const struct nfs_fh *fh)
 {
 	struct block_mount_id *b_mt_id = NULL;
 	struct pnfs_mount_type *mtype = NULL;
@@ -817,7 +817,7 @@ bl_initialize_mountpoint(struct nfs_server *server, const struct nfs_fh *fh)
 }
 
 static int
-bl_uninitialize_mountpoint(struct nfs_server *server)
+bl_clear_layoutdriver(struct nfs_server *server)
 {
 	struct block_mount_id *b_mt_id = server->pnfs_ld_data;
 
@@ -1114,8 +1114,8 @@ static struct pnfs_layoutdriver_type blocklayout_type = {
 	.setup_layoutcommit		= bl_setup_layoutcommit,
 	.encode_layoutcommit		= bl_encode_layoutcommit,
 	.cleanup_layoutcommit		= bl_cleanup_layoutcommit,
-	.initialize_mountpoint		= bl_initialize_mountpoint,
-	.uninitialize_mountpoint	= bl_uninitialize_mountpoint,
+	.set_layoutdriver		= bl_set_layoutdriver,
+	.clear_layoutdriver		= bl_clear_layoutdriver,
 	.pg_test			= bl_pg_test,
 };
 
