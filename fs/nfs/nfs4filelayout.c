@@ -591,7 +591,8 @@ filelayout_commit(struct nfs_write_data *data, int sync)
 		}
 		dprintk("%s: Initiating commit: %llu USE DS:\n",
 			__func__, file_offset);
-		print_ds(ds);
+		ifdebug(FACILITY)
+			print_ds(ds);
 
 		/* Send COMMIT to data server */
 		nfs_initiate_commit(dsdata, clnt, call_ops, sync);
