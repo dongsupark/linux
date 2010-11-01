@@ -677,7 +677,7 @@ static void free_blk_mountid(struct block_mount_id *mid)
 	}
 }
 
-/* This is mostly copied form the filelayout's get_device_info function.
+/* This is mostly copied from the filelayout's get_device_info function.
  * It seems much of this should be at the generic pnfs level.
  */
 static struct pnfs_block_dev *
@@ -796,8 +796,10 @@ bl_set_layoutdriver(struct nfs_server *server, const struct nfs_fh *fh)
 			bdev = nfs4_blk_get_deviceinfo(server, fh,
 						     &dlist->dev_id[i],
 						     &block_disklist);
-			if (!bdev)
+			if (!bdev) {
+				status = -ENODEV;
 				goto out_error;
+			}
 			spin_lock(&b_mt_id->bm_lock);
 			list_add(&bdev->bm_node, &b_mt_id->bm_devlist);
 			spin_unlock(&b_mt_id->bm_lock);
