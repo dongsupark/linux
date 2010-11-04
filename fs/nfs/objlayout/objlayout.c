@@ -102,6 +102,7 @@ objlayout_alloc_lseg(struct pnfs_layout_hdr *pnfslay,
 	pnfs_osd_layout = (struct pnfs_osd_layout *)objlseg->pnfs_osd_layout;
 	pnfs_osd_xdr_decode_layout(pnfs_osd_layout, layout);
 
+	objlseg->lseg.range = lgr->range;
 	status = objio_alloc_lseg(&objlseg->internal, pnfslay, &objlseg->lseg,
 				  pnfs_osd_layout);
 	if (status)
