@@ -230,6 +230,7 @@ static __be32 decode_layoutrecall_args(struct svc_rqst *rqstp,
 {
 	__be32 *p;
 	__be32 status = 0;
+	uint32_t iomode;
 
 	args->cbl_addr = svc_addr(rqstp);
 	p = read_buf(xdr, 4 * sizeof(uint32_t));
@@ -239,11 +240,15 @@ static __be32 decode_layoutrecall_args(struct svc_rqst *rqstp,
 	}
 
 	args->cbl_layout_type = ntohl(*p++);
-	args->cbl_seg.iomode = ntohl(*p++);
+	/* Depite the spec's xdr, iomode really belongs in the FILE switch,
+	 * as it is unuseable and ignored with the other types.
+	 */
+	iomode = ntohl(*p++);
 	args->cbl_layoutchanged = ntohl(*p++);
 	args->cbl_recall_type = ntohl(*p++);
 
 	if (likely(args->cbl_recall_type == RETURN_FILE)) {
+		args->cbl_range.iomode = iomode;
 		status = decode_fh(xdr, &args->cbl_fh);
 		if (unlikely(status != 0))
 			goto out;
@@ -253,8 +258,8 @@ static __be32 decode_layoutrecall_args(struct svc_rqst *rqstp,
 			status = htonl(NFS4ERR_BADXDR);
 			goto out;
 		}
-		p = xdr_decode_hyper(p, &args->cbl_seg.offset);
-		p = xdr_decode_hyper(p, &args->cbl_seg.length);
+		p = xdr_decode_hyper(p, &args->cbl_range.offset);
+		p = xdr_decode_hyper(p, &args->cbl_range.length);
 		status = decode_stateid(xdr, &args->cbl_stateid);
 		if (unlikely(status != 0))
 			goto out;
@@ -267,12 +272,10 @@ static __be32 decode_layoutrecall_args(struct svc_rqst *rqstp,
 		p = xdr_decode_hyper(p, &args->cbl_fsid.major);
 		p = xdr_decode_hyper(p, &args->cbl_fsid.minor);
 	}
-	dprintk("%s: ltype 0x%x iomode %d changed %d recall_type %d "
-		"fsid %llx-%llx fhsize %d\n", __func__,
-		args->cbl_layout_type, args->cbl_seg.iomode,
-		args->cbl_layoutchanged, args->cbl_recall_type,
-		args->cbl_fsid.major, args->cbl_fsid.minor,
-		args->cbl_fh.size);
+	dprintk("%s: ltype 0x%x iomode %d changed %d recall_type %d\n",
+		__func__,
+		args->cbl_layout_type, iomode,
+		args->cbl_layoutchanged, args->cbl_recall_type);
 out:
 	dprintk("%s: exit with status = %d\n", __func__, ntohl(status));
 	return status;

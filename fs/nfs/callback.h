@@ -148,13 +148,17 @@ extern unsigned nfs4_callback_recallslot(struct cb_recallslotargs *args,
 
 struct cb_layoutrecallargs {
 	struct sockaddr		*cbl_addr;
-	struct nfs_fh		cbl_fh;
-	struct pnfs_layout_range cbl_seg;
-	struct nfs_fsid		cbl_fsid;
 	uint32_t		cbl_recall_type;
 	uint32_t		cbl_layout_type;
 	uint32_t		cbl_layoutchanged;
-	nfs4_stateid		cbl_stateid;
+	union {
+		struct {
+			struct nfs_fh		cbl_fh;
+			struct pnfs_layout_range cbl_range;
+			nfs4_stateid		cbl_stateid;
+		};
+		struct nfs_fsid		cbl_fsid;
+	};
 };
 
 extern unsigned nfs4_callback_layoutrecall(

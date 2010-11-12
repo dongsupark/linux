@@ -221,13 +221,13 @@ static int pnfs_recall_layout(void *data)
 	rl = *args->rl;
 
 	/* support whole file layouts only */
-	rl.cbl_seg.offset = 0;
-	rl.cbl_seg.length = NFS4_MAX_UINT64;
+	rl.cbl_range.offset = 0;
+	rl.cbl_range.length = NFS4_MAX_UINT64;
 
 	if (rl.cbl_recall_type == RETURN_FILE) {
 		if (pnfs_is_next_layout_stateid(NFS_I(inode)->layout,
 						rl.cbl_stateid))
-			status = pnfs_return_layout(inode, &rl.cbl_seg,
+			status = pnfs_return_layout(inode, &rl.cbl_range,
 						    &rl.cbl_stateid, RETURN_FILE,
 						    false);
 		else
@@ -249,7 +249,7 @@ static int pnfs_recall_layout(void *data)
 	/* IMPROVEME: This loop is inefficient, running in O(|s_inodes|^2) */
 	while ((ino = nfs_layoutrecall_find_inode(clp, &rl)) != NULL) {
 		/* FIXME: need to check status on pnfs_return_layout */
-		pnfs_return_layout(ino, &rl.cbl_seg, NULL, RETURN_FILE, false);
+		pnfs_return_layout(ino, &rl.cbl_range, NULL, RETURN_FILE, false);
 		iput(ino);
 	}
 
@@ -265,7 +265,7 @@ static int pnfs_recall_layout(void *data)
 	lrp->args.layout_type = rl.cbl_layout_type;
 	lrp->args.return_type = rl.cbl_recall_type;
 	lrp->clp = clp;
-	lrp->args.range = rl.cbl_seg;
+	lrp->args.range = rl.cbl_range;
 	lrp->args.inode = inode;
 	nfs4_proc_layoutreturn(lrp, true);
 
@@ -326,9 +326,9 @@ static int pnfs_recall_all_layouts(struct nfs_client *clp)
 	int status = 0;
 
 	rl.cbl_recall_type = RETURN_ALL;
-	rl.cbl_seg.iomode = IOMODE_ANY;
-	rl.cbl_seg.offset = 0;
-	rl.cbl_seg.length = NFS4_MAX_UINT64;
+	rl.cbl_range.iomode = IOMODE_ANY;
+	rl.cbl_range.offset = 0;
+	rl.cbl_range.length = NFS4_MAX_UINT64;
 
 	/* we need the inode to get the nfs_server struct */
 	inode = nfs_layoutrecall_find_inode(clp, &rl);
