@@ -66,6 +66,7 @@ struct pnfs_layout_hdr {
 	struct list_head	segs;      /* layout segments list */
 	int			roc_iomode;/* return on close iomode, 0=none */
 	nfs4_stateid		stateid;
+	unsigned long		plh_block_lgets; /* block LAYOUTGET if >0 */
 	unsigned long		state;
 	struct inode		*inode;
 };
@@ -147,6 +148,7 @@ int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *,
 			enum pnfs_layoutreturn_type, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unset_pnfs_layoutdriver(struct nfs_server *);
+bool pnfs_layoutgets_blocked(struct pnfs_layout_hdr *lo);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
 void pnfs_layoutreturn_release(struct nfs4_layoutreturn *lpr);
 void pnfs_destroy_layout(struct nfs_inode *);

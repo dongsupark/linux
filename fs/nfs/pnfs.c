@@ -480,6 +480,9 @@ pnfs_layoutreturn_release(struct nfs4_layoutreturn *lrp)
 	lo = NFS_I(lrp->args.inode)->layout;
 	spin_lock(&lrp->args.inode->i_lock);
 	pnfs_clear_lseg_list(lo, &tmp_list, lrp->args.range.iomode);
+	lo->plh_block_lgets--;
+	if (!pnfs_layoutgets_blocked(lo))
+		rpc_wake_up(&NFS_I(lo->inode)->lo_rpcwaitq_stateid);
 	if (!lrp->res.valid)
 		;	/* forgetful model internal release */
 	else if (!lrp->res.lrs_present)
@@ -553,6 +556,7 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 			goto out;
 		}
 
+		lo->plh_block_lgets++;
 		/* Reference matched in pnfs_layoutreturn_release */
 		get_layout_hdr_locked(lo);
 
@@ -756,6 +760,12 @@ out:
 out_unlock:
 	spin_unlock(&ino->i_lock);
 	goto out;
+}
+
+bool
+pnfs_layoutgets_blocked(struct pnfs_layout_hdr *lo)
+{
+	return lo->plh_block_lgets;
 }
 
 int
