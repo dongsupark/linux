@@ -370,7 +370,7 @@ pnfs_destroy_all_layouts(struct nfs_client *clp)
  *
  * lo->stateid could be the open stateid, in which case we just use what given.
  */
-static void
+void
 pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
 			const nfs4_stateid *new)
 {
@@ -496,28 +496,6 @@ pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
 	return ret;
 }
 
-void
-pnfs_layoutreturn_release(struct nfs4_layoutreturn *lrp)
-{
-	struct pnfs_layout_hdr *lo;
-
-	if (lrp->args.return_type != RETURN_FILE)
-		return;
-	lo = NFS_I(lrp->args.inode)->layout;
-	spin_lock(&lrp->args.inode->i_lock);
-	lo->plh_block_lgets--;
-	if (!pnfs_layoutgets_blocked(lo))
-		rpc_wake_up(&NFS_I(lo->inode)->lo_rpcwaitq_stateid);
-	if (!lrp->res.valid)
-		;	/* forgetful model internal release */
-	else if (!lrp->res.lrs_present)
-		pnfs_invalidate_layout_stateid(lo);
-	else
-		pnfs_set_layout_stateid(lo, &lrp->res.stateid);
-	put_layout_hdr_locked(lo); /* Matched in _pnfs_return_layout */
-	spin_unlock(&lrp->args.inode->i_lock);
-}
-
 static int
 return_layout(struct inode *ino, struct pnfs_layout_range *range,
 	      enum pnfs_layoutreturn_type type, struct pnfs_layout_hdr *lo,
@@ -588,7 +566,7 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 		list_for_each_entry_safe(lseg, tmp, &lo->segs, fi_list)
 			if (should_free_lseg(&lseg->range, arg.iomode))
 				mark_lseg_invalid(lseg, &tmp_list);
-		/* Reference matched in pnfs_layoutreturn_release */
+		/* Reference matched in nfs4_layoutreturn_release */
 		get_layout_hdr_locked(lo);
 		spin_unlock(&ino->i_lock);
 		pnfs_free_lseg_list(&tmp_list);

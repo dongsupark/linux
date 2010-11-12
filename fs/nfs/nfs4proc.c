@@ -5465,9 +5465,20 @@ static void nfs4_layoutreturn_done(struct rpc_task *task, void *calldata)
 		server = NFS_SERVER(lrp->args.inode);
 	else
 		server = NULL;
-	if (nfs4_async_handle_error(task, server, NULL, lrp->clp) == -EAGAIN)
+	if (nfs4_async_handle_error(task, server, NULL, lrp->clp) == -EAGAIN) {
 		nfs_restart_rpc(task, lrp->clp);
+		return;
+	}
+	if ((task->tk_status == 0) && (lrp->args.return_type == RETURN_FILE)) {
+		struct pnfs_layout_hdr *lo = NFS_I(lrp->args.inode)->layout;
 
+		spin_lock(&lo->inode->i_lock);
+		if (lrp->res.lrs_present)
+			pnfs_set_layout_stateid(lo, &lrp->res.stateid);
+		else
+			pnfs_invalidate_layout_stateid(lo);
+		spin_unlock(&lo->inode->i_lock);
+	}
 	dprintk("<-- %s\n", __func__);
 }
 
@@ -5476,8 +5487,17 @@ static void nfs4_layoutreturn_release(void *calldata)
 	struct nfs4_layoutreturn *lrp = calldata;
 
 	dprintk("--> %s return_type %d\n", __func__, lrp->args.return_type);
+	if (lrp->args.return_type == RETURN_FILE) {
+		struct inode *ino = lrp->args.inode;
+		struct pnfs_layout_hdr *lo = NFS_I(ino)->layout;
 
-	pnfs_layoutreturn_release(lrp);
+		spin_lock(&ino->i_lock);
+		lo->plh_block_lgets--;
+		if (!pnfs_layoutgets_blocked(lo))
+			rpc_wake_up(&NFS_I(ino)->lo_rpcwaitq_stateid);
+		spin_unlock(&ino->i_lock);
+		put_layout_hdr(lrp->args.inode);
+	}
 	kfree(calldata);
 	dprintk("<-- %s\n", __func__);
 }

@@ -236,7 +236,6 @@ struct nfs4_layoutreturn_args {
 
 struct nfs4_layoutreturn_res {
 	struct nfs4_sequence_res seq_res;
-	bool valid;	/* internal, true if received reply */
 	u32 lrs_present;
 	nfs4_stateid stateid;
 };
