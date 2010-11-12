@@ -5440,23 +5440,23 @@ static void
 nfs4_layoutreturn_prepare(struct rpc_task *task, void *calldata)
 {
 	struct nfs4_layoutreturn *lrp = calldata;
-	struct inode *ino = lrp->args.inode;
-	struct nfs_inode *nfsi = NFS_I(ino);
-	struct nfs_server *server = NFS_SERVER(ino);
 
 	dprintk("--> %s\n", __func__);
-	if ((lrp->args.return_type == RETURN_FILE) &&
-	    pnfs_return_layout_barrier(nfsi, lrp->args.range.iomode)) {
-		dprintk("%s: waiting on barrier\n", __func__);
-		rpc_sleep_on(&nfsi->lo_rpcwaitq, task, NULL);
-		return;
+	if (lrp->args.return_type == RETURN_FILE) {
+		struct nfs_inode *nfsi = NFS_I(lrp->args.inode);
+
+		if (pnfs_return_layout_barrier(nfsi, lrp->args.range.iomode)) {
+			dprintk("%s: waiting on barrier\n", __func__);
+			rpc_sleep_on(&nfsi->lo_rpcwaitq, task, NULL);
+			return;
+		}
 	}
 	if (lrp->stateid) {
 		/* Forget the layout, without sending the return */
 		rpc_exit(task, 0);
 		return;
 	}
-	if (nfs4_setup_sequence(server, &lrp->args.seq_args,
+	if (nfs41_setup_sequence(lrp->clp->cl_session, &lrp->args.seq_args,
 				&lrp->res.seq_res, 0, task))
 		return;
 	rpc_call_start(task);
@@ -5465,16 +5465,19 @@ nfs4_layoutreturn_prepare(struct rpc_task *task, void *calldata)
 static void nfs4_layoutreturn_done(struct rpc_task *task, void *calldata)
 {
 	struct nfs4_layoutreturn *lrp = calldata;
-	struct inode *ino = lrp->args.inode;
-	struct nfs_server *server = NFS_SERVER(ino);
+	struct nfs_server *server;
 
 	dprintk("--> %s\n", __func__);
 
 	if (!nfs4_sequence_done(task, &lrp->res.seq_res))
 		return;
 
-	if (nfs4_async_handle_error(task, server, NULL, NULL) == -EAGAIN)
-		nfs_restart_rpc(task, server->nfs_client);
+	if (lrp->args.return_type == RETURN_FILE)
+		server = NFS_SERVER(lrp->args.inode);
+	else
+		server = NULL;
+	if (nfs4_async_handle_error(task, server, NULL, lrp->clp) == -EAGAIN)
+		nfs_restart_rpc(task, lrp->clp);
 
 	dprintk("<-- %s\n", __func__);
 }
@@ -5482,10 +5485,8 @@ static void nfs4_layoutreturn_done(struct rpc_task *task, void *calldata)
 static void nfs4_layoutreturn_release(void *calldata)
 {
 	struct nfs4_layoutreturn *lrp = calldata;
-	struct pnfs_layout_hdr *lo = NFS_I(lrp->args.inode)->layout;
 
-	dprintk("--> %s return_type %d lo %p\n", __func__,
-		lrp->args.return_type, lo);
+	dprintk("--> %s return_type %d\n", __func__, lrp->args.return_type);
 
 	pnfs_layoutreturn_release(lrp);
 	kfree(calldata);
@@ -5500,8 +5501,6 @@ static const struct rpc_call_ops nfs4_layoutreturn_call_ops = {
 
 int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool issync)
 {
-	struct inode *ino = lrp->args.inode;
-	struct nfs_server *server = NFS_SERVER(ino);
 	struct rpc_task *task;
 	struct rpc_message msg = {
 		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_LAYOUTRETURN],
@@ -5509,7 +5508,7 @@ int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool issync)
 		.rpc_resp = &lrp->res,
 	};
 	struct rpc_task_setup task_setup_data = {
-		.rpc_client = server->client,
+		.rpc_client = lrp->clp->cl_rpcclient,
 		.rpc_message = &msg,
 		.callback_ops = &nfs4_layoutreturn_call_ops,
 		.callback_data = lrp,

@@ -264,6 +264,7 @@ static int pnfs_recall_layout(void *data)
 	lrp->args.reclaim = 0;
 	lrp->args.layout_type = rl.cbl_layout_type;
 	lrp->args.return_type = rl.cbl_recall_type;
+	lrp->clp = clp;
 	lrp->args.range = rl.cbl_seg;
 	lrp->args.inode = inode;
 	nfs4_proc_layoutreturn(lrp, true);

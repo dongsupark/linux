@@ -472,11 +472,12 @@ pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
 void
 pnfs_layoutreturn_release(struct nfs4_layoutreturn *lrp)
 {
-	struct pnfs_layout_hdr *lo = NFS_I(lrp->args.inode)->layout;
+	struct pnfs_layout_hdr *lo;
 	LIST_HEAD(tmp_list);
 
 	if (lrp->args.return_type != RETURN_FILE)
 		return;
+	lo = NFS_I(lrp->args.inode)->layout;
 	spin_lock(&lrp->args.inode->i_lock);
 	pnfs_clear_lseg_list(lo, &tmp_list, lrp->args.range.iomode);
 	if (!lrp->res.valid)
@@ -515,6 +516,7 @@ return_layout(struct inode *ino, struct pnfs_layout_range *range,
 	lrp->args.range = *range;
 	lrp->args.inode = ino;
 	lrp->stateid = stateid;
+	lrp->clp = server->nfs_client;
 
 	status = nfs4_proc_layoutreturn(lrp, wait);
 out:
