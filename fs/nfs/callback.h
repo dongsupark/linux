@@ -166,6 +166,17 @@ extern unsigned nfs4_callback_layoutrecall(
 	void *dummy, struct cb_process_state *cps);
 
 extern void nfs4_check_drain_bc_complete(struct nfs4_session *ses);
+extern bool matches_outstanding_recall(struct inode *ino,
+				       struct pnfs_layout_range *range);
+extern void notify_drained(struct nfs_client *clp, u64 mask);
+extern void nfs_client_return_layouts(struct nfs_client *clp);
+
+#else /* CONFIG_NFS_V4_1 */
+
+static inline void nfs_client_return_layouts(struct nfs_client *clp)
+{
+}
+
 #endif /* CONFIG_NFS_V4_1 */
 
 extern __be32 nfs4_callback_getattr(struct cb_getattrargs *args,

@@ -30,12 +30,15 @@
 #ifndef FS_NFS_PNFS_H
 #define FS_NFS_PNFS_H
 
+#include "callback.h" /* for cb_layoutrecallargs */
+
 struct pnfs_layout_segment {
 	struct list_head fi_list;
 	struct pnfs_layout_range range;
 	atomic_t pls_refcount;
 	bool valid;
 	struct pnfs_layout_hdr *layout;
+	u64 pls_notify_mask;
 };
 
 #ifdef CONFIG_NFS_V4_1
@@ -45,7 +48,7 @@ struct pnfs_layout_segment {
 enum {
 	NFS_LAYOUT_RO_FAILED = 0,	/* get ro layout failed stop trying */
 	NFS_LAYOUT_RW_FAILED,		/* get rw layout failed stop trying */
-	NFS_LAYOUT_STATEID_SET,		/* have a valid layout stateid */
+	NFS_LAYOUT_BULK_RECALL,		/* bulk recall affecting layout */
 };
 
 /* Per-layout driver specific registration structure */
@@ -63,10 +66,13 @@ struct pnfs_layoutdriver_type {
 struct pnfs_layout_hdr {
 	atomic_t		plh_refcount;
 	struct list_head	layouts;   /* other client layouts */
+	struct list_head	plh_bulk_recall; /* clnt list of bulk recalls */
 	struct list_head	segs;      /* layout segments list */
 	int			roc_iomode;/* return on close iomode, 0=none */
 	nfs4_stateid		stateid;
+	unsigned long		plh_outstanding; /* number of RPCs out */
 	unsigned long		plh_block_lgets; /* block LAYOUTGET if >0 */
+	u32			plh_barrier; /* ignore lower seqids */
 	unsigned long		plh_flags;
 	struct inode		*inode;
 };
@@ -79,6 +85,15 @@ struct pnfs_device {
 	void          *area;
 	unsigned int  pgbase;
 	unsigned int  pglen;
+};
+
+struct pnfs_cb_lrecall_info {
+	struct list_head	pcl_list; /* hook into cl_layoutrecalls list */
+	atomic_t		pcl_count;
+	int			pcl_notify_bit;
+	struct nfs_client	*pcl_clp;
+	struct inode		*pcl_ino;
+	struct cb_layoutrecallargs pcl_args;
 };
 
 /*
@@ -137,6 +152,8 @@ extern int nfs4_proc_layoutget(struct nfs4_layoutget *lgp);
 extern int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool wait);
 
 /* pnfs.c */
+void get_layout_hdr(struct pnfs_layout_hdr *lo);
+bool should_free_lseg(struct pnfs_layout_range *lseg_range, u32 iomode);
 struct pnfs_layout_segment *
 pnfs_has_layout(struct pnfs_layout_hdr *lo, u32 iomode);
 struct pnfs_layout_segment *
@@ -148,15 +165,22 @@ int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *,
 			enum pnfs_layoutreturn_type, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unset_pnfs_layoutdriver(struct nfs_server *);
-bool pnfs_layoutgets_blocked(struct pnfs_layout_hdr *lo);
+bool pnfs_layoutgets_blocked(struct pnfs_layout_hdr *lo, nfs4_stateid *stateid);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
+void pnfs_free_lseg_list(struct list_head *tmp_list);
 void pnfs_destroy_layout(struct nfs_inode *);
 void pnfs_destroy_all_layouts(struct nfs_client *);
 void put_layout_hdr(struct inode *inode);
 void pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
-			     const nfs4_stateid *new);
-void pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo,
-			     struct nfs4_state *open_state);
+			     const nfs4_stateid *new,
+			     bool update_barrier);
+int pnfs_choose_layoutget_stateid(nfs4_stateid *dst,
+				  struct pnfs_layout_hdr *lo,
+				  struct nfs4_state *open_state);
+void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
+				struct pnfs_layout_range *range,
+				int notify_bit, atomic_t *notify_count,
+				struct list_head *tmp_list);
 
 static inline bool
 has_layout(struct nfs_inode *nfsi)
@@ -168,11 +192,6 @@ static inline int lo_fail_bit(u32 iomode)
 {
 	return iomode == IOMODE_RW ?
 			 NFS_LAYOUT_RW_FAILED : NFS_LAYOUT_RO_FAILED;
-}
-
-static inline void pnfs_invalidate_layout_stateid(struct pnfs_layout_hdr *lo)
-{
-	clear_bit(NFS_LAYOUT_STATEID_SET, &lo->plh_flags);
 }
 
 static inline void get_lseg(struct pnfs_layout_segment *lseg)

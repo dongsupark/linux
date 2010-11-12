@@ -5322,31 +5322,58 @@ nfs4_layoutget_prepare(struct rpc_task *task, void *calldata)
 	struct inode *ino = lgp->args.inode;
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct nfs_server *server = NFS_SERVER(ino);
+	struct nfs_client *clp = NFS_SERVER(ino)->nfs_client;
 
 	dprintk("--> %s\n", __func__);
+	spin_lock(&clp->cl_lock);
+	if (matches_outstanding_recall(ino, &lgp->args.range)) {
+		rpc_sleep_on(&clp->cl_rpcwaitq_recall, task, NULL);
+		spin_unlock(&clp->cl_lock);
+		return;
+	}
+	spin_unlock(&clp->cl_lock);
+	/* Note the is a race here, where a CB_LAYOUTRECALL can come in
+	 * right now covering the LAYOUTGET we are about to send.
+	 * However, that is not so catastrophic, and there seems
+	 * to be no way to prevent it completely.
+	 */
 	spin_lock(&ino->i_lock);
-	if (pnfs_layoutgets_blocked(nfsi->layout)) {
+	if (pnfs_layoutgets_blocked(nfsi->layout, NULL)) {
 		rpc_sleep_on(&nfsi->lo_rpcwaitq_stateid, task, NULL);
 		spin_unlock(&ino->i_lock);
 		return;
 	}
+	/* This needs after above check but atomic with it in order to properly
+	 * serialize openstateid LAYOUTGETs.
+	 */
+	nfsi->layout->plh_outstanding++;
 	spin_unlock(&ino->i_lock);
+
 	if (nfs4_setup_sequence(server, &lgp->args.seq_args,
-				&lgp->res.seq_res, 0, task))
+				&lgp->res.seq_res, 0, task)) {
+		spin_lock(&ino->i_lock);
+		nfsi->layout->plh_outstanding--;
+		spin_unlock(&ino->i_lock);
 		return;
+	}
 	rpc_call_start(task);
 }
 
 static void nfs4_layoutget_done(struct rpc_task *task, void *calldata)
 {
 	struct nfs4_layoutget *lgp = calldata;
-	struct nfs_server *server = NFS_SERVER(lgp->args.inode);
+	struct inode *ino = lgp->args.inode;
 
 	dprintk("--> %s\n", __func__);
 
-	if (!nfs4_sequence_done(task, &lgp->res.seq_res))
+	if (!nfs4_sequence_done(task, &lgp->res.seq_res)) {
+		/* layout code relies on fact that in this case
+		 * code falls back to tk_action=call_start, but not
+		 * back to rpc_prepare_task, to keep plh_outstanding
+		 * correct.
+		 */
 		return;
-
+	}
 	switch (task->tk_status) {
 	case 0:
 		break;
@@ -5355,7 +5382,11 @@ static void nfs4_layoutget_done(struct rpc_task *task, void *calldata)
 		task->tk_status = -NFS4ERR_DELAY;
 		/* Fall through */
 	default:
-		if (nfs4_async_handle_error(task, server, NULL, NULL) == -EAGAIN) {
+		if (nfs4_async_handle_error(task, NFS_SERVER(ino),
+					    NULL, NULL) == -EAGAIN) {
+			spin_lock(&ino->i_lock);
+			NFS_I(ino)->layout->plh_outstanding--;
+			spin_unlock(&ino->i_lock);
 			rpc_restart_call_prepare(task);
 			return;
 		}
@@ -5413,13 +5444,20 @@ int nfs4_proc_layoutget(struct nfs4_layoutget *lgp)
 	if (IS_ERR(task))
 		return PTR_ERR(task);
 	status = nfs4_wait_for_completion_rpc_task(task);
-	if (status != 0)
-		goto out;
-	status = task->tk_status;
-	if (status != 0)
-		goto out;
-	status = pnfs_layout_process(lgp);
-out:
+	if (status == 0)
+		status = task->tk_status;
+	if (status == 0)
+		status = pnfs_layout_process(lgp);
+	else {
+		struct inode *ino = lgp->args.inode;
+		struct pnfs_layout_hdr *lo = NFS_I(ino)->layout;
+
+		spin_lock(&ino->i_lock);
+		lo->plh_outstanding--;
+		if (!pnfs_layoutgets_blocked(lo, NULL))
+			rpc_wake_up(&NFS_I(ino)->lo_rpcwaitq_stateid);
+		spin_unlock(&ino->i_lock);
+	}
 	rpc_put_task(task);
 	dprintk("<-- %s status=%d\n", __func__, status);
 	return status;
@@ -5474,9 +5512,9 @@ static void nfs4_layoutreturn_done(struct rpc_task *task, void *calldata)
 
 		spin_lock(&lo->inode->i_lock);
 		if (lrp->res.lrs_present)
-			pnfs_set_layout_stateid(lo, &lrp->res.stateid);
+			pnfs_set_layout_stateid(lo, &lrp->res.stateid, true);
 		else
-			pnfs_invalidate_layout_stateid(lo);
+			BUG_ON(!list_empty(&lo->segs));
 		spin_unlock(&lo->inode->i_lock);
 	}
 	dprintk("<-- %s\n", __func__);
@@ -5493,10 +5531,11 @@ static void nfs4_layoutreturn_release(void *calldata)
 
 		spin_lock(&ino->i_lock);
 		lo->plh_block_lgets--;
-		if (!pnfs_layoutgets_blocked(lo))
+		lo->plh_outstanding--;
+		if (!pnfs_layoutgets_blocked(lo, NULL))
 			rpc_wake_up(&NFS_I(ino)->lo_rpcwaitq_stateid);
 		spin_unlock(&ino->i_lock);
-		put_layout_hdr(lrp->args.inode);
+		put_layout_hdr(ino);
 	}
 	kfree(calldata);
 	dprintk("<-- %s\n", __func__);
@@ -5526,6 +5565,14 @@ int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool issync)
 	int status = 0;
 
 	dprintk("--> %s\n", __func__);
+	if (lrp->args.return_type == RETURN_FILE) {
+		struct pnfs_layout_hdr *lo = NFS_I(lrp->args.inode)->layout;
+		/* FIXME we should test for BULK here */
+		spin_lock(&lo->inode->i_lock);
+		BUG_ON(lo->plh_block_lgets == 0);
+		lo->plh_outstanding++;
+		spin_unlock(&lo->inode->i_lock);
+	}
 	task = rpc_run_task(&task_setup_data);
 	if (IS_ERR(task))
 		return PTR_ERR(task);

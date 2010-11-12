@@ -1798,13 +1798,14 @@ encode_getdeviceinfo(struct xdr_stream *xdr,
 	hdr->replen += decode_getdeviceinfo_maxsz;
 }
 
-static void
+static int
 encode_layoutget(struct xdr_stream *xdr,
 		      const struct nfs4_layoutget_args *args,
 		      struct compound_hdr *hdr)
 {
 	nfs4_stateid stateid;
 	__be32 *p;
+	int status;
 
 	p = reserve_space(xdr, 44 + NFS4_STATEID_SIZE);
 	*p++ = cpu_to_be32(OP_LAYOUTGET);
@@ -1814,8 +1815,11 @@ encode_layoutget(struct xdr_stream *xdr,
 	p = xdr_encode_hyper(p, args->range.offset);
 	p = xdr_encode_hyper(p, args->range.length);
 	p = xdr_encode_hyper(p, args->minlength);
-	pnfs_get_layout_stateid(&stateid, NFS_I(args->inode)->layout,
-				args->ctx->state);
+	status = pnfs_choose_layoutget_stateid(&stateid,
+					       NFS_I(args->inode)->layout,
+					       args->ctx->state);
+	if (status)
+		return status;
 	p = xdr_encode_opaque_fixed(p, &stateid.data, NFS4_STATEID_SIZE);
 	*p = cpu_to_be32(args->maxcount);
 
@@ -1828,6 +1832,7 @@ encode_layoutget(struct xdr_stream *xdr,
 		args->maxcount);
 	hdr->nops++;
 	hdr->replen += decode_layoutget_maxsz;
+	return 0;
 }
 
 static void
@@ -2715,12 +2720,15 @@ static int nfs4_xdr_enc_layoutget(struct rpc_rqst *req, uint32_t *p,
 	struct compound_hdr hdr = {
 		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
 	};
+	int status;
 
 	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
 	encode_compound_hdr(&xdr, req, &hdr);
 	encode_sequence(&xdr, &args->seq_args, &hdr);
 	encode_putfh(&xdr, NFS_FH(args->inode), &hdr);
-	encode_layoutget(&xdr, args, &hdr);
+	status = encode_layoutget(&xdr, args, &hdr);
+	if (status)
+		return status;
 	encode_nops(&hdr);
 	return 0;
 }
