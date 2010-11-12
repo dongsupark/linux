@@ -249,10 +249,10 @@ put_lseg(struct pnfs_layout_segment *lseg)
 }
 
 static int
-should_free_lseg(struct pnfs_layout_segment *lseg, u32 iomode)
+should_free_lseg(struct pnfs_layout_range *lseg_range, u32 iomode)
 {
 	return (iomode == IOMODE_ANY ||
-		lseg->range.iomode == iomode);
+		lseg_range->iomode == iomode);
 }
 
 static bool
@@ -271,7 +271,7 @@ pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo, struct list_head *tmp_list,
 
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry_safe(lseg, next, &lo->segs, fi_list) {
-		if (!should_free_lseg(lseg, iomode) ||
+		if (!should_free_lseg(&lseg->range, iomode) ||
 		    !_pnfs_can_return_lseg(lseg))
 			continue;
 		dprintk("%s: freeing lseg %p iomode %d\n", __func__,
@@ -463,7 +463,7 @@ has_layout_to_return(struct pnfs_layout_hdr *lo, u32 iomode)
 	dprintk("%s:Begin lo %p iomode %d\n", __func__, lo, iomode);
 
 	list_for_each_entry(lseg, &lo->segs, fi_list)
-		if (should_free_lseg(lseg, iomode)) {
+		if (should_free_lseg(&lseg->range, iomode)) {
 			out = lseg;
 			break;
 		}
@@ -480,7 +480,7 @@ pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
 
 	spin_lock(&nfsi->vfs_inode.i_lock);
 	list_for_each_entry(lseg, &nfsi->layout->segs, fi_list) {
-		if (!should_free_lseg(lseg, iomode))
+		if (!should_free_lseg(&lseg->range, iomode))
 			continue;
 		lseg->valid = false;
 		if (!_pnfs_can_return_lseg(lseg)) {
