@@ -177,34 +177,42 @@ EXPORT_SYMBOL_GPL(pnfs_unregister_layoutdriver);
  * pNFS client layout cache
  */
 
+/* Need to hold i_lock if caller does not already hold reference */
 static void
-get_layout_hdr_locked(struct pnfs_layout_hdr *lo)
+get_layout_hdr(struct pnfs_layout_hdr *lo)
 {
-	assert_spin_locked(&lo->inode->i_lock);
-	lo->refcount++;
+	atomic_inc(&lo->plh_refcount);
+	smp_mb__after_atomic_inc();
+}
+
+static void
+destroy_layout_hdr(struct pnfs_layout_hdr *lo)
+{
+	dprintk("%s: freeing layout cache %p\n", __func__, lo);
+	BUG_ON(!list_empty(&lo->layouts));
+	NFS_I(lo->inode)->layout = NULL;
+	kfree(lo);
 }
 
 static void
 put_layout_hdr_locked(struct pnfs_layout_hdr *lo)
 {
 	assert_spin_locked(&lo->inode->i_lock);
-	BUG_ON(lo->refcount == 0);
-
-	lo->refcount--;
-	if (!lo->refcount) {
-		dprintk("%s: freeing layout cache %p\n", __func__, lo);
-		BUG_ON(!list_empty(&lo->layouts));
-		NFS_I(lo->inode)->layout = NULL;
-		kfree(lo);
-	}
+	BUG_ON(atomic_read(&lo->plh_refcount) == 0);
+	if (atomic_dec_and_test(&lo->plh_refcount))
+		destroy_layout_hdr(lo);
 }
 
 void
 put_layout_hdr(struct inode *inode)
 {
-	spin_lock(&inode->i_lock);
-	put_layout_hdr_locked(NFS_I(inode)->layout);
-	spin_unlock(&inode->i_lock);
+	struct pnfs_layout_hdr *lo = NFS_I(inode)->layout;
+
+	BUG_ON(atomic_read(&lo->plh_refcount) == 0);
+	if (atomic_dec_and_lock(&lo->plh_refcount, &inode->i_lock)) {
+		destroy_layout_hdr(lo);
+		spin_unlock(&inode->i_lock);
+	}
 }
 
 static void
@@ -567,7 +575,7 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 			if (should_free_lseg(&lseg->range, arg.iomode))
 				mark_lseg_invalid(lseg, &tmp_list);
 		/* Reference matched in nfs4_layoutreturn_release */
-		get_layout_hdr_locked(lo);
+		get_layout_hdr(lo);
 		spin_unlock(&ino->i_lock);
 		pnfs_free_lseg_list(&tmp_list);
 
@@ -629,7 +637,7 @@ pnfs_insert_layout(struct pnfs_layout_hdr *lo,
 			__func__, lseg, lseg->range.iomode,
 			lseg->range.offset, lseg->range.length);
 	}
-	get_layout_hdr_locked(lo);
+	get_layout_hdr(lo);
 
 	dprintk("%s:Return\n", __func__);
 }
@@ -642,7 +650,7 @@ alloc_init_layout_hdr(struct inode *ino)
 	lo = kzalloc(sizeof(struct pnfs_layout_hdr), GFP_KERNEL);
 	if (!lo)
 		return NULL;
-	lo->refcount = 1;
+	atomic_set(&lo->plh_refcount, 1);
 	INIT_LIST_HEAD(&lo->layouts);
 	INIT_LIST_HEAD(&lo->segs);
 	lo->inode = ino;
@@ -757,7 +765,7 @@ pnfs_update_layout(struct inode *ino,
 	if (test_bit(lo_fail_bit(iomode), &nfsi->layout->state))
 		goto out_unlock;
 
-	get_layout_hdr_locked(lo); /* Matched in pnfs_layoutget_release */
+	get_layout_hdr(lo); /* Matched in pnfs_layoutget_release */
 	spin_unlock(&ino->i_lock);
 
 	lseg = send_layoutget(lo, ctx, iomode);
