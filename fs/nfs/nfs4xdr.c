@@ -1848,8 +1848,10 @@ encode_layoutreturn(struct xdr_stream *xdr,
 		p = reserve_space(xdr, 16 + NFS4_STATEID_SIZE);
 		p = xdr_encode_hyper(p, args->range.offset);
 		p = xdr_encode_hyper(p, args->range.length);
-		pnfs_get_layout_stateid(&stateid, NFS_I(args->inode)->layout,
-					NULL);
+		spin_lock(&args->inode->i_lock);
+		memcpy(stateid.data, NFS_I(args->inode)->layout->stateid.data,
+		       NFS4_STATEID_SIZE);
+		spin_unlock(&args->inode->i_lock);
 		p = xdr_encode_opaque_fixed(p, &stateid.data,
 					    NFS4_STATEID_SIZE);
 		p = reserve_space(xdr, 4);

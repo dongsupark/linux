@@ -115,12 +115,11 @@ static bool
 pnfs_is_next_layout_stateid(const struct pnfs_layout_hdr *lo,
 			    const nfs4_stateid stateid)
 {
-	int seqlock;
 	bool res;
 	u32 oldseqid, newseqid;
 
-	do {
-		seqlock = read_seqbegin(&lo->seqlock);
+	spin_lock(&lo->inode->i_lock);
+	{
 		oldseqid = be32_to_cpu(lo->stateid.stateid.seqid);
 		newseqid = be32_to_cpu(stateid.stateid.seqid);
 		res = !memcmp(lo->stateid.stateid.other,
@@ -138,7 +137,8 @@ pnfs_is_next_layout_stateid(const struct pnfs_layout_hdr *lo,
 			if (res)
 				res = (newseqid == 1);
 		}
-	} while (read_seqretry(&lo->seqlock, seqlock));
+	}
+	spin_unlock(&lo->inode->i_lock);
 
 	return res;
 }

@@ -357,7 +357,6 @@ pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
 	nfs4_stateid *old = &lo->stateid;
 	bool overwrite = false;
 
-	write_seqlock(&lo->seqlock);
 	if (!test_bit(NFS_LAYOUT_STATEID_SET, &lo->state) ||
 	    memcmp(old->stateid.other, new->stateid.other, sizeof(new->stateid.other)))
 		overwrite = true;
@@ -371,43 +370,27 @@ pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
 	}
 	if (overwrite)
 		memcpy(&old->stateid, &new->stateid, sizeof(new->stateid));
-	write_sequnlock(&lo->seqlock);
-}
-
-static void
-pnfs_layout_from_open_stateid(struct pnfs_layout_hdr *lo,
-			      struct nfs4_state *state)
-{
-	int seq;
-
-	dprintk("--> %s\n", __func__);
-	write_seqlock(&lo->seqlock);
-	do {
-		seq = read_seqbegin(&state->seqlock);
-		memcpy(lo->stateid.data, state->stateid.data,
-		       sizeof(state->stateid.data));
-	} while (read_seqretry(&state->seqlock, seq));
-	set_bit(NFS_LAYOUT_STATEID_SET, &lo->state);
-	write_sequnlock(&lo->seqlock);
-	dprintk("<-- %s\n", __func__);
 }
 
 void
 pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo,
 			struct nfs4_state *open_state)
 {
-	int seq;
-
 	dprintk("--> %s\n", __func__);
-	do {
-		seq = read_seqbegin(&lo->seqlock);
-		if (!test_bit(NFS_LAYOUT_STATEID_SET, &lo->state)) {
-			/* This will trigger retry of the read */
-			pnfs_layout_from_open_stateid(lo, open_state);
-		} else
-			memcpy(dst->data, lo->stateid.data,
-			       sizeof(lo->stateid.data));
-	} while (read_seqretry(&lo->seqlock, seq));
+	spin_lock(&lo->inode->i_lock);
+	if (!test_bit(NFS_LAYOUT_STATEID_SET, &lo->state)) {
+		int seq;
+
+		do {
+			seq = read_seqbegin(&open_state->seqlock);
+			memcpy(dst->data, open_state->stateid.data,
+			       sizeof(open_state->stateid.data));
+		} while (read_seqretry(&open_state->seqlock, seq));
+		set_bit(NFS_LAYOUT_STATEID_SET, &lo->state);
+	} else
+		memcpy(dst->data, lo->stateid.data,
+		       sizeof(lo->stateid.data));
+	spin_unlock(&lo->inode->i_lock);
 	dprintk("<-- %s\n", __func__);
 }
 
@@ -656,7 +639,6 @@ alloc_init_layout_hdr(struct inode *ino)
 	lo->refcount = 1;
 	INIT_LIST_HEAD(&lo->layouts);
 	INIT_LIST_HEAD(&lo->segs);
-	seqlock_init(&lo->seqlock);
 	lo->inode = ino;
 	return lo;
 }

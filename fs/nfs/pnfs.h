@@ -65,7 +65,6 @@ struct pnfs_layout_hdr {
 	struct list_head	layouts;   /* other client layouts */
 	struct list_head	segs;      /* layout segments list */
 	int			roc_iomode;/* return on close iomode, 0=none */
-	seqlock_t		seqlock;   /* Protects the stateid */
 	nfs4_stateid		stateid;
 	unsigned long		state;
 	struct inode		*inode;
@@ -170,9 +169,7 @@ static inline int lo_fail_bit(u32 iomode)
 
 static inline void pnfs_invalidate_layout_stateid(struct pnfs_layout_hdr *lo)
 {
-	write_seqlock(&lo->seqlock);
 	clear_bit(NFS_LAYOUT_STATEID_SET, &lo->state);
-	write_sequnlock(&lo->seqlock);
 }
 
 static inline void get_lseg(struct pnfs_layout_segment *lseg)
