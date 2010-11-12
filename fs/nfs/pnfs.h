@@ -67,7 +67,7 @@ struct pnfs_layout_hdr {
 	int			roc_iomode;/* return on close iomode, 0=none */
 	nfs4_stateid		stateid;
 	unsigned long		plh_block_lgets; /* block LAYOUTGET if >0 */
-	unsigned long		state;
+	unsigned long		plh_flags;
 	struct inode		*inode;
 };
 
@@ -172,7 +172,7 @@ static inline int lo_fail_bit(u32 iomode)
 
 static inline void pnfs_invalidate_layout_stateid(struct pnfs_layout_hdr *lo)
 {
-	clear_bit(NFS_LAYOUT_STATEID_SET, &lo->state);
+	clear_bit(NFS_LAYOUT_STATEID_SET, &lo->plh_flags);
 }
 
 static inline void get_lseg(struct pnfs_layout_segment *lseg)

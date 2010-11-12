@@ -385,7 +385,7 @@ pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
 	nfs4_stateid *old = &lo->stateid;
 	bool overwrite = false;
 
-	if (!test_bit(NFS_LAYOUT_STATEID_SET, &lo->state) ||
+	if (!test_bit(NFS_LAYOUT_STATEID_SET, &lo->plh_flags) ||
 	    memcmp(old->stateid.other, new->stateid.other, sizeof(new->stateid.other)))
 		overwrite = true;
 	else {
@@ -406,7 +406,7 @@ pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo,
 {
 	dprintk("--> %s\n", __func__);
 	spin_lock(&lo->inode->i_lock);
-	if (!test_bit(NFS_LAYOUT_STATEID_SET, &lo->state)) {
+	if (!test_bit(NFS_LAYOUT_STATEID_SET, &lo->plh_flags)) {
 		int seq;
 
 		do {
@@ -414,7 +414,7 @@ pnfs_get_layout_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo,
 			memcpy(dst->data, open_state->stateid.data,
 			       sizeof(open_state->stateid.data));
 		} while (read_seqretry(&open_state->seqlock, seq));
-		set_bit(NFS_LAYOUT_STATEID_SET, &lo->state);
+		set_bit(NFS_LAYOUT_STATEID_SET, &lo->plh_flags);
 	} else
 		memcpy(dst->data, lo->stateid.data,
 		       sizeof(lo->stateid.data));
@@ -462,7 +462,7 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	nfs4_proc_layoutget(lgp);
 	if (!lseg) {
 		/* remember that LAYOUTGET failed and suspend trying */
-		set_bit(lo_fail_bit(iomode), &lo->state);
+		set_bit(lo_fail_bit(iomode), &lo->plh_flags);
 	}
 	return lseg;
 }
@@ -762,7 +762,7 @@ pnfs_update_layout(struct inode *ino,
 	}
 
 	/* if LAYOUTGET already failed once we don't try again */
-	if (test_bit(lo_fail_bit(iomode), &nfsi->layout->state))
+	if (test_bit(lo_fail_bit(iomode), &nfsi->layout->plh_flags))
 		goto out_unlock;
 
 	get_layout_hdr(lo); /* Matched in pnfs_layoutget_release */
@@ -771,7 +771,7 @@ pnfs_update_layout(struct inode *ino,
 	lseg = send_layoutget(lo, ctx, iomode);
 out:
 	dprintk("%s end, state 0x%lx lseg %p\n", __func__,
-		nfsi->layout->state, lseg);
+		nfsi->layout->plh_flags, lseg);
 	put_lseg(lseg); /* STUB - callers currently ignore return value */
 	return lseg;
 out_unlock:
