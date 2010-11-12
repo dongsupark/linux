@@ -5469,9 +5469,6 @@ static void nfs4_layoutreturn_done(struct rpc_task *task, void *calldata)
 	if (!nfs4_sequence_done(task, &lrp->res.seq_res))
 		return;
 
-	if (RPC_ASSASSINATED(task))
-		return;
-
 	if (nfs4_async_handle_error(task, server, NULL) == -EAGAIN)
 		nfs_restart_rpc(task, server->nfs_client);
 
