@@ -211,41 +211,32 @@ static void
 init_lseg(struct pnfs_layout_hdr *lo, struct pnfs_layout_segment *lseg)
 {
 	INIT_LIST_HEAD(&lseg->fi_list);
-	kref_init(&lseg->kref);
+	atomic_set(&lseg->pls_refcount, 1);
+	smp_mb();
 	lseg->valid = true;
 	lseg->layout = lo;
-}
-
-/* Called without i_lock held, as the free_lseg call may sleep */
-static void
-destroy_lseg(struct kref *kref)
-{
-	struct pnfs_layout_segment *lseg =
-		container_of(kref, struct pnfs_layout_segment, kref);
-	struct inode *ino = lseg->layout->inode;
-
-	dprintk("--> %s\n", __func__);
-	NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
-	/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
-	put_layout_hdr(ino);
 }
 
 static void
 put_lseg(struct pnfs_layout_segment *lseg)
 {
 	bool do_wake_up;
-	struct nfs_inode *nfsi;
+	struct inode *ino;
 
 	if (!lseg)
 		return;
 
 	dprintk("%s: lseg %p ref %d valid %d\n", __func__, lseg,
-		atomic_read(&lseg->kref.refcount), lseg->valid);
+		atomic_read(&lseg->pls_refcount), lseg->valid);
 	do_wake_up = !lseg->valid;
-	nfsi = NFS_I(lseg->layout->inode);
-	kref_put(&lseg->kref, destroy_lseg);
+	ino = lseg->layout->inode;
+	if (atomic_dec_and_test(&lseg->pls_refcount)) {
+		NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
+		/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
+		put_layout_hdr(ino);
+	}
 	if (do_wake_up)
-		rpc_wake_up(&nfsi->lo_rpcwaitq);
+		rpc_wake_up(&NFS_I(ino)->lo_rpcwaitq);
 }
 
 static int
@@ -258,7 +249,7 @@ should_free_lseg(struct pnfs_layout_range *lseg_range, u32 iomode)
 static bool
 _pnfs_can_return_lseg(struct pnfs_layout_segment *lseg)
 {
-	return atomic_read(&lseg->kref.refcount) == 1;
+	return atomic_read(&lseg->pls_refcount) == 1;
 }
 
 static void
@@ -469,7 +460,7 @@ pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
 		if (!_pnfs_can_return_lseg(lseg)) {
 			dprintk("%s: wait on lseg %p refcount %d\n",
 				__func__, lseg,
-				atomic_read(&lseg->kref.refcount));
+				atomic_read(&lseg->pls_refcount));
 			ret = true;
 		}
 	}
@@ -704,7 +695,7 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo, u32 iomode)
 	}
 
 	dprintk("%s:Return lseg %p ref %d valid %d\n",
-		__func__, ret, ret ? atomic_read(&ret->kref.refcount) : 0,
+		__func__, ret, ret ? atomic_read(&ret->pls_refcount) : 0,
 		ret ? ret->valid : 0);
 	return ret;
 }

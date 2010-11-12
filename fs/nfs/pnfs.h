@@ -33,7 +33,7 @@
 struct pnfs_layout_segment {
 	struct list_head fi_list;
 	struct pnfs_layout_range range;
-	struct kref kref;
+	atomic_t pls_refcount;
 	bool valid;
 	struct pnfs_layout_hdr *layout;
 };
@@ -174,7 +174,8 @@ static inline void pnfs_invalidate_layout_stateid(struct pnfs_layout_hdr *lo)
 
 static inline void get_lseg(struct pnfs_layout_segment *lseg)
 {
-	kref_get(&lseg->kref);
+	atomic_inc(&lseg->pls_refcount);
+	smp_mb__after_atomic_inc();
 }
 
 /* Return true if a layout driver is being used for this mountpoint */
