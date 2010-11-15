@@ -698,8 +698,8 @@ is_matching_lseg(struct pnfs_layout_segment *lseg, u32 iomode)
 /*
  * lookup range in layout
  */
-struct pnfs_layout_segment *
-pnfs_has_layout(struct pnfs_layout_hdr *lo, u32 iomode)
+static struct pnfs_layout_segment *
+pnfs_find_lseg(struct pnfs_layout_hdr *lo, u32 iomode)
 {
 	struct pnfs_layout_segment *lseg, *ret = NULL;
 
@@ -707,7 +707,8 @@ pnfs_has_layout(struct pnfs_layout_hdr *lo, u32 iomode)
 
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry(lseg, &lo->segs, fi_list) {
-		if (is_matching_lseg(lseg, iomode)) {
+		if (lseg->valid && is_matching_lseg(lseg, iomode)) {
+			get_lseg(lseg);
 			ret = lseg;
 			break;
 		}
@@ -745,20 +746,9 @@ pnfs_update_layout(struct inode *ino,
 	}
 
 	/* Check to see if the layout for the given range already exists */
-	lseg = pnfs_has_layout(lo, iomode);
-	if (lseg) {
-		if (lseg->valid) {
-			dprintk("%s: Using cached lseg %p "
-				"iomode %d)\n",
-				__func__,
-				lseg,
-				iomode);
-			get_lseg(lseg);
-			goto out_unlock;
-		}
-		/* someone is cleaning the layout */
-		lseg = NULL;
-	}
+	lseg = pnfs_find_lseg(lo, iomode);
+	if (lseg)
+		goto out_unlock;
 
 	/* if LAYOUTGET already failed once we don't try again */
 	if (test_bit(lo_fail_bit(iomode), &nfsi->layout->plh_flags))
