@@ -738,7 +738,7 @@ find_get_extent_locked(struct pnfs_block_layout *bl, sector_t isect)
 int
 encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 			       struct xdr_stream *xdr,
-			       const struct nfs4_layoutcommit_args *arg)
+			       const struct nfs4_layoutcommit_op_args *arg)
 {
 	sector_t start, end;
 	struct pnfs_block_short_extent *lce, *save;
