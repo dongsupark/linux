@@ -653,10 +653,11 @@ bl_encode_layoutcommit(struct pnfs_layout_hdr *lo, struct xdr_stream *xdr,
 
 static void
 bl_cleanup_layoutcommit(struct pnfs_layout_hdr *lo,
-			struct nfs4_layoutcommit_args *arg, int status)
+			struct nfs4_layoutcommit_op_args *arg,
+			struct nfs4_layoutcommit_op_res *res)
 {
 	dprintk("%s enter\n", __func__);
-	clean_pnfs_block_layoutupdate(BLK_LO2EXT(lo), arg, status);
+	clean_pnfs_block_layoutupdate(BLK_LO2EXT(lo), arg, res->status);
 	kfree(arg->layoutdriver_data);
 }
 
