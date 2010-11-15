@@ -247,7 +247,7 @@ static __be32 decode_layoutrecall_args(struct svc_rqst *rqstp,
 	args->cbl_layoutchanged = ntohl(*p++);
 	args->cbl_recall_type = ntohl(*p++);
 
-	if (likely(args->cbl_recall_type == RETURN_FILE)) {
+	if (args->cbl_recall_type == RETURN_FILE) {
 		args->cbl_range.iomode = iomode;
 		status = decode_fh(xdr, &args->cbl_fh);
 		if (unlikely(status != 0))
@@ -271,6 +271,9 @@ static __be32 decode_layoutrecall_args(struct svc_rqst *rqstp,
 		}
 		p = xdr_decode_hyper(p, &args->cbl_fsid.major);
 		p = xdr_decode_hyper(p, &args->cbl_fsid.minor);
+	} else if (args->cbl_recall_type != RETURN_ALL) {
+		status = htonl(NFS4ERR_BADXDR);
+		goto out;
 	}
 	dprintk("%s: ltype 0x%x iomode %d changed %d recall_type %d\n",
 		__func__,

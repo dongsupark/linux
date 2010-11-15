@@ -127,6 +127,9 @@ _recall_matches_lget(struct pnfs_cb_lrecall_info *cb_info,
 		return (ino == cb_info->pcl_ino) &&
 			should_free_lseg(range, cb_args->cbl_range.iomode);
 	default:
+		/* Should never hit here, as decode_layoutrecall_args()
+		 * will verify cb_info from server.
+		 */
 		BUG();
 	}
 }
