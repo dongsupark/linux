@@ -617,7 +617,7 @@ bl_alloc_lseg(struct pnfs_layout_hdr *lo,
 
 static int
 bl_setup_layoutcommit(struct pnfs_layout_hdr *lo,
-		      struct nfs4_layoutcommit_args *arg)
+		      struct nfs4_layoutcommit_op_args *arg)
 {
 	struct nfs_server *nfss = NFS_SERVER(lo->inode);
 	struct bl_layoutupdate_data *layoutupdate_data;
