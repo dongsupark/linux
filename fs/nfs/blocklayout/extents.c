@@ -922,7 +922,7 @@ set_to_rw(struct pnfs_block_layout *bl, u64 offset, u64 length)
 
 void
 clean_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
-			      const struct nfs4_layoutcommit_args *arg,
+			      const struct nfs4_layoutcommit_op_args *arg,
 			      int status)
 {
 	struct bl_layoutupdate_data *bld = arg->layoutdriver_data;
