@@ -619,8 +619,7 @@ static void __nfs4_close(struct path *path, struct nfs4_state *state,
 				.length = NFS4_MAX_UINT64,
 			};
 
-			pnfs_return_layout(state->inode, &range, NULL,
-					   RETURN_FILE, wait);
+			pnfs_return_layout(state->inode, &range, wait);
 		}
 
 		nfs4_do_close(path, state, gfp_mask, wait);

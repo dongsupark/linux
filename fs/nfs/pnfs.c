@@ -539,9 +539,7 @@ pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
 }
 
 static int
-return_layout(struct inode *ino, struct pnfs_layout_range *range,
-	      enum pnfs_layoutreturn_type type, struct pnfs_layout_hdr *lo,
-	      bool wait, const nfs4_stateid *stateid)
+return_layout(struct inode *ino, struct pnfs_layout_range *range, bool wait)
 {
 	struct nfs4_layoutreturn *lrp;
 	struct nfs_server *server = NFS_SERVER(ino);
@@ -549,20 +547,16 @@ return_layout(struct inode *ino, struct pnfs_layout_range *range,
 
 	dprintk("--> %s\n", __func__);
 
-	BUG_ON(type != RETURN_FILE);
-
 	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
 	if (lrp == NULL) {
-		if (lo && (type == RETURN_FILE))
-			put_layout_hdr(lo->inode);
+		put_layout_hdr(ino);
 		goto out;
 	}
 	lrp->args.reclaim = 0;
 	lrp->args.layout_type = server->pnfs_curr_ld->id;
-	lrp->args.return_type = type;
+	lrp->args.return_type = RETURN_FILE;
 	lrp->args.range = *range;
 	lrp->args.inode = ino;
-	lrp->stateid = stateid;
 	lrp->clp = server->nfs_client;
 
 	status = nfs4_proc_layoutreturn(lrp, wait);
@@ -571,50 +565,44 @@ out:
 	return status;
 }
 
+/* Initiates a LAYOUTRETURN(FILE) */
 int
 _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
-		    const nfs4_stateid *stateid, /* optional */
-		    enum pnfs_layoutreturn_type type,
 		    bool wait)
 {
 	struct pnfs_layout_hdr *lo = NULL;
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct pnfs_layout_range arg;
+	LIST_HEAD(tmp_list);
+	struct pnfs_layout_segment *lseg, *tmp;
 	int status = 0;
 
-	dprintk("--> %s type %d\n", __func__, type);
-
+	dprintk("--> %s\n", __func__);
 
 	arg.iomode = range ? range->iomode : IOMODE_ANY;
 	arg.offset = 0;
 	arg.length = NFS4_MAX_UINT64;
 
-	/* probably should BUGON if type != RETURN_FILE */
-	if (type == RETURN_FILE) {
-		LIST_HEAD(tmp_list);
-		struct pnfs_layout_segment *lseg, *tmp;
-
-		spin_lock(&ino->i_lock);
-		lo = nfsi->layout;
-		if (lo && !has_layout_to_return(lo, arg.iomode))
-			lo = NULL;
-		if (!lo) {
-			spin_unlock(&ino->i_lock);
-			dprintk("%s: no layout segments to return\n", __func__);
-			goto out;
-		}
-
-		lo->plh_block_lgets++;
-		list_for_each_entry_safe(lseg, tmp, &lo->segs, fi_list)
-			if (should_free_lseg(&lseg->range, arg.iomode))
-				mark_lseg_invalid(lseg, &tmp_list);
-		/* Reference matched in nfs4_layoutreturn_release */
-		get_layout_hdr(lo);
+	spin_lock(&ino->i_lock);
+	lo = nfsi->layout;
+	if (lo && !has_layout_to_return(lo, arg.iomode))
+		lo = NULL;
+	if (!lo) {
 		spin_unlock(&ino->i_lock);
-		pnfs_free_lseg_list(&tmp_list);
-
-		status = return_layout(ino, &arg, type, lo, wait, stateid);
+		dprintk("%s: no layout segments to return\n", __func__);
+		goto out;
 	}
+
+	lo->plh_block_lgets++;
+	list_for_each_entry_safe(lseg, tmp, &lo->segs, fi_list)
+		if (should_free_lseg(&lseg->range, arg.iomode))
+			mark_lseg_invalid(lseg, &tmp_list);
+	/* Reference matched in nfs4_layoutreturn_release */
+	get_layout_hdr(lo);
+	spin_unlock(&ino->i_lock);
+	pnfs_free_lseg_list(&tmp_list);
+
+	status = return_layout(ino, &arg, wait);
 out:
 	dprintk("<-- %s status: %d\n", __func__, status);
 	return status;

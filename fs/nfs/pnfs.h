@@ -160,9 +160,7 @@ struct pnfs_layout_segment *
 pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 		   enum pnfs_iomode access_type);
 bool pnfs_return_layout_barrier(struct nfs_inode *, u32 iomode);
-int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *,
-			const nfs4_stateid *stateid, /* optional */
-			enum pnfs_layoutreturn_type, bool wait);
+int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unset_pnfs_layoutdriver(struct nfs_server *);
 bool pnfs_layoutgets_blocked(struct pnfs_layout_hdr *lo, nfs4_stateid *stateid);
@@ -216,16 +214,13 @@ pnfs_layout_roc_iomode(struct nfs_inode *nfsi)
 
 static inline int pnfs_return_layout(struct inode *ino,
 				     struct pnfs_layout_range *range,
-				     const nfs4_stateid *stateid, /* optional */
-				     enum pnfs_layoutreturn_type type,
 				     bool wait)
 {
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct nfs_server *nfss = NFS_SERVER(ino);
 
-	if (pnfs_enabled_sb(nfss) &&
-	    (type != RETURN_FILE || has_layout(nfsi)))
-		return _pnfs_return_layout(ino, range, stateid, type, wait);
+	if (pnfs_enabled_sb(nfss) && has_layout(nfsi))
+		return _pnfs_return_layout(ino, range, wait);
 
 	return 0;
 }
@@ -271,8 +266,6 @@ pnfs_layout_roc_iomode(struct nfs_inode *nfsi)
 
 static inline int pnfs_return_layout(struct inode *ino,
 				     struct pnfs_layout_range *range,
-				     const nfs4_stateid *stateid, /* optional */
-				     enum pnfs_layoutreturn_type type,
 				     bool wait)
 {
 	return 0;

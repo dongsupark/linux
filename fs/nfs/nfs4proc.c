@@ -5478,11 +5478,6 @@ nfs4_layoutreturn_prepare(struct rpc_task *task, void *calldata)
 			return;
 		}
 	}
-	if (lrp->stateid) {
-		/* Forget the layout, without sending the return */
-		rpc_exit(task, 0);
-		return;
-	}
 	if (nfs41_setup_sequence(lrp->clp->cl_session, &lrp->args.seq_args,
 				&lrp->res.seq_res, 0, task))
 		return;
