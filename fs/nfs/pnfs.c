@@ -306,11 +306,13 @@ static void mark_lseg_invalid(struct pnfs_layout_segment *lseg,
 	}
 }
 
-static void
+/* Returns false if there was nothing to do, true otherwise */
+static bool
 pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo, struct list_head *tmp_list,
 		     u32 iomode)
 {
 	struct pnfs_layout_segment *lseg, *next;
+	bool rv = false;
 
 	dprintk("%s:Begin lo %p\n", __func__, lo);
 
@@ -322,8 +324,10 @@ pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo, struct list_head *tmp_list,
 				lseg, lseg->range.iomode, lseg->range.offset,
 				lseg->range.length);
 			mark_lseg_invalid(lseg, tmp_list);
+			rv = true;
 		}
 	dprintk("%s:Return\n", __func__);
+	return rv;
 }
 
 void
@@ -486,22 +490,6 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	return lseg;
 }
 
-static struct pnfs_layout_segment *
-has_layout_to_return(struct pnfs_layout_hdr *lo, u32 iomode)
-{
-	struct pnfs_layout_segment *out = NULL, *lseg;
-	dprintk("%s:Begin lo %p iomode %d\n", __func__, lo, iomode);
-
-	list_for_each_entry(lseg, &lo->segs, fi_list)
-		if (should_free_lseg(&lseg->range, iomode)) {
-			out = lseg;
-			break;
-		}
-
-	dprintk("%s:Return lseg=%p\n", __func__, out);
-	return out;
-}
-
 void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 				struct pnfs_layout_range *range,
 				int notify_bit, atomic_t *notify_count,
@@ -574,7 +562,6 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct pnfs_layout_range arg;
 	LIST_HEAD(tmp_list);
-	struct pnfs_layout_segment *lseg, *tmp;
 	int status = 0;
 
 	dprintk("--> %s\n", __func__);
@@ -585,18 +572,12 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 
 	spin_lock(&ino->i_lock);
 	lo = nfsi->layout;
-	if (lo && !has_layout_to_return(lo, arg.iomode))
-		lo = NULL;
-	if (!lo) {
+	if (!lo || !pnfs_clear_lseg_list(lo, &tmp_list, arg.iomode)) {
 		spin_unlock(&ino->i_lock);
 		dprintk("%s: no layout segments to return\n", __func__);
 		goto out;
 	}
-
 	lo->plh_block_lgets++;
-	list_for_each_entry_safe(lseg, tmp, &lo->segs, fi_list)
-		if (should_free_lseg(&lseg->range, arg.iomode))
-			mark_lseg_invalid(lseg, &tmp_list);
 	/* Reference matched in nfs4_layoutreturn_release */
 	get_layout_hdr(lo);
 	spin_unlock(&ino->i_lock);
