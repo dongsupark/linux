@@ -475,7 +475,7 @@ objlayout_write_pagelist(struct nfs_write_data *wdata,
 void
 objlayout_encode_layoutcommit(struct pnfs_layout_hdr *pnfslay,
 			      struct xdr_stream *xdr,
-			      const struct nfs4_layoutcommit_args *args)
+			      const struct nfs4_layoutcommit_op_args *args)
 {
 	struct objlayout *objlay = OBJLAYOUT(pnfslay);
 	struct pnfs_osd_layoutupdate lou;
