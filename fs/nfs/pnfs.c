@@ -1576,7 +1576,6 @@ pnfs_unhash_deviceid(struct pnfs_deviceid_cache *c,
 	hlist_for_each_entry_rcu(d, n, &c->dc_deviceids[h], de_node)
 		if (!memcmp(&d->de_id, id, sizeof(*id))) {
 			hlist_del_rcu(&d->de_node);
-			synchronize_rcu();
 			return d;
 		}
 
@@ -1597,7 +1596,7 @@ pnfs_put_deviceid(struct pnfs_deviceid_cache *c,
 
 	pnfs_unhash_deviceid(c, &devid->de_id);
 	spin_unlock(&c->dc_lock);
-
+	synchronize_rcu();
 	c->dc_free_callback(devid);
 }
 EXPORT_SYMBOL_GPL(pnfs_put_deviceid);
@@ -1611,7 +1610,7 @@ pnfs_delete_deviceid(struct pnfs_deviceid_cache *c,
 	spin_lock(&c->dc_lock);
 	devid = pnfs_unhash_deviceid(c, id);
 	spin_unlock(&c->dc_lock);
-
+	synchronize_rcu();
 	dprintk("%s [%d]\n", __func__, atomic_read(&devid->de_ref));
 	if (atomic_dec_and_test(&devid->de_ref))
 		c->dc_free_callback(devid);
