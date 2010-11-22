@@ -155,87 +155,29 @@ matches_outstanding_recall(struct inode *ino, u32 iomode)
 	return rv;
 }
 
-/* Send a synchronous LAYOUTRETURN.  By the time this is called, we know
- * all IO has been drained, any matching lsegs deleted, and that no
- * overlapping LAYOUTGETs will be sent or processed for the duration
- * of this call.
- * Note that it is possible that when this is called, the stateid has
- * been invalidated.  But will not be cleared, so can still use.
- */
-static int
-pnfs_send_layoutreturn(struct nfs_client *clp,
-		       struct pnfs_cb_lrecall_info *cb_info)
-{
-	struct cb_layoutrecallargs *args = &cb_info->pcl_args;
-	struct nfs4_layoutreturn *lrp;
-
-	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
-	if (!lrp)
-		return -ENOMEM;
-	lrp->args.reclaim = 0;
-	lrp->args.layout_type = args->cbl_layout_type;
-	lrp->args.return_type = args->cbl_recall_type;
-	lrp->clp = clp;
-	if (args->cbl_recall_type == RETURN_FILE) {
-		lrp->args.range = args->cbl_range;
-		lrp->args.inode = cb_info->pcl_ino;
-	} else {
-		lrp->args.range.iomode = IOMODE_ANY;
-		lrp->args.inode = NULL;
-	}
-	return nfs4_proc_layoutreturn(lrp, true);
-}
-
-/* Called by state manager to finish CB_LAYOUTRECALLS initiated by
- * nfs4_callback_layoutrecall().
- */
-void nfs_client_return_layouts(struct nfs_client *clp)
-{
-	struct pnfs_cb_lrecall_info *cb_info;
-
-	spin_lock(&clp->cl_lock);
-	while (true) {
-		if (list_empty(&clp->cl_layoutrecalls)) {
-			spin_unlock(&clp->cl_lock);
-			break;
-		}
-		cb_info = list_first_entry(&clp->cl_layoutrecalls,
-					   struct pnfs_cb_lrecall_info,
-					   pcl_list);
-		spin_unlock(&clp->cl_lock);
-		if (atomic_read(&cb_info->pcl_count) != 0)
-			break;
-		/* What do on error return?  These layoutreturns are
-		 * required by the protocol.  So if do not get
-		 * successful reply, probably have to do something
-		 * more drastic.
-		 */
-		pnfs_send_layoutreturn(clp, cb_info);
-		spin_lock(&clp->cl_lock);
-		/* Removing from the list unblocks LAYOUTGETs */
-		list_del(&cb_info->pcl_list);
-		clp->cl_cb_lrecall_count--;
-		clp->cl_drain_notification[1 << cb_info->pcl_notify_bit] = NULL;
-		kfree(cb_info);
-	}
-}
-
 void notify_drained(struct nfs_client *clp, u64 mask)
 {
 	atomic_t **ptr = clp->cl_drain_notification;
-	bool done = false;
 
 	/* clp lock not needed except to remove used up entries */
 	/* Should probably use functions defined in bitmap.h */
 	while (mask) {
-		if ((mask & 1) && (atomic_dec_and_test(*ptr)))
-			done = true;
+		if ((mask & 1) && (atomic_dec_and_test(*ptr))) {
+			struct pnfs_cb_lrecall_info *cb_info;
+
+			cb_info = container_of(*ptr,
+					       struct pnfs_cb_lrecall_info,
+					       pcl_count);
+			spin_lock(&clp->cl_lock);
+			/* Removing from the list unblocks LAYOUTGETs */
+			list_del(&cb_info->pcl_list);
+			clp->cl_cb_lrecall_count--;
+			clp->cl_drain_notification[1 << cb_info->pcl_notify_bit] = NULL;
+			spin_unlock(&clp->cl_lock);
+			kfree(cb_info);
+		}
 		mask >>= 1;
 		ptr++;
-	}
-	if (done) {
-		set_bit(NFS4CLNT_LAYOUT_RECALL, &clp->cl_state);
-		nfs4_schedule_state_manager(clp);
 	}
 }
 
@@ -261,8 +203,9 @@ static int initiate_layout_draining(struct pnfs_cb_lrecall_info *cb_info)
 				 * does having a layout ref keep ino around?
 				 *  It should.
 				 */
-				/* We need to hold the reference until any
-				 * potential LAYOUTRETURN is finished.
+				/* Without this, layout can be freed as soon
+				 * as we release cl_lock.  Matched in
+				 * do_callback_layoutrecall.
 				 */
 				get_layout_hdr(lo);
 				cb_info->pcl_ino = lo->inode;
@@ -381,6 +324,18 @@ static u32 do_callback_layoutrecall(struct nfs_client *clp,
 			res = NFS4ERR_NOMATCHING_LAYOUT;
 		}
 		kfree(new);
+	} else {
+		/* We are currently using a referenced layout */
+		if (args->cbl_recall_type == RETURN_FILE) {
+			struct pnfs_layout_hdr *lo;
+
+			lo = NFS_I(new->pcl_ino)->layout;
+			spin_lock(&lo->inode->i_lock);
+			lo->plh_block_lgets--;
+			spin_unlock(&lo->inode->i_lock);
+			put_layout_hdr(new->pcl_ino);
+		}
+		res = NFS4ERR_DELAY;
 	}
 out:
 	dprintk("%s returning %i\n", __func__, res);
