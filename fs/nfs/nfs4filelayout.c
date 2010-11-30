@@ -497,6 +497,7 @@ filelayout_commit(struct nfs_write_data *data, int sync)
 	struct list_head **ds_page_list = NULL;
 	u16 *indices_used;
 	int num_indices_seen = 0;
+	bool used_mds = false;
 	const struct rpc_call_ops *call_ops;
 	struct rpc_clnt *clnt;
 	struct nfs_write_data **clone_list = NULL;
@@ -546,11 +547,21 @@ filelayout_commit(struct nfs_write_data *data, int sync)
 	if (!clone_list)
 		goto mem_error;
 	for (i = 0; i < num_indices_seen - 1; i++) {
+		if (indices_used[i] == NFS4_PNFS_MAX_MULTI_CNT) {
+			used_mds = true;
+			clone_list[i] = data;
+		} else {
+			clone_list[i] = filelayout_clone_write_data(data);
+			if (!clone_list[i])
+				goto mem_error;
+		}
+	}
+	if (used_mds) {
 		clone_list[i] = filelayout_clone_write_data(data);
 		if (!clone_list[i])
 			goto mem_error;
-	}
-	clone_list[i] = data;
+	} else
+		clone_list[i] = data;
 	/*
 	 * Now send off the RPCs to each ds.  Note that it is important
 	 * that any RPC to the MDS be sent last (or at least after all
