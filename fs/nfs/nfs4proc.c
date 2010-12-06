@@ -5340,14 +5340,8 @@ static void nfs4_layoutget_done(struct rpc_task *task, void *calldata)
 
 	dprintk("--> %s\n", __func__);
 
-	if (!nfs4_sequence_done(task, &lgp->res.seq_res)) {
-		/* layout code relies on fact that in this case
-		 * code falls back to tk_action=call_start, but not
-		 * back to rpc_prepare_task, to keep plh_outstanding
-		 * correct.
-		 */
+	if (!nfs4_sequence_done(task, &lgp->res.seq_res))
 		return;
-	}
 	switch (task->tk_status) {
 	case 0:
 		break;
@@ -5370,7 +5364,6 @@ static void nfs4_layoutget_release(void *calldata)
 	struct nfs4_layoutget *lgp = calldata;
 
 	dprintk("--> %s\n", __func__);
-	put_layout_hdr(lgp->args.inode);
 	if (lgp->res.layout.buf != NULL)
 		free_page((unsigned long) lgp->res.layout.buf);
 	put_nfs_open_context(lgp->args.ctx);

@@ -154,6 +154,7 @@ struct cb_layoutrecallargs {
 	union {
 		struct {
 			struct nfs_fh		cbl_fh;
+			struct inode		*cbl_inode;
 			struct pnfs_layout_range cbl_range;
 			nfs4_stateid		cbl_stateid;
 		};
@@ -166,9 +167,11 @@ extern unsigned nfs4_callback_layoutrecall(
 	void *dummy, struct cb_process_state *cps);
 
 extern void nfs4_check_drain_bc_complete(struct nfs4_session *ses);
-extern bool matches_outstanding_recall(struct inode *ino,
-				       u32 iomode);
-extern void notify_drained(struct nfs_client *clp, u64 mask);
+
+static inline void notify_drained(struct nfs_client *clp, int count)
+{
+	atomic_sub(count, &clp->cl_drain_notify);
+}
 
 #endif /* CONFIG_NFS_V4_1 */
 

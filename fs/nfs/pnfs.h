@@ -38,7 +38,7 @@ struct pnfs_layout_segment {
 	atomic_t pls_refcount;
 	bool valid;
 	struct pnfs_layout_hdr *layout;
-	u64 pls_notify_mask;
+	int pls_notify_count;
 };
 
 #ifdef CONFIG_NFS_V4_1
@@ -85,15 +85,6 @@ struct pnfs_device {
 	void          *area;
 	unsigned int  pgbase;
 	unsigned int  pglen;
-};
-
-struct pnfs_cb_lrecall_info {
-	struct list_head	pcl_list; /* hook into cl_layoutrecalls list */
-	atomic_t		pcl_count;
-	int			pcl_notify_bit;
-	struct nfs_client	*pcl_clp;
-	struct inode		*pcl_ino;
-	struct cb_layoutrecallargs pcl_args;
 };
 
 /*
@@ -174,7 +165,6 @@ int pnfs_choose_layoutget_stateid(nfs4_stateid *dst,
 				  struct nfs4_state *open_state);
 void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 				struct pnfs_layout_range *range,
-				int notify_bit, atomic_t *notify_count,
 				struct list_head *tmp_list);
 
 static inline bool

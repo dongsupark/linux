@@ -223,7 +223,7 @@ init_lseg(struct pnfs_layout_hdr *lo, struct pnfs_layout_segment *lseg)
 	smp_mb();
 	lseg->valid = true;
 	lseg->layout = lo;
-	lseg->pls_notify_mask = 0;
+	lseg->pls_notify_count = 0;
 }
 
 static void
@@ -273,12 +273,12 @@ put_lseg(struct pnfs_layout_segment *lseg)
 		atomic_read(&lseg->pls_refcount), lseg->valid);
 	ino = lseg->layout->inode;
 	if (atomic_dec_and_lock(&lseg->pls_refcount, &ino->i_lock)) {
-		u64 mask = lseg->pls_notify_mask;
+		int count = lseg->pls_notify_count;
 
 		_put_lseg_common(lseg);
 		spin_unlock(&ino->i_lock);
 		NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
-		notify_drained(NFS_SERVER(ino)->nfs_client, mask);
+		notify_drained(NFS_SERVER(ino)->nfs_client, count);
 		/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
 		put_layout_hdr(ino);
 	}
@@ -333,14 +333,14 @@ pnfs_free_lseg_list(struct list_head *free_me)
 {
 	struct pnfs_layout_segment *lseg, *tmp;
 	struct inode *ino;
-	u64 mask;
+	int count;
 
 	list_for_each_entry_safe(lseg, tmp, free_me, fi_list) {
 		BUG_ON(atomic_read(&lseg->pls_refcount) != 0);
 		ino = lseg->layout->inode;
-		mask = lseg->pls_notify_mask;
+		count = lseg->pls_notify_count;
 		NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
-		notify_drained(NFS_SERVER(ino)->nfs_client, mask);
+		notify_drained(NFS_SERVER(ino)->nfs_client, count);
 		/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
 		put_layout_hdr(ino);
 	}
@@ -475,10 +475,8 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 
 	BUG_ON(ctx == NULL);
 	lgp = kzalloc(sizeof(*lgp), GFP_KERNEL);
-	if (lgp == NULL) {
-		put_layout_hdr(ino);
+	if (lgp == NULL)
 		return NULL;
-	}
 	lgp->args.minlength = NFS4_MAX_UINT64;
 	lgp->args.maxcount = PNFS_LAYOUT_MAXSIZE;
 	lgp->args.range.iomode = iomode;
@@ -502,15 +500,14 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 
 void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 				struct pnfs_layout_range *range,
-				int notify_bit, atomic_t *notify_count,
 				struct list_head *tmp_list)
 {
 	struct pnfs_layout_segment *lseg, *tmp;
 
 	list_for_each_entry_safe(lseg, tmp, &lo->segs, fi_list)
 		if (should_free_lseg(&lseg->range, range->iomode)) {
-			lseg->pls_notify_mask |= (1 << notify_bit);
-			atomic_inc(notify_count);
+			lseg->pls_notify_count++;
+			atomic_inc(&NFS_SERVER(lo->inode)->nfs_client->cl_drain_notify);
 			mark_lseg_invalid(lseg, tmp_list);
 		}
 }
@@ -745,13 +742,6 @@ pnfs_update_layout(struct inode *ino,
 
 	if (!pnfs_enabled_sb(NFS_SERVER(ino)))
 		return NULL;
-	spin_lock(&clp->cl_lock);
-	if (matches_outstanding_recall(ino, iomode)) {
-		dprintk("%s matches recall, use MDS\n", __func__);
-		spin_unlock(&clp->cl_lock);
-		return NULL;
-	}
-	spin_unlock(&clp->cl_lock);
 	spin_lock(&ino->i_lock);
 	lo = pnfs_find_alloc_layout(ino);
 	if (lo == NULL) {
@@ -759,6 +749,12 @@ pnfs_update_layout(struct inode *ino,
 		goto out_unlock;
 	}
 
+	/* Do we even need to bother with this? */
+	if (test_bit(NFS4CLNT_LAYOUTRECALL, &clp->cl_state) ||
+	    test_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags)) {
+		dprintk("%s matches recall, use MDS\n", __func__);
+		goto out_unlock;
+	}
 	/* Check to see if the layout for the given range already exists */
 	lseg = pnfs_find_lseg(lo, iomode);
 	if (lseg)
@@ -795,6 +791,7 @@ pnfs_update_layout(struct inode *ino,
 		}
 	}
 	lo->plh_outstanding--;
+	put_layout_hdr(ino);
 	spin_unlock(&ino->i_lock);
 out:
 	dprintk("%s end, state 0x%lx lseg %p\n", __func__,
@@ -840,14 +837,11 @@ pnfs_layout_process(struct nfs4_layoutget *lgp)
 	}
 
 	spin_lock(&ino->i_lock);
-	/* decrement needs to be done before call to pnfs_layoutget_blocked */
-	spin_lock(&clp->cl_lock);
-	if (matches_outstanding_recall(ino, res->range.iomode)) {
-		spin_unlock(&clp->cl_lock);
+	if (test_bit(NFS4CLNT_LAYOUTRECALL, &clp->cl_state) ||
+	    test_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags)) {
 		dprintk("%s forget reply due to recall\n", __func__);
 		goto out_forget_reply;
 	}
-	spin_unlock(&clp->cl_lock);
 
 	if (pnfs_layoutgets_blocked(lo, &res->stateid, 1)) {
 		dprintk("%s forget reply due to state\n", __func__);
