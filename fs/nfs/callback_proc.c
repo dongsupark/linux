@@ -335,7 +335,7 @@ static u32 do_callback_layoutrecall(struct nfs_client *clp,
 	dprintk("%s enter, type=%i\n", __func__, args->cbl_recall_type);
 	new = kmalloc(sizeof(*new), GFP_KERNEL);
 	if (!new) {
-		res = NFS4ERR_RESOURCE;
+		res = NFS4ERR_DELAY;
 		goto out;
 	}
 	memcpy(&new->pcl_args, args, sizeof(*args));
