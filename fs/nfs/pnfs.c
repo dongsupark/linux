@@ -424,7 +424,8 @@ pnfs_layoutgets_blocked(struct pnfs_layout_hdr *lo, nfs4_stateid *stateid,
 		return true;
 	return lo->plh_block_lgets ||
 		test_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags) ||
-		(list_empty(&lo->segs) && (lo->plh_outstanding > lget));
+		(list_empty(&lo->segs) &&
+		 (atomic_read(&lo->plh_outstanding) > lget));
 }
 
 int
@@ -766,7 +767,7 @@ pnfs_update_layout(struct inode *ino,
 
 	if (pnfs_layoutgets_blocked(lo, NULL, 0))
 		goto out_unlock;
-	lo->plh_outstanding++;
+	atomic_inc(&lo->plh_outstanding);
 
 	get_layout_hdr(lo); /* Matched in pnfs_layoutget_release */
 	if (list_empty(&lo->segs)) {
@@ -781,18 +782,18 @@ pnfs_update_layout(struct inode *ino,
 	spin_unlock(&ino->i_lock);
 
 	lseg = send_layoutget(lo, ctx, iomode);
-	spin_lock(&ino->i_lock);
 	if (!lseg) {
+		spin_lock(&ino->i_lock);
 		if (list_empty(&lo->segs)) {
 			spin_lock(&clp->cl_lock);
 			list_del_init(&lo->layouts);
 			spin_unlock(&clp->cl_lock);
 			clear_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags);
 		}
+		spin_unlock(&ino->i_lock);
 	}
-	lo->plh_outstanding--;
+	atomic_dec(&lo->plh_outstanding);
 	put_layout_hdr(ino);
-	spin_unlock(&ino->i_lock);
 out:
 	dprintk("%s end, state 0x%lx lseg %p\n", __func__,
 		nfsi->layout->plh_flags, lseg);

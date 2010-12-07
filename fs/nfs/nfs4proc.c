@@ -5480,7 +5480,7 @@ static void nfs4_layoutreturn_release(void *calldata)
 
 		spin_lock(&ino->i_lock);
 		lo->plh_block_lgets--;
-		lo->plh_outstanding--;
+		atomic_dec(&lo->plh_outstanding);
 		spin_unlock(&ino->i_lock);
 		put_layout_hdr(ino);
 	}
@@ -5517,7 +5517,7 @@ int nfs4_proc_layoutreturn(struct nfs4_layoutreturn *lrp, bool issync)
 		/* FIXME we should test for BULK here */
 		spin_lock(&lo->inode->i_lock);
 		BUG_ON(lo->plh_block_lgets == 0);
-		lo->plh_outstanding++;
+		atomic_inc(&lo->plh_outstanding);
 		spin_unlock(&lo->inode->i_lock);
 	}
 	task = rpc_run_task(&task_setup_data);
