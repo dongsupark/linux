@@ -126,6 +126,7 @@ extern int nfs41_validate_delegation_stateid(struct nfs_delegation *delegation,
 #define RCA4_TYPE_MASK_OBJ_LAYOUT_MAX  9
 #define RCA4_TYPE_MASK_OTHER_LAYOUT_MIN 12
 #define RCA4_TYPE_MASK_OTHER_LAYOUT_MAX 15
+#define RCA4_TYPE_MASK_ALL 0xf31f
 
 struct cb_recallanyargs {
 	struct sockaddr	*craa_addr;

@@ -559,28 +559,10 @@ out:
 	return status;
 }
 
-static inline bool
-validate_bitmap_values(const unsigned long *mask)
+static bool
+validate_bitmap_values(unsigned long mask)
 {
-	int i;
-
-	if (*mask == 0)
-		return true;
-	if (test_bit(RCA4_TYPE_MASK_RDATA_DLG, mask) ||
-	    test_bit(RCA4_TYPE_MASK_WDATA_DLG, mask) ||
-	    test_bit(RCA4_TYPE_MASK_DIR_DLG, mask) ||
-	    test_bit(RCA4_TYPE_MASK_FILE_LAYOUT, mask) ||
-	    test_bit(RCA4_TYPE_MASK_BLK_LAYOUT, mask))
-		return true;
-	for (i = RCA4_TYPE_MASK_OBJ_LAYOUT_MIN;
-	     i <= RCA4_TYPE_MASK_OBJ_LAYOUT_MAX; i++)
-		if (test_bit(i, mask))
-			return true;
-	for (i = RCA4_TYPE_MASK_OTHER_LAYOUT_MIN;
-	     i <= RCA4_TYPE_MASK_OTHER_LAYOUT_MAX; i++)
-		if (test_bit(i, mask))
-			return true;
-	return false;
+	return (mask & ~RCA4_TYPE_MASK_ALL) == 0;
 }
 
 __be32 nfs4_callback_recallany(struct cb_recallanyargs *args, void *dummy,
@@ -597,8 +579,7 @@ __be32 nfs4_callback_recallany(struct cb_recallanyargs *args, void *dummy,
 		rpc_peeraddr2str(cps->clp->cl_rpcclient, RPC_DISPLAY_ADDR));
 
 	status = cpu_to_be32(NFS4ERR_INVAL);
-	if (!validate_bitmap_values((const unsigned long *)
-				    &args->craa_type_mask))
+	if (!validate_bitmap_values(args->craa_type_mask))
 		goto out;
 
 	status = cpu_to_be32(NFS4_OK);
