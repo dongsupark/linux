@@ -221,7 +221,7 @@ init_lseg(struct pnfs_layout_hdr *lo, struct pnfs_layout_segment *lseg)
 	INIT_LIST_HEAD(&lseg->fi_list);
 	atomic_set(&lseg->pls_refcount, 1);
 	smp_mb();
-	lseg->valid = true;
+	set_bit(NFS_LSEG_VALID, &lseg->pls_flags);
 	lseg->layout = lo;
 	lseg->pls_notify_count = 0;
 }
@@ -231,7 +231,7 @@ _put_lseg_common(struct pnfs_layout_segment *lseg)
 {
 	struct inode *ino = lseg->layout->inode;
 
-	BUG_ON(lseg->valid == true);
+	BUG_ON(test_bit(NFS_LSEG_VALID, &lseg->pls_flags));
 	list_del(&lseg->fi_list);
 	if (list_empty(&lseg->layout->segs)) {
 		struct nfs_client *clp;
@@ -254,7 +254,8 @@ put_lseg_locked(struct pnfs_layout_segment *lseg,
 		struct list_head *tmp_list)
 {
 	dprintk("%s: lseg %p ref %d valid %d\n", __func__, lseg,
-		atomic_read(&lseg->pls_refcount), lseg->valid);
+		atomic_read(&lseg->pls_refcount),
+		test_bit(NFS_LSEG_VALID, &lseg->pls_flags));
 	if (atomic_dec_and_test(&lseg->pls_refcount)) {
 		_put_lseg_common(lseg);
 		list_add(&lseg->fi_list, tmp_list);
@@ -270,7 +271,8 @@ put_lseg(struct pnfs_layout_segment *lseg)
 		return;
 
 	dprintk("%s: lseg %p ref %d valid %d\n", __func__, lseg,
-		atomic_read(&lseg->pls_refcount), lseg->valid);
+		atomic_read(&lseg->pls_refcount),
+		test_bit(NFS_LSEG_VALID, &lseg->pls_flags));
 	ino = lseg->layout->inode;
 	if (atomic_dec_and_lock(&lseg->pls_refcount, &ino->i_lock)) {
 		int count = lseg->pls_notify_count;
@@ -294,8 +296,7 @@ should_free_lseg(struct pnfs_layout_range *lseg_range, u32 iomode)
 static void mark_lseg_invalid(struct pnfs_layout_segment *lseg,
 			      struct list_head *tmp_list)
 {
-	if (lseg->valid) {
-		lseg->valid = false;
+	if (test_and_clear_bit(NFS_LSEG_VALID, &lseg->pls_flags)) {
 		/* Remove the reference keeping the lseg in the
 		 * list.  It will now be removed when all
 		 * outstanding io is finished.
@@ -712,7 +713,8 @@ pnfs_find_lseg(struct pnfs_layout_hdr *lo, u32 iomode)
 
 	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry(lseg, &lo->segs, fi_list) {
-		if (lseg->valid && is_matching_lseg(lseg, iomode)) {
+		if (test_bit(NFS_LSEG_VALID, &lseg->pls_flags) &&
+		    is_matching_lseg(lseg, iomode)) {
 			get_lseg(lseg);
 			ret = lseg;
 			break;
@@ -723,7 +725,7 @@ pnfs_find_lseg(struct pnfs_layout_hdr *lo, u32 iomode)
 
 	dprintk("%s:Return lseg %p ref %d valid %d\n",
 		__func__, ret, ret ? atomic_read(&ret->pls_refcount) : 0,
-		ret ? ret->valid : 0);
+		ret ? test_bit(NFS_LSEG_VALID, &ret->pls_flags) : 0);
 	return ret;
 }
 

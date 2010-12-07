@@ -32,11 +32,15 @@
 
 #include "callback.h" /* for cb_layoutrecallargs */
 
+enum {
+	NFS_LSEG_VALID = 0,	/* cleared when lseg is recalled/returned */
+};
+
 struct pnfs_layout_segment {
 	struct list_head fi_list;
 	struct pnfs_layout_range range;
 	atomic_t pls_refcount;
-	bool valid;
+	unsigned long pls_flags;
 	struct pnfs_layout_hdr *layout;
 	int pls_notify_count;
 };
