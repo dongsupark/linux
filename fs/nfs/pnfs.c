@@ -517,54 +517,6 @@ void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 		}
 }
 
-/* Return true if there is layout based io in progress in the given range.
- * Assumes range has already been marked invalid, and layout marked to
- * prevent any new lseg from being inserted.
- */
-bool
-pnfs_return_layout_barrier(struct nfs_inode *nfsi, u32 iomode)
-{
-	struct pnfs_layout_segment *lseg;
-	bool ret = false;
-
-	spin_lock(&nfsi->vfs_inode.i_lock);
-	list_for_each_entry(lseg, &nfsi->layout->segs, fi_list)
-		if (should_free_lseg(&lseg->range, iomode)) {
-			ret = true;
-			break;
-		}
-	spin_unlock(&nfsi->vfs_inode.i_lock);
-	dprintk("%s:Return %d\n", __func__, ret);
-	return ret;
-}
-
-static int
-return_layout(struct inode *ino, struct pnfs_layout_range *range, bool wait)
-{
-	struct nfs4_layoutreturn *lrp;
-	struct nfs_server *server = NFS_SERVER(ino);
-	int status = -ENOMEM;
-
-	dprintk("--> %s\n", __func__);
-
-	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
-	if (lrp == NULL) {
-		put_layout_hdr(ino);
-		goto out;
-	}
-	lrp->args.reclaim = 0;
-	lrp->args.layout_type = server->pnfs_curr_ld->id;
-	lrp->args.return_type = RETURN_FILE;
-	lrp->args.range = *range;
-	lrp->args.inode = ino;
-	lrp->clp = server->nfs_client;
-
-	status = nfs4_proc_layoutreturn(lrp, wait);
-out:
-	dprintk("<-- %s status: %d\n", __func__, status);
-	return status;
-}
-
 /* Initiates a LAYOUTRETURN(FILE) */
 int
 _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
@@ -590,12 +542,10 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 		goto out;
 	}
 	lo->plh_block_lgets++;
-	/* Reference matched in nfs4_layoutreturn_release */
-	get_layout_hdr(lo);
 	spin_unlock(&ino->i_lock);
 	pnfs_free_lseg_list(&tmp_list);
 
-	status = return_layout(ino, &arg, wait);
+	/* Don't need to wait since this is followed by call to end_writeback */
 out:
 	dprintk("<-- %s status: %d\n", __func__, status);
 	return status;

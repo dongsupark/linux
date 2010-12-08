@@ -324,12 +324,6 @@ static int nfs4_stat_to_errno(int);
 #define decode_layoutget_maxsz	(op_decode_hdr_maxsz + 8 + \
 				decode_stateid_maxsz + \
 				XDR_QUADLEN(PNFS_LAYOUT_MAXSIZE))
-#define encode_layoutreturn_maxsz (8 + op_encode_hdr_maxsz + \
-				encode_stateid_maxsz + \
-				1 /* FIXME: opaque lrf_body always empty at
-				   *the moment */)
-#define decode_layoutreturn_maxsz (op_decode_hdr_maxsz + \
-				1 + decode_stateid_maxsz)
 #else /* CONFIG_NFS_V4_1 */
 #define encode_sequence_maxsz	0
 #define decode_sequence_maxsz	0
@@ -733,14 +727,6 @@ static int nfs4_stat_to_errno(int);
 				decode_sequence_maxsz + \
 				decode_putfh_maxsz +        \
 				decode_layoutget_maxsz)
-#define NFS4_enc_layoutreturn_sz (compound_encode_hdr_maxsz + \
-				encode_sequence_maxsz + \
-				encode_putfh_maxsz + \
-				encode_layoutreturn_maxsz)
-#define NFS4_dec_layoutreturn_sz (compound_decode_hdr_maxsz + \
-				decode_sequence_maxsz + \
-				decode_putfh_maxsz + \
-				decode_layoutreturn_maxsz)
 
 const u32 nfs41_maxwrite_overhead = ((RPC_MAX_HEADER_WITH_AUTH +
 				      compound_encode_hdr_maxsz +
@@ -1835,36 +1821,6 @@ encode_layoutget(struct xdr_stream *xdr,
 	return 0;
 }
 
-static void
-encode_layoutreturn(struct xdr_stream *xdr,
-		    const struct nfs4_layoutreturn_args *args,
-		    struct compound_hdr *hdr)
-{
-	nfs4_stateid stateid;
-	__be32 *p;
-
-	p = reserve_space(xdr, 20);
-	*p++ = cpu_to_be32(OP_LAYOUTRETURN);
-	*p++ = cpu_to_be32(args->reclaim);
-	*p++ = cpu_to_be32(args->layout_type);
-	*p++ = cpu_to_be32(args->range.iomode);
-	*p = cpu_to_be32(args->return_type);
-	if (args->return_type == RETURN_FILE) {
-		p = reserve_space(xdr, 16 + NFS4_STATEID_SIZE);
-		p = xdr_encode_hyper(p, args->range.offset);
-		p = xdr_encode_hyper(p, args->range.length);
-		spin_lock(&args->inode->i_lock);
-		memcpy(stateid.data, NFS_I(args->inode)->layout->stateid.data,
-		       NFS4_STATEID_SIZE);
-		spin_unlock(&args->inode->i_lock);
-		p = xdr_encode_opaque_fixed(p, &stateid.data,
-					    NFS4_STATEID_SIZE);
-		p = reserve_space(xdr, 4);
-		*p = cpu_to_be32(0);
-	}
-	hdr->nops++;
-	hdr->replen += decode_layoutreturn_maxsz;
-}
 #endif /* CONFIG_NFS_V4_1 */
 
 /*
@@ -2733,25 +2689,6 @@ static int nfs4_xdr_enc_layoutget(struct rpc_rqst *req, uint32_t *p,
 	return 0;
 }
 
-/*
- * Encode LAYOUTRETURN request
- */
-static int nfs4_xdr_enc_layoutreturn(struct rpc_rqst *req, uint32_t *p,
-				     struct nfs4_layoutreturn_args *args)
-{
-	struct xdr_stream xdr;
-	struct compound_hdr hdr = {
-		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
-	};
-
-	xdr_init_encode(&xdr, &req->rq_snd_buf, p);
-	encode_compound_hdr(&xdr, req, &hdr);
-	encode_sequence(&xdr, &args->seq_args, &hdr);
-	encode_putfh(&xdr, NFS_FH(args->inode), &hdr);
-	encode_layoutreturn(&xdr, args, &hdr);
-	encode_nops(&hdr);
-	return 0;
-}
 #endif /* CONFIG_NFS_V4_1 */
 
 static void print_overflow_msg(const char *func, const struct xdr_stream *xdr)
@@ -5155,26 +5092,6 @@ out_overflow:
 	return -EIO;
 }
 
-static int decode_layoutreturn(struct xdr_stream *xdr,
-			       struct nfs4_layoutreturn_res *res)
-{
-	__be32 *p;
-	int status;
-
-	status = decode_op_hdr(xdr, OP_LAYOUTRETURN);
-	if (status)
-		return status;
-	p = xdr_inline_decode(xdr, 4);
-	if (unlikely(!p))
-		goto out_overflow;
-	res->lrs_present = be32_to_cpup(p);
-	if (res->lrs_present)
-		status = decode_stateid(xdr, &res->stateid);
-	return status;
-out_overflow:
-	print_overflow_msg(__func__, xdr);
-	return -EIO;
-}
 #endif /* CONFIG_NFS_V4_1 */
 
 /*
@@ -6252,30 +6169,6 @@ out:
 	return status;
 }
 
-/*
- * Decode LAYOUTRETURN response
- */
-static int nfs4_xdr_dec_layoutreturn(struct rpc_rqst *rqstp, uint32_t *p,
-				     struct nfs4_layoutreturn_res *res)
-{
-	struct xdr_stream xdr;
-	struct compound_hdr hdr;
-	int status;
-
-	xdr_init_decode(&xdr, &rqstp->rq_rcv_buf, p);
-	status = decode_compound_hdr(&xdr, &hdr);
-	if (status)
-		goto out;
-	status = decode_sequence(&xdr, &res->seq_res, rqstp);
-	if (status)
-		goto out;
-	status = decode_putfh(&xdr);
-	if (status)
-		goto out;
-	status = decode_layoutreturn(&xdr, res);
-out:
-	return status;
-}
 #endif /* CONFIG_NFS_V4_1 */
 
 __be32 *nfs4_decode_dirent(struct xdr_stream *xdr, struct nfs_entry *entry,
@@ -6473,7 +6366,6 @@ struct rpc_procinfo	nfs4_procedures[] = {
   PROC(RECLAIM_COMPLETE, enc_reclaim_complete,  dec_reclaim_complete),
   PROC(GETDEVICEINFO, enc_getdeviceinfo, dec_getdeviceinfo),
   PROC(LAYOUTGET,  enc_layoutget,     dec_layoutget),
-  PROC(LAYOUTRETURN, enc_layoutreturn,  dec_layoutreturn),
 #endif /* CONFIG_NFS_V4_1 */
 };
 
