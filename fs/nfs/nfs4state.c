@@ -79,6 +79,7 @@ int nfs4_init_clientid(struct nfs_client *clp, struct rpc_cred *cred)
 	if (status != 0)
 		goto out;
 	clp->cl_clientid = clid.clientid;
+	clp->cl_cb_ident = clid.cb_ident;
 	nfs4_schedule_state_renewal(clp);
 out:
 	return status;
