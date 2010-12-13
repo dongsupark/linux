@@ -215,7 +215,6 @@ nfs41_callback_up(struct svc_serv *serv, struct rpc_xprt *xprt)
 	 * Save the svc_serv in the transport so that it can
 	 * be referenced when the session backchannel is initialized
 	 */
-	serv->bc_xprt = bc_xprt;
 	xprt->bc_serv = serv;
 
 	/* socket is shared with the fore channel */
@@ -227,6 +226,8 @@ nfs41_callback_up(struct svc_serv *serv, struct rpc_xprt *xprt)
 	rqstp = svc_prepare_thread(serv, &serv->sv_pools[0]);
 	if (IS_ERR(rqstp))
 		svc_sock_destroy(bc_xprt);
+	else
+		serv->bc_xprt = bc_xprt;
 out:
 	dprintk("--> %s return %p\n", __func__, rqstp);
 	return rqstp;
