@@ -363,29 +363,53 @@ static int nfs_sockaddr_cmp(const struct sockaddr *sa1,
 	return 0;
 }
 
+/* Common match routine for v4.0 and v4.1 callback services */
+bool
+nfs4_cb_match_client(const struct sockaddr *addr, struct nfs_client *clp,
+		     u32 minorversion)
+{
+	struct sockaddr *clap = (struct sockaddr *)&clp->cl_addr;
+
+	/* Don't match clients that failed to initialise */
+	if (!(clp->cl_cons_state == NFS_CS_READY ||
+	    clp->cl_cons_state == NFS_CS_SESSION_INITING))
+		return false;
+
+	/* Match the version and minorversion */
+	if (clp->rpc_ops->version != 4 ||
+	    clp->cl_minorversion != minorversion)
+		return false;
+
+	/* Match only the IP address, not the port number */
+	if (!nfs_sockaddr_match_ipaddr(addr, clap))
+		return false;
+
+	return true;
+}
+
 /*
- * Find a client by IP address and protocol version
- * - returns NULL if no such client
+ * NFSv4.0 callback thread helper
+ *
+ * Find a client by IP address, protocol version, minorversion, and callback
+ * identifier.
+ *
+ * Called from the pg_authenticate method with a zero callback_ident
+ * because the callback identifier has not been decoded.
+ *
+ * Returns NULL if no such client
  */
-struct nfs_client *nfs_find_client(const struct sockaddr *addr, u32 nfsversion)
+struct nfs_client *
+nfs4_find_client_ident(const struct sockaddr *addr, u32 callback_ident)
 {
 	struct nfs_client *clp;
 
 	spin_lock(&nfs_client_lock);
 	list_for_each_entry(clp, &nfs_client_list, cl_share_link) {
-		struct sockaddr *clap = (struct sockaddr *)&clp->cl_addr;
-
-		/* Don't match clients that failed to initialise properly */
-		if (!(clp->cl_cons_state == NFS_CS_READY ||
-		      clp->cl_cons_state == NFS_CS_SESSION_INITING))
+		if (nfs4_cb_match_client(addr, clp, 0) == false)
 			continue;
 
-		/* Different NFS versions cannot share the same nfs_client */
-		if (clp->rpc_ops->version != nfsversion)
-			continue;
-
-		/* Match only the IP address, not the port number */
-		if (!nfs_sockaddr_match_ipaddr(addr, clap))
+		/* Match the non-zero callback identifier */
+		if (callback_ident != 0 && clp->cl_cb_ident != callback_ident)
 			continue;
 
 		atomic_inc(&clp->cl_count);
@@ -396,29 +420,36 @@ struct nfs_client *nfs_find_client(const struct sockaddr *addr, u32 nfsversion)
 	return NULL;
 }
 
+#if defined(CONFIG_NFS_V4_1)
 /*
- * Find a client by IP address and protocol version
- * - returns NULL if no such client
+ * NFSv4.1 callback thread helper
+ * For CB_COMPOUND calls, find a client by IP address, protocol version,
+ * minorversion, and sessionID
+ *
+ * CREATE_SESSION triggers a CB_NULL ping from servers. The callback service
+ * sessionid can only be set after the CREATE_SESSION return, so a CB_NULL
+ * can arrive before the callback sessionid is set. For CB_NULL calls,
+ * find a client by IP address protocol version, and minorversion.
+ *
+ * Returns NULL if no such client
  */
-struct nfs_client *nfs_find_client_next(struct nfs_client *clp)
+struct nfs_client *
+nfs4_find_client_sessionid(const struct sockaddr *addr,
+			   struct nfs4_sessionid *sid, int is_cb_compound)
 {
-	struct sockaddr *sap = (struct sockaddr *)&clp->cl_addr;
-	u32 nfsvers = clp->rpc_ops->version;
+	struct nfs_client *clp;
 
 	spin_lock(&nfs_client_lock);
-	list_for_each_entry_continue(clp, &nfs_client_list, cl_share_link) {
-		struct sockaddr *clap = (struct sockaddr *)&clp->cl_addr;
-
-		/* Don't match clients that failed to initialise properly */
-		if (clp->cl_cons_state != NFS_CS_READY)
+	list_for_each_entry(clp, &nfs_client_list, cl_share_link) {
+		if (nfs4_cb_match_client(addr, clp, 1) == false)
 			continue;
 
-		/* Different NFS versions cannot share the same nfs_client */
-		if (clp->rpc_ops->version != nfsvers)
+		if (!nfs4_has_session(clp))
 			continue;
 
-		/* Match only the IP address, not the port number */
-		if (!nfs_sockaddr_match_ipaddr(sap, clap))
+		/* Match sessionid unless cb_null call*/
+		if (is_cb_compound && (memcmp(clp->cl_session->sess_id.data,
+		    sid->data, NFS4_MAX_SESSIONID_LEN) != 0))
 			continue;
 
 		atomic_inc(&clp->cl_count);
@@ -429,6 +460,16 @@ struct nfs_client *nfs_find_client_next(struct nfs_client *clp)
 	return NULL;
 }
 
+#else /* CONFIG_NFS_V4_1 */
+
+struct nfs_client *
+nfs4_find_client_sessionid(const struct sockaddr *addr,
+			   struct nfs4_sessionid *sid, int is_cb_compound)
+{
+	return NULL;
+}
+
+#endif /* CONFIG_NFS_V4_1 */
 /*
  * Find an nfs_client on the list that matches the initialisation data
  * that is supplied.
