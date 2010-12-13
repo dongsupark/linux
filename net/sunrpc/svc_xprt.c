@@ -128,7 +128,8 @@ static void svc_xprt_free(struct kref *kref)
 	if (test_bit(XPT_CACHE_AUTH, &xprt->xpt_flags))
 		svcauth_unix_info_release(xprt);
 	put_net(xprt->xpt_net);
-	xprt->xpt_ops->xpo_free(xprt);
+	if (!test_bit(XPT_SHARE_SOCK, &xprt->xpt_flags))
+		xprt->xpt_ops->xpo_free(xprt);
 	module_put(owner);
 }
 

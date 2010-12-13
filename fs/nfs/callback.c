@@ -193,6 +193,9 @@ nfs41_callback_up(struct svc_serv *serv, struct rpc_xprt *xprt)
 	serv->bc_xprt = bc_xprt;
 	xprt->bc_serv = serv;
 
+	/* socket is shared with the fore channel */
+	set_bit(XPT_SHARE_SOCK, &bc_xprt->xpt_flags);
+
 	INIT_LIST_HEAD(&serv->sv_cb_list);
 	spin_lock_init(&serv->sv_cb_lock);
 	init_waitqueue_head(&serv->sv_cb_waitq);
