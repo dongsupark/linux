@@ -985,6 +985,8 @@ void xprt_free(struct rpc_xprt *xprt)
 {
 	put_net(xprt->xprt_net);
 	kfree(xprt->slot);
+	if (xprt->bc_xprt)
+		kfree(xprt->bc_xprt->xpt_bc_sid);
 	kfree(xprt);
 }
 EXPORT_SYMBOL_GPL(xprt_free);
