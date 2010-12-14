@@ -93,16 +93,6 @@ struct nfs_client {
 #endif
 };
 
-static inline bool
-is_ds_only_client(struct nfs_client *clp)
-{
-#ifdef CONFIG_NFS_V4_1
-	return is_ds_only_session(clp->cl_exchange_flags);
-#else
-	return false;
-#endif
-}
-
 /*
  * NFS client parameters stored in the superblock.
  */
