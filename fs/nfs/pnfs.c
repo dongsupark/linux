@@ -182,7 +182,6 @@ void
 get_layout_hdr(struct pnfs_layout_hdr *lo)
 {
 	atomic_inc(&lo->plh_refcount);
-	smp_mb__after_atomic_inc();
 }
 
 static void
