@@ -186,7 +186,7 @@ static int initiate_layout_draining(struct nfs_client *clp,
 			list_del_init(&lo->plh_bulk_recall);
 			spin_unlock(&lo->inode->i_lock);
 			trigger_flush(lo->inode);
-			put_layout_hdr(lo->inode);
+			put_layout_hdr(lo);
 			rv = NFS4_OK;
 		}
 		pnfs_free_lseg_list(&free_me_list);
@@ -217,7 +217,7 @@ static u32 do_callback_layoutrecall(struct nfs_client *clp,
 		spin_lock(&lo->inode->i_lock);
 		lo->plh_block_lgets--;
 		spin_unlock(&lo->inode->i_lock);
-		put_layout_hdr(args->cbl_inode);
+		put_layout_hdr(lo);
 	}
 	clear_bit(NFS4CLNT_LAYOUTRECALL, &clp->cl_state);
 out:

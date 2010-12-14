@@ -203,9 +203,9 @@ put_layout_hdr_locked(struct pnfs_layout_hdr *lo)
 }
 
 void
-put_layout_hdr(struct inode *inode)
+put_layout_hdr(struct pnfs_layout_hdr *lo)
 {
-	struct pnfs_layout_hdr *lo = NFS_I(inode)->layout;
+	struct inode *inode = lo->inode;
 
 	BUG_ON(atomic_read(&lo->plh_refcount) == 0);
 	if (atomic_dec_and_lock(&lo->plh_refcount, &inode->i_lock)) {
@@ -281,7 +281,7 @@ put_lseg(struct pnfs_layout_segment *lseg)
 		NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
 		notify_drained(NFS_SERVER(ino)->nfs_client, count);
 		/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
-		put_layout_hdr(ino);
+		put_layout_hdr(NFS_I(ino)->layout);
 	}
 }
 
@@ -342,7 +342,7 @@ pnfs_free_lseg_list(struct list_head *free_me)
 		NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
 		notify_drained(NFS_SERVER(ino)->nfs_client, count);
 		/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
-		put_layout_hdr(ino);
+		put_layout_hdr(NFS_I(ino)->layout);
 	}
 	INIT_LIST_HEAD(free_me);
 }
@@ -832,7 +832,7 @@ pnfs_update_layout(struct inode *ino,
 		spin_unlock(&ino->i_lock);
 	}
 	atomic_dec(&lo->plh_outstanding);
-	put_layout_hdr(ino);
+	put_layout_hdr(lo);
 out:
 	dprintk("%s end, state 0x%lx lseg %p\n", __func__,
 		nfsi->layout->plh_flags, lseg);
