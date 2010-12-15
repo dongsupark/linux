@@ -30,8 +30,6 @@
 #ifndef FS_NFS_PNFS_H
 #define FS_NFS_PNFS_H
 
-#include "callback.h" /* for cb_layoutrecallargs */
-
 enum {
 	NFS_LSEG_VALID = 0,	/* cleared when lseg is recalled/returned */
 	NFS_LSEG_ROC,		/* roc bit received from server */
