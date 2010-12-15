@@ -298,10 +298,11 @@ put_lseg(struct pnfs_layout_segment *lseg)
 EXPORT_SYMBOL_GPL(put_lseg);
 
 static bool
-should_free_lseg(u32 lseg_iomode, u32 recall_iomode)
+should_free_lseg(struct pnfs_layout_range *lseg_range,
+		 struct pnfs_layout_range *recall_range)
 {
-	return (recall_iomode == IOMODE_ANY ||
-		lseg_iomode == recall_iomode);
+	return (recall_range->iomode == IOMODE_ANY ||
+		lseg_range->iomode == recall_range->iomode);
 }
 
 /* Returns 1 if lseg is removed from list, 0 otherwise */
@@ -327,12 +328,13 @@ static int mark_lseg_invalid(struct pnfs_layout_segment *lseg,
 int
 mark_matching_lsegs_invalid(struct pnfs_layout_hdr *lo,
 			    struct list_head *tmp_list,
-			    u32 iomode)
+			    struct pnfs_layout_range *range)
 {
 	struct pnfs_layout_segment *lseg, *next;
 	int invalid = 0, removed = 0;
 
-	dprintk("%s:Begin lo %p\n", __func__, lo);
+	dprintk("%s:Begin lo %p offset %llu length %llu iomode %d\n",
+		__func__, lo, range->offset, range->length, range->iomode);
 
 	assert_spin_locked(&lo->plh_inode->i_lock);
 	if (list_empty(&lo->plh_segs)) {
@@ -341,7 +343,7 @@ mark_matching_lsegs_invalid(struct pnfs_layout_hdr *lo,
 		return 0;
 	}
 	list_for_each_entry_safe(lseg, next, &lo->plh_segs, pls_list)
-		if (should_free_lseg(lseg->pls_range.iomode, iomode)) {
+		if (should_free_lseg(&lseg->pls_range, range)) {
 			dprintk("%s: freeing lseg %p iomode %d "
 				"offset %llu length %llu\n", __func__,
 				lseg, lseg->pls_range.iomode, lseg->pls_range.offset,
@@ -384,13 +386,18 @@ void
 pnfs_destroy_layout(struct nfs_inode *nfsi)
 {
 	struct pnfs_layout_hdr *lo;
+	struct pnfs_layout_range range = {
+		.iomode = IOMODE_ANY,
+		.offset = 0,
+		.length = NFS4_MAX_UINT64,
+	};
 	LIST_HEAD(tmp_list);
 
 	spin_lock(&nfsi->vfs_inode.i_lock);
 	lo = nfsi->layout;
 	if (lo) {
 		lo->plh_block_lgets++; /* permanently block new LAYOUTGETs */
-		mark_matching_lsegs_invalid(lo, &tmp_list, IOMODE_ANY);
+		mark_matching_lsegs_invalid(lo, &tmp_list, &range);
 		WARN_ON(!list_empty(&nfsi->layout->plh_segs));
 		WARN_ON(!list_empty(&nfsi->layout->plh_layouts));
 
@@ -505,7 +512,7 @@ pnfs_choose_layoutget_stateid(nfs4_stateid *dst, struct pnfs_layout_hdr *lo,
 static struct pnfs_layout_segment *
 send_layoutget(struct pnfs_layout_hdr *lo,
 	   struct nfs_open_context *ctx,
-	   u32 iomode)
+	   struct pnfs_layout_range *range)
 {
 	struct inode *ino = lo->plh_inode;
 	struct nfs_server *server = NFS_SERVER(ino);
@@ -520,7 +527,7 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 		return NULL;
 	lgp->args.minlength = NFS4_MAX_UINT64;
 	lgp->args.maxcount = PNFS_LAYOUT_MAXSIZE;
-	lgp->args.range.iomode = iomode;
+	lgp->args.range.iomode = range->iomode;
 	lgp->args.range.offset = 0;
 	lgp->args.range.length = NFS4_MAX_UINT64;
 	lgp->args.type = server->pnfs_curr_ld->id;
@@ -534,7 +541,7 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	nfs4_proc_layoutget(lgp);
 	if (!lseg) {
 		/* remember that LAYOUTGET failed and suspend trying */
-		set_bit(lo_fail_bit(iomode), &lo->plh_flags);
+		set_bit(lo_fail_bit(range->iomode), &lo->plh_flags);
 	}
 	return lseg;
 }
@@ -622,10 +629,12 @@ bool pnfs_roc_drain(struct inode *ino, u32 *barrier)
  * are seen first.
  */
 static s64
-cmp_layout(u32 iomode1, u32 iomode2)
+cmp_layout(struct pnfs_layout_range *l1,
+	   struct pnfs_layout_range *l2)
 {
 	/* read > read/write */
-	return (int)(iomode2 == IOMODE_READ) - (int)(iomode1 == IOMODE_READ);
+	return (int)(l2->iomode == IOMODE_READ) -
+		(int)(l1->iomode == IOMODE_READ);
 }
 
 static void
@@ -639,7 +648,7 @@ pnfs_insert_layout(struct pnfs_layout_hdr *lo,
 
 	assert_spin_locked(&lo->plh_inode->i_lock);
 	list_for_each_entry(lp, &lo->plh_segs, pls_list) {
-		if (cmp_layout(lp->pls_range.iomode, lseg->pls_range.iomode) > 0)
+		if (cmp_layout(&lp->pls_range, &lseg->pls_range) > 0)
 			continue;
 		list_add_tail(&lseg->pls_list, &lp->pls_list);
 		dprintk("%s: inserted lseg %p "
@@ -708,7 +717,7 @@ pnfs_find_alloc_layout(struct inode *ino)
 
 /*
  * iomode matching rules:
- * iomode	lseg	match
+ * range	lseg	match
  * -----	-----	-----
  * ANY		READ	true
  * ANY		RW	true
@@ -718,16 +727,18 @@ pnfs_find_alloc_layout(struct inode *ino)
  * READ		RW	true
  */
 static int
-is_matching_lseg(struct pnfs_layout_segment *lseg, u32 iomode)
+is_matching_lseg(struct pnfs_layout_segment *lseg,
+		 struct pnfs_layout_range *range)
 {
-	return (iomode != IOMODE_RW || lseg->pls_range.iomode == IOMODE_RW);
+	return (range->iomode != IOMODE_RW || lseg->pls_range.iomode == IOMODE_RW);
 }
 
 /*
  * lookup range in layout
  */
 static struct pnfs_layout_segment *
-pnfs_find_lseg(struct pnfs_layout_hdr *lo, u32 iomode)
+pnfs_find_lseg(struct pnfs_layout_hdr *lo,
+		struct pnfs_layout_range *range)
 {
 	struct pnfs_layout_segment *lseg, *ret = NULL;
 
@@ -736,12 +747,12 @@ pnfs_find_lseg(struct pnfs_layout_hdr *lo, u32 iomode)
 	assert_spin_locked(&lo->plh_inode->i_lock);
 	list_for_each_entry(lseg, &lo->plh_segs, pls_list) {
 		if (test_bit(NFS_LSEG_VALID, &lseg->pls_flags) &&
-		    is_matching_lseg(lseg, iomode)) {
+		    is_matching_lseg(lseg, range)) {
 			get_lseg(lseg);
 			ret = lseg;
 			break;
 		}
-		if (cmp_layout(iomode, lseg->pls_range.iomode) > 0)
+		if (cmp_layout(range, &lseg->pls_range) > 0)
 			break;
 	}
 
@@ -759,6 +770,11 @@ pnfs_update_layout(struct inode *ino,
 		   struct nfs_open_context *ctx,
 		   enum pnfs_iomode iomode)
 {
+	struct pnfs_layout_range arg = {
+		.iomode = iomode,
+		.offset = 0,
+		.length = NFS4_MAX_UINT64,
+	};
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct nfs_client *clp = NFS_SERVER(ino)->nfs_client;
 	struct pnfs_layout_hdr *lo;
@@ -781,7 +797,7 @@ pnfs_update_layout(struct inode *ino,
 		goto out_unlock;
 	}
 	/* Check to see if the layout for the given range already exists */
-	lseg = pnfs_find_lseg(lo, iomode);
+	lseg = pnfs_find_lseg(lo, &arg);
 	if (lseg)
 		goto out_unlock;
 
@@ -807,7 +823,7 @@ pnfs_update_layout(struct inode *ino,
 		spin_unlock(&clp->cl_lock);
 	}
 
-	lseg = send_layoutget(lo, ctx, iomode);
+	lseg = send_layoutget(lo, ctx, &arg);
 	if (!lseg && first) {
 		spin_lock(&clp->cl_lock);
 		list_del_init(&lo->plh_layouts);
