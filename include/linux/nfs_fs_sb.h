@@ -85,6 +85,10 @@ struct nfs_client {
 	struct nfs4_session	*cl_session; 	/* sharred session */
 	struct list_head	cl_layouts;
 	atomic_t		cl_recall_count; /* no. of lsegs in recall */
+	struct list_head	cl_layoutrecalls;
+	unsigned long		cl_cb_lrecall_count;
+#define PNFS_MAX_CB_LRECALLS (64)
+	atomic_t		*cl_drain_notification[PNFS_MAX_CB_LRECALLS];
 	struct pnfs_deviceid_cache *cl_devid_cache; /* pNFS deviceid cache */
 #endif /* CONFIG_NFS_V4_1 */
 
