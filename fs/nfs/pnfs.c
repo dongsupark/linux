@@ -599,9 +599,56 @@ void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 		}
 }
 
-/* Since we are using the forgetful model, nothing is sent over the wire.
- * However, we still must stop using any matching layouts.
+/* Return true if there is layout based io in progress in the given range.
+ * Assumes range has already been marked invalid, and layout marked to
+ * prevent any new lseg from being inserted.
  */
+bool
+pnfs_return_layout_barrier(struct nfs_inode *nfsi,
+			   struct pnfs_layout_range *range)
+{
+	struct pnfs_layout_segment *lseg;
+	bool ret = false;
+
+	spin_lock(&nfsi->vfs_inode.i_lock);
+	list_for_each_entry(lseg, &nfsi->layout->plh_segs, pls_list)
+		if (should_free_lseg(&lseg->pls_range, range)) {
+			ret = true;
+			break;
+		}
+	spin_unlock(&nfsi->vfs_inode.i_lock);
+	dprintk("%s:Return %d\n", __func__, ret);
+	return ret;
+}
+
+static int
+return_layout(struct inode *ino, struct pnfs_layout_range *range, bool wait)
+{
+	struct nfs4_layoutreturn *lrp;
+	struct nfs_server *server = NFS_SERVER(ino);
+	int status = -ENOMEM;
+
+	dprintk("--> %s\n", __func__);
+
+	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
+	if (lrp == NULL) {
+		put_layout_hdr(NFS_I(ino)->layout);
+		goto out;
+	}
+	lrp->args.reclaim = 0;
+	lrp->args.layout_type = server->pnfs_curr_ld->id;
+	lrp->args.return_type = RETURN_FILE;
+	lrp->args.range = *range;
+	lrp->args.inode = ino;
+	lrp->clp = server->nfs_client;
+
+	status = nfs4_proc_layoutreturn(lrp, wait);
+out:
+	dprintk("<-- %s status: %d\n", __func__, status);
+	return status;
+}
+
+/* Initiates a LAYOUTRETURN(FILE) */
 int
 _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 		    bool wait)
@@ -626,10 +673,21 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 		goto out;
 	}
 	lo->plh_block_lgets++;
+	/* Reference matched in nfs4_layoutreturn_release */
+	get_layout_hdr(lo);
 	spin_unlock(&ino->i_lock);
 	pnfs_free_lseg_list(&tmp_list);
 
-	/* Don't need to wait since this is followed by call to end_writeback */
+	if (layoutcommit_needed(nfsi)) {
+		status = pnfs_layoutcommit_inode(ino, wait);
+		if (status) {
+			/* Return layout even if layoutcommit fails */
+			dprintk("%s: layoutcommit failed, status=%d. "
+				"Returning layout anyway\n",
+				__func__, status);
+		}
+	}
+	status = return_layout(ino, &arg, wait);
 out:
 	dprintk("<-- %s status: %d\n", __func__, status);
 	return status;
