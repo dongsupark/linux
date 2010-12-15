@@ -8,9 +8,6 @@
 #include <linux/nfs4.h>
 #include <linux/nfs_fs.h>
 #include <linux/slab.h>
-#include <linux/kthread.h>
-#include <linux/module.h>
-#include <linux/writeback.h>
 #include "nfs4_fs.h"
 #include "callback.h"
 #include "delegation.h"
