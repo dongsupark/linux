@@ -43,7 +43,7 @@ struct pnfs_layout_segment {
 	atomic_t pls_refcount;
 	unsigned long pls_flags;
 	struct pnfs_layout_hdr *layout;
-	int pls_notify_count;
+	int pls_recall_count;
 };
 
 #ifdef CONFIG_NFS_V4_1

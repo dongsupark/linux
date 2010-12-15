@@ -202,9 +202,9 @@ static u32 do_callback_layoutrecall(struct nfs_client *clp,
 	dprintk("%s enter, type=%i\n", __func__, args->cbl_recall_type);
 	if (test_and_set_bit(NFS4CLNT_LAYOUTRECALL, &clp->cl_state))
 		goto out;
-	atomic_inc(&clp->cl_drain_notify);
+	atomic_inc(&clp->cl_recall_count);
 	status = initiate_layout_draining(clp, args);
-	if (atomic_dec_and_test(&clp->cl_drain_notify))
+	if (atomic_dec_and_test(&clp->cl_recall_count))
 		res = NFS4ERR_NOMATCHING_LAYOUT;
 	else
 		res = NFS4ERR_DELAY;

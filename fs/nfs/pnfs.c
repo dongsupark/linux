@@ -222,17 +222,17 @@ init_lseg(struct pnfs_layout_hdr *lo, struct pnfs_layout_segment *lseg)
 	smp_mb();
 	set_bit(NFS_LSEG_VALID, &lseg->pls_flags);
 	lseg->layout = lo;
-	lseg->pls_notify_count = 0;
+	lseg->pls_recall_count = 0;
 }
 
 static void free_lseg(struct pnfs_layout_segment *lseg)
 {
 	struct inode *ino = lseg->layout->inode;
-	int count = lseg->pls_notify_count;
+	int count = lseg->pls_recall_count;
 
 	BUG_ON(atomic_read(&lseg->pls_refcount) != 0);
 	NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
-	atomic_sub(count, &NFS_SERVER(ino)->nfs_client->cl_drain_notify);
+	atomic_sub(count, &NFS_SERVER(ino)->nfs_client->cl_recall_count);
 	/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
 	put_layout_hdr(NFS_I(ino)->layout);
 }
@@ -508,8 +508,8 @@ void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 
 	list_for_each_entry_safe(lseg, tmp, &lo->segs, fi_list)
 		if (should_free_lseg(&lseg->range, range->iomode)) {
-			lseg->pls_notify_count++;
-			atomic_inc(&NFS_SERVER(lo->inode)->nfs_client->cl_drain_notify);
+			lseg->pls_recall_count++;
+			atomic_inc(&NFS_SERVER(lo->inode)->nfs_client->cl_recall_count);
 			mark_lseg_invalid(lseg, tmp_list);
 		}
 }
