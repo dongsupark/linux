@@ -46,6 +46,7 @@ enum nfs4_client_state {
 	NFS4CLNT_DELEGRETURN,
 	NFS4CLNT_SESSION_RESET,
 	NFS4CLNT_RECALL_SLOT,
+	NFS4CLNT_LAYOUT_RECALL,
 };
 
 enum nfs4_session_state {
