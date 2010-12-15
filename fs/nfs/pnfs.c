@@ -514,7 +514,9 @@ void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 		}
 }
 
-/* Initiates a LAYOUTRETURN(FILE) */
+/* Since we are using the forgetful model, nothing is sent over the wire.
+ * However, we still must stop using any matching layouts.
+ */
 int
 _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 		    bool wait)
