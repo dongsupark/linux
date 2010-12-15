@@ -276,9 +276,9 @@ struct pnfs_block_extent *get_extent(struct pnfs_block_extent *be);
 int is_sector_initialized(struct pnfs_inval_markings *marks, sector_t isect);
 int encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 				   struct xdr_stream *xdr,
-				   const struct nfs4_layoutcommit_op_args *arg);
+				   const struct nfs4_layoutcommit_args *arg);
 void clean_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
-				   const struct nfs4_layoutcommit_op_args *arg,
+				   const struct nfs4_layoutcommit_args *arg,
 				   int status);
 int add_and_merge_extent(struct pnfs_block_layout *bl,
 			 struct pnfs_block_extent *new);
