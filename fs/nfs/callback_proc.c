@@ -111,11 +111,6 @@ int nfs4_validate_delegation_stateid(struct nfs_delegation *delegation, const nf
 
 #if defined(CONFIG_NFS_V4_1)
 
-static void trigger_flush(struct inode *ino)
-{
-	write_inode_now(ino, 0);
-}
-
 static int initiate_layout_draining(struct nfs_client *clp,
 				    struct cb_layoutrecallargs *args)
 {
@@ -154,8 +149,6 @@ static int initiate_layout_draining(struct nfs_client *clp,
 		}
 		pnfs_set_layout_stateid(lo, &args->cbl_stateid, true);
 		spin_unlock(&lo->inode->i_lock);
-		if (rv == NFS4_OK)
-			trigger_flush(lo->inode);
 		pnfs_free_lseg_list(&free_me_list);
 	} else {
 		struct pnfs_layout_hdr *tmp;
@@ -185,7 +178,6 @@ static int initiate_layout_draining(struct nfs_client *clp,
 			nfs4_asynch_forget_layouts(lo, &range, &free_me_list);
 			list_del_init(&lo->plh_bulk_recall);
 			spin_unlock(&lo->inode->i_lock);
-			trigger_flush(lo->inode);
 			put_layout_hdr(lo);
 			rv = NFS4_OK;
 		}
