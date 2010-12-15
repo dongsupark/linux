@@ -617,7 +617,7 @@ bl_alloc_lseg(struct pnfs_layout_hdr *lo,
 
 static int
 bl_setup_layoutcommit(struct pnfs_layout_hdr *lo,
-		      struct nfs4_layoutcommit_op_args *arg)
+		      struct nfs4_layoutcommit_args *arg)
 {
 	struct nfs_server *nfss = NFS_SERVER(lo->inode);
 	struct bl_layoutupdate_data *layoutupdate_data;
@@ -645,7 +645,7 @@ bl_setup_layoutcommit(struct pnfs_layout_hdr *lo,
 
 static void
 bl_encode_layoutcommit(struct pnfs_layout_hdr *lo, struct xdr_stream *xdr,
-		       const struct nfs4_layoutcommit_op_args *arg)
+		       const struct nfs4_layoutcommit_args *arg)
 {
 	dprintk("%s enter\n", __func__);
 	encode_pnfs_block_layoutupdate(BLK_LO2EXT(lo), xdr, arg);
@@ -653,12 +653,11 @@ bl_encode_layoutcommit(struct pnfs_layout_hdr *lo, struct xdr_stream *xdr,
 
 static void
 bl_cleanup_layoutcommit(struct pnfs_layout_hdr *lo,
-			struct nfs4_layoutcommit_op_args *arg,
-			struct nfs4_layoutcommit_op_res *res)
+			struct nfs4_layoutcommit_data *lcdata)
 {
 	dprintk("%s enter\n", __func__);
-	clean_pnfs_block_layoutupdate(BLK_LO2EXT(lo), arg, res->status);
-	kfree(arg->layoutdriver_data);
+	clean_pnfs_block_layoutupdate(BLK_LO2EXT(lo), &lcdata->args, lcdata->res.status);
+	kfree(lcdata->args.layoutdriver_data);
 }
 
 static void free_blk_mountid(struct block_mount_id *mid)
