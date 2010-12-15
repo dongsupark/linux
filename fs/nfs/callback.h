@@ -168,11 +168,6 @@ extern unsigned nfs4_callback_layoutrecall(
 
 extern void nfs4_check_drain_bc_complete(struct nfs4_session *ses);
 
-static inline void notify_drained(struct nfs_client *clp, int count)
-{
-	atomic_sub(count, &clp->cl_drain_notify);
-}
-
 #endif /* CONFIG_NFS_V4_1 */
 
 extern __be32 nfs4_callback_getattr(struct cb_getattrargs *args,

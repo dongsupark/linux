@@ -232,7 +232,7 @@ static void free_lseg(struct pnfs_layout_segment *lseg)
 
 	BUG_ON(atomic_read(&lseg->pls_refcount) != 0);
 	NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
-	notify_drained(NFS_SERVER(ino)->nfs_client, count);
+	atomic_sub(count, &NFS_SERVER(ino)->nfs_client->cl_drain_notify);
 	/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
 	put_layout_hdr(NFS_I(ino)->layout);
 }
