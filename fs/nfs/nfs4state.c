@@ -627,6 +627,7 @@ static void __nfs4_close(struct path *path, struct nfs4_state *state,
 		u32 roc_iomode;
 		struct nfs_inode *nfsi = NFS_I(state->inode);
 
+		/* FIXME: should return the layout only on last close */
 		if (has_layout(nfsi) &&
 		    (roc_iomode = pnfs_layout_roc_iomode(nfsi)) != 0) {
 			struct pnfs_layout_range range = {
