@@ -302,6 +302,7 @@ should_free_lseg(struct pnfs_layout_range *lseg_range, u32 iomode)
 static void mark_lseg_invalid(struct pnfs_layout_segment *lseg,
 			      struct list_head *tmp_list)
 {
+	assert_spin_locked(&lseg->layout->inode->i_lock);
 	if (test_and_clear_bit(NFS_LSEG_VALID, &lseg->pls_flags)) {
 		/* Remove the reference keeping the lseg in the
 		 * list.  It will now be removed when all
@@ -392,6 +393,7 @@ pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo, const nfs4_stateid *new,
 {
 	u32 oldseq, newseq;
 
+	assert_spin_locked(&lo->inode->i_lock);
 	oldseq = be32_to_cpu(lo->stateid.stateid.seqid);
 	newseq = be32_to_cpu(new->stateid.seqid);
 	if ((int)(newseq - oldseq) > 0) {
@@ -420,6 +422,7 @@ static bool
 pnfs_layoutgets_blocked(struct pnfs_layout_hdr *lo, nfs4_stateid *stateid,
 			int lget)
 {
+	assert_spin_locked(&lo->inode->i_lock);
 	if ((stateid) &&
 	    (int)(lo->plh_barrier - be32_to_cpu(stateid->stateid.seqid)) >= 0)
 		return true;
@@ -506,6 +509,7 @@ void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 {
 	struct pnfs_layout_segment *lseg, *tmp;
 
+	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry_safe(lseg, tmp, &lo->segs, fi_list)
 		if (should_free_lseg(&lseg->range, range->iomode)) {
 			lseg->pls_recall_count++;
@@ -656,6 +660,7 @@ pnfs_insert_layout(struct pnfs_layout_hdr *lo,
 
 	dprintk("%s:Begin\n", __func__);
 
+	assert_spin_locked(&lo->inode->i_lock);
 	list_for_each_entry(lp, &lo->segs, fi_list) {
 		if (cmp_layout(lp->range.iomode, lseg->range.iomode) > 0)
 			continue;
