@@ -240,12 +240,6 @@ has_layout(struct nfs_inode *nfsi)
 }
 
 static inline bool
-pnfs_ld_layoutret_on_setattr(struct inode *inode)
-{
-	return false;
-}
-
-static inline bool
 pnfs_roc(struct inode *ino)
 {
 	return false;
