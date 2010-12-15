@@ -465,12 +465,9 @@ pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo, const nfs4_stateid *new,
 	newseq = be32_to_cpu(new->stateid.seqid);
 	if ((int)(newseq - oldseq) > 0) {
 		memcpy(&lo->stateid, &new->stateid, sizeof(new->stateid));
-		if (update_barrier) {
-			u32 new_barrier = be32_to_cpu(new->stateid.seqid);
-
-			if ((int)(new_barrier - lo->plh_barrier))
-				lo->plh_barrier = new_barrier;
-		} else {
+		if (update_barrier)
+			lo->plh_barrier = be32_to_cpu(new->stateid.seqid);
+		else {
 			/* Because of wraparound, we want to keep the barrier
 			 * "close" to the current seqids.  It needs to be
 			 * within 2**31 to count as "behind", so if it
@@ -618,7 +615,7 @@ return_layout(struct inode *ino, struct pnfs_layout_range *range, bool wait)
 
 	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
 	if (lrp == NULL) {
-		put_layout_hdr(ino);
+		put_layout_hdr(NFS_I(ino)->layout);
 		goto out;
 	}
 	lrp->args.reclaim = 0;
@@ -677,91 +674,6 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 out:
 	dprintk("<-- %s status: %d\n", __func__, status);
 	return status;
-}
-
-bool pnfs_roc(struct inode *ino)
-{
-	struct pnfs_layout_hdr *lo;
-	struct pnfs_layout_segment *lseg, *tmp;
-	LIST_HEAD(tmp_list);
-	bool found = false;
-
-	spin_lock(&ino->i_lock);
-	lo = NFS_I(ino)->layout;
-	if (!lo || !test_and_clear_bit(NFS_LAYOUT_ROC, &lo->plh_flags) ||
-	    test_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags))
-		goto out_nolayout;
-	list_for_each_entry_safe(lseg, tmp, &lo->segs, fi_list)
-		if (test_bit(NFS_LSEG_ROC, &lseg->pls_flags)) {
-			mark_lseg_invalid(lseg, &tmp_list);
-			found = true;
-		}
-	if (!found)
-		goto out_nolayout;
-	lo->plh_block_lgets++;
-	get_layout_hdr(lo); /* matched in pnfs_roc_release */
-	spin_unlock(&ino->i_lock);
-	pnfs_free_lseg_list(&tmp_list);
-	return true;
-
-out_nolayout:
-	spin_unlock(&ino->i_lock);
-	return false;
-}
-
-void pnfs_roc_release(bool needed, struct inode *ino)
-{
-	if (needed) {
-		struct pnfs_layout_hdr *lo;
-
-		spin_lock(&ino->i_lock);
-		lo = NFS_I(ino)->layout;
-		lo->plh_block_lgets--;
-		put_layout_hdr_locked(lo);
-		spin_unlock(&ino->i_lock);
-	}
-}
-
-void pnfs_roc_set_barrier(bool needed, struct inode *ino, u32 barrier)
-{
-	if (needed) {
-		struct pnfs_layout_hdr *lo;
-
-		spin_lock(&ino->i_lock);
-		lo = NFS_I(ino)->layout;
-		if ((int)(barrier - lo->plh_barrier) > 0)
-			lo->plh_barrier = barrier;
-		spin_unlock(&ino->i_lock);
-	}
-}
-
-void pnfs_roc_drain(bool needed, struct inode *ino, u32 *barrier,
-		    struct rpc_task *task)
-{
-	struct nfs_inode *nfsi = NFS_I(ino);
-	struct pnfs_layout_segment *lseg;
-	bool found = false;
-
-	if (!needed)
-		return;
-	spin_lock(&ino->i_lock);
-	list_for_each_entry(lseg, &nfsi->layout->segs, fi_list)
-		if (test_bit(NFS_LSEG_ROC, &lseg->pls_flags)) {
-			rpc_sleep_on(&NFS_I(ino)->lo_rpcwaitq, task, NULL);
-			found = true;
-			break;
-		}
-	if (!found) {
-		struct pnfs_layout_hdr *lo = nfsi->layout;
-		u32 current_seqid = be32_to_cpu(lo->stateid.stateid.seqid);
-
-		/* Since close does not return a layout stateid for use as
-		 * a barrier, we choose the worst-case barrier.
-		 */
-		*barrier = current_seqid + atomic_read(&lo->plh_outstanding);
-	}
-	spin_unlock(&ino->i_lock);
-	return;
 }
 
 /*
@@ -1032,8 +944,11 @@ pnfs_layout_process(struct nfs4_layoutget *lgp)
 	pnfs_insert_layout(lo, lseg);
 
 	if (res->return_on_close) {
-		set_bit(NFS_LSEG_ROC, &lseg->pls_flags);
-		set_bit(NFS_LAYOUT_ROC, &lo->plh_flags);
+		/* FI: This needs to be re-examined.  At lo level,
+		 * all it needs is a bit indicating whether any of
+		 * the lsegs in the list have the flags set.
+		 */
+		lo->roc_iomode |= res->range.iomode;
 	}
 
 	/* Done processing layoutget. Set the layout stateid */

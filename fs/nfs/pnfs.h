@@ -34,7 +34,6 @@
 
 enum {
 	NFS_LSEG_VALID = 0,	/* cleared when lseg is recalled/returned */
-	NFS_LSEG_ROC,		/* roc bit received from server */
 };
 
 struct pnfs_layout_segment {
@@ -60,7 +59,6 @@ enum {
 	NFS_LAYOUT_RW_FAILED,		/* get rw layout failed stop trying */
 	NFS_LAYOUT_BULK_RECALL,		/* bulk recall affecting layout */
 	NFS_LAYOUT_NEED_LCOMMIT,	/* LAYOUTCOMMIT needed */
-	NFS_LAYOUT_ROC,			/* some lseg had roc bit set */
 };
 
 /* Per-layout driver specific registration structure */
@@ -103,6 +101,7 @@ struct pnfs_layout_hdr {
 	struct list_head	layouts;   /* other client layouts */
 	struct list_head	plh_bulk_recall; /* clnt list of bulk recalls */
 	struct list_head	segs;      /* layout segments list */
+	int			roc_iomode;/* return on close iomode, 0=none */
 	nfs4_stateid		stateid;
 	atomic_t		plh_outstanding; /* number of RPCs out */
 	unsigned long		plh_block_lgets; /* block LAYOUTGET if >0 */
@@ -223,11 +222,6 @@ int pnfs_choose_layoutget_stateid(nfs4_stateid *dst,
 void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 				struct pnfs_layout_range *range,
 				struct list_head *tmp_list);
-bool pnfs_roc(struct inode *ino);
-void pnfs_roc_release(bool needed, struct inode *ino);
-void pnfs_roc_set_barrier(bool needed, struct inode *ino, u32 barrier);
-void pnfs_roc_drain(bool needed, struct inode *ino, u32 *barrier,
-		    struct rpc_task *task);
 
 static inline bool
 has_layout(struct nfs_inode *nfsi)
@@ -251,6 +245,14 @@ static inline void get_lseg(struct pnfs_layout_segment *lseg)
 static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 {
 	return nfss->pnfs_curr_ld != NULL;
+}
+
+/* Should the pNFS client commit and return the layout on close
+ */
+static inline int
+pnfs_layout_roc_iomode(struct nfs_inode *nfsi)
+{
+	return nfsi->layout->roc_iomode;
 }
 
 static inline int pnfs_return_layout(struct inode *ino,
@@ -336,26 +338,10 @@ static inline int pnfs_layoutcommit_inode(struct inode *inode, int sync)
 	return 0;
 }
 
-static inline bool
-pnfs_roc(struct inode *ino)
+static inline int
+pnfs_layout_roc_iomode(struct nfs_inode *nfsi)
 {
-	return false;
-}
-
-static inline void
-pnfs_roc_release(bool needed, struct inode *ino)
-{
-}
-
-static inline void
-pnfs_roc_set_barrier(bool needed, struct inode *ino, u32 barrier)
-{
-}
-
-static inline void
-pnfs_roc_drain(bool needed, struct inode *ino, u32 *barrier,
-	       struct rpc_task *task)
-{
+	return 0;
 }
 
 static inline int pnfs_return_layout(struct inode *ino,
