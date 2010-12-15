@@ -3098,6 +3098,7 @@ static void pnfs4_update_write_done(struct nfs_inode *nfsi, struct nfs_write_dat
 {
 #ifdef CONFIG_NFS_V4_1
 	pnfs_update_last_write(nfsi, data->args.offset, data->res.count);
+	pnfs_need_layoutcommit(nfsi, data->args.context);
 #endif /* CONFIG_NFS_V4_1 */
 }
 
