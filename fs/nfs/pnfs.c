@@ -225,6 +225,18 @@ init_lseg(struct pnfs_layout_hdr *lo, struct pnfs_layout_segment *lseg)
 	lseg->pls_notify_count = 0;
 }
 
+static void free_lseg(struct pnfs_layout_segment *lseg)
+{
+	struct inode *ino = lseg->layout->inode;
+	int count = lseg->pls_notify_count;
+
+	BUG_ON(atomic_read(&lseg->pls_refcount) != 0);
+	NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
+	notify_drained(NFS_SERVER(ino)->nfs_client, count);
+	/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
+	put_layout_hdr(NFS_I(ino)->layout);
+}
+
 static void
 _put_lseg_common(struct pnfs_layout_segment *lseg)
 {
@@ -274,14 +286,9 @@ put_lseg(struct pnfs_layout_segment *lseg)
 		test_bit(NFS_LSEG_VALID, &lseg->pls_flags));
 	ino = lseg->layout->inode;
 	if (atomic_dec_and_lock(&lseg->pls_refcount, &ino->i_lock)) {
-		int count = lseg->pls_notify_count;
-
 		_put_lseg_common(lseg);
 		spin_unlock(&ino->i_lock);
-		NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
-		notify_drained(NFS_SERVER(ino)->nfs_client, count);
-		/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
-		put_layout_hdr(NFS_I(ino)->layout);
+		free_lseg(lseg);
 	}
 }
 
@@ -332,18 +339,9 @@ void
 pnfs_free_lseg_list(struct list_head *free_me)
 {
 	struct pnfs_layout_segment *lseg, *tmp;
-	struct inode *ino;
-	int count;
 
-	list_for_each_entry_safe(lseg, tmp, free_me, fi_list) {
-		BUG_ON(atomic_read(&lseg->pls_refcount) != 0);
-		ino = lseg->layout->inode;
-		count = lseg->pls_notify_count;
-		NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
-		notify_drained(NFS_SERVER(ino)->nfs_client, count);
-		/* Matched by get_layout_hdr_locked in pnfs_insert_layout */
-		put_layout_hdr(NFS_I(ino)->layout);
-	}
+	list_for_each_entry_safe(lseg, tmp, free_me, fi_list)
+		free_lseg(lseg);
 	INIT_LIST_HEAD(free_me);
 }
 
