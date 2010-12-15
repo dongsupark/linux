@@ -191,6 +191,7 @@ struct nfs_inode {
 
 	/* pNFS layout information */
 	struct rpc_wait_queue lo_rpcwaitq;
+	struct rpc_wait_queue	lo_rpcwaitq_stateid;
 	struct pnfs_layout_hdr *layout;
 #endif /* CONFIG_NFS_V4*/
 #ifdef CONFIG_NFS_FSCACHE

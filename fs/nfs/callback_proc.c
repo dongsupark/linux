@@ -209,6 +209,7 @@ void nfs_client_return_layouts(struct nfs_client *clp)
 		list_del(&cb_info->pcl_list);
 		clp->cl_cb_lrecall_count--;
 		clp->cl_drain_notification[1 << cb_info->pcl_notify_bit] = NULL;
+		rpc_wake_up(&clp->cl_rpcwaitq_recall);
 		kfree(cb_info);
 	}
 }
@@ -360,6 +361,7 @@ static u32 do_callback_layoutrecall(struct nfs_client *clp,
 		list_del(&new->pcl_list);
 		clp->cl_cb_lrecall_count--;
 		clp->cl_drain_notification[1 << bit_num] = NULL;
+		rpc_wake_up(&clp->cl_rpcwaitq_recall);
 		spin_unlock(&clp->cl_lock);
 		if (res == NFS4_OK) {
 			if (args->cbl_recall_type == RETURN_FILE) {
@@ -368,6 +370,8 @@ static u32 do_callback_layoutrecall(struct nfs_client *clp,
 				lo = NFS_I(new->pcl_ino)->layout;
 				spin_lock(&lo->inode->i_lock);
 				lo->plh_block_lgets--;
+				if (!pnfs_layoutgets_blocked(lo, NULL))
+					rpc_wake_up(&NFS_I(lo->inode)->lo_rpcwaitq_stateid);
 				spin_unlock(&lo->inode->i_lock);
 				put_layout_hdr(lo);
 			}
