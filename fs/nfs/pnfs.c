@@ -853,8 +853,9 @@ pnfs_find_lseg(struct pnfs_layout_hdr *lo,
 			break;
 	}
 
-	dprintk("%s:Return lseg %p ref %d\n",
-		__func__, ret, ret ? atomic_read(&ret->pls_refcount) : 0);
+	dprintk("%s:Return lseg %p ref %d valid %d\n",
+		__func__, ret, ret ? atomic_read(&ret->pls_refcount) : 0,
+		ret ? test_bit(NFS_LSEG_VALID, &ret->pls_flags) : 0);
 	return ret;
 }
 
