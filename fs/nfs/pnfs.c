@@ -343,7 +343,7 @@ put_lseg(struct pnfs_layout_segment *lseg)
 }
 EXPORT_SYMBOL_GPL(put_lseg);
 
-static bool
+bool
 should_free_lseg(struct pnfs_layout_range *lseg_range,
 		 struct pnfs_layout_range *recall_range)
 {
