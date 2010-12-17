@@ -43,6 +43,7 @@ struct pnfs_layout_segment {
 	atomic_t pls_refcount;
 	unsigned long pls_flags;
 	struct pnfs_layout_hdr *pls_layout;
+	int pls_recall_count;
 };
 
 enum pnfs_try_status {

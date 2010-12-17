@@ -277,14 +277,17 @@ init_lseg(struct pnfs_layout_hdr *lo, struct pnfs_layout_segment *lseg)
 	smp_mb();
 	set_bit(NFS_LSEG_VALID, &lseg->pls_flags);
 	lseg->pls_layout = lo;
+	lseg->pls_recall_count = 0;
 }
 
 static void free_lseg(struct pnfs_layout_segment *lseg)
 {
 	struct inode *ino = lseg->pls_layout->plh_inode;
+	int count = lseg->pls_recall_count;
 
 	BUG_ON(atomic_read(&lseg->pls_refcount) != 0);
 	NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
+	atomic_sub(count, &NFS_SERVER(ino)->nfs_client->cl_recall_count);
 	/* Matched by get_layout_hdr in pnfs_insert_layout */
 	put_layout_hdr(NFS_I(ino)->layout);
 }
@@ -589,8 +592,11 @@ void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 
 	assert_spin_locked(&lo->plh_inode->i_lock);
 	list_for_each_entry_safe(lseg, tmp, &lo->plh_segs, pls_list)
-		if (should_free_lseg(&lseg->pls_range, range))
+		if (should_free_lseg(&lseg->pls_range, range)) {
+			lseg->pls_recall_count++;
+			atomic_inc(&NFS_SERVER(lo->plh_inode)->nfs_client->cl_recall_count);
 			mark_lseg_invalid(lseg, tmp_list);
+		}
 }
 
 /* Since we are using the forgetful model, nothing is sent over the wire.

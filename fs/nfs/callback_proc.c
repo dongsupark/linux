@@ -192,7 +192,12 @@ static u32 do_callback_layoutrecall(struct nfs_client *clp,
 	dprintk("%s enter, type=%i\n", __func__, args->cbl_recall_type);
 	if (test_and_set_bit(NFS4CLNT_LAYOUTRECALL, &clp->cl_state))
 		goto out;
+	atomic_inc(&clp->cl_recall_count);
 	status = initiate_layout_draining(clp, args);
+	if (atomic_dec_and_test(&clp->cl_recall_count))
+		res = NFS4ERR_NOMATCHING_LAYOUT;
+	else
+		res = NFS4ERR_DELAY;
 	if (status)
 		res = status;
 	else if (args->cbl_recall_type == RETURN_FILE) {
@@ -203,7 +208,6 @@ static u32 do_callback_layoutrecall(struct nfs_client *clp,
 		lo->plh_block_lgets--;
 		spin_unlock(&lo->plh_inode->i_lock);
 		put_layout_hdr(lo);
-		res = NFS4ERR_DELAY;
 	}
 	clear_bit(NFS4CLNT_LAYOUTRECALL, &clp->cl_state);
 out:
