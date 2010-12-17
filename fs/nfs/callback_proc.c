@@ -141,8 +141,8 @@ static int initiate_layout_draining(struct nfs_client *clp,
 		spin_lock(&lo->plh_inode->i_lock);
 		if (rv == NFS4_OK) {
 			lo->plh_block_lgets++;
-			mark_matching_lsegs_invalid(lo, &free_me_list,
-						    &args->cbl_range);
+			nfs4_asynch_forget_layouts(lo, &args->cbl_range,
+						   &free_me_list);
 		}
 		pnfs_set_layout_stateid(lo, &args->cbl_stateid, true);
 		spin_unlock(&lo->plh_inode->i_lock);
@@ -172,7 +172,7 @@ static int initiate_layout_draining(struct nfs_client *clp,
 					 &recall_list, plh_bulk_recall) {
 			spin_lock(&lo->plh_inode->i_lock);
 			set_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags);
-			mark_matching_lsegs_invalid(lo, &free_me_list, &range);
+			nfs4_asynch_forget_layouts(lo, &range, &free_me_list);
 			list_del_init(&lo->plh_bulk_recall);
 			spin_unlock(&lo->plh_inode->i_lock);
 			pnfs_free_lseg_list(&free_me_list);

@@ -216,9 +216,9 @@ void pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
 int pnfs_choose_layoutget_stateid(nfs4_stateid *dst,
 				  struct pnfs_layout_hdr *lo,
 				  struct nfs4_state *open_state);
-bool mark_matching_lsegs_invalid(struct pnfs_layout_hdr *lo,
-				 struct list_head *tmp_list,
-				 struct pnfs_layout_range *range);
+void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
+				struct pnfs_layout_range *range,
+				struct list_head *tmp_list);
 bool pnfs_roc(struct inode *ino);
 void pnfs_roc_release(bool needed, struct inode *ino);
 void pnfs_roc_set_barrier(bool needed, struct inode *ino, u32 barrier);

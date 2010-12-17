@@ -361,11 +361,10 @@ static void mark_lseg_invalid(struct pnfs_layout_segment *lseg,
 	}
 }
 
-/* Returns false if no lsegs match, true otherwise */
-bool
-mark_matching_lsegs_invalid(struct pnfs_layout_hdr *lo,
-			    struct list_head *tmp_list,
-			    struct pnfs_layout_range *range)
+/* Returns false if there was nothing to do, true otherwise */
+static bool
+pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo, struct list_head *tmp_list,
+		     struct pnfs_layout_range *range)
 {
 	struct pnfs_layout_segment *lseg, *next;
 	bool rv = false;
@@ -433,7 +432,7 @@ pnfs_destroy_layout(struct nfs_inode *nfsi)
 	lo = nfsi->layout;
 	if (lo) {
 		lo->plh_block_lgets++; /* permanently block new LAYOUTGETs */
-		mark_matching_lsegs_invalid(lo, &tmp_list, &range);
+		pnfs_clear_lseg_list(lo, &tmp_list, &range);
 		WARN_ON(!list_empty(&nfsi->layout->plh_segs));
 		WARN_ON(!list_empty(&nfsi->layout->plh_layouts));
 
@@ -582,6 +581,18 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	return lseg;
 }
 
+void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
+				struct pnfs_layout_range *range,
+				struct list_head *tmp_list)
+{
+	struct pnfs_layout_segment *lseg, *tmp;
+
+	assert_spin_locked(&lo->plh_inode->i_lock);
+	list_for_each_entry_safe(lseg, tmp, &lo->plh_segs, pls_list)
+		if (should_free_lseg(&lseg->pls_range, range))
+			mark_lseg_invalid(lseg, tmp_list);
+}
+
 /* Since we are using the forgetful model, nothing is sent over the wire.
  * However, we still must stop using any matching layouts.
  */
@@ -603,7 +614,7 @@ _pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
 
 	spin_lock(&ino->i_lock);
 	lo = nfsi->layout;
-	if (!lo || !mark_matching_lsegs_invalid(lo, &tmp_list, &arg)) {
+	if (!lo || !pnfs_clear_lseg_list(lo, &tmp_list, &arg)) {
 		spin_unlock(&ino->i_lock);
 		dprintk("%s: no layout segments to return\n", __func__);
 		goto out;
