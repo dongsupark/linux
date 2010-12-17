@@ -197,6 +197,7 @@ destroy_layout_hdr(struct pnfs_layout_hdr *lo)
 static void
 put_layout_hdr_locked(struct pnfs_layout_hdr *lo)
 {
+	assert_spin_locked(&lo->plh_inode->i_lock);
 	BUG_ON(atomic_read(&lo->plh_refcount) == 0);
 	if (atomic_dec_and_test(&lo->plh_refcount))
 		destroy_layout_hdr(lo);
@@ -301,6 +302,7 @@ static int mark_lseg_invalid(struct pnfs_layout_segment *lseg,
 {
 	int rv = 0;
 
+	assert_spin_locked(&lseg->pls_layout->plh_inode->i_lock);
 	if (test_and_clear_bit(NFS_LSEG_VALID, &lseg->pls_flags)) {
 		/* Remove the reference keeping the lseg in the
 		 * list.  It will now be removed when all
@@ -324,6 +326,7 @@ mark_matching_lsegs_invalid(struct pnfs_layout_hdr *lo,
 
 	dprintk("%s:Begin lo %p\n", __func__, lo);
 
+	assert_spin_locked(&lo->plh_inode->i_lock);
 	if (list_empty(&lo->plh_segs)) {
 		if (!test_and_set_bit(NFS_LAYOUT_DESTROYED, &lo->plh_flags))
 			put_layout_hdr_locked(lo);
@@ -415,6 +418,7 @@ pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo, const nfs4_stateid *new,
 {
 	u32 oldseq, newseq;
 
+	assert_spin_locked(&lo->plh_inode->i_lock);
 	oldseq = be32_to_cpu(lo->plh_stateid.stateid.seqid);
 	newseq = be32_to_cpu(new->stateid.seqid);
 	if ((int)(newseq - oldseq) > 0) {
@@ -443,6 +447,7 @@ static bool
 pnfs_layoutgets_blocked(struct pnfs_layout_hdr *lo, nfs4_stateid *stateid,
 			int lget)
 {
+	assert_spin_locked(&lo->plh_inode->i_lock);
 	if ((stateid) &&
 	    (int)(lo->plh_barrier - be32_to_cpu(stateid->stateid.seqid)) >= 0)
 		return true;
