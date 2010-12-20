@@ -648,34 +648,41 @@ out_nolayout:
 	return false;
 }
 
-void pnfs_roc_release(struct inode *ino)
+void pnfs_roc_release(bool needed, struct inode *ino)
 {
-	struct pnfs_layout_hdr *lo;
+	if (needed) {
+		struct pnfs_layout_hdr *lo;
 
-	spin_lock(&ino->i_lock);
-	lo = NFS_I(ino)->layout;
-	lo->plh_block_lgets--;
-	put_layout_hdr_locked(lo);
-	spin_unlock(&ino->i_lock);
+		spin_lock(&ino->i_lock);
+		lo = NFS_I(ino)->layout;
+		lo->plh_block_lgets--;
+		put_layout_hdr_locked(lo);
+		spin_unlock(&ino->i_lock);
+	}
 }
 
-void pnfs_roc_set_barrier(struct inode *ino, u32 barrier)
+void pnfs_roc_set_barrier(bool needed, struct inode *ino, u32 barrier)
 {
-	struct pnfs_layout_hdr *lo;
+	if (needed) {
+		struct pnfs_layout_hdr *lo;
 
-	spin_lock(&ino->i_lock);
-	lo = NFS_I(ino)->layout;
-	if ((int)(barrier - lo->plh_barrier) > 0)
-		lo->plh_barrier = barrier;
-	spin_unlock(&ino->i_lock);
+		spin_lock(&ino->i_lock);
+		lo = NFS_I(ino)->layout;
+		if ((int)(barrier - lo->plh_barrier) > 0)
+			lo->plh_barrier = barrier;
+		spin_unlock(&ino->i_lock);
+	}
 }
 
-void pnfs_roc_drain(struct inode *ino, u32 *barrier, struct rpc_task *task)
+void pnfs_roc_drain(bool needed, struct inode *ino, u32 *barrier,
+		    struct rpc_task *task)
 {
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct pnfs_layout_segment *lseg;
 	bool found = false;
 
+	if (!needed)
+		return;
 	spin_lock(&ino->i_lock);
 	list_for_each_entry(lseg, &nfsi->layout->plh_segs, pls_list)
 		if (test_bit(NFS_LSEG_ROC, &lseg->pls_flags)) {
