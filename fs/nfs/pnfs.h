@@ -211,6 +211,11 @@ void pnfs_roc_release(struct inode *ino);
 void pnfs_roc_set_barrier(struct inode *ino, u32 barrier);
 bool pnfs_roc_drain(struct inode *ino, u32 *barrier);
 
+static inline bool
+has_layout(struct nfs_inode *nfsi)
+{
+	return nfsi->layout != NULL;
+}
 
 static inline int lo_fail_bit(u32 iomode)
 {
@@ -253,6 +258,12 @@ pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 		   enum pnfs_iomode access_type)
 {
 	return NULL;
+}
+
+static inline bool
+has_layout(struct nfs_inode *nfsi)
+{
+	return false;
 }
 
 static inline enum pnfs_try_status
