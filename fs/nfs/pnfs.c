@@ -592,6 +592,42 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	return lseg;
 }
 
+/* Since we are using the forgetful model, nothing is sent over the wire.
+ * However, we still must stop using any matching layouts.
+ */
+int
+_pnfs_return_layout(struct inode *ino, struct pnfs_layout_range *range,
+		    bool wait)
+{
+	struct pnfs_layout_hdr *lo = NULL;
+	struct nfs_inode *nfsi = NFS_I(ino);
+	struct pnfs_layout_range arg;
+	LIST_HEAD(tmp_list);
+	int status = 0;
+
+	dprintk("--> %s\n", __func__);
+
+	arg.iomode = range ? range->iomode : IOMODE_ANY;
+	arg.offset = 0;
+	arg.length = NFS4_MAX_UINT64;
+
+	spin_lock(&ino->i_lock);
+	lo = nfsi->layout;
+	if (!lo || !mark_matching_lsegs_invalid(lo, &tmp_list, &arg)) {
+		spin_unlock(&ino->i_lock);
+		dprintk("%s: no layout segments to return\n", __func__);
+		goto out;
+	}
+	lo->plh_block_lgets++;
+	spin_unlock(&ino->i_lock);
+	pnfs_free_lseg_list(&tmp_list);
+
+	/* Don't need to wait since this is followed by call to end_writeback */
+out:
+	dprintk("<-- %s status: %d\n", __func__, status);
+	return status;
+}
+
 bool pnfs_roc(struct inode *ino)
 {
 	struct pnfs_layout_hdr *lo;

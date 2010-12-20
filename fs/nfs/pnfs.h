@@ -189,6 +189,7 @@ void put_lseg(struct pnfs_layout_segment *lseg);
 struct pnfs_layout_segment *
 pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 		   enum pnfs_iomode access_type);
+int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, u32 id);
 void unset_pnfs_layoutdriver(struct nfs_server *);
 enum pnfs_try_status pnfs_try_to_write_data(struct nfs_write_data *,
@@ -245,6 +246,19 @@ static inline void get_lseg(struct pnfs_layout_segment *lseg)
 static inline int pnfs_enabled_sb(struct nfs_server *nfss)
 {
 	return nfss->pnfs_curr_ld != NULL;
+}
+
+static inline int pnfs_return_layout(struct inode *ino,
+				     struct pnfs_layout_range *range,
+				     bool wait)
+{
+	struct nfs_inode *nfsi = NFS_I(ino);
+	struct nfs_server *nfss = NFS_SERVER(ino);
+
+	if (pnfs_enabled_sb(nfss) && has_layout(nfsi))
+		return _pnfs_return_layout(ino, range, wait);
+
+	return 0;
 }
 
 static inline bool
@@ -337,6 +351,13 @@ static inline bool
 pnfs_roc_drain(struct inode *ino, u32 *barrier)
 {
 	return false;
+}
+
+static inline int pnfs_return_layout(struct inode *ino,
+				     struct pnfs_layout_range *range,
+				     bool wait)
+{
+	return 0;
 }
 
 static inline void set_pnfs_layoutdriver(struct nfs_server *s, u32 id)
