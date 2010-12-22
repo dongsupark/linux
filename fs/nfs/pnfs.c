@@ -670,7 +670,7 @@ void pnfs_roc_set_barrier(struct inode *ino, u32 barrier)
 	spin_unlock(&ino->i_lock);
 }
 
-bool pnfs_roc_drain(struct inode *ino, u32 *barrier)
+void pnfs_roc_drain(struct inode *ino, u32 *barrier, struct rpc_task *task)
 {
 	struct nfs_inode *nfsi = NFS_I(ino);
 	struct pnfs_layout_segment *lseg;
@@ -679,6 +679,7 @@ bool pnfs_roc_drain(struct inode *ino, u32 *barrier)
 	spin_lock(&ino->i_lock);
 	list_for_each_entry(lseg, &nfsi->layout->plh_segs, pls_list)
 		if (test_bit(NFS_LSEG_ROC, &lseg->pls_flags)) {
+			rpc_sleep_on(&NFS_I(ino)->lo_rpcwaitq, task, NULL);
 			found = true;
 			break;
 		}
@@ -692,7 +693,7 @@ bool pnfs_roc_drain(struct inode *ino, u32 *barrier)
 		*barrier = current_seqid + atomic_read(&lo->plh_outstanding);
 	}
 	spin_unlock(&ino->i_lock);
-	return found;
+	return;
 }
 
 /*

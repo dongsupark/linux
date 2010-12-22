@@ -1942,12 +1942,8 @@ static void nfs4_close_prepare(struct rpc_task *task, void *data)
 
 	if (calldata->arg.fmode == 0) {
 		task->tk_msg.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_CLOSE];
-		if (calldata->roc &&
-		    pnfs_roc_drain(calldata->inode, &calldata->roc_barrier)) {
-			rpc_sleep_on(&NFS_I(calldata->inode)->lo_rpcwaitq,
-				     task, NULL);
-			return;
-		}
+		if (calldata->roc)
+			pnfs_roc_drain(state->inode, &calldata->roc_barrier, task);
 	}
 
 	nfs_fattr_init(calldata->res.fattr);

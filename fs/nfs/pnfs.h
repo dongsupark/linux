@@ -222,7 +222,7 @@ bool mark_matching_lsegs_invalid(struct pnfs_layout_hdr *lo,
 bool pnfs_roc(struct inode *ino);
 void pnfs_roc_release(struct inode *ino);
 void pnfs_roc_set_barrier(struct inode *ino, u32 barrier);
-bool pnfs_roc_drain(struct inode *ino, u32 *barrier);
+void pnfs_roc_drain(struct inode *ino, u32 *barrier, struct rpc_task *task);
 
 static inline bool
 has_layout(struct nfs_inode *nfsi)
@@ -347,10 +347,9 @@ pnfs_roc_set_barrier(struct inode *ino, u32 barrier)
 {
 }
 
-static inline bool
-pnfs_roc_drain(struct inode *ino, u32 *barrier)
+static inline void
+pnfs_roc_drain(struct inode *ino, u32 *barrier, struct rpc_task *task)
 {
-	return false;
 }
 
 static inline int pnfs_return_layout(struct inode *ino,
