@@ -1944,7 +1944,7 @@ static void nfs4_close_prepare(struct rpc_task *task, void *data)
 		task->tk_msg.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_CLOSE];
 		if (calldata->roc &&
 		    pnfs_roc_drain(calldata->inode, &calldata->roc_barrier)) {
-			rpc_sleep_on(&NFS_SERVER(calldata->inode)->roc_rpcwaitq,
+			rpc_sleep_on(&NFS_I(calldata->inode)->lo_rpcwaitq,
 				     task, NULL);
 			return;
 		}

@@ -301,7 +301,7 @@ _put_lseg_common(struct pnfs_layout_segment *lseg)
 		/* Matched by initial refcount set in alloc_init_layout_hdr */
 		put_layout_hdr_locked(lseg->pls_layout);
 	}
-	rpc_wake_up(&NFS_SERVER(ino)->roc_rpcwaitq);
+	rpc_wake_up(&NFS_I(ino)->lo_rpcwaitq);
 }
 
 /* The use of tmp_list is necessary because pnfs_curr_ld->free_lseg

@@ -243,11 +243,6 @@ static void nfs_cb_idr_remove_locked(struct nfs_client *clp)
 		idr_remove(&cb_ident_idr, clp->cl_cb_ident);
 }
 
-static void pnfs_init_server(struct nfs_server *server)
-{
-	rpc_init_wait_queue(&server->roc_rpcwaitq, "pNFS ROC");
-}
-
 #else
 static void nfs4_shutdown_client(struct nfs_client *clp)
 {
@@ -258,10 +253,6 @@ void nfs_cleanup_cb_ident_idr(void)
 }
 
 static void nfs_cb_idr_remove_locked(struct nfs_client *clp)
-{
-}
-
-static void pnfs_init_server(struct nfs_server *server)
 {
 }
 
@@ -1056,8 +1047,6 @@ static struct nfs_server *nfs_alloc_server(void)
 		kfree(server);
 		return NULL;
 	}
-
-	pnfs_init_server(server);
 
 	return server;
 }
