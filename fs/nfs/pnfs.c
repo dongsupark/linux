@@ -413,10 +413,9 @@ pnfs_free_lseg_list(struct list_head *free_me)
 		list_del_init(&lo->plh_layouts);
 		spin_unlock(&clp->cl_lock);
 	}
-	list_for_each_entry_safe(lseg, tmp, free_me, pls_list) {
-		list_del(&lseg->pls_list);
+	list_for_each_entry_safe(lseg, tmp, free_me, pls_list)
 		free_lseg(lseg);
-	}
+	INIT_LIST_HEAD(free_me);
 }
 
 void
