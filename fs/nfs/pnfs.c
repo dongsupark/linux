@@ -197,6 +197,7 @@ destroy_layout_hdr(struct pnfs_layout_hdr *lo)
 static void
 put_layout_hdr_locked(struct pnfs_layout_hdr *lo)
 {
+	BUG_ON(atomic_read(&lo->plh_refcount) == 0);
 	if (atomic_dec_and_test(&lo->plh_refcount))
 		destroy_layout_hdr(lo);
 }
@@ -206,6 +207,7 @@ put_layout_hdr(struct pnfs_layout_hdr *lo)
 {
 	struct inode *inode = lo->plh_inode;
 
+	BUG_ON(atomic_read(&lo->plh_refcount) == 0);
 	if (atomic_dec_and_lock(&lo->plh_refcount, &inode->i_lock)) {
 		destroy_layout_hdr(lo);
 		spin_unlock(&inode->i_lock);
@@ -226,6 +228,7 @@ static void free_lseg(struct pnfs_layout_segment *lseg)
 {
 	struct inode *ino = lseg->pls_layout->plh_inode;
 
+	BUG_ON(atomic_read(&lseg->pls_refcount) != 0);
 	NFS_SERVER(ino)->pnfs_curr_ld->free_lseg(lseg);
 	/* Matched by get_layout_hdr in pnfs_insert_layout */
 	put_layout_hdr(NFS_I(ino)->layout);
