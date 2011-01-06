@@ -154,6 +154,7 @@ struct cb_layoutrecallargs {
 	union {
 		struct {
 			struct nfs_fh		cbl_fh;
+			struct inode		*cbl_inode;
 			struct pnfs_layout_range cbl_range;
 			nfs4_stateid		cbl_stateid;
 		};

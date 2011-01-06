@@ -306,9 +306,8 @@ _put_lseg_common(struct pnfs_layout_segment *lseg)
 
 /* The use of tmp_list is necessary because pnfs_curr_ld->free_lseg
  * could sleep, so must be called outside of the lock.
- * Returns 1 if object was removed, otherwise return 0.
  */
-static int
+static void
 put_lseg_locked(struct pnfs_layout_segment *lseg,
 		struct list_head *tmp_list)
 {
@@ -318,9 +317,7 @@ put_lseg_locked(struct pnfs_layout_segment *lseg,
 	if (atomic_dec_and_test(&lseg->pls_refcount)) {
 		_put_lseg_common(lseg);
 		list_add(&lseg->pls_list, tmp_list);
-		return 1;
 	}
-	return 0;
 }
 
 void
@@ -351,33 +348,27 @@ should_free_lseg(struct pnfs_layout_range *lseg_range,
 		lseg_range->iomode == recall_range->iomode);
 }
 
-/* Returns 1 if lseg is removed from list, 0 otherwise */
-static int mark_lseg_invalid(struct pnfs_layout_segment *lseg,
-			     struct list_head *tmp_list)
+static void mark_lseg_invalid(struct pnfs_layout_segment *lseg,
+			      struct list_head *tmp_list)
 {
-	int rv = 0;
-
 	assert_spin_locked(&lseg->pls_layout->plh_inode->i_lock);
 	if (test_and_clear_bit(NFS_LSEG_VALID, &lseg->pls_flags)) {
 		/* Remove the reference keeping the lseg in the
 		 * list.  It will now be removed when all
 		 * outstanding io is finished.
 		 */
-		rv = put_lseg_locked(lseg, tmp_list);
+		put_lseg_locked(lseg, tmp_list);
 	}
-	return rv;
 }
 
-/* Returns count of number of matching invalid lsegs remaining in list
- * after call.
- */
-int
+/* Returns false if no lsegs match, true otherwise */
+bool
 mark_matching_lsegs_invalid(struct pnfs_layout_hdr *lo,
 			    struct list_head *tmp_list,
 			    struct pnfs_layout_range *range)
 {
 	struct pnfs_layout_segment *lseg, *next;
-	int invalid = 0, removed = 0;
+	bool rv = false;
 
 	dprintk("%s:Begin lo %p offset %llu length %llu iomode %d\n",
 		__func__, lo, range->offset, range->length, range->iomode);
@@ -394,11 +385,11 @@ mark_matching_lsegs_invalid(struct pnfs_layout_hdr *lo,
 				"offset %llu length %llu\n", __func__,
 				lseg, lseg->pls_range.iomode, lseg->pls_range.offset,
 				lseg->pls_range.length);
-			invalid++;
-			removed += mark_lseg_invalid(lseg, tmp_list);
+			mark_lseg_invalid(lseg, tmp_list);
+			rv = true;
 		}
-	dprintk("%s:Return %i\n", __func__, invalid - removed);
-	return invalid - removed;
+	dprintk("%s:Return\n", __func__);
+	return rv;
 }
 
 /* note free_me must contain lsegs from a single layout_hdr */
