@@ -18,8 +18,11 @@
 #include <linux/sunrpc/clnt.h>
 #include <linux/nfs_fs.h>
 #include <linux/nfs_page.h>
+#include <linux/smp_lock.h>
+#include <linux/module.h>
 
 #include <asm/system.h>
+#include <linux/module.h>
 #include "pnfs.h"
 
 #include "nfs4_fs.h"
@@ -157,6 +160,55 @@ static void nfs_readpage_release(struct nfs_page *req)
 	nfs_release_request(req);
 }
 
+int nfs_initiate_read(struct nfs_read_data *data, struct rpc_clnt *clnt,
+		      const struct rpc_call_ops *call_ops)
+{
+	struct inode *inode = data->inode;
+	int swap_flags = IS_SWAPFILE(inode) ? NFS_RPC_SWAPFLAGS : 0;
+	struct rpc_task *task;
+	struct rpc_message msg = {
+		.rpc_argp = &data->args,
+		.rpc_resp = &data->res,
+		.rpc_cred = data->cred,
+	};
+	struct rpc_task_setup task_setup_data = {
+		.task = &data->task,
+		.rpc_client = clnt,
+		.rpc_message = &msg,
+		.callback_ops = call_ops,
+		.callback_data = data,
+		.workqueue = nfsiod_workqueue,
+		.flags = RPC_TASK_ASYNC | swap_flags,
+	};
+
+	/* Set up the initial task struct. */
+	NFS_PROTO(inode)->read_setup(data, &msg);
+
+	dprintk("NFS: %5u initiated read call (req %s/%Ld, %u bytes @ offset %Lu)\n",
+			data->task.tk_pid,
+			inode->i_sb->s_id,
+			(long long)NFS_FILEID(inode),
+			data->args.count,
+			(unsigned long long)data->args.offset);
+
+	task = rpc_run_task(&task_setup_data);
+	if (IS_ERR(task))
+		return PTR_ERR(task);
+	rpc_put_task(task);
+	return 0;
+}
+EXPORT_SYMBOL(nfs_initiate_read);
+
+int pnfs_initiate_read(struct nfs_read_data *data, struct rpc_clnt *clnt,
+		       const struct rpc_call_ops *call_ops)
+{
+	if (data->req->wb_lseg &&
+	    (pnfs_try_to_read_data(data, call_ops) == PNFS_ATTEMPTED))
+		return 0;
+
+	return nfs_initiate_read(data, clnt, call_ops);
+}
+
 /*
  * Set up the NFS read request struct
  */
@@ -165,26 +217,10 @@ static int nfs_read_rpcsetup(struct nfs_page *req, struct nfs_read_data *data,
 		unsigned int count, unsigned int offset)
 {
 	struct inode *inode = req->wb_context->path.dentry->d_inode;
-	int swap_flags = IS_SWAPFILE(inode) ? NFS_RPC_SWAPFLAGS : 0;
-	struct rpc_task *task;
-	struct rpc_message msg = {
-		.rpc_argp = &data->args,
-		.rpc_resp = &data->res,
-		.rpc_cred = req->wb_context->cred,
-	};
-	struct rpc_task_setup task_setup_data = {
-		.task = &data->task,
-		.rpc_client = NFS_CLIENT(inode),
-		.rpc_message = &msg,
-		.callback_ops = call_ops,
-		.callback_data = data,
-		.workqueue = nfsiod_workqueue,
-		.flags = RPC_TASK_ASYNC | swap_flags,
-	};
 
 	data->req	  = req;
 	data->inode	  = inode;
-	data->cred	  = msg.rpc_cred;
+	data->cred	  = req->wb_context->cred;
 
 	data->args.fh     = NFS_FH(inode);
 	data->args.offset = req_offset(req) + offset;
@@ -199,21 +235,7 @@ static int nfs_read_rpcsetup(struct nfs_page *req, struct nfs_read_data *data,
 	data->res.eof     = 0;
 	nfs_fattr_init(&data->fattr);
 
-	/* Set up the initial task struct. */
-	NFS_PROTO(inode)->read_setup(data, &msg);
-
-	dprintk("NFS: %5u initiated read call (req %s/%Ld, %u bytes @ offset %Lu)\n",
-			data->task.tk_pid,
-			inode->i_sb->s_id,
-			(long long)NFS_FILEID(inode),
-			count,
-			(unsigned long long)data->args.offset);
-
-	task = rpc_run_task(&task_setup_data);
-	if (IS_ERR(task))
-		return PTR_ERR(task);
-	rpc_put_task(task);
-	return 0;
+	return pnfs_initiate_read(data, NFS_CLIENT(inode), call_ops);
 }
 
 static void
@@ -357,7 +379,14 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 {
 	struct nfs_readargs *argp = &data->args;
 	struct nfs_readres *resp = &data->res;
+	struct nfs_client *clp = NFS_SERVER(data->inode)->nfs_client;
 
+#ifdef CONFIG_NFS_V4_1
+	if (data->fldata.ds_nfs_client) {
+		dprintk("%s DS read\n", __func__);
+		clp = data->fldata.ds_nfs_client;
+	}
+#endif /* CONFIG_NFS_V4_1 */
 	if (resp->eof || resp->count == argp->count)
 		return;
 
@@ -371,7 +400,7 @@ static void nfs_readpage_retry(struct rpc_task *task, struct nfs_read_data *data
 	argp->offset += resp->count;
 	argp->pgbase += resp->count;
 	argp->count -= resp->count;
-	nfs_restart_rpc(task, NFS_SERVER(data->inode)->nfs_client);
+	nfs_restart_rpc(task, clp);
 }
 
 /*
@@ -412,13 +441,19 @@ static void nfs_readpage_release_partial(void *calldata)
 void nfs_read_prepare(struct rpc_task *task, void *calldata)
 {
 	struct nfs_read_data *data = calldata;
+	struct nfs4_session *ds_session = NULL;
 
-	if (nfs4_setup_sequence(NFS_SERVER(data->inode), NULL,
+	if (data->fldata.ds_nfs_client) {
+		dprintk("%s DS read\n", __func__);
+		ds_session = data->fldata.ds_nfs_client->cl_session;
+	}
+	if (nfs4_setup_sequence(NFS_SERVER(data->inode), ds_session,
 				&data->args.seq_args, &data->res.seq_res,
 				0, task))
 		return;
 	rpc_call_start(task);
 }
+EXPORT_SYMBOL(nfs_read_prepare);
 #endif /* CONFIG_NFS_V4_1 */
 
 static const struct rpc_call_ops nfs_read_partial_ops = {
@@ -637,6 +672,7 @@ int nfs_readpages(struct file *filp, struct address_space *mapping,
 	ret = read_cache_pages(mapping, pages, readpage_async_filler, &desc);
 
 	nfs_pageio_complete(&pgio);
+	put_lseg(pgio.pg_lseg);
 	npages = (pgio.pg_bytes_written + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 	nfs_add_stats(inode, NFSIOS_READPAGES, npages);
 read_complete:
