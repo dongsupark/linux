@@ -264,7 +264,7 @@ put_lseg_locked(struct pnfs_layout_segment *lseg,
 	return 0;
 }
 
-static void
+void
 put_lseg(struct pnfs_layout_segment *lseg)
 {
 	struct inode *ino;
@@ -282,6 +282,7 @@ put_lseg(struct pnfs_layout_segment *lseg)
 		free_lseg(lseg);
 	}
 }
+EXPORT_SYMBOL_GPL(put_lseg);
 
 static bool
 should_free_lseg(u32 lseg_iomode, u32 recall_iomode)
@@ -795,7 +796,6 @@ pnfs_update_layout(struct inode *ino,
 out:
 	dprintk("%s end, state 0x%lx lseg %p\n", __func__,
 		nfsi->layout->plh_flags, lseg);
-	put_lseg(lseg); /* STUB - callers currently ignore return value */
 	return lseg;
 out_unlock:
 	spin_unlock(&ino->i_lock);
@@ -908,6 +908,16 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 		return;
 
 	pnfs_set_pg_test(inode, pgio);
+}
+
+static void _pnfs_clear_lseg_from_pages(struct list_head *head)
+{
+	struct nfs_page *req;
+
+	list_for_each_entry(req, head, wb_list) {
+		put_lseg(req->wb_lseg);
+		req->wb_lseg = NULL;
+	}
 }
 
 /*
