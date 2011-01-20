@@ -911,6 +911,7 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 {
 	struct nfs_server *nfss = NFS_SERVER(inode);
 
+	pgio->pg_iswrite = 0;
 	pgio->pg_test = NULL;
 	pgio->pg_lseg = NULL;
 
@@ -922,6 +923,18 @@ pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio,
 		return;
 
 	pnfs_set_pg_test(inode, pgio);
+}
+
+void
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *inode)
+{
+	struct nfs_server *server = NFS_SERVER(inode);
+
+	pgio->pg_iswrite = 1;
+	if (!pnfs_enabled_sb(server))
+		pgio->pg_test = NULL;
+	else
+		pnfs_set_pg_test(inode, pgio);
 }
 
 static void _pnfs_clear_lseg_from_pages(struct list_head *head)

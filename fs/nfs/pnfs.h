@@ -176,6 +176,7 @@ enum pnfs_try_status pnfs_try_to_read_data(struct nfs_read_data *,
 					    const struct rpc_call_ops *);
 void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *,
 			   struct nfs_open_context *, struct list_head *);
+void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
 void pnfs_free_lseg_list(struct list_head *tmp_list);
 void pnfs_destroy_layout(struct nfs_inode *);
@@ -279,6 +280,12 @@ static inline void unset_pnfs_layoutdriver(struct nfs_server *s)
 static inline void
 pnfs_pageio_init_read(struct nfs_pageio_descriptor *pgio, struct inode *ino,
 		      struct nfs_open_context *ctx, struct list_head *pages)
+{
+	pgio->pg_lseg = NULL;
+}
+
+static inline void
+pnfs_pageio_init_write(struct nfs_pageio_descriptor *pgio, struct inode *ino)
 {
 	pgio->pg_lseg = NULL;
 }

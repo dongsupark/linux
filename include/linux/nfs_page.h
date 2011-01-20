@@ -65,6 +65,7 @@ struct nfs_pageio_descriptor {
 	int			pg_error;
 	struct pnfs_layout_segment *pg_lseg;
 #ifdef CONFIG_NFS_V4_1
+	int			pg_iswrite;
 	int			(*pg_test)(struct nfs_pageio_descriptor *, struct nfs_page *, struct nfs_page *);
 #endif /* CONFIG_NFS_V4_1 */
 };
