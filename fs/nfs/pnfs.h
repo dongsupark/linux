@@ -247,6 +247,13 @@ pnfs_try_to_read_data(struct nfs_read_data *data,
 	return PNFS_NOT_ATTEMPTED;
 }
 
+static inline enum pnfs_try_status
+pnfs_try_to_commit(struct nfs_write_data *data,
+		   const struct rpc_call_ops *call_ops, int how)
+{
+	return PNFS_NOT_ATTEMPTED;
+}
+
 static inline bool
 pnfs_roc(struct inode *ino)
 {
