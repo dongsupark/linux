@@ -55,7 +55,7 @@ struct block_device *nfs4_blkdev_get(dev_t dev)
 	struct block_device *bd;
 
 	dprintk("%s enter\n", __func__);
-	bd = open_by_devnum(dev, FMODE_READ);
+	bd = blkdev_get_by_dev(dev, FMODE_READ, NULL);
 	if (IS_ERR(bd))
 		goto fail;
 	return bd;
@@ -72,7 +72,6 @@ int nfs4_blkdev_put(struct block_device *bdev)
 {
 	dprintk("%s for device %d:%d\n", __func__, MAJOR(bdev->bd_dev),
 			MINOR(bdev->bd_dev));
-	bd_release(bdev);
 	return blkdev_put(bdev, FMODE_READ);
 }
 
