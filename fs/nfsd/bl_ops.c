@@ -1389,7 +1389,7 @@ extents_cleanup(struct fiemap_extent_info *fei)
 static boolean_t
 device_slice(dev_t devid)
 {
-	struct block_device	*bd	= open_by_devnum(devid, FMODE_READ);
+	struct block_device	*bd	= blkdev_get_by_dev(devid, FMODE_READ, NULL);
 	boolean_t		rval	= False;
 	
 	if (bd) {
