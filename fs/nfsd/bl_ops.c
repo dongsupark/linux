@@ -385,8 +385,8 @@ bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 	res->lg_seg.length = (res->lg_seg.length + adj + 511) & ~511;
 	
 	if (res->lg_seg.iomode != IOMODE_READ)
-		if (i->i_op->fallocate(i, FALLOC_FL_KEEP_SIZE,
-				       res->lg_seg.offset, res->lg_seg.length))
+		if (i->i_fop->fallocate(i, FALLOC_FL_KEEP_SIZE,
+					res->lg_seg.offset, res->lg_seg.length))
 			return NFS4ERR_IO;
 		
 	INIT_LIST_HEAD(&bl_possible);
@@ -1431,7 +1431,7 @@ layout_inode_add(struct inode *i, bl_layout_rec_t **p)
 {
 	bl_layout_rec_t		*r	= NULL;
 
-	if (!i->i_op->fiemap || !i->i_op->fallocate) {
+	if (!i->i_op->fiemap || !i->i_fop->fallocate) {
 		printk("pNFS: file system doesn't support required fiemap or"
 		    "fallocate methods\n");
 		return False;
