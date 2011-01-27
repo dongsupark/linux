@@ -5469,21 +5469,23 @@ nfs4_layoutget_prepare(struct rpc_task *task, void *calldata)
 	 * serialize openstateid LAYOUTGETs.
 	 */
 	atomic_inc(&nfsi->layout->plh_outstanding);
+	if (pnfs_choose_layoutget_stateid(&lgp->args.stateid,
+					  NFS_I(lgp->args.inode)->layout,
+					  lgp->args.ctx->state)) {
+		rpc_exit(task, NFS4_OK);
+		goto err_out_locked;
+	}
 	spin_unlock(&ino->i_lock);
 
 	if (nfs4_setup_sequence(server, NULL, &lgp->args.seq_args,
 				&lgp->res.seq_res, 0, task)) {
 		goto err_out;
 	}
-	if (pnfs_choose_layoutget_stateid(&lgp->args.stateid,
-					  NFS_I(lgp->args.inode)->layout,
-					  lgp->args.ctx->state)) {
-		rpc_exit(task, NFS4_OK);
-		goto err_out;
-	}
 	rpc_call_start(task);
+	return;
 err_out:
 	spin_lock(&ino->i_lock);
+err_out_locked:
 	atomic_dec(&nfsi->layout->plh_outstanding);
 	spin_unlock(&ino->i_lock);
 }
