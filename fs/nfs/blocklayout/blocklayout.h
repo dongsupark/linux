@@ -191,7 +191,7 @@ struct bl_layoutupdate_data {
 	struct list_head ranges;
 };
 
-#define BLK_ID(lo) ((struct block_mount_id *)(NFS_SERVER(lo->inode)->pnfs_ld_data))
+#define BLK_ID(lo) ((struct block_mount_id *)(NFS_SERVER(lo->plh_inode)->pnfs_ld_data))
 
 static inline struct pnfs_block_layout *
 BLK_LO2EXT(struct pnfs_layout_hdr *lo)
@@ -202,7 +202,7 @@ BLK_LO2EXT(struct pnfs_layout_hdr *lo)
 static inline struct pnfs_block_layout *
 BLK_LSEG2EXT(struct pnfs_layout_segment *lseg)
 {
-	return BLK_LO2EXT(lseg->layout);
+	return BLK_LO2EXT(lseg->pls_layout);
 }
 
 uint32_t *blk_overflow(uint32_t *p, uint32_t *end, size_t nbytes);
