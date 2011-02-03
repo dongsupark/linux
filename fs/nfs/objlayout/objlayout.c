@@ -102,7 +102,7 @@ objlayout_alloc_lseg(struct pnfs_layout_hdr *pnfslay,
 	pnfs_osd_layout = (struct pnfs_osd_layout *)objlseg->pnfs_osd_layout;
 	pnfs_osd_xdr_decode_layout(pnfs_osd_layout, layout);
 
-	objlseg->lseg.range = lgr->range;
+	objlseg->lseg.pls_range = lgr->range;
 	status = objio_alloc_lseg(&objlseg->internal, pnfslay, &objlseg->lseg,
 				  pnfs_osd_layout);
 	if (status)
@@ -177,11 +177,11 @@ objlayout_alloc_io_state(struct pnfs_layout_hdr *pnfs_layout_type,
 	if (objio_alloc_io_state(objlseg->internal, &state))
 		return NULL;
 
-	BUG_ON(offset < lseg->range.offset);
-	lseg_end_offset = end_offset(lseg->range.offset, lseg->range.length);
+	BUG_ON(offset < lseg->pls_range.offset);
+	lseg_end_offset = end_offset(lseg->pls_range.offset, lseg->pls_range.length);
 	BUG_ON(offset >= lseg_end_offset);
 	if (offset + count > lseg_end_offset) {
-		count = lseg->range.length - (offset - lseg->range.offset);
+		count = lseg->pls_range.length - (offset - lseg->pls_range.offset);
 		dprintk("%s: truncated count %Zd\n", __func__, count);
 	}
 
@@ -232,7 +232,7 @@ objlayout_iodone(struct objlayout_io_state *state)
 	if (likely(state->status >= 0)) {
 		objlayout_free_io_state(state);
 	} else {
-		struct objlayout *objlay = OBJLAYOUT(state->objlseg->lseg.layout);
+		struct objlayout *objlay = OBJLAYOUT(state->objlseg->lseg.pls_layout);
 
 		spin_lock(&objlay->lock);
 		objlay->delta_space_valid = OBJ_DSU_INVALID;
@@ -705,8 +705,8 @@ int objlayout_get_deviceinfo(struct pnfs_layout_hdr *pnfslay,
 	pd.pglen = PAGE_SIZE;
 	pd.mincount = 0;
 
-	sb = pnfslay->inode->i_sb;
-	err = nfs4_proc_getdeviceinfo(NFS_SERVER(pnfslay->inode), &pd);
+	sb = pnfslay->plh_inode->i_sb;
+	err = nfs4_proc_getdeviceinfo(NFS_SERVER(pnfslay->plh_inode), &pd);
 	dprintk("%s nfs_getdeviceinfo returned %d\n", __func__, err);
 	if (err)
 		goto err_out;

@@ -140,7 +140,7 @@ extern void objlayout_io_set_result(struct objlayout_io_state *state,
 static inline void
 objlayout_add_delta_space_used(struct objlayout_io_state *state, s64 space_used)
 {
-	struct objlayout *objlay = OBJLAYOUT(state->objlseg->lseg.layout);
+	struct objlayout *objlay = OBJLAYOUT(state->objlseg->lseg.pls_layout);
 
 	/* If one of the I/Os errored out and the delta_space_used was
 	 * invalid we render the complete report as invalid. Protocol mandate

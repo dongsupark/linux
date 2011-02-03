@@ -183,7 +183,7 @@ static struct osd_dev *_device_lookup(struct pnfs_layout_hdr *pnfslay,
 	struct nfs4_deviceid *d_id;
 	struct osd_dev *od;
 	struct osd_dev_info odi;
-	struct objio_mount_type *omt = NFS_SERVER(pnfslay->inode)->pnfs_ld_data;
+	struct objio_mount_type *omt = NFS_SERVER(pnfslay->plh_inode)->pnfs_ld_data;
 	int err;
 
 	d_id = &layout->olo_comps[comp].oc_object_id.oid_device_id;

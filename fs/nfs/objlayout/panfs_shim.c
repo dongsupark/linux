@@ -229,8 +229,8 @@ objio_alloc_lseg(void **outp,
 		goto err;
 	buf = (u8 *)&mcs[1];
 
-	mcs->offset = lseg->range.offset;
-	mcs->length = lseg->range.length;
+	mcs->offset = lseg->pls_range.offset;
+	mcs->length = lseg->pls_range.length;
 #if 0
 	/* FIXME: for now */
 	mcs->expiration_time.ts_sec  = 0;
