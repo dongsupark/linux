@@ -468,7 +468,7 @@ pnfs_clear_lseg_list(struct pnfs_layout_hdr *lo, struct list_head *tmp_list,
 			mark_lseg_invalid(lseg, tmp_list);
 			rv = true;
 		}
-	dprintk("%s:Return\n", __func__);
+	dprintk("%s:Return %d\n", __func__, rv);
 	return rv;
 }
 
@@ -646,11 +646,12 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 	return lseg;
 }
 
-void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
+bool nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 				struct pnfs_layout_range *range,
 				int notify_bit, atomic_t *notify_count,
 				struct list_head *tmp_list)
 {
+	bool rv = false;
 	struct pnfs_layout_segment *lseg, *tmp;
 
 	assert_spin_locked(&lo->plh_inode->i_lock);
@@ -659,7 +660,11 @@ void nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 			lseg->pls_notify_mask |= (1 << notify_bit);
 			atomic_inc(notify_count);
 			mark_lseg_invalid(lseg, tmp_list);
+			rv = true;
 		}
+
+	dprintk("%s:Return %d\n", __func__, rv);
+	return rv;
 }
 
 /* Return true if there is layout based io in progress in the given range.
