@@ -186,6 +186,7 @@ void nfs_client_return_layouts(struct nfs_client *clp)
 {
 	struct pnfs_cb_lrecall_info *cb_info;
 
+	dprintk("%s\n", __func__);
 	spin_lock(&clp->cl_lock);
 	while (true) {
 		if (list_empty(&clp->cl_layoutrecalls)) {
@@ -270,10 +271,13 @@ static int initiate_layout_draining(struct pnfs_cb_lrecall_info *cb_info)
 		spin_lock(&lo->plh_inode->i_lock);
 		if (rv == NFS4_OK) {
 			lo->plh_block_lgets++;
-			nfs4_asynch_forget_layouts(lo, &args->cbl_range,
-						   cb_info->pcl_notify_bit,
-						   &cb_info->pcl_count,
-						   &free_me_list);
+			if (nfs4_asynch_forget_layouts(lo, &args->cbl_range,
+						       cb_info->pcl_notify_bit,
+						       &cb_info->pcl_count,
+						       &free_me_list))
+				rv = NFS4ERR_DELAY;
+			else
+				rv = NFS4ERR_NOMATCHING_LAYOUT;
 		}
 		pnfs_set_layout_stateid(lo, &args->cbl_stateid, true);
 		spin_unlock(&lo->plh_inode->i_lock);
@@ -309,10 +313,13 @@ static int initiate_layout_draining(struct pnfs_cb_lrecall_info *cb_info)
 					 &recall_list, plh_bulk_recall) {
 			spin_lock(&lo->plh_inode->i_lock);
 			set_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags);
-			nfs4_asynch_forget_layouts(lo, &range,
-						   cb_info->pcl_notify_bit,
-						   &cb_info->pcl_count,
-						   &free_me_list);
+			if (nfs4_asynch_forget_layouts(lo, &range,
+						       cb_info->pcl_notify_bit,
+						       &cb_info->pcl_count,
+						       &free_me_list))
+				rv = NFS4ERR_DELAY;
+			else
+				rv = NFS4ERR_NOMATCHING_LAYOUT;
 			list_del_init(&lo->plh_bulk_recall);
 			spin_unlock(&lo->plh_inode->i_lock);
 			pnfs_free_lseg_list(&free_me_list);
