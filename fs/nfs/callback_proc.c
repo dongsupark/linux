@@ -209,6 +209,7 @@ void nfs_client_return_layouts(struct nfs_client *clp)
 		list_del(&cb_info->pcl_list);
 		clp->cl_cb_lrecall_count--;
 		clp->cl_drain_notification[1 << cb_info->pcl_notify_bit] = NULL;
+		spin_unlock(&clp->cl_lock);
 		rpc_wake_up(&clp->cl_rpcwaitq_recall);
 		kfree(cb_info);
 	}
