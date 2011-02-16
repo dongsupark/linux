@@ -1084,9 +1084,6 @@ static void nfsd4_cb_done_sequence(struct rpc_task *task,
 		rpc_wake_up_next(&clp->cl_cb_waitq);
 		dprintk("%s: freed slot, new seqid=%d\n", __func__,
 			clp->cl_cb_session->se_cb_seq_nr);
-
-		/* We're done looking into the sequence information */
-		task->tk_msg.rpc_resp = NULL;
 	}
 }
 
