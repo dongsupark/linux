@@ -429,17 +429,22 @@ should_free_lseg(struct pnfs_layout_range *lseg_range,
 	       lo_seg_intersecting(lseg_range, recall_range);
 }
 
-static void mark_lseg_invalid(struct pnfs_layout_segment *lseg,
+static bool mark_lseg_invalid(struct pnfs_layout_segment *lseg,
 			      struct list_head *tmp_list)
 {
+	bool rv;
+
 	assert_spin_locked(&lseg->pls_layout->plh_inode->i_lock);
-	if (test_and_clear_bit(NFS_LSEG_VALID, &lseg->pls_flags)) {
+	rv = test_and_clear_bit(NFS_LSEG_VALID, &lseg->pls_flags);
+	if (rv) {
 		/* Remove the reference keeping the lseg in the
 		 * list.  It will now be removed when all
 		 * outstanding io is finished.
 		 */
 		put_lseg_locked(lseg, tmp_list);
 	}
+
+	return rv;
 }
 
 /* Returns false if there was nothing to do, true otherwise */
@@ -657,8 +662,10 @@ bool nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 	assert_spin_locked(&lo->plh_inode->i_lock);
 	list_for_each_entry_safe(lseg, tmp, &lo->plh_segs, pls_list)
 		if (should_free_lseg(&lseg->pls_range, range)) {
-			lseg->pls_notify_mask |= (1 << notify_idx);
-			atomic_inc(notify_count);
+			if (lseg->pls_notify_mask & (1 << notify_idx)) {
+				lseg->pls_notify_mask |= (1 << notify_idx);
+				atomic_inc(notify_count);
+			}
 			mark_lseg_invalid(lseg, tmp_list);
 			rv = true;
 		}
