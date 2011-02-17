@@ -5495,7 +5495,7 @@ static void nfs4_layoutget_done(struct rpc_task *task, void *calldata)
 	struct nfs4_layoutget *lgp = calldata;
 	struct nfs_server *server = NFS_SERVER(lgp->args.inode);
 
-	dprintk("--> %s\n", __func__);
+	dprintk("--> %s: tk_status=%d\n", __func__, task->tk_status);
 
 	if (!nfs4_sequence_done(task, &lgp->res.seq_res)) {
 		/* layout code relies on fact that in this case
@@ -5516,6 +5516,7 @@ static void nfs4_layoutget_done(struct rpc_task *task, void *calldata)
 		if (nfs4_async_handle_error(task, server, NULL, NULL) == -EAGAIN) {
 			struct inode *ino = lgp->args.inode;
 
+			dprintk("<-- %s retrying\n", __func__);
 			spin_lock(&ino->i_lock);
 			atomic_dec(&NFS_I(ino)->layout->plh_outstanding);
 			spin_unlock(&ino->i_lock);
