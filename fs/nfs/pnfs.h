@@ -166,7 +166,7 @@ struct pnfs_device {
 struct pnfs_cb_lrecall_info {
 	struct list_head	pcl_list; /* hook into cl_layoutrecalls list */
 	atomic_t		pcl_count;
-	int			pcl_notify_bit;
+	int			pcl_notify_idx;
 	struct nfs_client	*pcl_clp;
 	struct inode		*pcl_ino;
 	struct cb_layoutrecallargs pcl_args;

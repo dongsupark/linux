@@ -648,7 +648,7 @@ send_layoutget(struct pnfs_layout_hdr *lo,
 
 bool nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 				struct pnfs_layout_range *range,
-				int notify_bit, atomic_t *notify_count,
+				int notify_idx, atomic_t *notify_count,
 				struct list_head *tmp_list)
 {
 	bool rv = false;
@@ -657,7 +657,7 @@ bool nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
 	assert_spin_locked(&lo->plh_inode->i_lock);
 	list_for_each_entry_safe(lseg, tmp, &lo->plh_segs, pls_list)
 		if (should_free_lseg(&lseg->pls_range, range)) {
-			lseg->pls_notify_mask |= (1 << notify_bit);
+			lseg->pls_notify_mask |= (1 << notify_idx);
 			atomic_inc(notify_count);
 			mark_lseg_invalid(lseg, tmp_list);
 			rv = true;

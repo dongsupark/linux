@@ -197,8 +197,10 @@ void nfs_client_return_layouts(struct nfs_client *clp)
 					   struct pnfs_cb_lrecall_info,
 					   pcl_list);
 		spin_unlock(&clp->cl_lock);
+		/* Were all recalled lsegs already forgotten */
 		if (atomic_read(&cb_info->pcl_count) != 0)
 			break;
+
 		/* What do on error return?  These layoutreturns are
 		 * required by the protocol.  So if do not get
 		 * successful reply, probably have to do something
@@ -209,7 +211,7 @@ void nfs_client_return_layouts(struct nfs_client *clp)
 		/* Removing from the list unblocks LAYOUTGETs */
 		list_del(&cb_info->pcl_list);
 		clp->cl_cb_lrecall_count--;
-		clp->cl_drain_notification[1 << cb_info->pcl_notify_bit] = NULL;
+		clp->cl_drain_notification[cb_info->pcl_notify_idx] = NULL;
 		spin_unlock(&clp->cl_lock);
 		rpc_wake_up(&clp->cl_rpcwaitq_recall);
 		kfree(cb_info);
@@ -224,7 +226,7 @@ void notify_drained(struct nfs_client *clp, u64 mask)
 	/* clp lock not needed except to remove used up entries */
 	/* Should probably use functions defined in bitmap.h */
 	while (mask) {
-		if ((mask & 1) && (atomic_dec_and_test(*ptr)))
+		if ((mask & 1) && atomic_dec_and_test(*ptr))
 			done = true;
 		mask >>= 1;
 		ptr++;
@@ -272,7 +274,7 @@ static int initiate_layout_draining(struct pnfs_cb_lrecall_info *cb_info)
 		if (rv == NFS4_OK) {
 			lo->plh_block_lgets++;
 			if (nfs4_asynch_forget_layouts(lo, &args->cbl_range,
-						       cb_info->pcl_notify_bit,
+						       cb_info->pcl_notify_idx,
 						       &cb_info->pcl_count,
 						       &free_me_list))
 				rv = NFS4ERR_DELAY;
@@ -314,7 +316,7 @@ static int initiate_layout_draining(struct pnfs_cb_lrecall_info *cb_info)
 			spin_lock(&lo->plh_inode->i_lock);
 			set_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags);
 			if (nfs4_asynch_forget_layouts(lo, &range,
-						       cb_info->pcl_notify_bit,
+						       cb_info->pcl_notify_idx,
 						       &cb_info->pcl_count,
 						       &free_me_list))
 				rv = NFS4ERR_DELAY;
@@ -335,8 +337,7 @@ static u32 do_callback_layoutrecall(struct nfs_client *clp,
 				    struct cb_layoutrecallargs *args)
 {
 	struct pnfs_cb_lrecall_info *new;
-	atomic_t **ptr;
-	int bit_num;
+	int i;
 	u32 res;
 
 	dprintk("%s enter, type=%i\n", __func__, args->cbl_recall_type);
@@ -354,22 +355,26 @@ static u32 do_callback_layoutrecall(struct nfs_client *clp,
 		kfree(new);
 		res = NFS4ERR_DELAY;
 		spin_unlock(&clp->cl_lock);
+		dprintk("%s: too many layout recalls\n", __func__);
 		goto out;
 	}
 	clp->cl_cb_lrecall_count++;
 	/* Adding to the list will block conflicting LGET activity */
 	list_add_tail(&new->pcl_list, &clp->cl_layoutrecalls);
-	for (bit_num = 0, ptr = clp->cl_drain_notification; *ptr; ptr++)
-		bit_num++;
-	*ptr = &new->pcl_count;
-	new->pcl_notify_bit = bit_num;
+	for (i = 0; i < PNFS_MAX_CB_LRECALLS; i++)
+		if (!clp->cl_drain_notification[i]) {
+			clp->cl_drain_notification[i] = &new->pcl_count;
+			break;
+		}
+	BUG_ON(i >= PNFS_MAX_CB_LRECALLS);
+	new->pcl_notify_idx = i;
 	spin_unlock(&clp->cl_lock);
 	res = initiate_layout_draining(new);
 	if (res || atomic_dec_and_test(&new->pcl_count)) {
 		spin_lock(&clp->cl_lock);
 		list_del(&new->pcl_list);
 		clp->cl_cb_lrecall_count--;
-		clp->cl_drain_notification[1 << bit_num] = NULL;
+		clp->cl_drain_notification[new->pcl_notify_idx] = NULL;
 		rpc_wake_up(&clp->cl_rpcwaitq_recall);
 		spin_unlock(&clp->cl_lock);
 		if (res == NFS4_OK) {
