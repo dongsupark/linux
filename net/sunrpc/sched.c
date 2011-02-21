@@ -789,11 +789,11 @@ EXPORT_SYMBOL_GPL(rpc_free);
 /*
  * Creation and deletion of RPC task structures
  */
-static void rpc_init_task(struct rpc_task *task, const struct rpc_task_setup *task_setup_data)
+static void rpc_init_task(struct rpc_task *task, const struct rpc_task_setup *task_setup_data, unsigned short extra_flags)
 {
 	memset(task, 0, sizeof(*task));
 	atomic_set(&task->tk_count, 1);
-	task->tk_flags  = task_setup_data->flags;
+	task->tk_flags  = task_setup_data->flags | extra_flags;
 	task->tk_ops = task_setup_data->callback_ops;
 	task->tk_calldata = task_setup_data->callback_data;
 	INIT_LIST_HEAD(&task->tk_task);
@@ -842,14 +842,14 @@ struct rpc_task *rpc_new_task(const struct rpc_task_setup *setup_data)
 		flags = RPC_TASK_DYNAMIC;
 	}
 
-	rpc_init_task(task, setup_data);
+	rpc_init_task(task, setup_data, flags);
+
 	if (task->tk_status < 0) {
 		int err = task->tk_status;
 		rpc_put_task(task);
 		return ERR_PTR(err);
 	}
 
-	task->tk_flags |= flags;
 	dprintk("RPC:       allocated task %p\n", task);
 	return task;
 }
