@@ -36,6 +36,7 @@
 #ifdef CONFIG_NFSD_V4
 #include "acl.h"
 #include "idmap.h"
+#include "pnfsd.h"
 #endif /* CONFIG_NFSD_V4 */
 
 #include "nfsd.h"
@@ -379,6 +380,10 @@ nfsd_setattr(struct svc_rqst *rqstp, struct svc_fh *fhp, struct iattr *iap,
 					NFSD_MAY_TRUNC|NFSD_MAY_OWNER_OVERRIDE);
 			if (err)
 				goto out;
+#if defined(CONFIG_PNFSD_LOCAL_EXPORT)
+			if (is_inode_pnfsd_lexp(inode))
+				pnfsd_lexp_recall_layout(inode);
+#endif /* CONFIG_PNFSD_LOCAL_EXPORT */
 		}
 
 		host_err = get_write_access(inode);
