@@ -18,6 +18,8 @@
  * by David M. Richter <richterd@citi.umich.edu>
  */
 
+#include <linux/sched.h>
+#include <linux/wait.h>
 #include <linux/sunrpc/svc_xprt.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
 
@@ -27,6 +29,8 @@
 
 struct sockaddr pnfsd_lexp_addr;
 size_t pnfs_lexp_addr_len;
+
+static wait_queue_head_t lo_recall_wq;
 
 static int
 pnfsd_lexp_layout_type(struct super_block *sb)
@@ -196,8 +200,7 @@ static int
 pnfsd_lexp_layout_return(struct inode *inode,
 			 const struct nfsd4_pnfs_layoutreturn_arg *args)
 {
-	dprintk("%s: (unimplemented)\n", __func__);
-
+	wake_up_all(&lo_recall_wq);
 	return 0;
 }
 
@@ -220,6 +223,74 @@ static struct pnfs_export_operations pnfsd_lexp_ops = {
 void
 pnfsd_lexp_init(struct inode *inode)
 {
+	static bool init_once;
+
 	dprintk("%s: &pnfsd_lexp_ops=%p\n", __func__, &pnfsd_lexp_ops);
 	inode->i_sb->s_pnfs_op = &pnfsd_lexp_ops;
+
+	if (!init_once++)
+		init_waitqueue_head(&lo_recall_wq);
+}
+
+bool
+is_inode_pnfsd_lexp(struct inode *inode)
+{
+	return inode->i_sb->s_pnfs_op == &pnfsd_lexp_ops;
+}
+
+static bool
+has_layout(struct nfs4_file *fp)
+{
+	return !list_empty(&fp->fi_layouts);
+}
+
+/*
+ * recalls the layout if needed and waits synchronously for its return
+ */
+int
+pnfsd_lexp_recall_layout(struct inode *inode)
+{
+	struct nfs4_file *fp;
+	struct nfsd4_pnfs_cb_layout cbl;
+	int status = 0;
+
+	dprintk("%s: begin\n", __func__);
+	fp = find_file(inode);
+	BUG_ON(!fp);
+
+	if (!has_layout(fp))
+		goto out;
+
+	memset(&cbl, 0, sizeof(cbl));
+	cbl.cbl_recall_type = RETURN_FILE;
+	cbl.cbl_seg.layout_type = LAYOUT_NFSV4_1_FILES;
+	/* for now, always recall the whole layout */
+	cbl.cbl_seg.iomode = IOMODE_ANY;
+	cbl.cbl_seg.offset = 0;
+	cbl.cbl_seg.length = NFS4_MAX_UINT64;
+
+	while (has_layout(fp)) {
+		dprintk("%s: recalling layout\n", __func__);
+		status = nfsd_layout_recall_cb(inode->i_sb, inode, &cbl);
+
+		switch (status) {
+		case 0:
+		case -EAGAIN:
+			break;
+		case -ENOENT:	/* no matching layout */
+			status = 0;
+			goto out;
+		default:
+			goto out;
+		}
+
+		dprintk("%s: waiting status=%d\n", __func__, status);
+		status = wait_event_interruptible(lo_recall_wq, !has_layout(fp));
+		if (status)
+			break;
+	}
+out:
+	put_nfs4_file(fp);
+	dprintk("%s: status=%d\n", __func__, status);
+	return status;
 }
