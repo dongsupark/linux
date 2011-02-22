@@ -1161,12 +1161,14 @@ static void nfs_dentry_iput(struct dentry *dentry, struct inode *inode)
 	if (S_ISDIR(inode->i_mode))
 		/* drop any readdir cache as it could easily be old */
 		NFS_I(inode)->cache_validity |= NFS_INO_INVALID_DATA;
-
-	if (dentry->d_flags & DCACHE_NFSFS_RENAMED) {
+	if (dentry->d_flags & DCACHE_NFSFS_RENAMED)
 		drop_nlink(inode);
-		nfs_complete_unlink(dentry, inode);
-	}
 	iput(inode);
+}
+
+static void nfs_d_unlink(struct dentry *parent, struct dentry *dentry)
+{
+	nfs_complete_unlink(parent, dentry);
 }
 
 const struct dentry_operations nfs_dentry_operations = {
@@ -1174,6 +1176,7 @@ const struct dentry_operations nfs_dentry_operations = {
 	.d_delete	= nfs_dentry_delete,
 	.d_iput		= nfs_dentry_iput,
 	.d_automount	= nfs_d_automount,
+	.d_unlink	= nfs_d_unlink,
 };
 
 static struct dentry *nfs_lookup(struct inode *dir, struct dentry * dentry, struct nameidata *nd)
@@ -1248,6 +1251,7 @@ const struct dentry_operations nfs4_dentry_operations = {
 	.d_delete	= nfs_dentry_delete,
 	.d_iput		= nfs_dentry_iput,
 	.d_automount	= nfs_d_automount,
+	.d_unlink	= nfs_d_unlink,
 };
 
 /*

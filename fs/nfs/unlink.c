@@ -184,19 +184,17 @@ static int nfs_do_call_unlink(struct dentry *parent, struct inode *dir, struct n
 	return 1;
 }
 
-static int nfs_call_unlink(struct dentry *dentry, struct nfs_unlinkdata *data)
+static int nfs_call_unlink(struct dentry *parent, struct dentry *dentry, struct nfs_unlinkdata *data)
 {
-	struct dentry *parent;
 	struct inode *dir;
 	int ret = 0;
 
 
-	parent = dget_parent(dentry);
 	if (parent == NULL)
-		goto out_free;
+		goto out;
 	dir = parent->d_inode;
 	if (nfs_copy_dname(dentry, data) != 0)
-		goto out_dput;
+		goto out;
 	/* Non-exclusive lock protects against concurrent lookup() calls */
 	spin_lock(&dir->i_lock);
 	if (atomic_inc_not_zero(&NFS_I(dir)->silly_count) == 0) {
@@ -204,13 +202,11 @@ static int nfs_call_unlink(struct dentry *dentry, struct nfs_unlinkdata *data)
 		hlist_add_head(&data->list, &NFS_I(dir)->silly_list);
 		spin_unlock(&dir->i_lock);
 		ret = 1;
-		goto out_dput;
+		goto out;
 	}
 	spin_unlock(&dir->i_lock);
 	ret = nfs_do_call_unlink(parent, dir, data);
-out_dput:
-	dput(parent);
-out_free:
+out:
 	return ret;
 }
 
@@ -283,26 +279,24 @@ out:
 
 /**
  * nfs_complete_unlink - Initialize completion of the sillydelete
+ * @parent: parent directory
  * @dentry: dentry to delete
- * @inode: inode
  *
  * Since we're most likely to be called by dentry_iput(), we
  * only use the dentry to find the sillydelete. We then copy the name
  * into the qstr.
  */
 void
-nfs_complete_unlink(struct dentry *dentry, struct inode *inode)
+nfs_complete_unlink(struct dentry *parent, struct dentry *dentry)
 {
 	struct nfs_unlinkdata	*data = NULL;
 
-	spin_lock(&dentry->d_lock);
 	if (dentry->d_flags & DCACHE_NFSFS_RENAMED) {
 		dentry->d_flags &= ~DCACHE_NFSFS_RENAMED;
 		data = dentry->d_fsdata;
 	}
-	spin_unlock(&dentry->d_lock);
 
-	if (data != NULL && (NFS_STALE(inode) || !nfs_call_unlink(dentry, data)))
+	if (data != NULL && !nfs_call_unlink(parent, dentry, data))
 		nfs_free_unlinkdata(data);
 }
 

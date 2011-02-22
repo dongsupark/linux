@@ -866,6 +866,7 @@ struct dentry_operations {
 	char *(*d_dname)(struct dentry *, char *, int);
 	struct vfsmount *(*d_automount)(struct path *);
 	int (*d_manage)(struct dentry *, bool, bool);
+	void (*d_unlink)(struct dentry *, struct dentry *);
 };
 
   d_revalidate: called when the VFS needs to revalidate a dentry. This
@@ -972,6 +973,14 @@ struct dentry_operations {
 
 	This function is only used if DCACHE_MANAGE_TRANSIT is set on the
 	dentry being transited from.
+
+  d_unlink: called to allow the filesystem to unlink the dentry after final
+	use. It is only called when DCACHE_NFSFS_RENAMED is set, and is
+	designed for use by 'sillyrename' schemes that are commonly
+	implemented on distributed filesystems such as NFS.
+
+	Note that the filesystem is still responsible for protecting against
+	races with other lookups.
 
 Example :
 

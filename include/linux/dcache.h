@@ -169,6 +169,7 @@ struct dentry_operations {
 	char *(*d_dname)(struct dentry *, char *, int);
 	struct vfsmount *(*d_automount)(struct path *);
 	int (*d_manage)(struct dentry *, bool, bool);
+	void (*d_unlink)(struct dentry *, struct dentry *);
 } ____cacheline_aligned;
 
 /*

@@ -301,6 +301,9 @@ static struct dentry *d_kill(struct dentry *dentry, struct dentry *parent)
 	if (parent)
 		spin_unlock(&parent->d_lock);
 	dentry_iput(dentry);
+
+	if (dentry->d_flags & DCACHE_NFSFS_RENAMED)
+		dentry->d_op->d_unlink(parent, dentry);
 	/*
 	 * dentry_iput drops the locks, at which point nobody (except
 	 * transient RCU lookups) can reach this dentry.
@@ -2066,6 +2069,8 @@ again:
 		dentry->d_flags &= ~DCACHE_CANT_MOUNT;
 		dentry_unlink_inode(dentry);
 		fsnotify_nameremove(dentry, isdir);
+		if (dentry->d_flags & DCACHE_NFSFS_RENAMED)
+			dentry->d_op->d_unlink(dentry->d_parent, dentry);
 		return;
 	}
 
