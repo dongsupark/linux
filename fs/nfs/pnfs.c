@@ -1038,7 +1038,6 @@ pnfs_layout_process(struct nfs4_layoutget *lgp)
 		goto out;
 	}
 
-	spin_lock(&ino->i_lock);
 	/* decrement needs to be done before call to pnfs_layoutget_blocked */
 	atomic_dec(&lo->plh_outstanding);
 	spin_lock(&clp->cl_lock);
@@ -1049,6 +1048,7 @@ pnfs_layout_process(struct nfs4_layoutget *lgp)
 	}
 	spin_unlock(&clp->cl_lock);
 
+	spin_lock(&ino->i_lock);
 	if (pnfs_layoutgets_blocked(lo, &res->stateid)) {
 		dprintk("%s forget reply due to state\n", __func__);
 		goto out_forget_reply;
