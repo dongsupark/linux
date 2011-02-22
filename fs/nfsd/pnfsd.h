@@ -136,6 +136,8 @@ extern struct sockaddr pnfsd_lexp_addr;
 extern size_t pnfs_lexp_addr_len;
 
 extern void pnfsd_lexp_init(struct inode *);
+extern bool is_inode_pnfsd_lexp(struct inode *);
+extern int pnfsd_lexp_recall_layout(struct inode *);
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
 
 #endif /* LINUX_NFSD_PNFSD_H */
