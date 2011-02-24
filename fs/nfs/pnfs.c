@@ -249,7 +249,7 @@ _put_lseg_common(struct pnfs_layout_segment *lseg)
 	struct inode *ino = lseg->pls_layout->plh_inode;
 
 	BUG_ON(test_bit(NFS_LSEG_VALID, &lseg->pls_flags));
-	list_del(&lseg->pls_list);
+	list_del_init(&lseg->pls_list);
 	if (list_empty(&lseg->pls_layout->plh_segs)) {
 		set_bit(NFS_LAYOUT_DESTROYED, &lseg->pls_layout->plh_flags);
 		/* Matched by initial refcount set in alloc_init_layout_hdr */
