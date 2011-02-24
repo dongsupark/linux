@@ -185,9 +185,6 @@ static struct nfs_client *nfs_alloc_client(const struct nfs_client_initdata *cl_
 		clp->cl_machine_cred = cred;
 #if defined(CONFIG_NFS_V4_1)
 	INIT_LIST_HEAD(&clp->cl_layouts);
-	INIT_LIST_HEAD(&clp->cl_layoutrecalls);
-	rpc_init_wait_queue(&clp->cl_rpcwaitq_recall,
-			    "NFS client CB_LAYOUTRECALLS");
 #endif
 	nfs_fscache_get_client_cookie(clp);
 
@@ -246,6 +243,11 @@ static void nfs_cb_idr_remove_locked(struct nfs_client *clp)
 		idr_remove(&cb_ident_idr, clp->cl_cb_ident);
 }
 
+static void pnfs_init_server(struct nfs_server *server)
+{
+	rpc_init_wait_queue(&server->roc_rpcwaitq, "pNFS ROC");
+}
+
 #else
 static void nfs4_shutdown_client(struct nfs_client *clp)
 {
@@ -256,6 +258,10 @@ void nfs_cleanup_cb_ident_idr(void)
 }
 
 static void nfs_cb_idr_remove_locked(struct nfs_client *clp)
+{
+}
+
+static void pnfs_init_server(struct nfs_server *server)
 {
 }
 
@@ -1051,6 +1057,8 @@ static struct nfs_server *nfs_alloc_server(void)
 		kfree(server);
 		return NULL;
 	}
+
+	pnfs_init_server(server);
 
 	return server;
 }

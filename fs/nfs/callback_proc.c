@@ -108,227 +108,89 @@ int nfs4_validate_delegation_stateid(struct nfs_delegation *delegation, const nf
 
 #if defined(CONFIG_NFS_V4_1)
 
-static bool
-_recall_matches_lget(struct pnfs_cb_lrecall_info *cb_info,
-		     struct inode *ino, struct pnfs_layout_range *range)
+static u32 initiate_file_draining(struct nfs_client *clp,
+				  struct cb_layoutrecallargs *args)
 {
-	struct cb_layoutrecallargs *cb_args = &cb_info->pcl_args;
+	struct pnfs_layout_hdr *lo;
+	struct inode *ino;
+	bool found = false;
+	u32 rv = NFS4ERR_NOMATCHING_LAYOUT;
+	LIST_HEAD(free_me_list);
 
-	switch (cb_args->cbl_recall_type) {
-	case RETURN_ALL:
-		return true;
-	case RETURN_FSID:
-		return !memcmp(&NFS_SERVER(ino)->fsid, &cb_args->cbl_fsid,
-			       sizeof(struct nfs_fsid));
-	case RETURN_FILE:
-		return (ino == cb_info->pcl_ino) &&
-			should_free_lseg(range, &cb_args->cbl_range);
-	default:
-		/* Should never hit here, as decode_layoutrecall_args()
-		 * will verify cb_info from server.
+	spin_lock(&clp->cl_lock);
+	list_for_each_entry(lo, &clp->cl_layouts, plh_layouts) {
+		if (nfs_compare_fh(&args->cbl_fh,
+				   &NFS_I(lo->plh_inode)->fh))
+			continue;
+		ino = igrab(lo->plh_inode);
+		if (!ino)
+			continue;
+		found = true;
+		/* Without this, layout can be freed as soon
+		 * as we release cl_lock.
 		 */
-		BUG();
+		get_layout_hdr(lo);
+		break;
 	}
-}
+	spin_unlock(&clp->cl_lock);
+	if (!found)
+		return NFS4ERR_NOMATCHING_LAYOUT;
 
-bool
-matches_outstanding_recall(struct inode *ino, struct pnfs_layout_range *range)
-{
-	struct nfs_client *clp = NFS_SERVER(ino)->nfs_client;
-	struct pnfs_cb_lrecall_info *cb_info;
-	bool rv = false;
-
-	assert_spin_locked(&clp->cl_lock);
-	list_for_each_entry(cb_info, &clp->cl_layoutrecalls, pcl_list) {
-		if (_recall_matches_lget(cb_info, ino, range)) {
-			rv = true;
-			break;
-		}
-	}
+	spin_lock(&ino->i_lock);
+	if (test_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags) ||
+	    mark_matching_lsegs_invalid(lo, &free_me_list,
+					&args->cbl_range))
+		rv = NFS4ERR_DELAY;
+	else
+		rv = NFS4ERR_NOMATCHING_LAYOUT;
+	pnfs_set_layout_stateid(lo, &args->cbl_stateid, true);
+	spin_unlock(&ino->i_lock);
+	pnfs_free_lseg_list(&free_me_list);
+	put_layout_hdr(lo);
+	iput(ino);
 	return rv;
 }
 
-/* Send a synchronous LAYOUTRETURN.  By the time this is called, we know
- * all IO has been drained, any matching lsegs deleted, and that no
- * overlapping LAYOUTGETs will be sent or processed for the duration
- * of this call.
- * Note that it is possible that when this is called, the stateid has
- * been invalidated.  But will not be cleared, so can still use.
- */
-static int
-pnfs_send_layoutreturn(struct nfs_client *clp,
-		       struct pnfs_cb_lrecall_info *cb_info)
+static u32 initiate_bulk_draining(struct nfs_client *clp,
+				  struct cb_layoutrecallargs *args)
 {
-	struct cb_layoutrecallargs *args = &cb_info->pcl_args;
-	struct nfs4_layoutreturn *lrp;
-
-	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
-	if (!lrp)
-		return -ENOMEM;
-	lrp->args.reclaim = 0;
-	lrp->args.layout_type = args->cbl_layout_type;
-	lrp->args.return_type = args->cbl_recall_type;
-	lrp->clp = clp;
-	if (args->cbl_recall_type == RETURN_FILE) {
-		lrp->args.range = args->cbl_range;
-		lrp->args.inode = cb_info->pcl_ino;
-	} else {
-		lrp->args.range.iomode = IOMODE_ANY;
-		lrp->args.inode = NULL;
-	}
-	return nfs4_proc_layoutreturn(lrp, true);
-}
-
-/* Called by state manager to finish CB_LAYOUTRECALLS initiated by
- * nfs4_callback_layoutrecall().
- */
-void nfs_client_return_layouts(struct nfs_client *clp)
-{
-	struct pnfs_cb_lrecall_info *cb_info;
-
-	dprintk("%s\n", __func__);
-	spin_lock(&clp->cl_lock);
-	while (true) {
-		if (list_empty(&clp->cl_layoutrecalls)) {
-			spin_unlock(&clp->cl_lock);
-			break;
-		}
-		cb_info = list_first_entry(&clp->cl_layoutrecalls,
-					   struct pnfs_cb_lrecall_info,
-					   pcl_list);
-		spin_unlock(&clp->cl_lock);
-		/* Were all recalled lsegs already forgotten */
-		if (atomic_read(&cb_info->pcl_count) != 0)
-			break;
-
-		/* What do on error return?  These layoutreturns are
-		 * required by the protocol.  So if do not get
-		 * successful reply, probably have to do something
-		 * more drastic.
-		 */
-		pnfs_send_layoutreturn(clp, cb_info);
-		spin_lock(&clp->cl_lock);
-		/* Removing from the list unblocks LAYOUTGETs */
-		list_del(&cb_info->pcl_list);
-		clp->cl_cb_lrecall_count--;
-		clp->cl_drain_notification[cb_info->pcl_notify_idx] = NULL;
-		spin_unlock(&clp->cl_lock);
-		rpc_wake_up(&clp->cl_rpcwaitq_recall);
-		kfree(cb_info);
-	}
-}
-
-void notify_drained(struct nfs_client *clp, u64 mask)
-{
-	atomic_t **ptr = clp->cl_drain_notification;
-	bool done = false;
-
-	/* clp lock not needed except to remove used up entries */
-	/* Should probably use functions defined in bitmap.h */
-	while (mask) {
-		if ((mask & 1) && atomic_dec_and_test(*ptr))
-			done = true;
-		mask >>= 1;
-		ptr++;
-	}
-	if (done) {
-		set_bit(NFS4CLNT_LAYOUT_RECALL, &clp->cl_state);
-		nfs4_schedule_state_manager(clp);
-	}
-}
-
-static int initiate_layout_draining(struct pnfs_cb_lrecall_info *cb_info)
-{
-	struct nfs_client *clp = cb_info->pcl_clp;
 	struct pnfs_layout_hdr *lo;
-	int rv = NFS4ERR_NOMATCHING_LAYOUT;
-	struct cb_layoutrecallargs *args = &cb_info->pcl_args;
+	struct inode *ino;
+	u32 rv = NFS4ERR_NOMATCHING_LAYOUT;
+	struct pnfs_layout_hdr *tmp;
+	LIST_HEAD(recall_list);
+	LIST_HEAD(free_me_list);
+	struct pnfs_layout_range range = {
+		.iomode = IOMODE_ANY,
+		.offset = 0,
+		.length = NFS4_MAX_UINT64,
+	};
 
-	if (args->cbl_recall_type == RETURN_FILE) {
-		LIST_HEAD(free_me_list);
-
-		spin_lock(&clp->cl_lock);
-		list_for_each_entry(lo, &clp->cl_layouts, plh_layouts) {
-			if (nfs_compare_fh(&args->cbl_fh,
-					   &NFS_I(lo->plh_inode)->fh))
-				continue;
-			if (test_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags))
-				rv = NFS4ERR_DELAY;
-			else {
-				/* FIXME I need to better understand igrab and
-				 * does having a layout ref keep ino around?
-				 *  It should.
-				 */
-				/* We need to hold the reference until any
-				 * potential LAYOUTRETURN is finished.
-				 */
-				get_layout_hdr(lo);
-				cb_info->pcl_ino = lo->plh_inode;
-				rv = NFS4_OK;
-			}
-			break;
-		}
-		spin_unlock(&clp->cl_lock);
-
-		spin_lock(&lo->plh_inode->i_lock);
-		if (rv == NFS4_OK) {
-			lo->plh_block_lgets++;
-			if (nfs4_asynch_forget_layouts(lo, &args->cbl_range,
-						       cb_info->pcl_notify_idx,
-						       &cb_info->pcl_count,
-						       &free_me_list))
-				rv = NFS4ERR_DELAY;
-			else
-				rv = NFS4ERR_NOMATCHING_LAYOUT;
-		}
-		pnfs_set_layout_stateid(lo, &args->cbl_stateid, true);
-		spin_unlock(&lo->plh_inode->i_lock);
+	spin_lock(&clp->cl_lock);
+	list_for_each_entry(lo, &clp->cl_layouts, plh_layouts) {
+		if ((args->cbl_recall_type == RETURN_FSID) &&
+		    memcmp(&NFS_SERVER(lo->plh_inode)->fsid,
+			   &args->cbl_fsid, sizeof(struct nfs_fsid)))
+			continue;
+		if (!igrab(lo->plh_inode))
+			continue;
+		get_layout_hdr(lo);
+		BUG_ON(!list_empty(&lo->plh_bulk_recall));
+		list_add(&lo->plh_bulk_recall, &recall_list);
+	}
+	spin_unlock(&clp->cl_lock);
+	list_for_each_entry_safe(lo, tmp,
+				 &recall_list, plh_bulk_recall) {
+		ino = lo->plh_inode;
+		spin_lock(&ino->i_lock);
+		set_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags);
+		if (mark_matching_lsegs_invalid(lo, &free_me_list, &range))
+			rv = NFS4ERR_DELAY;
+		list_del_init(&lo->plh_bulk_recall);
+		spin_unlock(&ino->i_lock);
 		pnfs_free_lseg_list(&free_me_list);
-	} else {
-		struct pnfs_layout_hdr *tmp;
-		LIST_HEAD(recall_list);
-		LIST_HEAD(free_me_list);
-		struct pnfs_layout_range range = {
-			.iomode = IOMODE_ANY,
-			.offset = 0,
-			.length = NFS4_MAX_UINT64,
-		};
-
-		spin_lock(&clp->cl_lock);
-		/* Per RFC 5661, 12.5.5.2.1.5, bulk recall must be serialized */
-		if (!list_is_singular(&clp->cl_layoutrecalls)) {
-			spin_unlock(&clp->cl_lock);
-			return NFS4ERR_DELAY;
-		}
-		list_for_each_entry(lo, &clp->cl_layouts, plh_layouts) {
-			if ((args->cbl_recall_type == RETURN_FSID) &&
-			    memcmp(&NFS_SERVER(lo->plh_inode)->fsid,
-				   &args->cbl_fsid, sizeof(struct nfs_fsid)))
-				continue;
-			get_layout_hdr(lo);
-			/* We could list_del(&lo->layouts) here */
-			BUG_ON(!list_empty(&lo->plh_bulk_recall));
-			list_add(&lo->plh_bulk_recall, &recall_list);
-		}
-		spin_unlock(&clp->cl_lock);
-		list_for_each_entry_safe(lo, tmp,
-					 &recall_list, plh_bulk_recall) {
-			spin_lock(&lo->plh_inode->i_lock);
-			set_bit(NFS_LAYOUT_BULK_RECALL, &lo->plh_flags);
-			if (nfs4_asynch_forget_layouts(lo, &range,
-						       cb_info->pcl_notify_idx,
-						       &cb_info->pcl_count,
-						       &free_me_list))
-				rv = NFS4ERR_DELAY;
-			else
-				rv = NFS4ERR_NOMATCHING_LAYOUT;
-			list_del_init(&lo->plh_bulk_recall);
-			spin_unlock(&lo->plh_inode->i_lock);
-			pnfs_free_lseg_list(&free_me_list);
-			put_layout_hdr(lo);
-			rv = NFS4_OK;
-		}
-		pnfs_free_lseg_list(&free_me_list);
+		put_layout_hdr(lo);
+		iput(ino);
 	}
 	return rv;
 }
@@ -336,63 +198,16 @@ static int initiate_layout_draining(struct pnfs_cb_lrecall_info *cb_info)
 static u32 do_callback_layoutrecall(struct nfs_client *clp,
 				    struct cb_layoutrecallargs *args)
 {
-	struct pnfs_cb_lrecall_info *new;
-	int i;
-	u32 res;
+	u32 res = NFS4ERR_DELAY;
 
 	dprintk("%s enter, type=%i\n", __func__, args->cbl_recall_type);
-	new = kmalloc(sizeof(*new), GFP_KERNEL);
-	if (!new) {
-		res = NFS4ERR_DELAY;
+	if (test_and_set_bit(NFS4CLNT_LAYOUTRECALL, &clp->cl_state))
 		goto out;
-	}
-	memcpy(&new->pcl_args, args, sizeof(*args));
-	atomic_set(&new->pcl_count, 1);
-	new->pcl_clp = clp;
-	new->pcl_ino = NULL;
-	spin_lock(&clp->cl_lock);
-	if (clp->cl_cb_lrecall_count >= PNFS_MAX_CB_LRECALLS) {
-		kfree(new);
-		res = NFS4ERR_DELAY;
-		spin_unlock(&clp->cl_lock);
-		dprintk("%s: too many layout recalls\n", __func__);
-		goto out;
-	}
-	clp->cl_cb_lrecall_count++;
-	/* Adding to the list will block conflicting LGET activity */
-	list_add_tail(&new->pcl_list, &clp->cl_layoutrecalls);
-	for (i = 0; i < PNFS_MAX_CB_LRECALLS; i++)
-		if (!clp->cl_drain_notification[i]) {
-			clp->cl_drain_notification[i] = &new->pcl_count;
-			break;
-		}
-	BUG_ON(i >= PNFS_MAX_CB_LRECALLS);
-	new->pcl_notify_idx = i;
-	spin_unlock(&clp->cl_lock);
-	res = initiate_layout_draining(new);
-	if (res || atomic_dec_and_test(&new->pcl_count)) {
-		spin_lock(&clp->cl_lock);
-		list_del(&new->pcl_list);
-		clp->cl_cb_lrecall_count--;
-		clp->cl_drain_notification[new->pcl_notify_idx] = NULL;
-		rpc_wake_up(&clp->cl_rpcwaitq_recall);
-		spin_unlock(&clp->cl_lock);
-		if (res == NFS4_OK) {
-			if (args->cbl_recall_type == RETURN_FILE) {
-				struct pnfs_layout_hdr *lo;
-
-				lo = NFS_I(new->pcl_ino)->layout;
-				spin_lock(&lo->plh_inode->i_lock);
-				lo->plh_block_lgets--;
-				if (!pnfs_layoutgets_blocked(lo, NULL))
-					rpc_wake_up(&NFS_I(lo->plh_inode)->lo_rpcwaitq_stateid);
-				spin_unlock(&lo->plh_inode->i_lock);
-				put_layout_hdr(lo);
-			}
-			res = NFS4ERR_NOMATCHING_LAYOUT;
-		}
-		kfree(new);
-	}
+	if (args->cbl_recall_type == RETURN_FILE)
+		res = initiate_file_draining(clp, args);
+	else
+		res = initiate_bulk_draining(clp, args);
+	clear_bit(NFS4CLNT_LAYOUTRECALL, &clp->cl_state);
 out:
 	dprintk("%s returning %i\n", __func__, res);
 	return res;

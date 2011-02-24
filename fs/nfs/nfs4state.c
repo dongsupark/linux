@@ -153,7 +153,7 @@ static int nfs41_setup_state_renewal(struct nfs_client *clp)
 	int status;
 	struct nfs_fsinfo fsinfo;
 
-	if (is_ds_only_client(clp)) {
+	if (!test_bit(NFS_CS_CHECK_LEASE_TIME, &clp->cl_res_state)) {
 		nfs4_schedule_state_renewal(clp);
 		return 0;
 	}
@@ -229,7 +229,6 @@ static int nfs4_begin_drain_session(struct nfs_client *clp)
 int nfs41_init_clientid(struct nfs_client *clp, struct rpc_cred *cred)
 {
 	int status;
-	u32 req_exchange_flags = clp->cl_exchange_flags;
 
 	nfs4_begin_drain_session(clp);
 	status = nfs4_proc_exchange_id(clp, cred);
@@ -238,16 +237,6 @@ int nfs41_init_clientid(struct nfs_client *clp, struct rpc_cred *cred)
 	status = nfs4_proc_create_session(clp);
 	if (status != 0)
 		goto out;
-	if (is_ds_only_session(req_exchange_flags)) {
-		clp->cl_exchange_flags &=
-		     ~(EXCHGID4_FLAG_USE_PNFS_MDS | EXCHGID4_FLAG_USE_NON_PNFS);
-		if (!is_ds_only_session(clp->cl_exchange_flags)) {
-			nfs4_destroy_session(clp->cl_session);
-			clp->cl_session = NULL;
-			status = -ENOTSUPP;
-			goto out;
-		}
-	}
 	nfs41_setup_state_renewal(clp);
 	nfs_mark_client_ready(clp, NFS_CS_READY);
 out:
@@ -679,22 +668,9 @@ static void __nfs4_close(struct path *path, struct nfs4_state *state,
 		nfs4_put_open_state(state);
 		nfs4_put_state_owner(owner);
 	} else {
-		u32 roc_iomode;
-		struct nfs_inode *nfsi = NFS_I(state->inode);
+		bool roc = pnfs_roc(state->inode);
 
-		/* FIXME: should return the layout only on last close */
-		if (has_layout(nfsi) &&
-		    (roc_iomode = pnfs_layout_roc_iomode(nfsi)) != 0) {
-			struct pnfs_layout_range range = {
-				.iomode = roc_iomode,
-				.offset = 0,
-				.length = NFS4_MAX_UINT64,
-			};
-
-			pnfs_return_layout(state->inode, &range, wait);
-		}
-
-		nfs4_do_close(path, state, gfp_mask, wait);
+		nfs4_do_close(path, state, gfp_mask, wait, roc);
 	}
 }
 
@@ -1695,10 +1671,6 @@ static void nfs4_state_manager(struct nfs_client *clp)
 		nfs4_end_drain_session(clp);
 		if (test_and_clear_bit(NFS4CLNT_DELEGRETURN, &clp->cl_state)) {
 			nfs_client_return_marked_delegations(clp);
-			continue;
-		}
-		if (test_and_clear_bit(NFS4CLNT_LAYOUT_RECALL, &clp->cl_state)) {
-			nfs_client_return_layouts(clp);
 			continue;
 		}
 		/* Recall session slots */

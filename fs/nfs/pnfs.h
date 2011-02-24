@@ -35,6 +35,7 @@
 
 enum {
 	NFS_LSEG_VALID = 0,	/* cleared when lseg is recalled/returned */
+	NFS_LSEG_ROC,		/* roc bit received from server */
 };
 
 struct pnfs_layout_segment {
@@ -43,7 +44,6 @@ struct pnfs_layout_segment {
 	atomic_t pls_refcount;
 	unsigned long pls_flags;
 	struct pnfs_layout_hdr *pls_layout;
-	u64 pls_notify_mask;
 };
 
 enum pnfs_try_status {
@@ -60,6 +60,7 @@ enum {
 	NFS_LAYOUT_RW_FAILED,		/* get rw layout failed stop trying */
 	NFS_LAYOUT_BULK_RECALL,		/* bulk recall affecting layout */
 	NFS_LAYOUT_NEED_LCOMMIT,	/* LAYOUTCOMMIT needed */
+	NFS_LAYOUT_ROC,			/* some lseg had roc bit set */
 	NFS_LAYOUT_DESTROYED,		/* no new use of layout allowed */
 };
 
@@ -163,15 +164,6 @@ struct pnfs_device {
 	unsigned int  pglen;
 };
 
-struct pnfs_cb_lrecall_info {
-	struct list_head	pcl_list; /* hook into cl_layoutrecalls list */
-	atomic_t		pcl_count;
-	int			pcl_notify_idx;
-	struct nfs_client	*pcl_clp;
-	struct inode		*pcl_ino;
-	struct cb_layoutrecallargs pcl_args;
-};
-
 #define NFS4_PNFS_GETDEVLIST_MAXNUM 16
 
 struct pnfs_devicelist {
@@ -250,7 +242,6 @@ bool should_free_lseg(struct pnfs_layout_range *lseg_range,
 struct pnfs_layout_segment *
 pnfs_update_layout(struct inode *ino, struct nfs_open_context *ctx,
 		   loff_t pos, u64 count, enum pnfs_iomode access_type);
-bool pnfs_return_layout_barrier(struct nfs_inode *, struct pnfs_layout_range *);
 int _pnfs_return_layout(struct inode *, struct pnfs_layout_range *, bool wait);
 void set_pnfs_layoutdriver(struct nfs_server *, const struct nfs_fh *mntfh, u32 id);
 void unset_pnfs_layoutdriver(struct nfs_server *);
@@ -271,7 +262,6 @@ void pnfs_pageio_init_read(struct nfs_pageio_descriptor *, struct inode *,
 			   size_t *);
 void pnfs_pageio_init_write(struct nfs_pageio_descriptor *, struct inode *,
 			    size_t *);
-bool pnfs_layoutgets_blocked(struct pnfs_layout_hdr *lo, nfs4_stateid *stateid);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
 void pnfs_free_lseg_list(struct list_head *tmp_list);
 void pnfs_destroy_layout(struct nfs_inode *);
@@ -283,13 +273,16 @@ void pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
 int pnfs_choose_layoutget_stateid(nfs4_stateid *dst,
 				  struct pnfs_layout_hdr *lo,
 				  struct nfs4_state *open_state);
-bool nfs4_asynch_forget_layouts(struct pnfs_layout_hdr *lo,
-				struct pnfs_layout_range *range,
-				int notify_bit, atomic_t *notify_count,
-				struct list_head *tmp_list);
 void pnfs_read_done(struct nfs_read_data *);
 void pnfs_writeback_done(struct nfs_write_data *);
 void pnfs_commit_done(struct nfs_write_data *);
+int mark_matching_lsegs_invalid(struct pnfs_layout_hdr *lo,
+				struct list_head *tmp_list,
+				struct pnfs_layout_range *recall_range);
+bool pnfs_roc(struct inode *ino);
+void pnfs_roc_release(struct inode *ino);
+void pnfs_roc_set_barrier(struct inode *ino, u32 barrier);
+bool pnfs_roc_drain(struct inode *ino, u32 *barrier);
 
 static inline bool
 has_layout(struct nfs_inode *nfsi)
@@ -303,10 +296,14 @@ static inline int lo_fail_bit(u32 iomode)
 			 NFS_LAYOUT_RW_FAILED : NFS_LAYOUT_RO_FAILED;
 }
 
-static inline void get_lseg(struct pnfs_layout_segment *lseg)
+static inline struct pnfs_layout_segment *
+get_lseg(struct pnfs_layout_segment *lseg)
 {
-	atomic_inc(&lseg->pls_refcount);
-	smp_mb__after_atomic_inc();
+	if (lseg) {
+		atomic_inc(&lseg->pls_refcount);
+		smp_mb__after_atomic_inc();
+	}
+	return lseg;
 }
 
 /* Return true if a layout driver is being used for this mountpoint */
@@ -381,8 +378,10 @@ static inline void pnfs_destroy_layout(struct nfs_inode *nfsi)
 {
 }
 
-static inline void get_lseg(struct pnfs_layout_segment *lseg)
+static inline struct pnfs_layout_segment *
+get_lseg(struct pnfs_layout_segment *lseg)
 {
+	return NULL;
 }
 
 static inline void put_lseg(struct pnfs_layout_segment *lseg)
@@ -432,6 +431,28 @@ pnfs_try_to_commit(struct nfs_write_data *data,
 static inline int pnfs_layoutcommit_inode(struct inode *inode, int sync)
 {
 	return 0;
+}
+
+static inline void
+pnfs_roc_release(struct inode *ino)
+{
+}
+
+static inline void
+pnfs_roc_set_barrier(struct inode *ino, u32 barrier)
+{
+}
+
+static inline bool
+pnfs_roc_drain(struct inode *ino, u32 *barrier)
+{
+	return false;
+}
+
+static inline bool
+pnfs_roc(struct inode *ino)
+{
+	return false;
 }
 
 static inline bool
