@@ -15,6 +15,7 @@
 #include <linux/ioctl.h>
 #include <linux/virtio_config.h>
 #include <linux/virtio_ring.h>
+#include <target/target_core_base.h>
 
 struct vhost_vring_state {
 	unsigned int index;
@@ -24,7 +25,11 @@ struct vhost_vring_state {
 struct vhost_vring_file {
 	unsigned int index;
 	int fd; /* Pass -1 to unbind from file. */
+};
 
+struct vhost_scsi_target {
+	unsigned char vhost_wwpn[TRANSPORT_IQN_LEN];
+	unsigned short vhost_tpgt;
 };
 
 struct vhost_vring_addr {
@@ -120,6 +125,11 @@ struct vhost_memory {
  * used for transmit.  Pass fd -1 to unbind from the socket and the transmit
  * device.  This can be used to stop the ring (e.g. for migration). */
 #define VHOST_NET_SET_BACKEND _IOW(VHOST_VIRTIO, 0x30, struct vhost_vring_file)
+
+/* VHOST_SCSI specific defines */
+
+#define VHOST_SCSI_SET_ENDPOINT _IOW(VHOST_VIRTIO, 0x40, struct vhost_scsi_target)
+#define VHOST_SCSI_CLEAR_ENDPOINT _IOW(VHOST_VIRTIO, 0x41, struct vhost_scsi_target)
 
 /* Feature bits */
 /* Log all write descriptors. Can be changed while device is active. */
