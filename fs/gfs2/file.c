@@ -741,10 +741,9 @@ static void calc_max_reserv(struct gfs2_inode *ip, loff_t max, loff_t *len,
 	}
 }
 
-static long gfs2_fallocate(struct file *file, int mode, loff_t offset,
-			   loff_t len)
+long __gfs2_fallocate(struct file *file, struct inode *inode,
+		      int mode, loff_t offset, loff_t len)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
 	struct gfs2_sbd *sdp = GFS2_SB(inode);
 	struct gfs2_inode *ip = GFS2_I(inode);
 	unsigned int data_blocks = 0, ind_blocks = 0, rblocks;
@@ -834,7 +833,7 @@ retry:
 		gfs2_qadata_put(ip);
 	}
 
-	if (error == 0)
+	if (file && error == 0)
 		error = generic_write_sync(file, pos, count);
 	goto out_unlock;
 
@@ -849,6 +848,13 @@ out_unlock:
 out_uninit:
 	gfs2_holder_uninit(&ip->i_gh);
 	return error;
+}
+
+static long gfs2_fallocate(struct file *file, int mode, loff_t offset,
+			   loff_t len)
+{
+	return __gfs2_fallocate(file, file->f_path.dentry->d_inode, mode,
+				offset, len);
 }
 
 #ifdef CONFIG_GFS2_FS_LOCKING_DLM
