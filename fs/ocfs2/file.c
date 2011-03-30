@@ -1988,10 +1988,9 @@ int ocfs2_change_file_space(struct file *file, unsigned int cmd,
 	return __ocfs2_change_file_space(file, inode, file->f_pos, cmd, sr, 0);
 }
 
-static long ocfs2_fallocate(struct file *file, int mode, loff_t offset,
+static long ocfs2_fallocate(struct inode *inode, int mode, loff_t offset,
 			    loff_t len)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
 	struct ocfs2_super *osb = OCFS2_SB(inode->i_sb);
 	struct ocfs2_space_resv sr;
 	int change_size = 1;
@@ -2001,6 +2000,9 @@ static long ocfs2_fallocate(struct file *file, int mode, loff_t offset,
 		return -EOPNOTSUPP;
 	if (!ocfs2_writes_unwritten_extents(osb))
 		return -EOPNOTSUPP;
+
+	if (S_ISDIR(inode->i_mode))
+		return -ENODEV;
 
 	if (mode & FALLOC_FL_KEEP_SIZE)
 		change_size = 0;
@@ -2691,6 +2693,7 @@ const struct inode_operations ocfs2_file_iops = {
 	.getxattr	= generic_getxattr,
 	.listxattr	= ocfs2_listxattr,
 	.removexattr	= generic_removexattr,
+	.fallocate	= ocfs2_fallocate,
 	.fiemap		= ocfs2_fiemap,
 	.get_acl	= ocfs2_iop_get_acl,
 };
@@ -2724,7 +2727,7 @@ const struct file_operations ocfs2_fops = {
 	.flock		= ocfs2_flock,
 	.splice_read	= ocfs2_file_splice_read,
 	.splice_write	= ocfs2_file_splice_write,
-	.fallocate	= ocfs2_fallocate,
+	.fallocate	= generic_file_fallocate,
 };
 
 const struct file_operations ocfs2_dops = {
