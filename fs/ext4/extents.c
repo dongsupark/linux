@@ -4284,15 +4284,14 @@ static void ext4_falloc_update_inode(struct inode *inode,
 }
 
 /*
- * preallocate space for a file. This implements ext4's fallocate file
+ * preallocate space for a file. This implements ext4's fallocate inode
  * operation, which gets called from sys_fallocate system call.
  * For block-mapped files, posix_fallocate should fall back to the method
  * of writing zeroes to the required new blocks (the same behavior which is
  * expected for file systems which do not support fallocate() system call).
  */
-long ext4_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
+long ext4_fallocate(struct inode *inode, int mode, loff_t offset, loff_t len)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
 	handle_t *handle;
 	loff_t new_size;
 	unsigned int max_blocks;
@@ -4310,12 +4309,16 @@ long ext4_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 	if (!(ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS)))
 		return -EOPNOTSUPP;
 
+	/* preallocation to directories is currently not supported */
+	if (S_ISDIR(inode->i_mode))
+		return -ENODEV;
+
 	/* Return error if mode is not supported */
 	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE))
 		return -EOPNOTSUPP;
 
 	if (mode & FALLOC_FL_PUNCH_HOLE)
-		return ext4_punch_hole(file, offset, len);
+		return ext4_punch_hole(inode, offset, len);
 
 	trace_ext4_fallocate_enter(inode, offset, len, mode);
 	map.m_lblk = offset >> blkbits;
@@ -4700,9 +4703,8 @@ static int ext4_xattr_fiemap(struct inode *inode,
  *
  * Returns the number of blocks removed or negative on err
  */
-int ext4_ext_punch_hole(struct file *file, loff_t offset, loff_t length)
+int ext4_ext_punch_hole(struct inode *inode, loff_t offset, loff_t length)
 {
-	struct inode *inode = file->f_path.dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
 	struct ext4_ext_cache cache_ex;
 	ext4_lblk_t first_block, last_block, num_blocks, iblock, max_blocks;

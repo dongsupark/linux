@@ -24,6 +24,7 @@ extern const struct file_operations xfs_file_operations;
 extern const struct file_operations xfs_dir_file_operations;
 
 extern ssize_t xfs_vn_listxattr(struct dentry *, char *data, size_t size);
+extern long _xfs_vn_fallocate(struct inode *, int mode, loff_t offset, loff_t len, int attr_flags);
 
 extern void xfs_setup_inode(struct xfs_inode *);
 

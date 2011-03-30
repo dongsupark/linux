@@ -1638,6 +1638,8 @@ struct inode_operations {
 	ssize_t (*listxattr) (struct dentry *, char *, size_t);
 	int (*removexattr) (struct dentry *, const char *);
 	void (*truncate_range)(struct inode *, loff_t, loff_t);
+	long (*fallocate)(struct inode *, int mode, loff_t offset,
+			  loff_t len);
 	int (*fiemap)(struct inode *, struct fiemap_extent_info *, u64 start,
 		      u64 len);
 } ____cacheline_aligned;
@@ -2576,7 +2578,7 @@ extern ssize_t simple_write_to_buffer(void *to, size_t available, loff_t *ppos,
 		const void __user *from, size_t count);
 
 extern int generic_file_fsync(struct file *, loff_t, loff_t, int);
-
+extern long generic_file_fallocate(struct file *, int mode, loff_t offset, loff_t len);
 extern int generic_check_addressable(unsigned, u64);
 
 #ifdef CONFIG_MIGRATION

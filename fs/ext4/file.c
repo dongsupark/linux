@@ -244,7 +244,7 @@ const struct file_operations ext4_file_operations = {
 	.fsync		= ext4_sync_file,
 	.splice_read	= generic_file_splice_read,
 	.splice_write	= generic_file_splice_write,
-	.fallocate	= ext4_fallocate,
+	.fallocate	= generic_file_fallocate,
 };
 
 const struct inode_operations ext4_file_inode_operations = {
@@ -257,6 +257,7 @@ const struct inode_operations ext4_file_inode_operations = {
 	.removexattr	= generic_removexattr,
 #endif
 	.get_acl	= ext4_get_acl,
+	.fallocate	= ext4_fallocate,
 	.fiemap		= ext4_fiemap,
 };
 
