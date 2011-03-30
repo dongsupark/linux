@@ -924,6 +924,13 @@ int generic_file_fsync(struct file *file, int datasync)
 }
 EXPORT_SYMBOL(generic_file_fsync);
 
+long generic_file_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
+{
+	struct inode *inode = file->f_path.dentry->d_inode;
+	return inode->i_op->fallocate(inode, mode, offset, len);
+}
+EXPORT_SYMBOL(generic_file_fallocate);
+
 /**
  * generic_check_addressable - Check addressability of file system
  * @blocksize_bits:	log of file system block size
