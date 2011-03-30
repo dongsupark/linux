@@ -1757,6 +1757,12 @@ static int gfs2_removexattr(struct dentry *dentry, const char *name)
 	return ret;
 }
 
+static long gfs2_inode_fallocate(struct inode *inode, int mode, loff_t offset,
+			   loff_t len)
+{
+	return __gfs2_fallocate(NULL, inode, mode, offset, len);
+}
+
 static int gfs2_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 		       u64 start, u64 len)
 {
@@ -1828,6 +1834,7 @@ const struct inode_operations gfs2_dir_iops = {
 	.getxattr = gfs2_getxattr,
 	.listxattr = gfs2_listxattr,
 	.removexattr = gfs2_removexattr,
+	.fallocate = gfs2_inode_fallocate,
 	.fiemap = gfs2_fiemap,
 	.get_acl = gfs2_get_acl,
 };
