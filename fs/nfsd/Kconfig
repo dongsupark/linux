@@ -102,3 +102,23 @@ config PNFSD_LOCAL_EXPORT
 	  useful for development and debugging purposes.
 
 	  If unsure, say N.
+
+config PNFSD_LEXP_LAYOUT_SEGMENTS
+	bool "Simulate layout segments"
+	depends on PNFSD_LOCAL_EXPORT
+	help
+	  Say Y here if you want your pNFS server to simulate layout segments
+	  when exporting local filesystems for debugging purposes.
+	  over the files layout type.
+	  This is mostly useful for development and debugging purposes.
+
+	  If unsure, say N.
+
+config PNFSD_LEXP_LAYOUT_SEGMENT_SIZE
+	int "Simulated layout segment size"
+	depends on PNFSD_LEXP_LAYOUT_SEGMENTS
+	default 65536
+	help
+	  Set simulated layout segment size.
+
+	  If unsure, say N.
