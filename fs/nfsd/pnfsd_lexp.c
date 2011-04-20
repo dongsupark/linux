@@ -143,8 +143,16 @@ pnfsd_lexp_layout_get(struct inode *inode,
 	dprintk("--> %s: inode=%p\n", __func__, inode);
 
 	res->lg_seg.layout_type = LAYOUT_NFSV4_1_FILES;
+#ifdef     CONFIG_PNFSD_LEXP_LAYOUT_SEGMENTS
+#if CONFIG_PNFSD_LEXP_LAYOUT_SEGMENT_SIZE <= 0
+#error CONFIG_PNFSD_LEXP_LAYOUT_SEGMENT_SIZE must be greater than zero
+#endif
+	res->lg_seg.offset -= res->lg_seg.offset % CONFIG_PNFSD_LEXP_LAYOUT_SEGMENT_SIZE;
+	res->lg_seg.length = CONFIG_PNFSD_LEXP_LAYOUT_SEGMENT_SIZE;
+#else   /* CONFIG_PNFSD_LEXP_LAYOUT_SEGMENTS */
 	res->lg_seg.offset = 0;
 	res->lg_seg.length = NFS4_MAX_UINT64;
+#endif  /* CONFIG_PNFSD_LEXP_LAYOUT_SEGMENTS */
 
 	layout = kzalloc(sizeof(*layout), GFP_KERNEL);
 	if (layout == NULL) {
@@ -178,7 +186,9 @@ pnfsd_lexp_layout_get(struct inode *inode,
 exit:
 	kfree(layout);
 	kfree(fhp);
-	dprintk("<-- %s: return %d\n", __func__, rc);
+	dprintk("<-- %s: return %d offset=%llu length=%llu\n", __func__, rc,
+		(unsigned long long)res->lg_seg.offset,
+		(unsigned long long)res->lg_seg.length);
 	return rc;
 
 error:
