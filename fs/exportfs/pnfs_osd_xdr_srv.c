@@ -72,7 +72,7 @@ static int pnfs_osd_xdr_encode_data_map(
 
 /*
  * struct pnfs_osd_objid {
- * 	struct pnfs_deviceid	oid_device_id;
+ * 	struct nfs4_deviceid	oid_device_id;
  * 	u64			oid_partition_id;
  * 	u64			oid_object_id;
  * };
@@ -250,7 +250,7 @@ EXPORT_SYMBOL(pnfs_osd_xdr_decode_layoutupdate);
 
 /*
  * struct pnfs_osd_objid {
- * 	struct pnfs_deviceid	oid_device_id;
+ * 	struct nfs4_deviceid	oid_device_id;
  * 	u64			oid_partition_id;
  * 	u64			oid_object_id;
  * };
