@@ -25,6 +25,7 @@
  */
 
 #include <linux/nfsd/nfsd4_pnfs.h>
+#include <linux/pnfs_osd_xdr.h>
 #include "exofs.h"
 
 static int exofs_layout_type(struct super_block *sb)

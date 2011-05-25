@@ -17,12 +17,6 @@
 
 #if ! defined(__PNFS_OSD_XDR_H__)
 
-enum pnfs_iomode {
-	IOMODE_READ = 1,
-	IOMODE_RW = 2,
-	IOMODE_ANY = 3,
-};
-
 /* Layout Structure */
 enum pnfs_osd_raid_algorithm4 {
 	PNFS_OSD_RAID_0		= 1,

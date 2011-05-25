@@ -41,6 +41,7 @@
 
 #include <linux/nfs_fs.h>
 #include <linux/nfs_page.h>
+#include <linux/exp_xdr.h>
 #include <scsi/osd_protocol.h>
 
 #define PNFS_OSD_OSDNAME_MAXSIZE 256
@@ -279,6 +280,12 @@ struct pnfs_osd_ioerr {
 	u32			oer_errno;
 };
 
+static inline unsigned
+pnfs_osd_ioerr_xdr_sz(void)
+{
+	return pnfs_osd_objid_xdr_sz() + 2 + 2 + 1 + 1;
+}
+
 /* OSD XDR API */
 /* Layout helpers */
 /* Layout decoding is done in two parts:
@@ -341,5 +348,24 @@ pnfs_osd_xdr_encode_layoutupdate(struct xdr_stream *xdr,
 /* Client */
 extern __be32 *pnfs_osd_xdr_ioerr_reserve_space(struct xdr_stream *xdr);
 extern void pnfs_osd_xdr_encode_ioerr(__be32 *p, struct pnfs_osd_ioerr *ioerr);
+
+/*
+ * Server Helpers
+ */
+
+extern int pnfs_osd_xdr_encode_layout(
+	struct exp_xdr_stream *xdr,
+	struct pnfs_osd_layout *layout);
+
+extern int pnfs_osd_xdr_encode_deviceaddr(
+	struct exp_xdr_stream *xdr, struct pnfs_osd_deviceaddr *devaddr);
+
+extern __be32 * pnfs_osd_xdr_decode_layoutupdate(
+	struct pnfs_osd_layoutupdate *lou, __be32 *p);
+
+
+extern __be32 * pnfs_osd_xdr_decode_ioerr(
+	struct pnfs_osd_ioerr *ioerr, __be32 *p);
+
 
 #endif /* __PNFS_OSD_XDR_H__ */

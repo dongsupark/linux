@@ -36,6 +36,7 @@
 #include <linux/fs.h>
 #include <linux/time.h>
 #include <linux/backing-dev.h>
+#include <linux/nfs4.h>
 #include "common.h"
 
 /* FIXME: Remove once pnfs hits mainline
