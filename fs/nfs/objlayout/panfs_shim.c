@@ -1,6 +1,4 @@
 /*
- *  panfs_shim.c
- *
  *  Shim layer for interfacing with the Panasas DirectFlow module I/O stack
  *
  *  Copyright (C) 2007-2009 Panasas Inc.
@@ -50,37 +48,57 @@
 
 struct panfs_export_operations *panfs_export_ops;
 
-void *
-objio_init_mt(void)
-{
-	return panfs_export_ops == NULL ? ERR_PTR(-EAGAIN) : NULL;
-}
+struct panfs_segment {
+	struct pnfs_layout_segment lseg;
+	unsigned max_io_size;
+	pan_sm_map_cap_t mcs;
+	/* components and caps array fomr this point on */
+};
 
-void objio_fini_mt(void *mountid)
+enum {
+	MAX_IO_STRIPES = 16,			/* max number of stripes per I/O */
+	MAX_IO_COMP = 65536 * MAX_IO_STRIPES,	/* max bytes per component */
+};
+
+static unsigned
+_max_io_size(unsigned stripe_unit, unsigned num_comps)
 {
+	unsigned max_io_size = stripe_unit * MAX_IO_STRIPES;
+
+	if (max_io_size > MAX_IO_COMP)
+		max_io_size = MAX_IO_COMP;
+
+	return max_io_size * num_comps;
 }
 
 static int
 panfs_shim_conv_raid01(struct pnfs_osd_layout *layout,
 		       struct pnfs_osd_data_map *lo_map,
-		       pan_agg_layout_hdr_t *hdr)
+		       pan_agg_layout_hdr_t *hdr,
+		       struct panfs_segment *panfs_seg)
 {
 	if (lo_map->odm_mirror_cnt) {
 		hdr->type = PAN_AGG_RAID1;
 		hdr->hdr.raid1.num_comps = lo_map->odm_mirror_cnt + 1;
+		panfs_seg->max_io_size = MAX_IO_COMP;
 	} else if (layout->olo_num_comps > 1) {
 		hdr->type = PAN_AGG_RAID0;
 		hdr->hdr.raid0.num_comps = layout->olo_num_comps;
 		hdr->hdr.raid0.stripe_unit = lo_map->odm_stripe_unit;
-	} else
+		panfs_seg->max_io_size = _max_io_size(hdr->hdr.raid0.stripe_unit,
+						      hdr->hdr.raid0.num_comps);
+	} else {
 		hdr->type = PAN_AGG_SIMPLE;
+		panfs_seg->max_io_size = MAX_IO_COMP;
+	}
 	return 0;
 }
 
 static int
 panfs_shim_conv_raid5(struct pnfs_osd_layout *layout,
 		      struct pnfs_osd_data_map *lo_map,
-		      pan_agg_layout_hdr_t *hdr)
+		      pan_agg_layout_hdr_t *hdr,
+		      struct panfs_segment *panfs_seg)
 {
 	if (lo_map->odm_mirror_cnt)
 		goto err;
@@ -100,6 +118,8 @@ panfs_shim_conv_raid5(struct pnfs_osd_layout *layout,
 		   hand out layotu otherwise */
 		hdr->hdr.grp_raid5_left.group_layout_policy =
 			PAN_AGG_GRP_RAID5_LEFT_POLICY_ROUND_ROBIN;
+		panfs_seg->max_io_size = _max_io_size(hdr->hdr.grp_raid5_left.stripe_unit,
+						      hdr->hdr.grp_raid5_left.rg_width);
 	} else {
 		hdr->type = PAN_AGG_RAID5_LEFT;
 		hdr->hdr.raid5_left.num_comps = lo_map->odm_num_comps;
@@ -108,6 +128,8 @@ panfs_shim_conv_raid5(struct pnfs_osd_layout *layout,
 		hdr->hdr.raid5_left.stripe_unit2 =
 		hdr->hdr.raid5_left.stripe_unit1 =
 		hdr->hdr.raid5_left.stripe_unit0 = lo_map->odm_stripe_unit;
+		panfs_seg->max_io_size = _max_io_size(hdr->hdr.raid5_left.stripe_unit0,
+						      hdr->hdr.raid5_left.num_comps);
 	}
 
 	return 0;
@@ -121,7 +143,8 @@ err:
 static int
 panfs_shim_conv_pnfs_osd_data_map(
 	struct pnfs_osd_layout *layout,
-	pan_agg_layout_hdr_t *hdr)
+	pan_agg_layout_hdr_t *hdr,
+	struct panfs_segment *panfs_seg)
 {
 	int status = -EINVAL;
 	struct pnfs_osd_data_map *lo_map = &layout->olo_map;
@@ -144,7 +167,7 @@ panfs_shim_conv_pnfs_osd_data_map(
 				layout->olo_comps_index);
 			goto err;
 		}
-		status = panfs_shim_conv_raid01(layout, lo_map, hdr);
+		status = panfs_shim_conv_raid01(layout, lo_map, hdr, panfs_seg);
 		break;
 
 	case PNFS_OSD_RAID_5:
@@ -171,7 +194,7 @@ panfs_shim_conv_pnfs_osd_data_map(
 					layout->olo_comps_index);
 				goto err;
 			}
-		status = panfs_shim_conv_raid5(layout, lo_map, hdr);
+		status = panfs_shim_conv_raid5(layout, lo_map, hdr, panfs_seg);
 		break;
 
 	case PNFS_OSD_RAID_4:
@@ -192,31 +215,39 @@ err:
  * Convert pnfs_osd layout into Panasas map and caps type
  */
 int
-objio_alloc_lseg(void **outp,
+objio_alloc_lseg(struct pnfs_layout_segment **outp,
 	struct pnfs_layout_hdr *pnfslay,
-	struct pnfs_layout_segment *lseg,
-	struct pnfs_osd_layout *layout)
+	struct pnfs_layout_range *range,
+	struct xdr_stream *xdr,
+	gfp_t gfp_flags)
 {
 	int i, total_comps;
 	int status;
 	struct pnfs_osd_object_cred *lo_comp;
 	pan_size_t alloc_sz, local_sz;
+	struct panfs_segment *panfs_seg = NULL;
+	struct pnfs_osd_xdr_decode_layout_iter iter;
+	struct pnfs_osd_layout layout;
 	pan_sm_map_cap_t *mcs = NULL;
 	u8 *buf;
 	pan_agg_comp_obj_t *pan_comp;
 	pan_sm_sec_t *pan_sec;
 
+	status = pnfs_osd_xdr_decode_layout_map(&layout, &iter, xdr);
+	if (unlikely(status))
+		return status;
+
 	status = -EINVAL;
-	if (layout->olo_num_comps < layout->olo_map.odm_group_width) {
-		total_comps = layout->olo_comps_index + layout->olo_num_comps;
+	if (layout.olo_num_comps < layout.olo_map.odm_group_width) {
+		total_comps = layout.olo_comps_index + layout.olo_num_comps;
 	} else {
 		/* allocate full map, otherwise SAM gets confused */
-		total_comps = layout->olo_map.odm_num_comps;
+		total_comps = layout.olo_map.odm_num_comps;
 	}
-	alloc_sz = total_comps *
+	alloc_sz = sizeof(struct panfs_segment) + total_comps *
 		   (sizeof(pan_agg_comp_obj_t) + sizeof(pan_sm_sec_t));
-	for (i = 0; i < layout->olo_num_comps; i++) {
-		void *p = layout->olo_comps[i].oc_cap.cred;
+	for (i = 0; i < layout.olo_num_comps; i++) {
+		void *p = layout.olo_comps[i].oc_cap.cred;
 		if (panfs_export_ops->sm_sec_t_get_size_otw(
 			(pan_sm_sec_otw_t *)&p, &local_sz, NULL, NULL))
 			goto err;
@@ -224,21 +255,23 @@ objio_alloc_lseg(void **outp,
 	}
 
 	status = -ENOMEM;
-	mcs = kzalloc(sizeof(*mcs) + alloc_sz, GFP_KERNEL);
-	if (!mcs)
+	panfs_seg = kzalloc(alloc_sz, gfp_flags);
+	if (!panfs_seg)
 		goto err;
-	buf = (u8 *)&mcs[1];
+	mcs = &panfs_seg->mcs;
+	buf = (u8 *)&panfs_seg[1];
 
-	mcs->offset = lseg->pls_range.offset;
-	mcs->length = lseg->pls_range.length;
+	mcs->offset = range->offset;
+	mcs->length = range->length;
 #if 0
 	/* FIXME: for now */
 	mcs->expiration_time.ts_sec  = 0;
 	mcs->expiration_time.ts_nsec = 0;
 #endif
 	mcs->full_map.map_hdr.avail_state = PAN_AGG_OBJ_STATE_NORMAL;
-	status = panfs_shim_conv_pnfs_osd_data_map(layout,
-						   &mcs->full_map.layout_hdr);
+	status = panfs_shim_conv_pnfs_osd_data_map(&layout,
+						   &mcs->full_map.layout_hdr,
+						   panfs_seg);
 	if (status)
 		goto err;
 
@@ -250,10 +283,10 @@ objio_alloc_lseg(void **outp,
 	mcs->secs.data = (pan_sm_sec_t *)buf;
 	buf += total_comps * sizeof(pan_sm_sec_t);
 
-	lo_comp = layout->olo_comps;
-	pan_comp = mcs->full_map.components.data + layout->olo_comps_index;
-	pan_sec = mcs->secs.data + layout->olo_comps_index;
-	for (i = 0; i < layout->olo_num_comps; i++) {
+	lo_comp = layout.olo_comps;
+	pan_comp = mcs->full_map.components.data + layout.olo_comps_index;
+	pan_sec = mcs->secs.data + layout.olo_comps_index;
+	for (i = 0; i < layout.olo_num_comps; i++) {
 		void *p;
 		pan_stor_obj_id_t *obj_id = &mcs->full_map.map_hdr.obj_id;
 		struct pnfs_osd_objid *oc_obj_id = &lo_comp->oc_object_id;
@@ -327,12 +360,13 @@ objio_alloc_lseg(void **outp,
 		pan_sec++;
 	}
 
-	*outp = mcs;
+	*outp = &panfs_seg->lseg;
 	dprintk("%s:Return mcs=%p\n", __func__, mcs);
 	return 0;
 
 err:
-	objio_free_lseg(mcs);
+	if (panfs_seg)
+		objio_free_lseg(&panfs_seg->lseg);
 	dprintk("%s:Error %d\n", __func__, status);
 	return status;
 }
@@ -341,8 +375,9 @@ err:
  * Free a Panasas map and caps type
  */
 void
-objio_free_lseg(void *p)
+objio_free_lseg(struct pnfs_layout_segment *lseg)
 {
+	struct panfs_segment *p = container_of(lseg, struct panfs_segment, lseg);
 	kfree(p);
 }
 
@@ -350,12 +385,14 @@ objio_free_lseg(void *p)
  * I/O routines
  */
 int
-objio_alloc_io_state(void *seg, struct objlayout_io_state **outp)
+objio_alloc_io_state(struct pnfs_layout_segment *lseg,
+	struct objlayout_io_state **outp,
+	gfp_t gfp_flags)
 {
 	struct panfs_shim_io_state *p;
 
 	dprintk("%s: allocating io_state\n", __func__);
-	p = kzalloc(sizeof(*p), GFP_KERNEL);
+	p = kzalloc(sizeof(*p), gfp_flags);
 	if (!p)
 		return -ENOMEM;
 
@@ -458,12 +495,24 @@ panfs_shim_read_done(
 	objlayout_read_done(&state->ol_state, status, true);
 }
 
+static inline struct panfs_segment *
+OBJIO_LSEG(struct pnfs_layout_segment *lseg)
+{
+	return container_of(lseg, struct panfs_segment, lseg);
+}
+
+static inline pan_sm_map_cap_t *
+_panfs_shim_get_map_cap_t(struct objlayout_io_state *ol_state)
+{
+	return &OBJIO_LSEG(ol_state->lseg)->mcs;
+}
+
 ssize_t
 objio_read_pagelist(struct objlayout_io_state *ol_state)
 {
 	struct panfs_shim_io_state *state = container_of(ol_state,
 					struct panfs_shim_io_state, ol_state);
-	pan_sm_map_cap_t *mcs = (pan_sm_map_cap_t *)ol_state->objlseg->internal;
+	pan_sm_map_cap_t *mcs = _panfs_shim_get_map_cap_t(ol_state);
 	ssize_t status = 0;
 	pan_status_t rc = PAN_SUCCESS;
 
@@ -543,7 +592,7 @@ objio_write_pagelist(struct objlayout_io_state *ol_state,
 {
 	struct panfs_shim_io_state *state = container_of(ol_state,
 					struct panfs_shim_io_state, ol_state);
-	pan_sm_map_cap_t *mcs = (pan_sm_map_cap_t *)ol_state->objlseg->internal;
+	pan_sm_map_cap_t *mcs = _panfs_shim_get_map_cap_t(ol_state);
 	ssize_t status = 0;
 	pan_status_t rc = PAN_SUCCESS;
 
@@ -581,6 +630,15 @@ objio_write_pagelist(struct objlayout_io_state *ol_state,
  err:
 	dprintk("%s: Return %Zd\n", __func__, status);
 	return status;
+}
+
+static bool
+panfs_shim_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev, struct nfs_page *req)
+{
+	if (!pnfs_generic_pg_test(pgio, prev, req))
+		return false;
+
+	return pgio->pg_count + req->wb_bytes <= OBJIO_LSEG(pgio->pg_lseg)->max_io_size;
 }
 
 int
@@ -639,9 +697,6 @@ static struct pnfs_layoutdriver_type panlayout_type = {
 	.name = "PNFS_LAYOUT_PANOSD",
 	.flags                   = PNFS_LAYOUTRET_ON_SETATTR,
 
-	.set_layoutdriver        = objlayout_set_layoutdriver,
-	.unset_layoutdriver      = objlayout_unset_layoutdriver,
-
 	.alloc_layout_hdr        = objlayout_alloc_layout_hdr,
 	.free_layout_hdr         = objlayout_free_layout_hdr,
 
@@ -650,6 +705,7 @@ static struct pnfs_layoutdriver_type panlayout_type = {
 
 	.read_pagelist           = objlayout_read_pagelist,
 	.write_pagelist          = objlayout_write_pagelist,
+	.pg_test                 = panfs_shim_pg_test,
 
 	.encode_layoutcommit	 = objlayout_encode_layoutcommit,
 	.encode_layoutreturn     = objlayout_encode_layoutreturn,
