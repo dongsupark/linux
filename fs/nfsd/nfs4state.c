@@ -3589,6 +3589,8 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	update_stateid(&stp->st_stateid);
 	memcpy(&close->cl_stateid, &stp->st_stateid, sizeof(stateid_t));
 
+	pnfs_roc(stp->st_stateowner->so_client, stp->st_file);
+
 	/* release_stateid() calls nfsd_close() if needed */
 	release_open_stateid(stp);
 
