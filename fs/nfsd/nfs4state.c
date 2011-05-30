@@ -3887,6 +3887,8 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 	update_stateid(&stp->st_stid.sc_stateid);
 	memcpy(&close->cl_stateid, &stp->st_stid.sc_stateid, sizeof(stateid_t));
 
+	pnfsd_roc(stp->st_stateowner->so_client, stp->st_file);
+
 	nfsd4_close_open_stateid(stp);
 	oo->oo_last_closed_stid = stp;
 
