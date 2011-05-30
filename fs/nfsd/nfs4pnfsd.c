@@ -293,7 +293,8 @@ init_layout(struct nfs4_layout *lp,
 	    struct nfs4_client *clp,
 	    struct svc_fh *current_fh,
 	    struct nfsd4_layout_seg *seg,
-	    stateid_t *stateid)
+	    stateid_t *stateid,
+	    bool roc)
 {
 	dprintk("pNFS %s: lp %p ls %p clp %p fp %p ino %p\n", __func__,
 		lp, ls, clp, fp, fp->fi_inode);
@@ -304,6 +305,7 @@ init_layout(struct nfs4_layout *lp,
 	memcpy(&lp->lo_seg, seg, sizeof(lp->lo_seg));
 	get_layout_state(ls);		/* put on destroy_layout */
 	lp->lo_state = ls;
+	lp->lo_roc = roc;
 	update_layout_stateid(ls, stateid);
 	list_add_tail(&lp->lo_perclnt, &clp->cl_layouts);
 	list_add_tail(&lp->lo_perfile, &fp->fi_layouts);
@@ -799,7 +801,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		goto out_freelayout;
 
 	/* Can't merge, so let's initialize this new layout */
-	init_layout(lp, ls, fp, clp, lgp->lg_fhp, &res.lg_seg, &lgp->lg_sid);
+	init_layout(lp, ls, fp, clp, lgp->lg_fhp, &res.lg_seg, &lgp->lg_sid, res.lg_return_on_close);
 out_unlock:
 	if (ls)
 		put_layout_state(ls);
@@ -1182,6 +1184,39 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 	fs_layout_return(clr->clr_sb, inode, &lr, LR_FLAG_INTERN,
 			 recall_cookie);
 	iput(inode);
+}
+
+/* Return On Close:
+ *   Look for all layouts of @fp that belong to @clp, if ROC is set, remove
+ *   the layout and simulate a layout_return. Surly the client has forgotten
+ *   these layouts or it would return them before the close.
+ */
+void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
+{
+	struct nfs4_layout *lo, *nextlp;
+
+	spin_lock(&layout_lock);
+	list_for_each_entry_safe (lo, nextlp, &fp->fi_layouts, lo_perfile) {
+		struct nfsd4_pnfs_layoutreturn lr;
+		bool empty;
+
+		/* Check for a match */
+		if (!lo->lo_roc || lo->lo_client != clp)
+			continue;
+
+		/* Return the layout */
+		memset(&lr, 0, sizeof(lr));
+		lr.args.lr_return_type = RETURN_FILE;
+		lr.args.lr_seg = lo->lo_seg;
+		dequeue_layout(lo);
+		destroy_layout(lo); /* do not access lp after this */
+
+		empty = list_empty(&fp->fi_layouts);
+		fs_layout_return(fp->fi_inode->i_sb, fp->fi_inode, &lr,
+				 LR_FLAG_EXPIRE,
+				 empty ? PNFS_LAST_LAYOUT_NO_RECALLS : NULL);
+	}
+	spin_unlock(&layout_lock);
 }
 
 void pnfs_expire_client(struct nfs4_client *clp)

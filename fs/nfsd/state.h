@@ -532,12 +532,14 @@ extern void nfs4_pnfs_state_init(void);
 extern void nfs4_pnfs_state_shutdown(void);
 extern void nfs4_ds_get_verifier(stateid_t *, struct super_block *, u32 *);
 extern int nfs4_preprocess_pnfs_ds_stateid(struct svc_fh *, stateid_t *);
+extern void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp);
 #else /* CONFIG_PNFSD */
 static inline void nfsd4_free_pnfs_slabs(void) {}
 static inline int nfsd4_init_pnfs_slabs(void) { return 0; }
 static inline void pnfs_expire_client(struct nfs4_client *clp) {}
 static inline void release_pnfs_ds_dev_list(struct nfs4_ol_stateid *stp) {}
 static inline void nfs4_pnfs_state_shutdown(void) {}
+static inline void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp) {}
 #endif /* CONFIG_PNFSD */
 
 static inline u64
