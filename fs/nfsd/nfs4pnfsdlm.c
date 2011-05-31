@@ -318,9 +318,6 @@ static int nfsd4_pnfs_dlm_getdevinfo(struct super_block *sb,
 			goto out;
 		}
 
-		daddr->r_netid.data = "tcp";
-		daddr->r_netid.len = 3;
-
 		len = strcspn(bufp, ",");
 		daddr->r_addr.data = kmalloc(len + 4, GFP_KERNEL);
 		memcpy(daddr->r_addr.data, bufp, len);
@@ -330,6 +327,14 @@ static int nfsd4_pnfs_dlm_getdevinfo(struct super_block *sb,
 		 */
 		memcpy(daddr->r_addr.data + len, ".8.1", 4);
 		daddr->r_addr.len = len + 4;
+
+		if (strcspn(daddr->r_addr.data, ":") - 1 == daddr->r_addr.len) {
+			daddr->r_netid.data = "tcp";
+			daddr->r_netid.len = 3;
+		} else {
+			daddr->r_netid.data = "tcp6";
+			daddr->r_netid.len = 4;
+		}
 
 		fdev.fl_device_list[i].fl_multipath_length = 1;
 		fdev.fl_device_list[i].fl_multipath_list = daddr;
