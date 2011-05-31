@@ -137,7 +137,7 @@ static inline struct nfs4_layout_state *layoutstateid(struct nfs4_stid *s)
 }
 
 #if defined(CONFIG_PNFSD_LOCAL_EXPORT)
-extern struct sockaddr pnfsd_lexp_addr;
+extern struct sockaddr_storage pnfsd_lexp_addr;
 extern size_t pnfs_lexp_addr_len;
 
 extern void pnfsd_lexp_init(struct inode *);
