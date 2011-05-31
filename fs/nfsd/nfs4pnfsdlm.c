@@ -164,7 +164,7 @@ nfsd4_set_pnfs_dlm_device(char *pnfs_dlm_device, int len)
 
 	/* data server list */
 	/* FIXME: need to check for comma separated valid ip format */
-	len = strcspn(bufp, ":");
+	len = strlen(bufp);
 	if (len > NFSD_DLM_DS_LIST_MAX)
 		goto out_free;
 	memcpy(new->ds_list, bufp, len);
