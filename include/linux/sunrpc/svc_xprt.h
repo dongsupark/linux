@@ -209,13 +209,13 @@ static inline char *__svc_print_addr(const struct sockaddr *addr,
 /*
  * Print a network address in a universal format (see rfc1833 and nfsv4.1)
  */
-static inline int __svc_print_netaddr(struct sockaddr *addr,
+static inline int __svc_print_netaddr(struct sockaddr_storage *addr,
 				      struct xdr_netobj *na)
 {
 	u16 port;
 	ssize_t len;
 
-	switch (addr->sa_family) {
+	switch (addr->ss_family) {
 	case AF_INET: {
 		struct sockaddr_in *sin = (struct sockaddr_in *)addr;
 		port = ntohs(sin->sin_port);
@@ -236,7 +236,7 @@ static inline int __svc_print_netaddr(struct sockaddr *addr,
 	}
 	default:
 		snprintf(na->data, na->len, "unknown address type: %d",
-			 addr->sa_family);
+			 addr->ss_family);
 		len = -EINVAL;
 		break;
 	}
