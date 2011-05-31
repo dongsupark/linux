@@ -27,7 +27,7 @@
 
 #define NFSDDBG_FACILITY NFSDDBG_PNFS
 
-struct sockaddr pnfsd_lexp_addr;
+struct sockaddr_storage pnfsd_lexp_addr;
 size_t pnfs_lexp_addr_len;
 
 static wait_queue_head_t lo_recall_wq;
@@ -87,7 +87,7 @@ pnfsd_lexp_get_device_info(struct super_block *sb,
 		goto out;
 	}
 
-	/* count the number of comma-delimited DS IPs */
+	/* format local address */
 	fdev.fl_device_length = 1;
 	fdev.fl_device_list = fl_devices;
 
@@ -100,7 +100,7 @@ pnfsd_lexp_get_device_info(struct super_block *sb,
 	if (err < 0)
 		goto out;
 	daddr.r_addr.len = err;
-	switch (pnfsd_lexp_addr.sa_family) {
+	switch (pnfsd_lexp_addr.ss_family) {
 	case AF_INET:
 		daddr.r_netid.data = "tcp";
 		daddr.r_netid.len = 3;
