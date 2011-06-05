@@ -234,7 +234,7 @@ spnfs_layoutrecall(struct inode *inode, int type, u64 offset, u64 len)
 int
 spnfs_test_layoutrecall(char *path, u64 offset, u64 len)
 {
-	struct nameidata nd;
+	struct path p;
 	struct inode *inode;
 	int type, rc;
 
@@ -245,16 +245,16 @@ spnfs_test_layoutrecall(char *path, u64 offset, u64 len)
 		inode = NULL;
 		type = RETURN_ALL;
 	} else {
-		rc = path_lookup(path, 0, &nd);
+		rc = kern_path(path, 0, &p);
 		if (rc != 0)
-			return -ENOENT;
+			return rc;
 
 		/*
 		 * XXX todo: add a RETURN_FSID scenario here...maybe if
 		 * inode is a dir...
 		 */
 
-		inode = nd.path.dentry->d_inode;
+		inode = p.dentry->d_inode;
 		type = RETURN_FILE;
 	}
 
@@ -264,7 +264,7 @@ spnfs_test_layoutrecall(char *path, u64 offset, u64 len)
 	rc = spnfs_layoutrecall(inode, type, offset, len);
 
 	if (type != RETURN_ALL)
-		path_put(&nd.path);
+		path_put(&p);
 	return rc;
 }
 
