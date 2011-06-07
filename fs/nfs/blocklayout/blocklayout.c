@@ -645,7 +645,7 @@ bl_setup_layoutcommit(struct pnfs_layout_hdr *lo,
 
 static void
 bl_encode_layoutcommit(struct pnfs_layout_hdr *lo, struct xdr_stream *xdr,
-		       const struct nfs4_layoutcommit_args *arg)
+		       const struct nfs4_layoutcommit_op_args *arg)
 {
 	dprintk("%s enter\n", __func__);
 	encode_pnfs_block_layoutupdate(BLK_LO2EXT(lo), xdr, arg);
