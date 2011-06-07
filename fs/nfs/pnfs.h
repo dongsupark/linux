@@ -113,6 +113,9 @@ struct pnfs_layoutdriver_type {
 	int (*write_begin) (struct pnfs_layout_segment *lseg, struct page *page,
 			    loff_t pos, unsigned count,
 			    struct pnfs_fsdata *fsdata);
+	int (*write_end)(struct inode *inode, struct page *page, loff_t pos,
+			 unsigned count, unsigned copied,
+			 struct pnfs_layout_segment *lseg);
 
 	void (*free_deviceid_node) (struct nfs4_deviceid_node *);
 
@@ -333,6 +336,21 @@ static inline int pnfs_write_begin(struct file *filp, struct page *page,
 	return status;
 }
 
+/* CAREFUL - what happens if copied < len??? */
+static inline int pnfs_write_end(struct file *filp, struct page *page,
+				 loff_t pos, unsigned len, unsigned copied,
+				 struct pnfs_layout_segment *lseg)
+{
+	struct inode *inode = filp->f_dentry->d_inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+
+	if (nfss->pnfs_curr_ld && nfss->pnfs_curr_ld->write_end)
+		return nfss->pnfs_curr_ld->write_end(inode, page, pos, len,
+						     copied, lseg);
+	else
+		return 0;
+}
+
 static inline void pnfs_write_end_cleanup(struct file *filp, void *fsdata)
 {
 	struct nfs_server *nfss = NFS_SERVER(filp->f_dentry->d_inode);
@@ -429,6 +447,13 @@ static inline int pnfs_write_begin(struct file *filp, struct page *page,
 				   void **fsdata)
 {
 	*fsdata = NULL;
+	return 0;
+}
+
+static inline int pnfs_write_end(struct file *filp, struct page *page,
+				 loff_t pos, unsigned len, unsigned copied,
+				 struct pnfs_layout_segment *lseg)
+{
 	return 0;
 }
 
