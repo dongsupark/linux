@@ -1115,12 +1115,10 @@ bl_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 	   struct nfs_page *req)
 {
 	dprintk("%s enter\n", __func__);
-	if (pgio->pg_iswrite) {
-		return test_bit(PG_USE_PNFS, &prev->wb_flags) ==
-			test_bit(PG_USE_PNFS, &req->wb_flags);
-	} else {
+	if (pgio->pg_iswrite)
+		return prev->wb_lseg == req->wb_lseg;
+	else
 		return 1;
-	}
 }
 
 static struct layoutdriver_io_operations blocklayout_io_operations = {
