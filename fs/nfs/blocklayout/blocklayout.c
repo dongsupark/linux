@@ -625,7 +625,7 @@ bl_setup_layoutcommit(struct pnfs_layout_type *lo,
 		      struct pnfs_layoutcommit_arg *arg)
 {
 	struct nfs_server *nfss = PNFS_NFS_SERVER(lo);
-	struct pnfs_layoutcommit_arg *arg = &data->args;
+	struct bl_layoutupdate_data *layoutupdate_data;
 
 	dprintk("%s enter\n", __func__);
 	/* Need to ensure commit is block-size aligned */
@@ -637,6 +637,14 @@ bl_setup_layoutcommit(struct pnfs_layout_type *lo,
 		arg->lseg.length += offset + mask;
 		arg->lseg.length &= ~mask;
 	}
+
+	layoutupdate_data = kmalloc(sizeof(struct bl_layoutupdate_data),
+					 GFP_KERNEL);
+	if (unlikely(!layoutupdate_data))
+		return -ENOMEM;
+	INIT_LIST_HEAD(&layoutupdate_data->ranges);
+	arg->layoutdriver_data = layoutupdate_data;
+
 	return 0;
 }
 
