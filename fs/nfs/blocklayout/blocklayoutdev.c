@@ -133,7 +133,7 @@ nfs4_blk_decode_device(struct nfs_server *server,
 		goto out_err;
 
 	rv->bm_mdev = bd;
-	memcpy(&rv->bm_mdevid, &dev->dev_id, sizeof(struct pnfs_deviceid));
+	memcpy(&rv->bm_mdevid, &dev->dev_id, sizeof(struct nfs4_deviceid));
 	dprintk("%s Created device %s with bd_block_size %u\n",
 		__func__,
 		bd->bd_disk->disk_name,
@@ -153,7 +153,7 @@ out_err:
 
 /* Map deviceid returned by the server to constructed block_device */
 static struct block_device *translate_devid(struct pnfs_layout_hdr *lo,
-					    struct pnfs_deviceid *id)
+					    struct nfs4_deviceid *id)
 {
 	struct block_device *rv = NULL;
 	struct block_mount_id *mid;
@@ -164,7 +164,7 @@ static struct block_device *translate_devid(struct pnfs_layout_hdr *lo,
 	spin_lock(&mid->bm_lock);
 	list_for_each_entry(dev, &mid->bm_devlist, bm_node) {
 		if (memcmp(id->data, dev->bm_mdevid.data,
-			   NFS4_PNFS_DEVICEID4_SIZE) == 0) {
+			   NFS4_DEVICEID4_SIZE) == 0) {
 			rv = dev->bm_mdev;
 			goto out;
 		}
@@ -254,7 +254,7 @@ nfs4_blk_process_layoutget(struct pnfs_layout_hdr *lo,
 	READ32(count);
 
 	dprintk("%s enter, number of extents %i\n", __func__, count);
-	BLK_READBUF(p, end, (28 + NFS4_PNFS_DEVICEID4_SIZE) * count);
+	BLK_READBUF(p, end, (28 + NFS4_DEVICEID4_SIZE) * count);
 
 	/* Decode individual extents, putting them in temporary
 	 * staging area until whole layout is decoded to make error

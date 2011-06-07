@@ -55,7 +55,7 @@ struct block_mount_id {
 
 struct pnfs_block_dev {
 	struct list_head		bm_node;
-	struct pnfs_deviceid		bm_mdevid;    /* associated devid */
+	struct nfs4_deviceid		bm_mdevid;    /* associated devid */
 	struct block_device		*bm_mdev;     /* meta device itself */
 };
 
@@ -132,7 +132,7 @@ struct pnfs_inval_tracking {
 struct pnfs_block_extent {
 	struct kref	be_refcnt;
 	struct list_head be_node;	/* link into lseg list */
-	struct pnfs_deviceid be_devid;  /* STUB - remevable??? */
+	struct nfs4_deviceid be_devid;  /* STUB - remevable??? */
 	struct block_device *be_mdev;
 	sector_t	be_f_offset;	/* the starting offset in the file */
 	sector_t	be_length;	/* the size of the extent */
@@ -144,7 +144,7 @@ struct pnfs_block_extent {
 /* Shortened extent used by LAYOUTCOMMIT */
 struct pnfs_block_short_extent {
 	struct list_head bse_node;
-	struct pnfs_deviceid bse_devid;	/* STUB - removable??? */
+	struct nfs4_deviceid bse_devid;	/* STUB - removable??? */
 	struct block_device *bse_mdev;
 	sector_t	bse_f_offset;	/* the starting offset in the file */
 	sector_t	bse_length;	/* the size of the extent */
@@ -226,7 +226,7 @@ uint32_t *blk_overflow(uint32_t *p, uint32_t *end, size_t nbytes);
 	memcpy((x), p, nbytes);                 \
 	p += XDR_QUADLEN(nbytes);               \
 } while (0)
-#define READ_DEVID(x)	COPYMEM((x)->data, NFS4_PNFS_DEVICEID4_SIZE)
+#define READ_DEVID(x)	COPYMEM((x)->data, NFS4_DEVICEID4_SIZE)
 #define READ_SECTOR(x)     do { \
 	READ64(tmp); \
 	if (tmp & 0x1ff) { \
@@ -248,7 +248,7 @@ uint32_t *blk_overflow(uint32_t *p, uint32_t *end, size_t nbytes);
 #define WRITEMEM(ptr, nbytes)     do {                          \
 	p = xdr_encode_opaque_fixed(p, ptr, nbytes);	\
 } while (0)
-#define WRITE_DEVID(x)  WRITEMEM((x)->data, NFS4_PNFS_DEVICEID4_SIZE)
+#define WRITE_DEVID(x)  WRITEMEM((x)->data, NFS4_DEVICEID4_SIZE)
 
 /* blocklayoutdev.c */
 struct block_device *nfs4_blkdev_get(dev_t dev);
