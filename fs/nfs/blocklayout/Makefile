@@ -3,4 +3,4 @@
 #
 obj-$(CONFIG_PNFS_BLOCK) += blocklayoutdriver.o
 blocklayoutdriver-objs := blocklayout.o blocklayoutdev.o blocklayoutdm.o \
-			extents.o
+			extents.o block-device-discovery-pipe.o
