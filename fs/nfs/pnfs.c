@@ -1138,6 +1138,41 @@ pnfs_try_to_write_data(struct nfs_write_data *wdata,
 }
 
 /*
+ * This gives the layout driver an opportunity to read in page "around"
+ * the data to be written.  It returns 0 on success, otherwise an error code
+ * which will either be passed up to user, or ignored if
+ * some previous part of write succeeded.
+ * Note the range [pos, pos+len-1] is entirely within the page.
+ */
+int _pnfs_write_begin(struct inode *inode, struct page *page,
+		      loff_t pos, unsigned len,
+		      struct pnfs_layout_segment *lseg,
+		      struct pnfs_fsdata **fsdata)
+{
+	struct pnfs_fsdata *data;
+	int status = 0;
+
+	dprintk("--> %s: pos=%llu len=%u\n",
+		__func__, (unsigned long long)pos, len);
+	data = kzalloc(sizeof(struct pnfs_fsdata), GFP_KERNEL);
+	if (!data) {
+		status = -ENOMEM;
+		goto out;
+	}
+	data->lseg = lseg; /* refcount passed into data to be managed there */
+	status = NFS_SERVER(inode)->pnfs_curr_ld->write_begin(
+						lseg, page, pos, len, data);
+	if (status) {
+		kfree(data);
+		data = NULL;
+	}
+out:
+	*fsdata = data;
+	dprintk("<-- %s: status=%d\n", __func__, status);
+	return status;
+}
+
+/*
  * Called by non rpc-based layout drivers
  */
 int
@@ -1249,6 +1284,12 @@ pnfs_set_layoutcommit(struct nfs_write_data *wdata)
 		mark_inode_dirty_sync(wdata->inode);
 }
 EXPORT_SYMBOL_GPL(pnfs_set_layoutcommit);
+
+void pnfs_free_fsdata(struct pnfs_fsdata *fsdata)
+{
+	/* lseg refcounting handled directly in nfs_write_end */
+	kfree(fsdata);
+}
 
 /*
  * For the LAYOUT4_NFSV4_1_FILES layout type, NFS_DATA_SYNC WRITEs and

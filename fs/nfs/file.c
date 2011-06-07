@@ -384,12 +384,15 @@ static int nfs_write_begin(struct file *file, struct address_space *mapping,
 	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
 	struct page *page;
 	int once_thru = 0;
+	struct pnfs_layout_segment *lseg;
 
 	dfprintk(PAGECACHE, "NFS: write_begin(%s/%s(%ld), %u@%lld)\n",
 		file->f_path.dentry->d_parent->d_name.name,
 		file->f_path.dentry->d_name.name,
 		mapping->host->i_ino, len, (long long) pos);
-
+	lseg = pnfs_update_layout(mapping->host,
+				  nfs_file_open_context(file),
+				  pos, len, IOMODE_RW, GFP_NOFS);
 start:
 	/*
 	 * Prevent starvation issues if someone is doing a consistency
@@ -409,6 +412,9 @@ start:
 	if (ret) {
 		unlock_page(page);
 		page_cache_release(page);
+		*pagep = NULL;
+		*fsdata = NULL;
+		goto out;
 	} else if (!once_thru &&
 		   nfs_want_read_modify_write(file, page, pos, len)) {
 		once_thru = 1;
@@ -416,6 +422,12 @@ start:
 		page_cache_release(page);
 		if (!ret)
 			goto start;
+	}
+	ret = pnfs_write_begin(file, page, pos, len, lseg, fsdata);
+ out:
+	if (ret) {
+		put_lseg(lseg);
+		*fsdata = NULL;
 	}
 	return ret;
 }
@@ -426,6 +438,7 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 {
 	unsigned offset = pos & (PAGE_CACHE_SIZE - 1);
 	int status;
+	struct pnfs_layout_segment *lseg;
 
 	dfprintk(PAGECACHE, "NFS: write_end(%s/%s(%ld), %u@%lld)\n",
 		file->f_path.dentry->d_parent->d_name.name,
@@ -452,10 +465,13 @@ static int nfs_write_end(struct file *file, struct address_space *mapping,
 			zero_user_segment(page, pglen, PAGE_CACHE_SIZE);
 	}
 
+	lseg = nfs4_pull_lseg_from_fsdata(file, fsdata);
 	status = nfs_updatepage(file, page, offset, copied);
 
 	unlock_page(page);
 	page_cache_release(page);
+	pnfs_write_end_cleanup(file, fsdata);
+	put_lseg(lseg);
 
 	if (status < 0)
 		return status;

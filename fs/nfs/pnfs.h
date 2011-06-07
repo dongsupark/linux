@@ -54,6 +54,10 @@ enum pnfs_try_status {
 	PNFS_NOT_ATTEMPTED = 1,
 };
 
+struct pnfs_fsdata {
+	struct pnfs_layout_segment *lseg;
+};
+
 #ifdef CONFIG_NFS_V4_1
 
 #define LAYOUT_NFSV4_1_MODULE_PREFIX "nfs-layouttype4"
@@ -106,6 +110,9 @@ struct pnfs_layoutdriver_type {
 	 */
 	enum pnfs_try_status (*read_pagelist) (struct nfs_read_data *nfs_data);
 	enum pnfs_try_status (*write_pagelist) (struct nfs_write_data *nfs_data, int how);
+	int (*write_begin) (struct pnfs_layout_segment *lseg, struct page *page,
+			    loff_t pos, unsigned count,
+			    struct pnfs_fsdata *fsdata);
 
 	void (*free_deviceid_node) (struct nfs4_deviceid_node *);
 
@@ -180,6 +187,7 @@ enum pnfs_try_status pnfs_try_to_write_data(struct nfs_write_data *,
 enum pnfs_try_status pnfs_try_to_read_data(struct nfs_read_data *,
 					    const struct rpc_call_ops *);
 bool pnfs_generic_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev, struct nfs_page *req);
+void pnfs_free_fsdata(struct pnfs_fsdata *fsdata);
 void pnfs_cleanup_layoutcommit(struct inode *,
 			       struct nfs4_layoutcommit_data *);
 int pnfs_layout_process(struct nfs4_layoutget *lgp);
@@ -193,6 +201,10 @@ void pnfs_set_layout_stateid(struct pnfs_layout_hdr *lo,
 int pnfs_choose_layoutget_stateid(nfs4_stateid *dst,
 				  struct pnfs_layout_hdr *lo,
 				  struct nfs4_state *open_state);
+int _pnfs_write_begin(struct inode *inode, struct page *page,
+		      loff_t pos, unsigned len,
+		      struct pnfs_layout_segment *lseg,
+		      struct pnfs_fsdata **fsdata);
 int mark_matching_lsegs_invalid(struct pnfs_layout_hdr *lo,
 				struct list_head *tmp_list,
 				struct pnfs_layout_range *recall_range);
@@ -305,6 +317,32 @@ pnfs_ld_layoutret_on_setattr(struct inode *inode)
 		PNFS_LAYOUTRET_ON_SETATTR;
 }
 
+static inline int pnfs_write_begin(struct file *filp, struct page *page,
+				   loff_t pos, unsigned len,
+				   struct pnfs_layout_segment *lseg,
+				   void **fsdata)
+{
+	struct inode *inode = filp->f_dentry->d_inode;
+	struct nfs_server *nfss = NFS_SERVER(inode);
+	int status = 0;
+
+	*fsdata = lseg;
+	if (lseg && nfss->pnfs_curr_ld->write_begin)
+		status = _pnfs_write_begin(inode, page, pos, len, lseg,
+					   (struct pnfs_fsdata **) fsdata);
+	return status;
+}
+
+static inline void pnfs_write_end_cleanup(struct file *filp, void *fsdata)
+{
+	struct nfs_server *nfss = NFS_SERVER(filp->f_dentry->d_inode);
+
+	if (fsdata && nfss->pnfs_curr_ld) {
+		if (nfss->pnfs_curr_ld->write_begin)
+			pnfs_free_fsdata(fsdata);
+	}
+}
+
 static inline int pnfs_return_layout(struct inode *ino)
 {
 	struct nfs_inode *nfsi = NFS_I(ino);
@@ -323,6 +361,19 @@ static inline void pnfs_pageio_init(struct nfs_pageio_descriptor *pgio,
 
 	if (ld)
 		pgio->pg_test = ld->pg_test;
+}
+
+static inline struct pnfs_layout_segment *
+nfs4_pull_lseg_from_fsdata(struct file *filp, void *fsdata)
+{
+	if (fsdata) {
+		struct nfs_server *nfss = NFS_SERVER(filp->f_dentry->d_inode);
+
+		if (nfss->pnfs_curr_ld && nfss->pnfs_curr_ld->write_begin)
+			return ((struct pnfs_fsdata *) fsdata)->lseg;
+		return (struct pnfs_layout_segment *)fsdata;
+	}
+	return NULL;
 }
 
 #else  /* CONFIG_NFS_V4_1 */
@@ -370,6 +421,19 @@ pnfs_try_to_write_data(struct nfs_write_data *data,
 static inline int pnfs_return_layout(struct inode *ino)
 {
 	return 0;
+}
+
+static inline int pnfs_write_begin(struct file *filp, struct page *page,
+				   loff_t pos, unsigned len,
+				   struct pnfs_layout_segment *lseg,
+				   void **fsdata)
+{
+	*fsdata = NULL;
+	return 0;
+}
+
+static inline void pnfs_write_end_cleanup(struct file *filp, void *fsdata)
+{
 }
 
 static inline bool
@@ -443,6 +507,13 @@ static inline int pnfs_layoutcommit_inode(struct inode *inode, bool sync)
 static inline void nfs4_deviceid_purge_client(struct nfs_client *ncl)
 {
 }
+
+static inline struct pnfs_layout_segment *
+nfs4_pull_lseg_from_fsdata(struct file *filp, void *fsdata)
+{
+	return NULL;
+}
+
 #endif /* CONFIG_NFS_V4_1 */
 
 #endif /* FS_NFS_PNFS_H */
