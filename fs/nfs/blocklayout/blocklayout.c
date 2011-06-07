@@ -619,7 +619,7 @@ static int
 bl_setup_layoutcommit(struct pnfs_layout_hdr *lo,
 		      struct nfs4_layoutcommit_args *arg)
 {
-	struct nfs_server *nfss = NFS_SERVER(lo->inode);
+	struct nfs_server *nfss = NFS_SERVER(lo->plh_inode);
 	struct bl_layoutupdate_data *layoutupdate_data;
 
 	dprintk("%s enter\n", __func__);
