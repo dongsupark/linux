@@ -37,6 +37,11 @@
 #include <linux/nfs4_pnfs.h>
 #include <linux/dm-ioctl.h> /* Needed for struct dm_ioctl*/
 
+#define PG_pnfserr PG_owner_priv_1
+#define PagePnfsErr(page)	test_bit(PG_pnfserr, &(page)->flags)
+#define SetPagePnfsErr(page)	set_bit(PG_pnfserr, &(page)->flags)
+#define ClearPagePnfsErr(page)	clear_bit(PG_pnfserr, &(page)->flags)
+
 extern struct class shost_class; /* exported from drivers/scsi/hosts.c */
 extern int dm_dev_create(struct dm_ioctl *param); /* from dm-ioctl.c */
 extern int dm_dev_remove(struct dm_ioctl *param); /* from dm-ioctl.c */
