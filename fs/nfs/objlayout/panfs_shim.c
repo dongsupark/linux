@@ -684,6 +684,16 @@ EXPORT_SYMBOL(panfs_shim_unregister);
 #define PANLAYOUT_MAX_STRIPE_WIDTH   11
 #define PANLAYOUT_MAX_GATHER_STRIPES 8
 
+static const struct nfs_pageio_ops panfs_shim_pg_read_ops = {
+	.pg_test = panfs_shim_pg_test,
+	.pg_doio = nfs_generic_pg_readpages,
+};
+
+static const struct nfs_pageio_ops panfs_shim_pg_write_ops = {
+	.pg_test = panfs_shim_pg_test,
+	.pg_doio = nfs_generic_pg_writepages,
+};
+
 /*
  * Don't gather across stripes, but rather gather (coalesce) up to
  * the stripe size.
@@ -705,7 +715,8 @@ static struct pnfs_layoutdriver_type panlayout_type = {
 
 	.read_pagelist           = objlayout_read_pagelist,
 	.write_pagelist          = objlayout_write_pagelist,
-	.pg_test                 = panfs_shim_pg_test,
+	.pg_read_ops             = &panfs_shim_pg_read_ops,
+	.pg_write_ops            = &panfs_shim_pg_write_ops,
 
 	.encode_layoutcommit	 = objlayout_encode_layoutcommit,
 	.encode_layoutreturn     = objlayout_encode_layoutreturn,
