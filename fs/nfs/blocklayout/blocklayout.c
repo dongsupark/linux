@@ -448,8 +448,8 @@ bl_write_pagelist(struct pnfs_layout_type *lo,
 	int pg_index = pgbase >> PAGE_CACHE_SHIFT;
 
 	dprintk("%s enter, %Zu@%lld\n", __func__, count, offset);
-	if (!test_bit(PG_USE_PNFS, &wdata->req->wb_flags)) {
-		dprintk("PG_USE_PNFS not set\n");
+	if (!wdata->req->wb_lseg) {
+		dprintk("%s no lseg, falling back to MDS\n", __func__);
 		return PNFS_NOT_ATTEMPTED;
 	}
 	if (dont_like_caller(wdata->req)) {
