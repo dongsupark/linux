@@ -232,7 +232,7 @@ _range_has_tag(struct my_tree_t *tree, u64 start, u64 end, int32_t tag)
 			if ((pos->it_sector == end - tree->mtt_step_size) &&
 			    (pos->it_tags & (1 << tag))) {
 				expect = pos->it_sector - tree->mtt_step_size;
-				if (expect < start)
+				if (pos->it_sector < tree->mtt_step_size || expect < start)
 					return 1;
 				continue;
 			} else {
@@ -740,19 +740,12 @@ encode_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 			       struct xdr_stream *xdr,
 			       const struct nfs4_layoutcommit_args *arg)
 {
-	sector_t start, end;
 	struct pnfs_block_short_extent *lce, *save;
 	unsigned int count = 0;
-	struct bl_layoutupdate_data *bld = arg->layoutdriver_data;
-	struct list_head *ranges = &bld->ranges;
+	struct list_head *ranges = &bl->bl_committing;
 	__be32 *p, *xdr_start;
 
 	dprintk("%s enter\n", __func__);
-	start = arg->range.offset >> 9;
-	end = start + (arg->range.length >> 9);
-	dprintk("%s set start=%llu, end=%llu\n",
-		__func__, (u64)start, (u64)end);
-
 	/* BUG - creation of bl_commit is buggy - need to wait for
 	 * entire block to be marked WRITTEN before it can be added.
 	 */
@@ -925,11 +918,10 @@ clean_pnfs_block_layoutupdate(struct pnfs_block_layout *bl,
 			      const struct nfs4_layoutcommit_args *arg,
 			      int status)
 {
-	struct bl_layoutupdate_data *bld = arg->layoutdriver_data;
 	struct pnfs_block_short_extent *lce, *save;
 
 	dprintk("%s status %d\n", __func__, status);
-	list_for_each_entry_safe_reverse(lce, save, &bld->ranges, bse_node) {
+	list_for_each_entry_safe_reverse(lce, save, &bl->bl_committing, bse_node) {
 		if (likely(!status)) {
 			u64 offset = lce->bse_f_offset;
 			u64 end = offset + lce->bse_length;

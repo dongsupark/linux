@@ -5783,7 +5783,6 @@ static int _nfs4_getdevicelist(struct nfs_server *server,
 
 	dprintk("--> %s\n", __func__);
 	status = nfs4_call_sync(server->client, server, &msg, &args.seq_args, &res.seq_res, 0);
-	put_rpccred(msg.rpc_cred);
 	dprintk("<-- %s status=%d\n", __func__, status);
 	return status;
 }

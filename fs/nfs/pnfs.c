@@ -898,8 +898,6 @@ pnfs_find_lseg(struct pnfs_layout_hdr *lo,
 			ret = get_lseg(lseg);
 			break;
 		}
-		if (cmp_layout(range, &lseg->pls_range) > 0)
-			break;
 	}
 
 	dprintk("%s:Return lseg %p ref %d\n",
@@ -1252,6 +1250,7 @@ static struct pnfs_layout_segment *pnfs_list_write_lseg(struct inode *inode)
 		}
 	}
 	rv->pls_end_pos = max_pos;
+	dprintk("%s: lseg %p end_pos %llu\n", __func__, rv, rv->pls_end_pos);
 
 	return rv;
 }
@@ -1261,6 +1260,7 @@ pnfs_set_layoutcommit(struct nfs_write_data *wdata)
 {
 	struct nfs_inode *nfsi = NFS_I(wdata->inode);
 	loff_t end_pos = wdata->mds_offset + wdata->res.count;
+	loff_t isize = i_size_read(wdata->inode);
 	bool mark_as_dirty = false;
 
 	spin_lock(&nfsi->vfs_inode.i_lock);
@@ -1274,9 +1274,13 @@ pnfs_set_layoutcommit(struct nfs_write_data *wdata)
 		dprintk("%s: Set layoutcommit for inode %lu ",
 			__func__, wdata->inode->i_ino);
 	}
+	if (end_pos > isize)
+		end_pos = isize;
 	if (end_pos > wdata->lseg->pls_end_pos)
 		wdata->lseg->pls_end_pos = end_pos;
 	spin_unlock(&nfsi->vfs_inode.i_lock);
+	dprintk("%s: lseg %p end_pos %llu\n",
+		__func__, wdata->lseg, wdata->lseg->pls_end_pos);
 
 	/* if pnfs_layoutcommit_inode() runs between inode locks, the next one
 	 * will be a noop because NFS_INO_LAYOUTCOMMIT will not be set */

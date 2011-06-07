@@ -231,14 +231,16 @@ static int verify_extent(struct pnfs_block_extent *be,
 /* XDR decode pnfs_block_layout4 structure */
 int
 nfs4_blk_process_layoutget(struct pnfs_layout_hdr *lo,
-			   struct nfs4_layoutget_res *lgr)
+			   struct nfs4_layoutget_res *lgr, gfp_t gfp_flags)
 {
 	struct pnfs_block_layout *bl = BLK_LO2EXT(lo);
-	uint32_t *p = (uint32_t *)lgr->layout.buf;
-	uint32_t *end = (uint32_t *)((char *)lgr->layout.buf + lgr->layout.len);
 	int i, status = -EIO;
 	uint32_t count;
 	struct pnfs_block_extent *be = NULL, *save;
+	struct xdr_stream stream;
+	struct xdr_buf buf;
+	struct page *scratch;
+	__be32 *p;
 	uint64_t tmp; /* Used by READSECTOR */
 	struct layout_verification lv = {
 		.mode = lgr->range.iomode,
@@ -246,14 +248,27 @@ nfs4_blk_process_layoutget(struct pnfs_layout_hdr *lo,
 		.inval = lgr->range.offset >> 9,
 		.cowread = lgr->range.offset >> 9,
 	};
-
 	LIST_HEAD(extents);
 
-	BLK_READBUF(p, end, 4);
+	dprintk("---> %s\n", __func__);
+
+	scratch = alloc_page(gfp_flags);
+	if (!scratch)
+		return -ENOMEM;
+
+	xdr_init_decode_pages(&stream, &buf, lgr->layoutp->pages, lgr->layoutp->len);
+	xdr_set_scratch_buffer(&stream, page_address(scratch), PAGE_SIZE);
+
+	p = xdr_inline_decode(&stream, 4);
+	if (unlikely(!p))
+		goto out_err;
+
 	READ32(count);
 
 	dprintk("%s enter, number of extents %i\n", __func__, count);
-	BLK_READBUF(p, end, (28 + NFS4_DEVICEID4_SIZE) * count);
+	p = xdr_inline_decode(&stream, (28 + NFS4_DEVICEID4_SIZE) * count);
+	if (unlikely(!p))
+		goto out_err;
 
 	/* Decode individual extents, putting them in temporary
 	 * staging area until whole layout is decoded to make error
@@ -269,6 +284,7 @@ nfs4_blk_process_layoutget(struct pnfs_layout_hdr *lo,
 		be->be_mdev = translate_devid(lo, &be->be_devid);
 		if (!be->be_mdev)
 			goto out_err;
+
 		/* The next three values are read in as bytes,
 		 * but stored as 512-byte sector lengths
 		 */
@@ -283,11 +299,6 @@ nfs4_blk_process_layoutget(struct pnfs_layout_hdr *lo,
 			goto out_err;
 		}
 		list_add_tail(&be->be_node, &extents);
-	}
-	if (p != end) {
-		dprintk("%s Undecoded cruft at end of opaque\n", __func__);
-		be = NULL;
-		goto out_err;
 	}
 	if (lgr->range.offset + lgr->range.length != lv.start << 9) {
 		dprintk("%s Final length mismatch\n", __func__);
@@ -319,6 +330,7 @@ nfs4_blk_process_layoutget(struct pnfs_layout_hdr *lo,
 	spin_unlock(&bl->bl_ext_lock);
 	status = 0;
  out:
+	__free_page(scratch);
 	dprintk("%s returns %i\n", __func__, status);
 	return status;
 

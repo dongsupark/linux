@@ -156,6 +156,7 @@ struct pnfs_device {
 	unsigned int  layout_type;
 	unsigned int  mincount;
 	struct page **pages;
+	void          *area;
 	unsigned int  pgbase;
 	unsigned int  pglen;
 };

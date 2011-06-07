@@ -33,7 +33,6 @@
 #define FS_NFS_NFS4BLOCKLAYOUT_H
 
 #include <linux/nfs_fs.h>
-#include <linux/dm-ioctl.h> /* Needed for struct dm_ioctl*/
 #include "../pnfs.h"
 
 #define PAGE_CACHE_SECTORS (PAGE_CACHE_SIZE >> 9)
@@ -42,11 +41,6 @@
 #define PagePnfsErr(page)	test_bit(PG_pnfserr, &(page)->flags)
 #define SetPagePnfsErr(page)	set_bit(PG_pnfserr, &(page)->flags)
 #define ClearPagePnfsErr(page)	clear_bit(PG_pnfserr, &(page)->flags)
-
-extern int dm_dev_create(struct dm_ioctl *param); /* from dm-ioctl.c */
-extern int dm_dev_remove(struct dm_ioctl *param); /* from dm-ioctl.c */
-extern int dm_do_resume(struct dm_ioctl *param);
-extern int dm_table_load(struct dm_ioctl *param, size_t param_size);
 
 struct block_mount_id {
 	spinlock_t			bm_lock;    /* protects list */
@@ -180,6 +174,7 @@ struct pnfs_block_layout {
 	spinlock_t		bl_ext_lock;   /* Protects list manipulation */
 	struct list_head	bl_extents[EXTENT_LISTS]; /* R and RW extents */
 	struct list_head	bl_commit;	/* Needs layout commit */
+	struct list_head	bl_committing;	/* Layout committing */
 	unsigned int		bl_count;	/* entries in bl_commit */
 	sector_t		bl_blocksize;  /* Server blocksize in sectors */
 };
@@ -257,7 +252,7 @@ struct pnfs_block_dev *nfs4_blk_decode_device(struct nfs_server *server,
 					      struct pnfs_device *dev,
 					      struct list_head *sdlist);
 int nfs4_blk_process_layoutget(struct pnfs_layout_hdr *lo,
-			       struct nfs4_layoutget_res *lgr);
+			       struct nfs4_layoutget_res *lgr, gfp_t gfp_flags);
 int nfs4_blk_create_block_disk_list(struct list_head *);
 void nfs4_blk_destroy_disk_list(struct list_head *);
 /* blocklayoutdm.c */

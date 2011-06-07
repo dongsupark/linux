@@ -97,14 +97,6 @@ dont_like_caller(struct nfs_page *req)
 	}
 }
 
-static enum pnfs_try_status
-bl_commit(struct nfs_write_data *nfs_data,
-	  int sync)
-{
-	dprintk("%s enter\n", __func__);
-	return PNFS_NOT_ATTEMPTED;
-}
-
 /* The data we are handed might be spread across several bios.  We need
  * to track when the last one is finished.
  */
@@ -198,7 +190,7 @@ static void bl_read_cleanup(struct work_struct *work)
 	dprintk("%s enter\n", __func__);
 	task = container_of(work, struct rpc_task, u.tk_work);
 	rdata = container_of(task, struct nfs_read_data, task);
-	pnfs_read_done(rdata);
+	pnfs_ld_read_done(rdata);
 }
 
 static void
@@ -219,8 +211,7 @@ static void bl_rpc_do_nothing(struct rpc_task *task, void *calldata)
 }
 
 static enum pnfs_try_status
-bl_read_pagelist(struct nfs_read_data *rdata,
-		 unsigned nr_pages)
+bl_read_pagelist(struct nfs_read_data *rdata)
 {
 	int i, hole;
 	struct bio *bio = NULL;
@@ -233,13 +224,13 @@ bl_read_pagelist(struct nfs_read_data *rdata,
 	int pg_index = rdata->args.pgbase >> PAGE_CACHE_SHIFT;
 
 	dprintk("%s enter nr_pages %u offset %lld count %Zd\n", __func__,
-	       nr_pages, f_offset, count);
+	       rdata->npages, f_offset, count);
 
 	if (dont_like_caller(rdata->req)) {
 		dprintk("%s dont_like_caller failed\n", __func__);
 		goto use_mds;
 	}
-	if ((nr_pages == 1) && PagePnfsErr(rdata->req->wb_page)) {
+	if ((rdata->npages == 1) && PagePnfsErr(rdata->req->wb_page)) {
 		/* We want to fall back to mds in case of read_page
 		 * after error on read_pages.
 		 */
@@ -249,21 +240,21 @@ bl_read_pagelist(struct nfs_read_data *rdata,
 	par = alloc_parallel(rdata);
 	if (!par)
 		goto use_mds;
-	par->call_ops = *rdata->pdata.call_ops;
+	par->call_ops = *rdata->mds_ops;
 	par->call_ops.rpc_call_done = bl_rpc_do_nothing;
 	par->pnfs_callback = bl_end_par_io_read;
 	/* At this point, we can no longer jump to use_mds */
 
 	isect = (sector_t) (f_offset >> 9);
 	/* Code assumes extents are page-aligned */
-	for (i = pg_index; i < nr_pages; i++) {
+	for (i = pg_index; i < rdata->npages; i++) {
 		if (!extent_length) {
 			/* We've used up the previous extent */
 			put_extent(be);
 			put_extent(cow_read);
 			bio = bl_submit_bio(READ, bio);
 			/* Get the next one */
-			be = find_get_extent(BLK_LSEG2EXT(rdata->pdata.lseg),
+			be = find_get_extent(BLK_LSEG2EXT(rdata->lseg),
 					     isect, &cow_read);
 			if (!be) {
 				/* Error out this page */
@@ -293,7 +284,7 @@ bl_read_pagelist(struct nfs_read_data *rdata,
 			be_read = (hole && cow_read) ? cow_read : be;
 			for (;;) {
 				if (!bio) {
-					bio = bio_alloc(GFP_NOIO, nr_pages - i);
+					bio = bio_alloc(GFP_NOIO, rdata->npages - i);
 					if (!bio) {
 						/* Error out this page */
 						bl_done_with_rpage(pages[i], 0);
@@ -407,10 +398,10 @@ static void bl_write_cleanup(struct work_struct *work)
 		/* BUG - this should be called after each bio, not after
 		 * all finish, unless have some way of storing success/failure
 		 */
-		mark_extents_written(BLK_LSEG2EXT(wdata->pdata.lseg),
+		mark_extents_written(BLK_LSEG2EXT(wdata->lseg),
 				     wdata->args.offset, wdata->args.count);
 	}
-	pnfs_writeback_done(wdata);
+	pnfs_ld_write_done(wdata);
 }
 
 /* Called when last of bios associated with a bl_write_pagelist call finishes */
@@ -428,7 +419,6 @@ bl_end_par_io_write(void *data)
 
 static enum pnfs_try_status
 bl_write_pagelist(struct nfs_write_data *wdata,
-		  unsigned nr_pages,
 		  int sync)
 {
 	int i;
@@ -442,7 +432,7 @@ bl_write_pagelist(struct nfs_write_data *wdata,
 	int pg_index = wdata->args.pgbase >> PAGE_CACHE_SHIFT;
 
 	dprintk("%s enter, %Zu@%lld\n", __func__, count, offset);
-	if (!wdata->req->wb_lseg) {
+	if (!wdata->lseg) {
 		dprintk("%s no lseg, falling back to MDS\n", __func__);
 		return PNFS_NOT_ATTEMPTED;
 	}
@@ -460,19 +450,19 @@ bl_write_pagelist(struct nfs_write_data *wdata,
 	par = alloc_parallel(wdata);
 	if (!par)
 		return PNFS_NOT_ATTEMPTED;
-	par->call_ops = *wdata->pdata.call_ops;
+	par->call_ops = *wdata->mds_ops;
 	par->call_ops.rpc_call_done = bl_rpc_do_nothing;
 	par->pnfs_callback = bl_end_par_io_write;
 	/* At this point, have to be more careful with error handling */
 
 	isect = (sector_t) ((offset & (long)PAGE_CACHE_MASK) >> 9);
-	for (i = pg_index; i < nr_pages; i++) {
+	for (i = pg_index; i < wdata->npages ; i++) {
 		if (!extent_length) {
 			/* We've used up the previous extent */
 			put_extent(be);
 			bio = bl_submit_bio(WRITE, bio);
 			/* Get the next one */
-			be = find_get_extent(BLK_LSEG2EXT(wdata->pdata.lseg),
+			be = find_get_extent(BLK_LSEG2EXT(wdata->lseg),
 					     isect, NULL);
 			if (!be || !is_writable(be, isect)) {
 				/* FIXME */
@@ -484,7 +474,7 @@ bl_write_pagelist(struct nfs_write_data *wdata,
 		}
 		for (;;) {
 			if (!bio) {
-				bio = bio_alloc(GFP_NOIO, nr_pages - i);
+				bio = bio_alloc(GFP_NOIO, wdata->npages - i);
 				if (!bio) {
 					/* Error out this page */
 					/* FIXME */
@@ -504,7 +494,12 @@ bl_write_pagelist(struct nfs_write_data *wdata,
 		isect += PAGE_CACHE_SIZE >> 9;
 		extent_length -= PAGE_CACHE_SIZE >> 9;
 	}
-	wdata->res.count = (isect << 9) - (offset & (long)PAGE_CACHE_MASK);
+	wdata->res.count = (isect << 9) - (offset);
+	if (count < wdata->res.count) {
+		wdata->res.count = count;
+	}
+	/* pnfs_set_layoutcommit needs this */
+	wdata->mds_offset = offset;
 	put_extent(be);
 	bl_submit_bio(WRITE, bio);
 	put_parallel(par);
@@ -557,18 +552,19 @@ bl_free_layout_hdr(struct pnfs_layout_hdr *lo)
 }
 
 static struct pnfs_layout_hdr *
-bl_alloc_layout_hdr(struct inode *inode)
+bl_alloc_layout_hdr(struct inode *inode, gfp_t gfp_flags)
 {
 	struct pnfs_block_layout	*bl;
 
 	dprintk("%s enter\n", __func__);
-	bl = kzalloc(sizeof(*bl), GFP_KERNEL);
+	bl = kzalloc(sizeof(*bl), gfp_flags);
 	if (!bl)
 		return NULL;
 	spin_lock_init(&bl->bl_ext_lock);
 	INIT_LIST_HEAD(&bl->bl_extents[0]);
 	INIT_LIST_HEAD(&bl->bl_extents[1]);
 	INIT_LIST_HEAD(&bl->bl_commit);
+	INIT_LIST_HEAD(&bl->bl_committing);
 	bl->bl_count = 0;
 	bl->bl_blocksize = NFS_SERVER(inode)->pnfs_blksize >> 9;
 	INIT_INVAL_MARKS(&bl->bl_inval, bl->bl_blocksize);
@@ -590,16 +586,16 @@ bl_free_lseg(struct pnfs_layout_segment *lseg)
  */
 static struct pnfs_layout_segment *
 bl_alloc_lseg(struct pnfs_layout_hdr *lo,
-	      struct nfs4_layoutget_res *lgr)
+	      struct nfs4_layoutget_res *lgr, gfp_t gfp_flags)
 {
 	struct pnfs_layout_segment *lseg;
 	int status;
 
 	dprintk("%s enter\n", __func__);
-	lseg = kzalloc(sizeof(*lseg) + 0, GFP_KERNEL);
+	lseg = kzalloc(sizeof(*lseg) + 0, gfp_flags);
 	if (!lseg)
 		return NULL;
-	status = nfs4_blk_process_layoutget(lo, lgr);
+	status = nfs4_blk_process_layoutget(lo, lgr, gfp_flags);
 	if (status) {
 		/* We don't want to call the full-blown bl_free_lseg,
 		 * since on error extents were not touched.
@@ -613,34 +609,6 @@ bl_alloc_lseg(struct pnfs_layout_hdr *lo,
 		return ERR_PTR(status);
 	}
 	return lseg;
-}
-
-static int
-bl_setup_layoutcommit(struct pnfs_layout_hdr *lo,
-		      struct nfs4_layoutcommit_args *arg)
-{
-	struct nfs_server *nfss = NFS_SERVER(lo->plh_inode);
-	struct bl_layoutupdate_data *layoutupdate_data;
-
-	dprintk("%s enter\n", __func__);
-	/* Need to ensure commit is block-size aligned */
-	if (nfss->pnfs_blksize) {
-		u64 mask = nfss->pnfs_blksize - 1;
-		u64 offset = arg->range.offset & mask;
-
-		arg->range.offset -= offset;
-		arg->range.length += offset + mask;
-		arg->range.length &= ~mask;
-	}
-
-	layoutupdate_data = kmalloc(sizeof(struct bl_layoutupdate_data),
-					 GFP_KERNEL);
-	if (unlikely(!layoutupdate_data))
-		return -ENOMEM;
-	INIT_LIST_HEAD(&layoutupdate_data->ranges);
-	arg->layoutdriver_data = layoutupdate_data;
-
-	return 0;
 }
 
 static void
@@ -657,7 +625,6 @@ bl_cleanup_layoutcommit(struct pnfs_layout_hdr *lo,
 {
 	dprintk("%s enter\n", __func__);
 	clean_pnfs_block_layoutupdate(BLK_LO2EXT(lo), &lcdata->args, lcdata->res.status);
-	kfree(lcdata->args.layoutdriver_data);
 }
 
 static void free_blk_mountid(struct block_mount_id *mid)
@@ -1085,25 +1052,16 @@ bl_write_end_cleanup(struct file *filp, struct pnfs_fsdata *fsdata)
 	fsdata->private = NULL;
 }
 
-/* This is called by nfs_can_coalesce_requests via nfs_pageio_do_add_request.
- * Should return False if there is a reason requests can not be coalesced,
- * otherwise, should default to returning True.
- */
-static int
+static bool
 bl_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
-	   struct nfs_page *req)
+		   struct nfs_page *req)
 {
-	dprintk("%s enter\n", __func__);
-	if (pgio->pg_iswrite)
-		return prev->wb_lseg == req->wb_lseg;
-	else
-		return 1;
+	return pnfs_generic_pg_test(pgio, prev, req);
 }
 
 static struct pnfs_layoutdriver_type blocklayout_type = {
 	.id = LAYOUT_BLOCK_VOLUME,
 	.name = "LAYOUT_BLOCK_VOLUME",
-	.commit				= bl_commit,
 	.read_pagelist			= bl_read_pagelist,
 	.write_pagelist			= bl_write_pagelist,
 	.write_begin			= bl_write_begin,
@@ -1113,12 +1071,11 @@ static struct pnfs_layoutdriver_type blocklayout_type = {
 	.free_layout_hdr		= bl_free_layout_hdr,
 	.alloc_lseg			= bl_alloc_lseg,
 	.free_lseg			= bl_free_lseg,
-	.setup_layoutcommit		= bl_setup_layoutcommit,
 	.encode_layoutcommit		= bl_encode_layoutcommit,
 	.cleanup_layoutcommit		= bl_cleanup_layoutcommit,
 	.set_layoutdriver		= bl_set_layoutdriver,
 	.clear_layoutdriver		= bl_clear_layoutdriver,
-	.pg_test			= bl_pg_test,
+	.pg_test                        = bl_pg_test,
 };
 
 static int __init nfs4blocklayout_init(void)
