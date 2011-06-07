@@ -546,7 +546,7 @@ release_inval_marks(struct pnfs_inval_markings *marks)
 
 /* Note we are relying on caller locking to prevent nasty races. */
 static void
-bl_free_layout(struct pnfs_layout_hdr *lo)
+bl_free_layout_hdr(struct pnfs_layout_hdr *lo)
 {
 	struct pnfs_block_layout *bl = BLK_LO2EXT(lo);
 
@@ -557,7 +557,7 @@ bl_free_layout(struct pnfs_layout_hdr *lo)
 }
 
 static struct pnfs_layout_hdr *
-bl_alloc_layout(struct inode *inode)
+bl_alloc_layout_hdr(struct inode *inode)
 {
 	struct pnfs_block_layout	*bl;
 
@@ -1105,15 +1105,17 @@ bl_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 		return 1;
 }
 
-static struct layoutdriver_io_operations blocklayout_io_operations = {
+static struct pnfs_layoutdriver_type blocklayout_type = {
+	.id = LAYOUT_BLOCK_VOLUME,
+	.name = "LAYOUT_BLOCK_VOLUME",
 	.commit				= bl_commit,
 	.read_pagelist			= bl_read_pagelist,
 	.write_pagelist			= bl_write_pagelist,
 	.write_begin			= bl_write_begin,
 	.write_end			= bl_write_end,
 	.write_end_cleanup		= bl_write_end_cleanup,
-	.alloc_layout			= bl_alloc_layout,
-	.free_layout			= bl_free_layout,
+	.alloc_layout_hdr		= bl_alloc_layout_hdr,
+	.free_layout_hdr		= bl_free_layout_hdr,
 	.alloc_lseg			= bl_alloc_lseg,
 	.free_lseg			= bl_free_lseg,
 	.setup_layoutcommit		= bl_setup_layoutcommit,
@@ -1121,18 +1123,8 @@ static struct layoutdriver_io_operations blocklayout_io_operations = {
 	.cleanup_layoutcommit		= bl_cleanup_layoutcommit,
 	.initialize_mountpoint		= bl_initialize_mountpoint,
 	.uninitialize_mountpoint	= bl_uninitialize_mountpoint,
-};
-
-static struct layoutdriver_policy_operations blocklayout_policy_operations = {
 	.get_stripesize			= bl_get_stripesize,
 	.pg_test			= bl_pg_test,
-};
-
-static struct pnfs_layoutdriver_type blocklayout_type = {
-	.id = LAYOUT_BLOCK_VOLUME,
-	.name = "LAYOUT_BLOCK_VOLUME",
-	.ld_io_ops = &blocklayout_io_operations,
-	.ld_policy_ops = &blocklayout_policy_operations,
 };
 
 static int __init nfs4blocklayout_init(void)
