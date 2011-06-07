@@ -39,13 +39,7 @@
 #ifndef _SIMPLE_RPC_PIPEFS_H_
 #define _SIMPLE_RPC_PIPEFS_H_
 
-#include <linux/fs.h>
-#include <linux/list.h>
-#include <linux/mount.h>
-#include <linux/sched.h>
-#include <linux/sunrpc/clnt.h>
 #include <linux/sunrpc/rpc_pipe_fs.h>
-
 
 #define payload_of(headerp)  ((void *)(headerp + 1))
 
