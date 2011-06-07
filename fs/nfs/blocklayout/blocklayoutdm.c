@@ -129,7 +129,7 @@ void free_block_dev(struct pnfs_block_dev *bdev)
 /*
  *  Create meta device. Keep it open to use for I/O.
  */
-struct pnfs_block_dev *nfs4_blk_init_metadev(struct super_block *sb,
+struct pnfs_block_dev *nfs4_blk_init_metadev(struct nfs_server *server,
 					     struct pnfs_device *dev)
 {
 	static uint64_t dev_count; /* STUB used for device names */
@@ -151,7 +151,7 @@ struct pnfs_block_dev *nfs4_blk_init_metadev(struct super_block *sb,
 	bd = nfs4_blkdev_get(meta_dev);
 	if (!bd)
 		goto out_err;
-	if (bd_claim(bd, sb)) {
+	if (bd_claim(bd, server)) {
 		dprintk("%s: failed to claim device %d:%d\n",
 					__func__,
 					MAJOR(meta_dev),
