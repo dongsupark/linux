@@ -1206,10 +1206,18 @@ void pnfs_cleanup_layoutcommit(struct inode *inode,
 static struct pnfs_layout_segment *pnfs_list_write_lseg(struct inode *inode)
 {
 	struct pnfs_layout_segment *lseg, *rv = NULL;
+	loff_t max_pos = 0;
 
-	list_for_each_entry(lseg, &NFS_I(inode)->layout->plh_segs, pls_list)
-		if (lseg->pls_range.iomode == IOMODE_RW)
-			rv = lseg;
+	list_for_each_entry(lseg, &NFS_I(inode)->layout->plh_segs, pls_list) {
+		if (lseg->pls_range.iomode == IOMODE_RW) {
+			if (max_pos < lseg->pls_end_pos)
+				max_pos = lseg->pls_end_pos;
+			if (test_and_clear_bit(NFS_LSEG_LAYOUTCOMMIT, &lseg->pls_flags))
+				rv = lseg;
+		}
+	}
+	rv->pls_end_pos = max_pos;
+
 	return rv;
 }
 
@@ -1224,6 +1232,7 @@ pnfs_set_layoutcommit(struct nfs_write_data *wdata)
 	if (!test_and_set_bit(NFS_INO_LAYOUTCOMMIT, &nfsi->flags)) {
 		/* references matched in nfs4_layoutcommit_release */
 		get_lseg(wdata->lseg);
+		set_bit(NFS_LSEG_LAYOUTCOMMIT, &wdata->lseg->pls_flags);
 		wdata->lseg->pls_lc_cred =
 			get_rpccred(wdata->args.context->state->owner->so_cred);
 		mark_as_dirty = true;
