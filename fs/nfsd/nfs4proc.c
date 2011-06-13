@@ -906,7 +906,7 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 			   &write->wr_verifier);
 	if (pnfs_block_enabled(cstate->current_fh.fh_dentry->d_inode, 0)) {
 		status = bl_layoutrecall(cstate->current_fh.fh_dentry->d_inode,
-				RETURN_FILE, write->wr_offset, write->wr_buflen);
+			RETURN_FILE, write->wr_offset, write->wr_buflen, false);
 		if (status)
 			goto out_put;
 	}
