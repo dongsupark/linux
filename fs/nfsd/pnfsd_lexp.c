@@ -156,7 +156,7 @@ pnfsd_lexp_layout_get(struct inode *inode,
 
 	layout = kzalloc(sizeof(*layout), GFP_KERNEL);
 	if (layout == NULL) {
-		rc = -ENOMEM;
+		rc = NFS4ERR_DELAY;
 		goto error;
 	}
 
@@ -173,7 +173,7 @@ pnfsd_lexp_layout_get(struct inode *inode,
 
 	fhp = kmalloc(sizeof(*fhp), GFP_KERNEL);
 	if (fhp == NULL) {
-		rc = -ENOMEM;
+		rc = NFS4ERR_DELAY;
 		goto error;
 	}
 
