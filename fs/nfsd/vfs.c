@@ -300,8 +300,8 @@ commit_metadata(struct svc_fh *fhp)
  * N.B. After this call fhp needs an fh_put
  */
 __be32
-nfsd_setattr(struct svc_rqst *rqstp, struct svc_fh *fhp, struct iattr *iap,
-	     int check_guard, time_t guardtime)
+_nfsd_setattr(struct svc_rqst *rqstp, struct svc_fh *fhp, struct iattr *iap,
+	      int check_guard, time_t guardtime, bool with_nfs4_state_lock)
 {
 	struct dentry	*dentry;
 	struct inode	*inode;
@@ -380,7 +380,7 @@ nfsd_setattr(struct svc_rqst *rqstp, struct svc_fh *fhp, struct iattr *iap,
 				goto out;
 #if defined(CONFIG_PNFSD_LOCAL_EXPORT)
 			if (is_inode_pnfsd_lexp(inode))
-				pnfsd_lexp_recall_layout(inode);
+				pnfsd_lexp_recall_layout(inode, with_nfs4_state_lock);
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
 		}
 
