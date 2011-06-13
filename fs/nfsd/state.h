@@ -477,7 +477,8 @@ struct nfsd4_compound_state;
 
 extern __be32 nfs4_preprocess_stateid_op(struct nfsd4_compound_state *cstate,
 		stateid_t *stateid, int flags, struct file **filp);
-extern void nfs4_lock_state(void);
+extern void __nfs4_lock_state(const char *func);
+#define nfs4_lock_state() __nfs4_lock_state(__func__)
 extern void nfs4_unlock_state(void);
 extern int nfs4_in_grace(void);
 extern void nfs4_release_reclaim(void);
