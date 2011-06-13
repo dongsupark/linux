@@ -551,7 +551,7 @@ bl_layoutreturn(struct inode *i,
 }
 
 int
-bl_layoutrecall(struct inode *inode, int type, u64 offset, u64 len)
+bl_layoutrecall(struct inode *inode, int type, u64 offset, u64 len, bool with_nfs4_state_lock)
 {
 	struct super_block		*sb;
 	struct nfsd4_pnfs_cb_layout	lr;
@@ -622,7 +622,7 @@ restart:
 				 * same thread which will cause a deadlock.
 				 */
 				spin_unlock(&r->blr_lock);
-				nfsd_layout_recall_cb(sb, inode, &lr);
+				_nfsd_layout_recall_cb(sb, inode, &lr, with_nfs4_state_lock);
 				adj = MIN(b->bll_len - (offset - b->bll_foff),
 				    len);
 				offset += adj;
