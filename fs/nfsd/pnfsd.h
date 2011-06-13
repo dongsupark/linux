@@ -123,6 +123,9 @@ int put_layoutrecall(struct nfs4_layoutrecall *);
 void nomatching_layout(struct nfs4_layoutrecall *);
 void *layoutrecall_done(struct nfs4_layoutrecall *);
 void nfsd4_cb_layout(struct nfs4_layoutrecall *);
+int _nfsd_layout_recall_cb(struct super_block *, struct inode *,
+			  struct nfsd4_pnfs_cb_layout *,
+			  bool with_nfs4_state_lock);
 int nfsd_layout_recall_cb(struct super_block *, struct inode *,
 			  struct nfsd4_pnfs_cb_layout *);
 int nfsd_device_notify_cb(struct super_block *,
@@ -137,7 +140,7 @@ extern size_t pnfs_lexp_addr_len;
 
 extern void pnfsd_lexp_init(struct inode *);
 extern bool is_inode_pnfsd_lexp(struct inode *);
-extern int pnfsd_lexp_recall_layout(struct inode *);
+extern int pnfsd_lexp_recall_layout(struct inode *, bool with_nfs4_state_lock);
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
 
 #endif /* LINUX_NFSD_PNFSD_H */
