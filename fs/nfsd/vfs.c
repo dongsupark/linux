@@ -388,7 +388,8 @@ _nfsd_setattr(struct svc_rqst *rqstp, struct svc_fh *fhp, struct iattr *iap,
 #if defined(CONFIG_SPNFS_BLOCK)
 			if (pnfs_block_enabled(inode, 0)) {
 				err = bl_layoutrecall(inode, RETURN_FILE,
-				    iap->ia_size, inode->i_size - iap->ia_size);
+					iap->ia_size, inode->i_size - iap->ia_size,
+					with_nfs4_state_lock);
 			}
 #endif /* CONFIG_SPNFS_BLOCK */
 		}
