@@ -258,7 +258,7 @@ has_layout(struct nfs4_file *fp)
  * recalls the layout if needed and waits synchronously for its return
  */
 int
-pnfsd_lexp_recall_layout(struct inode *inode)
+pnfsd_lexp_recall_layout(struct inode *inode, bool with_nfs4_state_lock)
 {
 	struct nfs4_file *fp;
 	struct nfsd4_pnfs_cb_layout cbl;
@@ -281,7 +281,7 @@ pnfsd_lexp_recall_layout(struct inode *inode)
 
 	while (has_layout(fp)) {
 		dprintk("%s: recalling layout\n", __func__);
-		status = nfsd_layout_recall_cb(inode->i_sb, inode, &cbl);
+		status = _nfsd_layout_recall_cb(inode->i_sb, inode, &cbl, with_nfs4_state_lock);
 
 		switch (status) {
 		case 0:
