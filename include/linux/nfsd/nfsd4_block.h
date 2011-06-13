@@ -93,7 +93,7 @@ int bl_layoutcommit(struct inode *,
 		    struct nfsd4_pnfs_layoutcommit_res *);
 int bl_layoutreturn(struct inode *,
 		    const struct nfsd4_pnfs_layoutreturn_arg *);
-int bl_layoutrecall(struct inode *inode, int type, u64 offset, u64 len);
+int bl_layoutrecall(struct inode *inode, int type, u64 offset, u64 len, bool with_nfs4_state_lock);
 int bl_init_proc(void);
 int bl_upcall(bl_comm_t *, bl_comm_msg_t *, bl_comm_res_t **);
 
