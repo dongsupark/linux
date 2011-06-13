@@ -1460,8 +1460,9 @@ spawn_layout_recall(struct super_block *sb, struct list_head *todolist,
  * Spawn a thread to perform a recall layout
  *
  */
-int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
-			  struct nfsd4_pnfs_cb_layout *cbl)
+int
+_nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
+		       struct nfsd4_pnfs_cb_layout *cbl, bool with_nfs4_state_lock)
 {
 	int status;
 	struct nfs4_file *lrfile = NULL;
@@ -1483,7 +1484,8 @@ int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 		return -ENOENT;
 	}
 
-	nfs4_lock_state();
+	if (!with_nfs4_state_lock)
+		nfs4_lock_state();
 	status = -ENOENT;
 	if (inode) {
 		lrfile = find_file(inode);
@@ -1514,10 +1516,18 @@ int nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 	}
 
 err:
-	nfs4_unlock_state();
+	if (!with_nfs4_state_lock)
+		nfs4_unlock_state();
 	if (lrfile)
 		put_nfs4_file(lrfile);
 	return (todo_len && status) ? -EAGAIN : status;
+}
+
+int
+nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
+		      struct nfsd4_pnfs_cb_layout *cbl)
+{
+	return _nfsd_layout_recall_cb(sb, inode, cbl, false);
 }
 
 struct create_device_notify_list_arg {
