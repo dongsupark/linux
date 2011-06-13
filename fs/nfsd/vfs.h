@@ -46,8 +46,26 @@ __be32		nfsd_lookup(struct svc_rqst *, struct svc_fh *,
 __be32		 nfsd_lookup_dentry(struct svc_rqst *, struct svc_fh *,
 				const char *, unsigned int,
 				struct svc_export **, struct dentry **);
-__be32		nfsd_setattr(struct svc_rqst *, struct svc_fh *,
-				struct iattr *, int, time_t);
+__be32		_nfsd_setattr(struct svc_rqst *, struct svc_fh *,
+			      struct iattr *, int, time_t,
+			      bool with_nfs4_state_lock);
+
+/* call when nfs4_lock_state has not been taken */
+static inline __be32
+nfsd_setattr(struct svc_rqst *rqstp, struct svc_fh *fhp,
+	     struct iattr *iap, int check_guard, time_t guardtime)
+{
+	return _nfsd_setattr(rqstp, fhp, iap, check_guard, guardtime, false);
+}
+
+/* call when nfs4_lock_state is taken */
+static inline __be32
+nfsd_setattr_locked(struct svc_rqst *rqstp, struct svc_fh *fhp,
+		    struct iattr *iap, int check_guard, time_t guardtime)
+{
+	return _nfsd_setattr(rqstp, fhp, iap, check_guard, guardtime, true);
+}
+
 int nfsd_mountpoint(struct dentry *, struct svc_export *);
 #ifdef CONFIG_NFSD_V4
 __be32          nfsd4_set_nfs4_acl(struct svc_rqst *, struct svc_fh *,
