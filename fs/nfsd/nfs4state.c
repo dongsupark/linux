@@ -65,7 +65,8 @@ static int check_for_locks(struct nfs4_file *filp, struct nfs4_lockowner *lowner
 
 /* Currently used for almost all code touching nfsv4 state: */
 static DEFINE_MUTEX(client_mutex);
-struct task_struct *client_mutex_owner;
+static struct task_struct *client_mutex_owner;
+static const char *client_mutex_func;
 
 /*
  * Currently used for the del_recall_lru and file hash table.  In an
@@ -81,10 +82,16 @@ static struct kmem_cache *stateid_slab = NULL;
 static struct kmem_cache *deleg_slab = NULL;
 
 void
-nfs4_lock_state(void)
+__nfs4_lock_state(const char *func)
 {
-	mutex_lock(&client_mutex);
+	if (!mutex_trylock(&client_mutex)) {
+		printk("state lock taken by pid=%d func=%s\n",
+		       task_pid_nr(client_mutex_owner),
+		       client_mutex_func);
+		mutex_lock(&client_mutex);
+	}
 	client_mutex_owner = current;
+	client_mutex_func = func;
 }
 
 #define BUG_ON_UNLOCKED_STATE() BUG_ON(client_mutex_owner != current)
