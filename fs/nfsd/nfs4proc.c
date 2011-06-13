@@ -925,7 +925,7 @@ nfsd4_write(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 #if defined(CONFIG_SPNFS_BLOCK)
 	if (pnfs_block_enabled(cstate->current_fh.fh_dentry->d_inode, 0)) {
                 status = bl_layoutrecall(cstate->current_fh.fh_dentry->d_inode,
-		    RETURN_FILE, write->wr_offset, write->wr_buflen);
+		    RETURN_FILE, write->wr_offset, write->wr_buflen, false);
                 if (!status) {
                         status =  nfsd_write(rqstp, &cstate->current_fh, filp,
 			     write->wr_offset, rqstp->rq_vec, write->wr_vlen,
