@@ -266,7 +266,8 @@ pnfsd_lexp_recall_layout(struct inode *inode, bool with_nfs4_state_lock)
 
 	dprintk("%s: begin\n", __func__);
 	fp = find_file(inode);
-	BUG_ON(!fp);
+	if (!fp)
+		goto out_nofp;
 
 	if (!has_layout(fp))
 		goto out;
@@ -305,6 +306,7 @@ pnfsd_lexp_recall_layout(struct inode *inode, bool with_nfs4_state_lock)
 	}
 out:
 	put_nfs4_file(fp);
+out_nofp:
 	dprintk("%s: status=%d\n", __func__, status);
 	return status;
 }
