@@ -900,6 +900,8 @@ pnfs_find_lseg(struct pnfs_layout_hdr *lo,
 			ret = get_lseg(lseg);
 			break;
 		}
+		if (lseg->pls_range.offset > range->offset)
+			break;
 	}
 
 	dprintk("%s:Return lseg %p ref %d\n",
