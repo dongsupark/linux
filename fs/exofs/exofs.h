@@ -228,4 +228,11 @@ static inline void exofs_init_comps(struct ore_components *oc,
 	oc->ods = &sbi->oc.ods[first_dev];
 }
 
+/* export.c */
+#ifdef CONFIG_PNFSD
+void exofs_init_export(struct super_block *sb);
+#else
+static inline void exofs_init_export(struct super_block *sb) {}
+#endif
+
 #endif
