@@ -294,8 +294,12 @@ pnfsd_lexp_recall_layout(struct inode *inode, bool with_nfs4_state_lock)
 			goto out;
 		}
 
-		dprintk("%s: waiting status=%d\n", __func__, status);
+		if (with_nfs4_state_lock)
+			nfs4_unlock_state();
 		status = wait_event_interruptible(lo_recall_wq, !has_layout(fp));
+		if (with_nfs4_state_lock)
+			nfs4_lock_state();
+		dprintk("%s: waiting status=%d\n", __func__, status);
 		if (status)
 			break;
 	}
