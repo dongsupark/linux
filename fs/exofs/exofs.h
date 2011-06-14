@@ -81,6 +81,7 @@ struct exofs_sb_info {
 struct exofs_i_info {
 	struct inode   vfs_inode;          /* normal in-memory inode          */
 	wait_queue_head_t i_wq;            /* wait queue for inode            */
+	spinlock_t     i_layout_lock;      /* lock for layout/return/recall   */
 	unsigned long  i_flags;            /* various atomic flags            */
 	uint32_t       i_data[EXOFS_IDATA];/*short symlink names and device #s*/
 	uint32_t       i_dir_start_lookup; /* which page to start lookup      */
@@ -99,6 +100,9 @@ static inline osd_id exofs_oi_objno(struct exofs_i_info *oi)
  */
 #define OBJ_2BCREATED	0	/* object will be created soon*/
 #define OBJ_CREATED	1	/* object has been created on the osd*/
+/* Below are not used atomic but reuse the same i_flags */
+#define OBJ_LAYOUT_IS_GIVEN  2  /* inode has given layouts to clients*/
+#define OBJ_IN_LAYOUT_RECALL 3  /* inode is in the middle of a layout recall*/
 
 static inline int obj_2bcreated(struct exofs_i_info *oi)
 {
@@ -229,9 +233,19 @@ static inline void exofs_init_comps(struct ore_components *oc,
 }
 
 /* export.c */
+typedef int (exofs_recall_fn)(struct inode *inode, u64 data);
 #ifdef CONFIG_PNFSD
+int exofs_inode_recall_layout(struct inode *inode, enum pnfs_iomode iomode,
+			      exofs_recall_fn todo, u64 todo_data);
 void exofs_init_export(struct super_block *sb);
 #else
+static inline int
+exofs_inode_recall_layout(struct inode *inode, enum pnfs_iomode iomode,
+exofs_recall_fn todo, u64 todo_data)
+{
+	return todo(inode, todo_data);
+}
+
 static inline void exofs_init_export(struct super_block *sb) {}
 #endif
 
