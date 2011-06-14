@@ -185,11 +185,65 @@ static int exofs_layout_return(
 	return 0;
 }
 
+int exofs_get_device_info(struct super_block *sb, struct exp_xdr_stream *xdr,
+			  u32 layout_type,
+			  const struct nfsd4_pnfs_deviceid *devid)
+{
+	struct exofs_sb_info *sbi = sb->s_fs_info;
+	struct pnfs_osd_deviceaddr devaddr;
+	const struct osd_dev_info *odi;
+	u64 devno = devid->devid;
+	__be32 *start;
+	int err;
+
+	memset(&devaddr, 0, sizeof(devaddr));
+
+	if (unlikely(devno >= sbi->layout.s_numdevs)) {
+		EXOFS_DBGMSG("Error: Device((%llx,%llx) does not exist\n",
+			     devid->sbid, devno);
+		return -ENODEV;
+	}
+
+	odi = osduld_device_info(sbi->layout.s_ods[devno]);
+
+	devaddr.oda_systemid.len = odi->systemid_len;
+	devaddr.oda_systemid.data = (void *)odi->systemid; /* !const cast */
+
+	devaddr.oda_osdname.len = odi->osdname_len ;
+	devaddr.oda_osdname.data = (void *)odi->osdname;/* !const cast */
+
+	/* skip opaque size, will be filled-in later */
+	start = exp_xdr_reserve_qwords(xdr, 1);
+	if (!start) {
+		err = -ETOOSMALL;
+		goto err;
+	}
+
+	err = pnfs_osd_xdr_encode_deviceaddr(xdr, &devaddr);
+	if (err) {
+		err = -ETOOSMALL;
+		goto err;
+	}
+
+	exp_xdr_encode_opaque_len(start, xdr->p);
+
+	EXOFS_DBGMSG("xdr_bytes=%Zu devid=(%llx,%llx) osdname-%s\n",
+		     exp_xdr_qbytes(xdr->p - start), devid->sbid, devno,
+		     odi->osdname);
+	return 0;
+
+err:
+	EXOFS_DBGMSG("Error: err=%d at_byte=%zu\n",
+		     err, exp_xdr_qbytes(xdr->p - start));
+	return err;
+}
+
 struct pnfs_export_operations exofs_pnfs_ops = {
 	.layout_type	= exofs_layout_type,
 	.layout_get	= exofs_layout_get,
 	.layout_commit	= exofs_layout_commit,
 	.layout_return	= exofs_layout_return,
+	.get_device_info = exofs_get_device_info,
 };
 
 void exofs_init_export(struct super_block *sb)
