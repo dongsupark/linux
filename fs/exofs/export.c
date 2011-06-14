@@ -229,11 +229,31 @@ static int exofs_layout_commit(
 	return 0;
 }
 
+static void exofs_handle_error(struct pnfs_osd_ioerr *ioerr)
+{
+	EXOFS_ERR("exofs_handle_error: errno=%d is_write=%d obj=0x%llx "
+		  "offset=0x%llx length=0x%llx\n",
+		  ioerr->oer_errno, ioerr->oer_iswrite,
+		  _LLU(ioerr->oer_component.oid_object_id),
+		  _LLU(ioerr->oer_comp_offset),
+		  _LLU(ioerr->oer_comp_length));
+}
+
 static int exofs_layout_return(
 	struct inode *inode,
 	const struct nfsd4_pnfs_layoutreturn_arg *args)
 {
-	/* TODO: Decode the pnfs_osd_ioerr if lrf_body_len > 0 */
+	struct exp_xdr_stream xdr = {
+		.p = args->lrf_body,
+		.end = args->lrf_body + exp_xdr_qwords(args->lrf_body_len),
+	};
+	struct pnfs_osd_ioerr ioerr;
+
+	EXOFS_DBGMSG("(0x%lx) cookie %p body_len %d\n",
+		     inode->i_ino, args->lr_cookie, args->lrf_body_len);
+
+	while (pnfs_osd_xdr_decode_ioerr(&ioerr, &xdr))
+		exofs_handle_error(&ioerr);
 
 	if (args->lr_cookie) {
 		struct exofs_i_info *oi = exofs_i(inode);
