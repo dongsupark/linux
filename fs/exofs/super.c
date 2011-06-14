@@ -814,6 +814,7 @@ static int exofs_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_fs_info = sbi;
 	sb->s_op = &exofs_sops;
 	sb->s_export_op = &exofs_export_ops;
+	exofs_init_export(sb);
 	root = exofs_iget(sb, EXOFS_ROOT_ID - EXOFS_OBJ_OFF);
 	if (IS_ERR(root)) {
 		EXOFS_ERR("ERROR: exofs_iget failed\n");
