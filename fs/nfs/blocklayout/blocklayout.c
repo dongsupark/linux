@@ -498,8 +498,6 @@ bl_write_pagelist(struct nfs_write_data *wdata,
 	if (count < wdata->res.count) {
 		wdata->res.count = count;
 	}
-	/* pnfs_set_layoutcommit needs this */
-	wdata->mds_offset = offset;
 	put_extent(be);
 	bl_submit_bio(WRITE, bio);
 	put_parallel(par);
