@@ -685,13 +685,15 @@ EXPORT_SYMBOL(panfs_shim_unregister);
 #define PANLAYOUT_MAX_GATHER_STRIPES 8
 
 static const struct nfs_pageio_ops panfs_shim_pg_read_ops = {
+	.pg_init = pnfs_generic_pg_init_read,
 	.pg_test = panfs_shim_pg_test,
-	.pg_doio = nfs_generic_pg_readpages,
+	.pg_doio = pnfs_generic_pg_readpages,
 };
 
 static const struct nfs_pageio_ops panfs_shim_pg_write_ops = {
+	.pg_init = pnfs_generic_pg_init_write,
 	.pg_test = panfs_shim_pg_test,
-	.pg_doio = nfs_generic_pg_writepages,
+	.pg_doio = pnfs_generic_pg_writepages,
 };
 
 /*
