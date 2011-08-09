@@ -125,7 +125,6 @@ int nfs4_pnfs_cb_change_state(struct pnfs_get_state *);
 void nfs4_ds_get_verifier(stateid_t *, struct super_block *, u32 *);
 int put_layoutrecall(struct nfs4_layoutrecall *);
 void nomatching_layout(struct nfs4_layoutrecall *);
-void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp);
 void *layoutrecall_done(struct nfs4_layoutrecall *);
 void nfsd4_cb_layout(struct nfs4_layoutrecall *);
 int _nfsd_layout_recall_cb(struct super_block *, struct inode *,
