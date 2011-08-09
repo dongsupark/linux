@@ -73,6 +73,13 @@ err:
 	return status;
 }
 
+static unsigned exofs_layout_od_id(struct ore_layout *layout,
+				   struct ore_components *comps,
+				   osd_id obj_no, unsigned layout_index)
+{
+	return (layout_index + obj_no * layout->mirrors_p1) % comps->numdevs;
+}
+
 static enum nfsstat4 exofs_layout_get(
 	struct inode *inode,
 	struct exp_xdr_stream *xdr,
@@ -81,7 +88,8 @@ static enum nfsstat4 exofs_layout_get(
 {
 	struct exofs_i_info *oi = exofs_i(inode);
 	struct exofs_sb_info *sbi = inode->i_sb->s_fs_info;
-	struct exofs_layout *el = &sbi->layout;
+	struct ore_layout *el = &sbi->layout;
+	struct ore_components *ec = &sbi->comps;
 	struct pnfs_osd_object_cred *creds = NULL;
 	struct pnfs_osd_layout layout;
 	__be32 *start;
@@ -104,7 +112,7 @@ static enum nfsstat4 exofs_layout_get(
 	/* Fill in a pnfs_osd_layout struct */
 	layout.olo_map = sbi->data_map;
 	layout.olo_comps_index = 0;
-	layout.olo_num_comps = el->s_numdevs;
+	layout.olo_num_comps = ec->numdevs;
 	layout.olo_comps = creds;
 
 	nfserr = pnfs_osd_xdr_encode_layout_hdr(xdr, &layout);
@@ -112,16 +120,19 @@ static enum nfsstat4 exofs_layout_get(
 		goto out;
 
 	/* Encode layout components */
-	for (i = 0; i < el->s_numdevs; i++) {
+	for (i = 0; i < ec->numdevs; i++) {
 		struct pnfs_osd_object_cred cred;
-		osd_id id = exofs_oi_objno(oi);
-		unsigned dev = exofs_layout_od_id(el, id, i);
+		struct osd_obj_id oid = {
+			.partition = sbi->one_comp.obj.partition,
+			.id = exofs_oi_objno(oi)
+		};
+		unsigned dev = exofs_layout_od_id(el, ec, oid.id, i);
 
 		set_dev_id(&cred.oc_object_id.oid_device_id, args->lg_sbid,
 			   dev);
-		cred.oc_object_id.oid_partition_id = el->s_pid;
-		cred.oc_object_id.oid_object_id = id;
-		cred.oc_osd_version = osd_dev_is_ver1(el->s_ods[dev]) ?
+		cred.oc_object_id.oid_partition_id = oid.partition;
+		cred.oc_object_id.oid_object_id = oid.id;
+		cred.oc_osd_version = osd_dev_is_ver1(ec->ods[dev]) ?
 						PNFS_OSD_VERSION_1 :
 						PNFS_OSD_VERSION_2;
 		cred.oc_cap_key_sec = PNFS_OSD_CAP_KEY_SEC_NONE;
@@ -130,7 +141,7 @@ static enum nfsstat4 exofs_layout_get(
 		cred.oc_cap_key.cred		= NULL;
 
 		cred.oc_cap.cred_len	= OSD_CAP_LEN;
-		cred.oc_cap.cred	= oi->i_cred;
+		exofs_make_credential(cred.oc_cap.cred, &oid);
 		nfserr = pnfs_osd_xdr_encode_layout_cred(xdr, &cred);
 		if (unlikely(nfserr))
 			goto out;
@@ -277,6 +288,7 @@ int exofs_get_device_info(struct super_block *sb, struct exp_xdr_stream *xdr,
 			  const struct nfsd4_pnfs_deviceid *devid)
 {
 	struct exofs_sb_info *sbi = sb->s_fs_info;
+	struct ore_components *ec = &sbi->comps;
 	struct pnfs_osd_deviceaddr devaddr;
 	const struct osd_dev_info *odi;
 	u64 devno = devid->devid;
@@ -285,13 +297,13 @@ int exofs_get_device_info(struct super_block *sb, struct exp_xdr_stream *xdr,
 
 	memset(&devaddr, 0, sizeof(devaddr));
 
-	if (unlikely(devno >= sbi->layout.s_numdevs)) {
+	if (unlikely(devno >= ec->numdevs)) {
 		EXOFS_DBGMSG("Error: Device((%llx,%llx) does not exist\n",
 			     devid->sbid, devno);
 		return -ENODEV;
 	}
 
-	odi = osduld_device_info(sbi->layout.s_ods[devno]);
+	odi = osduld_device_info(ec->ods[devno]);
 
 	devaddr.oda_systemid.len = odi->systemid_len;
 	devaddr.oda_systemid.data = (void *)odi->systemid; /* !const cast */
