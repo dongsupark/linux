@@ -1336,7 +1336,7 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
  *   the layout and simulate a layout_return. Surly the client has forgotten
  *   these layouts or it would return them before the close.
  */
-void pnfs_roc(struct nfs4_client *clp, struct nfs4_file *fp)
+void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
 {
 	struct nfs4_layout *lo, *nextlp;
 
