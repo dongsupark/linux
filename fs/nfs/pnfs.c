@@ -38,7 +38,7 @@
 /* Locking:
  *
  * pnfs_spinlock:
- *      protects pnfs_modules_tbl.
+ *      protects pnfs_modules_tbl, pnfsiod_workqueue and pnfsiod_users.
  */
 static DEFINE_SPINLOCK(pnfs_spinlock);
 
@@ -46,6 +46,9 @@ static DEFINE_SPINLOCK(pnfs_spinlock);
  * pnfs_modules_tbl holds all pnfs modules
  */
 static LIST_HEAD(pnfs_modules_tbl);
+
+static struct workqueue_struct *pnfsiod_workqueue;
+static int pnfsiod_users = 0;
 
 /* Return the registered pnfs layout driver module matching given id */
 static struct pnfs_layoutdriver_type *
@@ -1478,3 +1481,50 @@ out:
 	dprintk("<-- %s status %d\n", __func__, status);
 	return status;
 }
+
+/*
+ * start up the pnfsiod workqueue
+ */
+int pnfsiod_start(void)
+{
+	struct workqueue_struct *wq;
+	dprintk("RPC:       creating workqueue pnfsiod\n");
+	wq = alloc_workqueue("pnfsiod", WQ_MEM_RECLAIM, 0);
+	if (wq == NULL)
+		return -ENOMEM;
+	spin_lock(&pnfs_spinlock);
+	pnfsiod_users++;
+	if (pnfsiod_workqueue == NULL) {
+		pnfsiod_workqueue = wq;
+	} else {
+		destroy_workqueue(wq);
+	}
+	spin_unlock(&pnfs_spinlock);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(pnfsiod_start);
+
+/*
+ * Destroy the pnfsiod workqueue
+ */
+void pnfsiod_stop(void)
+{
+	struct workqueue_struct *wq = NULL;
+
+	spin_lock(&pnfs_spinlock);
+	pnfsiod_users--;
+	if (pnfsiod_users == 0) {
+		wq = pnfsiod_workqueue;
+		pnfsiod_workqueue = NULL;
+	}
+	spin_unlock(&pnfs_spinlock);
+	if (wq)
+		destroy_workqueue(wq);
+}
+EXPORT_SYMBOL_GPL(pnfsiod_stop);
+
+void pnfsiod_queue_work(struct work_struct* work)
+{
+	queue_work(pnfsiod_workqueue, work);
+}
+EXPORT_SYMBOL_GPL(pnfsiod_queue_work);

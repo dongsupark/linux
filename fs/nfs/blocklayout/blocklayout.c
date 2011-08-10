@@ -228,7 +228,7 @@ bl_end_par_io_read(void *data)
 	struct nfs_read_data *rdata = data;
 
 	INIT_WORK(&rdata->task.u.tk_work, bl_read_cleanup);
-	schedule_work(&rdata->task.u.tk_work);
+	pnfsiod_queue_work(&rdata->task.u.tk_work);
 }
 
 /* We don't want normal .rpc_call_done callback used, so we replace it
@@ -418,7 +418,7 @@ static void bl_end_par_io_write(void *data)
 	wdata->task.tk_status = 0;
 	wdata->verf.committed = NFS_FILE_SYNC;
 	INIT_WORK(&wdata->task.u.tk_work, bl_write_cleanup);
-	schedule_work(&wdata->task.u.tk_work);
+	pnfsiod_queue_work(&wdata->task.u.tk_work);
 }
 
 /* FIXME STUB - mark intersection of layout and page as bad, so is not
@@ -977,9 +977,13 @@ static int __init nfs4blocklayout_init(void)
 
 	dprintk("%s: NFSv4 Block Layout Driver Registering...\n", __func__);
 
-	ret = pnfs_register_layoutdriver(&blocklayout_type);
+	ret = pnfsiod_start();
 	if (ret)
 		goto out;
+
+	ret = pnfs_register_layoutdriver(&blocklayout_type);
+	if (ret)
+		goto out_stop;
 
 	init_waitqueue_head(&bl_wq);
 
@@ -1009,6 +1013,8 @@ out_putrpc:
 	rpc_put_mount();
 out_remove:
 	pnfs_unregister_layoutdriver(&blocklayout_type);
+out_stop:
+	pnfsiod_stop();
 	return ret;
 }
 
@@ -1018,6 +1024,7 @@ static void __exit nfs4blocklayout_exit(void)
 	       __func__);
 
 	pnfs_unregister_layoutdriver(&blocklayout_type);
+	pnfsiod_stop();
 	rpc_unlink(bl_device_pipe);
 	rpc_put_mount();
 }
