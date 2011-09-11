@@ -81,19 +81,19 @@ int
 nfsd_spnfs_new(void)
 {
 	struct spnfs *spnfs = NULL;
+	struct vfsmount *mnt;
 	struct path path;
-	struct nameidata nd;
 	int rc;
 
 	if (global_spnfs != NULL)
 		return -EEXIST;
 
-	path.mnt = rpc_get_mount();
-	if (IS_ERR(path.mnt))
-		return PTR_ERR(path.mnt);
+	mnt = rpc_get_mount();
+	if (IS_ERR(mnt))
+		return PTR_ERR(mnt);
 
 	/* FIXME: do not abuse rpc_pipefs/nfs */
-	rc = vfs_path_lookup(path.mnt->mnt_root, path.mnt, "/nfs", 0, &nd);
+	rc = vfs_path_lookup(mnt->mnt_root, mnt, "/nfs", 0, &path);
 	if (rc)
 		goto err;
 
@@ -103,7 +103,7 @@ nfsd_spnfs_new(void)
 		goto err;
 	}
 
-	spnfs->spnfs_dentry = rpc_mkpipe(nd.path.dentry, "spnfs", spnfs,
+	spnfs->spnfs_dentry = rpc_mkpipe(path.dentry, "spnfs", spnfs,
 					 &spnfs_upcall_ops, 0);
 	if (IS_ERR(spnfs->spnfs_dentry)) {
 		rc = -EPIPE;
