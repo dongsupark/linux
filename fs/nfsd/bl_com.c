@@ -38,20 +38,20 @@ int
 nfsd_bl_start(void)
 {
 	bl_comm_t	*bl_comm = NULL;
+	struct vfsmount *mnt;
 	struct path path;
-	struct nameidata nd;
 	int rc;
 
 	dprintk("%s: starting pipe\n", __func__);
 	if (bl_comm_global)
 		return -EEXIST;
 
-	path.mnt = rpc_get_mount();
-	if (IS_ERR(path.mnt))
-		return PTR_ERR(path.mnt);
+	mnt = rpc_get_mount();
+	if (IS_ERR(mnt))
+		return PTR_ERR(mnt);
 
 	/* FIXME: do not abuse rpc_pipefs/nfs */
-	rc = vfs_path_lookup(path.mnt->mnt_root, path.mnt, "/nfs", 0, &nd);
+	rc = vfs_path_lookup(mnt->mnt_root, mnt, "/nfs", 0, &path);
 	if (rc)
 		goto err;
 
@@ -62,7 +62,7 @@ nfsd_bl_start(void)
 	}
 
 	/* FIXME: rename to "spnfs_block" */
-	bl_comm->pipe_dentry = rpc_mkpipe(nd.path.dentry, "pnfs_block", bl_comm,
+	bl_comm->pipe_dentry = rpc_mkpipe(path.dentry, "pnfs_block", bl_comm,
 					 &bl_upcall_ops, 0);
 	if (IS_ERR(bl_comm->pipe_dentry)) {
 		rc = -EPIPE;
