@@ -76,13 +76,22 @@ err:
 void ore_layout_2_pnfs_layout(struct pnfs_osd_layout *pl,
 			      const struct ore_layout *ol)
 {
-	pl->olo_map.odm_num_comps = ol->group_width * ol->mirrors_p1 *
-				    ol->group_count;
 	pl->olo_map.odm_stripe_unit = ol->stripe_unit;
-	pl->olo_map.odm_group_width = ol->group_width;
-	pl->olo_map.odm_group_depth = ol->group_depth;
 	pl->olo_map.odm_mirror_cnt = ol->mirrors_p1 - 1;
 	pl->olo_map.odm_raid_algorithm = ol->raid_algorithm;
+	if (ol->group_count > 1) {
+		pl->olo_map.odm_num_comps = ol->group_width * ol->mirrors_p1 *
+				    ol->group_count;
+		pl->olo_map.odm_group_width = ol->group_width;
+		pl->olo_map.odm_group_depth = ol->group_depth;
+	} else {
+		/* If we don't do this here group_depth will not be correct
+		 * because it is 32 bit only in pNFS
+		 */
+		pl->olo_map.odm_num_comps = ol->group_width * ol->mirrors_p1;
+		pl->olo_map.odm_group_width = 0;
+		pl->olo_map.odm_group_depth = 0;
+	}
 }
 
 static enum nfsstat4 exofs_layout_get(
