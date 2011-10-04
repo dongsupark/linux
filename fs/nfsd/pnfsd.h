@@ -40,6 +40,12 @@
 #include "state.h"
 #include "xdr4.h"
 
+/* outstanding layout stateid */
+struct nfs4_layout_state {
+	struct kref		ls_ref;
+	struct nfs4_stid	ls_stid;
+};
+
 /* outstanding layout */
 struct nfs4_layout {
 	struct list_head		lo_perfile;	/* hash by f_id */
