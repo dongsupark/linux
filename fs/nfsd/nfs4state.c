@@ -235,7 +235,7 @@ static inline int get_new_stid(struct nfs4_stid *stid)
 	return new_stid;
 }
 
-static inline __be32 init_stid(struct nfs4_stid *stid, struct nfs4_client *cl, unsigned char type)
+__be32 nfsd4_init_stid(struct nfs4_stid *stid, struct nfs4_client *cl, unsigned char type)
 {
 	stateid_t *s = &stid->sc_stateid;
 	int new_id;
@@ -274,7 +274,7 @@ alloc_init_deleg(struct nfs4_client *clp, struct nfs4_ol_stateid *stp, struct sv
 	dp = kmem_cache_alloc(deleg_slab, GFP_KERNEL);
 	if (dp == NULL)
 		return dp;
-	status = init_stid(&dp->dl_stid, clp, NFS4_DELEG_STID);
+	status = nfsd4_init_stid(&dp->dl_stid, clp, NFS4_DELEG_STID);
 	if (status) {
 		kmem_cache_free(deleg_slab, dp);
 		return NULL;
@@ -320,7 +320,7 @@ static void nfs4_put_deleg_lease(struct nfs4_file *fp)
 	}
 }
 
-static void unhash_stid(struct nfs4_stid *s)
+void nfsd4_unhash_stid(struct nfs4_stid *s)
 {
 	struct idr *stateids = &s->sc_client->cl_stateids;
 
@@ -331,7 +331,7 @@ static void unhash_stid(struct nfs4_stid *s)
 static void
 unhash_delegation(struct nfs4_delegation *dp)
 {
-	unhash_stid(&dp->dl_stid);
+	nfsd4_unhash_stid(&dp->dl_stid);
 	list_del_init(&dp->dl_perclnt);
 	spin_lock(&recall_lock);
 	list_del_init(&dp->dl_perfile);
@@ -484,7 +484,7 @@ static void release_lock_stateid(struct nfs4_ol_stateid *stp)
 	struct file *file;
 
 	unhash_generic_stateid(stp);
-	unhash_stid(&stp->st_stid);
+	nfsd4_unhash_stid(&stp->st_stid);
 	file = find_any_file(stp->st_file);
 	if (file)
 		locks_remove_posix(file, (fl_owner_t)lockowner(stp->st_stateowner));
@@ -533,7 +533,7 @@ static void unhash_open_stateid(struct nfs4_ol_stateid *stp)
 static void release_open_stateid(struct nfs4_ol_stateid *stp)
 {
 	unhash_open_stateid(stp);
-	unhash_stid(&stp->st_stid);
+	nfsd4_unhash_stid(&stp->st_stid);
 	free_generic_stateid(stp);
 }
 
@@ -555,7 +555,7 @@ static void release_last_closed_stateid(struct nfs4_openowner *oo)
 	struct nfs4_ol_stateid *s = oo->oo_last_closed_stid;
 
 	if (s) {
-		unhash_stid(&s->st_stid);
+		nfsd4_unhash_stid(&s->st_stid);
 		free_generic_stateid(s);
 		oo->oo_last_closed_stid = NULL;
 	}
@@ -2363,7 +2363,7 @@ static inline __be32 init_open_stateid(struct nfs4_ol_stateid *stp, struct nfs4_
 	struct nfs4_client *clp = oo->oo_owner.so_client;
 	__be32 status;
 
-	status = init_stid(&stp->st_stid, clp, NFS4_OPEN_STID);
+	status = nfsd4_init_stid(&stp->st_stid, clp, NFS4_OPEN_STID);
 	if (status)
 		return status;
 	INIT_LIST_HEAD(&stp->st_lockowners);
@@ -3863,7 +3863,7 @@ alloc_init_lock_stateid(struct nfs4_lockowner *lo, struct nfs4_file *fp, struct 
 	stp = nfs4_alloc_stateid();
 	if (stp == NULL)
 		return NULL;
-	status = init_stid(&stp->st_stid, clp, NFS4_LOCK_STID);
+	status = nfsd4_init_stid(&stp->st_stid, clp, NFS4_LOCK_STID);
 	if (status) {
 		free_generic_stateid(stp);
 		return NULL;
