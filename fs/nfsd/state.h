@@ -79,6 +79,7 @@ struct nfs4_stid {
 #define NFS4_DELEG_STID 4
 /* For an open stateid kept around *only* to process close replays: */
 #define NFS4_CLOSED_STID 8
+#define NFS4_LAYOUT_STID 16
 	unsigned char sc_type;
 	stateid_t sc_stateid;
 	struct nfs4_client *sc_client;
@@ -502,6 +503,8 @@ extern struct nfs4_file *find_alloc_file(struct inode *, struct svc_fh *);
 extern void put_nfs4_file(struct nfs4_file *);
 extern void get_nfs4_file(struct nfs4_file *);
 extern struct nfs4_client *find_confirmed_client(clientid_t *);
+extern void nfsd4_init_stid(struct nfs4_stid *, struct nfs4_client *, unsigned char type);
+extern void nfsd4_unhash_stid(struct nfs4_stid *);
 
 #if defined(CONFIG_PNFSD)
 extern int nfsd4_init_pnfs_slabs(void);
