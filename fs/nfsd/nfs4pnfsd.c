@@ -31,6 +31,7 @@ static DEFINE_SPINLOCK(layout_lock);
  * Layout state - NFSv4.1 pNFS
  */
 static struct kmem_cache *pnfs_layout_slab;
+static struct kmem_cache *layout_state_slab;
 
 /* hash table for nfsd4_pnfs_deviceid.sbid */
 #define SBID_HASH_BITS	8
@@ -74,6 +75,7 @@ nfsd4_free_pnfs_slabs(void)
 	struct sbid_tracker *sbid;
 
 	nfsd4_free_slab(&pnfs_layout_slab);
+	nfsd4_free_slab(&layout_state_slab);
 
 	for (i = 0; i < SBID_HASH_SIZE; i++) {
 		while (!list_empty(&sbid_hashtbl[i])) {
@@ -95,10 +97,55 @@ nfsd4_init_pnfs_slabs(void)
 	if (pnfs_layout_slab == NULL)
 		return -ENOMEM;
 
+	layout_state_slab = kmem_cache_create("pnfs_layout_states",
+			sizeof(struct nfs4_layout_state), 0, 0, NULL);
+	if (layout_state_slab == NULL)
+		return -ENOMEM;
+
 	for (i = 0; i < SBID_HASH_SIZE; i++)
 		INIT_LIST_HEAD(&sbid_hashtbl[i]);
 
 	return 0;
+}
+
+/*
+ * Note: must be called under the state lock
+ */
+static struct nfs4_layout_state *
+alloc_init_layout_state(struct nfs4_client *clp, stateid_t *stateid)
+{
+	struct nfs4_layout_state *new;
+
+	new = kmem_cache_alloc(layout_state_slab, GFP_KERNEL);
+	if (!new)
+		return new;
+	kref_init(&new->ls_ref);
+	nfsd4_init_stid(&new->ls_stid, clp, NFS4_LAYOUT_STID);
+	return new;
+}
+
+static void
+get_layout_state(struct nfs4_layout_state *ls)
+{
+	kref_get(&ls->ls_ref);
+}
+
+static void
+destroy_layout_state(struct kref *kref)
+{
+	struct nfs4_layout_state *ls =
+			container_of(kref, struct nfs4_layout_state, ls_ref);
+
+	nfsd4_unhash_stid(&ls->ls_stid);
+	kfree(ls);
+}
+
+static void
+put_layout_state(struct nfs4_layout_state *ls)
+{
+	dprintk("pNFS %s: ls %p ls_ref %d\n", __func__, ls,
+		atomic_read(&ls->ls_ref.refcount));
+	kref_put(&ls->ls_ref, destroy_layout_state);
 }
 
 static struct nfs4_layout *
