@@ -133,14 +133,14 @@ static enum nfsstat4 exofs_layout_get(
 	/* Encode layout components */
 	for (i = 0; i <  layout.olo_num_comps; i++) {
 		struct pnfs_osd_object_cred cred;
-		unsigned sbi_dev = (oi->comps.ods - sbi->comps.ods + i) %
-							sbi->comps.numdevs;
+		struct exofs_dev *ed = container_of(oi->oc.ods[i],
+							typeof(*ed), ored);
 
 		set_dev_id(&cred.oc_object_id.oid_device_id, args->lg_sbid,
-			   sbi_dev);
+			   ed->did);
 		cred.oc_object_id.oid_partition_id = oi->one_comp.obj.partition;
 		cred.oc_object_id.oid_object_id = oi->one_comp.obj.id;
-		cred.oc_osd_version = osd_dev_is_ver1(oi->comps.ods[i]) ?
+		cred.oc_osd_version = osd_dev_is_ver1(ed->ored.od) ?
 						PNFS_OSD_VERSION_1 :
 						PNFS_OSD_VERSION_2;
 		cred.oc_cap_key_sec = PNFS_OSD_CAP_KEY_SEC_NONE;
@@ -309,13 +309,13 @@ int exofs_get_device_info(struct super_block *sb, struct exp_xdr_stream *xdr,
 
 	memset(&devaddr, 0, sizeof(devaddr));
 
-	if (unlikely(devno >= sbi->comps.numdevs)) {
+	if (unlikely(devno >= sbi->oc.numdevs)) {
 		EXOFS_DBGMSG("Error: Device((%llx,%llx) does not exist\n",
 			     devid->sbid, devno);
 		return -ENODEV;
 	}
 
-	odi = osduld_device_info(sbi->comps.ods[devno]);
+	odi = osduld_device_info(sbi->oc.ods[devno]->od);
 
 	devaddr.oda_systemid.len = odi->systemid_len;
 	devaddr.oda_systemid.data = (void *)odi->systemid; /* !const cast */
