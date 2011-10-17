@@ -140,7 +140,7 @@ static enum nfsstat4 exofs_layout_get(
 	/* Fill in a pnfs_osd_layout struct */
 	ore_layout_2_pnfs_layout(&layout, &sbi->layout);
 
-	ore_calc_stripe_info(&sbi->layout, res->lg_seg.offset, &si);
+	ore_calc_stripe_info(&sbi->layout, res->lg_seg.offset, 0, &si);
 	layout.olo_comps_index = si.dev;
 	layout.olo_num_comps = sbi->layout.group_width * sbi->layout.mirrors_p1;
 
