@@ -2562,6 +2562,12 @@ static struct nfs4_delegation *find_deleg_stateid(struct nfs4_client *cl, statei
 	return delegstateid(ret);
 }
 
+static bool nfsd4_is_deleg_cur(struct nfsd4_open *open)
+{
+	return open->op_claim_type == NFS4_OPEN_CLAIM_DELEGATE_CUR ||
+	       open->op_claim_type == NFS4_OPEN_CLAIM_DELEG_CUR_FH;
+}
+
 static __be32
 nfs4_check_deleg(struct nfs4_client *cl, struct nfs4_file *fp, struct nfsd4_open *open,
 		struct nfs4_delegation **dp)
@@ -2577,7 +2583,7 @@ nfs4_check_deleg(struct nfs4_client *cl, struct nfs4_file *fp, struct nfsd4_open
 	if (status)
 		*dp = NULL;
 out:
-	if (open->op_claim_type != NFS4_OPEN_CLAIM_DELEGATE_CUR)
+	if (!nfsd4_is_deleg_cur(open))
 		return nfs_ok;
 	if (status)
 		return status;
@@ -2882,7 +2888,7 @@ nfsd4_process_open2(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nf
 			goto out;
 	} else {
 		status = nfserr_bad_stateid;
-		if (open->op_claim_type == NFS4_OPEN_CLAIM_DELEGATE_CUR)
+		if (nfsd4_is_deleg_cur(open))
 			goto out;
 		status = nfserr_jukebox;
 		fp = alloc_init_file(ino);
