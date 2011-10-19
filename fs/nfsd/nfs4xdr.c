@@ -2865,6 +2865,19 @@ nfsd4_encode_open(struct nfsd4_compoundres *resp, __be32 nfserr, struct nfsd4_op
 		WRITE32(0);   /* XXX: is NULL principal ok? */
 		ADJUST_ARGS();
 		break;
+	case NFS4_OPEN_DELEGATE_NONE_EXT: /* 4.1 */
+		switch (open->op_why_no_deleg) {
+		case WND4_CONTENTION:
+		case WND4_RESOURCE:
+			RESERVE_SPACE(8);
+			WRITE32(open->op_why_no_deleg);
+			WRITE32(0);	/* deleg signaling not supported yet */
+		default:
+			RESERVE_SPACE(4);
+			WRITE32(open->op_why_no_deleg);
+		}
+		ADJUST_ARGS();
+		break;
 	default:
 		BUG();
 	}
