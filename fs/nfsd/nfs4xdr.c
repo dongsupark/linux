@@ -2842,6 +2842,9 @@ nfsd4_encode_open(struct nfsd4_compoundres *resp, __be32 nfserr, struct nfsd4_op
 		WRITE32(0);   /* XXX: is NULL principal ok? */
 		ADJUST_ARGS();
 		break;
+	case NFS4_OPEN_DELEGATE_NONE_EXT: /* 4.1 */
+		WRITE32(WND4_NOT_WANTED);	/* only reason for now */
+		break;
 	default:
 		BUG();
 	}
