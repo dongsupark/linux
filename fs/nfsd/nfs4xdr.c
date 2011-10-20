@@ -2854,7 +2854,12 @@ nfsd4_encode_open(struct nfsd4_compoundres *resp, __be32 nfserr, struct nfsd4_op
 		ADJUST_ARGS();
 		break;
 	case NFS4_OPEN_DELEGATE_NONE_EXT: /* 4.1 */
-		WRITE32(WND4_NOT_WANTED);	/* only reason for now */
+		WRITE32(open->op_why_no_deleg);
+		switch (open->op_why_no_deleg) {
+		case WND4_CONTENTION:
+		case WND4_RESOURCE:
+			WRITE32(0);	/* deleg signaling not supported yet */
+		}
 		break;
 	default:
 		BUG();
