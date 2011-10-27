@@ -44,6 +44,7 @@
 struct nfs4_layout_state {
 	struct kref		ls_ref;
 	struct nfs4_stid	ls_stid;
+	struct list_head	ls_perfile;
 };
 
 /* outstanding layout */
