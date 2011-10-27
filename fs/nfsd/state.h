@@ -46,6 +46,12 @@ typedef struct {
 	u32             cl_id;
 } clientid_t;
 
+static inline int
+same_clid(clientid_t *cl1, clientid_t *cl2)
+{
+	return (cl1->cl_boot == cl2->cl_boot) && (cl1->cl_id == cl2->cl_id);
+}
+
 typedef struct {
 	clientid_t	so_clid;
 	u32		so_id;
@@ -398,6 +404,7 @@ struct nfs4_file {
 	bool			fi_had_conflict;
 #if defined(CONFIG_PNFSD)
 	struct list_head	fi_layouts;
+	struct list_head	fi_layout_states;
 	/* used by layoutget / layoutrecall */
 	struct nfs4_fsid	fi_fsid;
 	u32			fi_fhlen;

@@ -118,7 +118,8 @@ nfsd4_init_pnfs_slabs(void)
  * Note: must be called under the state lock
  */
 static struct nfs4_layout_state *
-alloc_init_layout_state(struct nfs4_client *clp, stateid_t *stateid)
+alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
+			stateid_t *stateid)
 {
 	struct nfs4_layout_state *new;
 
@@ -127,6 +128,10 @@ alloc_init_layout_state(struct nfs4_client *clp, stateid_t *stateid)
 		return new;
 	kref_init(&new->ls_ref);
 	nfsd4_init_stid(&new->ls_stid, clp, NFS4_LAYOUT_STID);
+	INIT_LIST_HEAD(&new->ls_perfile);
+	spin_lock(&layout_lock);
+	list_add(&new->ls_perfile, &fp->fi_layout_states);
+	spin_unlock(&layout_lock);
 	return new;
 }
 
@@ -143,6 +148,11 @@ destroy_layout_state(struct kref *kref)
 			container_of(kref, struct nfs4_layout_state, ls_ref);
 
 	nfsd4_unhash_stid(&ls->ls_stid);
+	if (!list_empty(&ls->ls_perfile)) {
+		spin_lock(&layout_lock);
+		list_del(&ls->ls_perfile);
+		spin_unlock(&layout_lock);
+	}
 	kfree(ls);
 }
 
@@ -193,7 +203,7 @@ nfs4_process_layout_stateid(struct nfs4_client *clp, struct nfs4_file *fp,
 			goto out;
 		}
 
-		ls = alloc_init_layout_state(clp, stateid);
+		ls = alloc_init_layout_state(clp, fp, stateid);
 		if (!ls) {
 			status = nfserr_jukebox;
 			goto out;
@@ -296,6 +306,7 @@ destroy_layout(struct nfs4_layout *lp)
 		__func__, lp, clp, fp, fp->fi_inode);
 
 	kmem_cache_free(pnfs_layout_slab, lp);
+	list_del_init(&ls->ls_perfile);
 	/* release references taken by init_layout */
 	put_layout_state(ls);
 	put_nfs4_file(fp);
@@ -1042,17 +1053,22 @@ out:
 }
 
 static bool
-cl_has_file_layout(stateid_t *lsid)
+cl_has_file_layout(struct nfs4_client *clp, struct nfs4_file *fp, stateid_t *lsid)
 {
-	__be32 status;
 	struct nfs4_layout_state *ls;
 
-	status = nfsd4_lookup_stateid(lsid, NFS4_LAYOUT_STID, &stid);
-	if (status)
-		return false;
+	spin_lock(&layout_lock);
+	list_for_each_entry (ls, &fp->fi_layout_states, ls_perfile)
+		if (same_clid(&ls->ls_stid.sc_stateid.si_opaque.so_clid,
+			      &clp->cl_clientid)) {
+			goto found;
+		}
+	spin_unlock(&layout_lock);
+	return false;
 
-	ls = container_of(stid, struct nfs4_layout_state, ls_stid);
-	update_layout_stateid(ls, lsid);
+found:
+	update_layout_stateid_locked(ls, lsid);
+	spin_unlock(&layout_lock);
 
 	return true;
 }
@@ -1086,7 +1102,7 @@ cl_has_layout(struct nfs4_client *clp, struct nfsd4_pnfs_cb_layout *cbl,
 {
 	switch (cbl->cbl_recall_type) {
 	case RETURN_FILE:
-		return cl_has_file_layout(lsid);
+		return cl_has_file_layout(clp, lrfile, lsid);
 	case RETURN_FSID:
 		return cl_has_fsid_layout(clp, &cbl->cbl_fsid);
 	default:
