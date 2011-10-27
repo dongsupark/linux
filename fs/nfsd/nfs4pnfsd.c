@@ -118,7 +118,8 @@ nfsd4_init_pnfs_slabs(void)
  * Note: must be called under the state lock
  */
 static struct nfs4_layout_state *
-alloc_init_layout_state(struct nfs4_client *clp, stateid_t *stateid)
+alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
+			stateid_t *stateid)
 {
 	struct nfs4_layout_state *new;
 
@@ -127,6 +128,10 @@ alloc_init_layout_state(struct nfs4_client *clp, stateid_t *stateid)
 		return new;
 	kref_init(&new->ls_ref);
 	nfsd4_init_stid(&new->ls_stid, clp, NFS4_LAYOUT_STID);
+	INIT_LIST_HEAD(&new->ls_perfile);
+	spin_lock(&layout_lock);
+	list_add(&new->ls_perfile, &fp->fi_layout_states);
+	spin_unlock(&layout_lock);
 	return new;
 }
 
@@ -143,6 +148,11 @@ destroy_layout_state(struct kref *kref)
 			container_of(kref, struct nfs4_layout_state, ls_ref);
 
 	nfsd4_unhash_stid(&ls->ls_stid);
+	if (!list_empty(&ls->ls_perfile)) {
+		spin_lock(&layout_lock);
+		list_del(&ls->ls_perfile);
+		spin_unlock(&layout_lock);
+	}
 	kfree(ls);
 }
 
@@ -193,7 +203,7 @@ nfs4_process_layout_stateid(struct nfs4_client *clp, struct nfs4_file *fp,
 			goto out;
 		}
 
-		ls = alloc_init_layout_state(clp, stateid);
+		ls = alloc_init_layout_state(clp, fp, stateid);
 		if (!ls) {
 			status = nfserr_jukebox;
 			goto out;
@@ -296,6 +306,7 @@ destroy_layout(struct nfs4_layout *lp)
 		__func__, lp, clp, fp, fp->fi_inode);
 
 	kmem_cache_free(pnfs_layout_slab, lp);
+	list_del_init(&ls->ls_perfile);
 	/* release references taken by init_layout */
 	put_layout_state(ls);
 	put_nfs4_file(fp);
