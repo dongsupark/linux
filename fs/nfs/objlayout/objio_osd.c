@@ -577,7 +577,14 @@ MODULE_LICENSE("GPL");
 static int __init
 objlayout_init(void)
 {
-	int ret = pnfs_register_layoutdriver(&objlayout_type);
+	int ret;
+
+	ret = pnfsiod_start();
+	if (!ret) {
+		ret = pnfs_register_layoutdriver(&objlayout_type);
+		if (ret)
+			pnfsiod_stop();
+	}
 
 	if (ret)
 		printk(KERN_INFO
@@ -593,6 +600,7 @@ static void __exit
 objlayout_exit(void)
 {
 	pnfs_unregister_layoutdriver(&objlayout_type);
+	pnfsiod_stop();
 	printk(KERN_INFO "%s: Unregistered OSD pNFS Layout Driver\n",
 	       __func__);
 }
