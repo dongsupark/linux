@@ -1053,18 +1053,23 @@ out:
 }
 
 static bool
-cl_has_file_layout(stateid_t *lsid)
+cl_has_file_layout(struct nfs4_client *clp, struct nfs4_file *fp, stateid_t *lsid)
 {
-	__be32 status;
 	struct nfs4_stid *stid;
 	struct nfs4_layout_state *ls;
 
-	status = nfsd4_lookup_stateid(lsid, NFS4_LAYOUT_STID, &stid);
-	if (status)
-		return false;
+	spin_lock(&layout_lock);
+	list_for_each_entry (ls, &fp->fi_layout_states, ls_perfile)
+		if (same_clid(&ls->ls_stid.sc_stateid.si_opaque.so_clid,
+			      &clp->cl_clientid)) {
+			goto found;
+		}
+	spin_unlock(&layout_lock);
+	return false;
 
-	ls = container_of(stid, struct nfs4_layout_state, ls_stid);
-	update_layout_stateid(ls, lsid);
+found:
+	update_layout_stateid_locked(ls, lsid);
+	spin_unlock(&layout_lock);
 
 	return true;
 }
@@ -1098,7 +1103,7 @@ cl_has_layout(struct nfs4_client *clp, struct nfsd4_pnfs_cb_layout *cbl,
 {
 	switch (cbl->cbl_recall_type) {
 	case RETURN_FILE:
-		return cl_has_file_layout(lsid);
+		return cl_has_file_layout(clp, lrfile, lsid);
 	case RETURN_FSID:
 		return cl_has_fsid_layout(clp, &cbl->cbl_fsid);
 	default:
