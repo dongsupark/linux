@@ -2339,6 +2339,7 @@ static void nfsd4_init_file(struct nfs4_file *fp, struct inode *ino,
 	memset(fp->fi_access, 0, sizeof(fp->fi_access));
 #if defined(CONFIG_PNFSD)
 	INIT_LIST_HEAD(&fp->fi_layouts);
+	INIT_LIST_HEAD(&fp->fi_layout_states);
 	fp->fi_fsid.major = current_fh->fh_export->ex_fsid;
 	fp->fi_fsid.minor = 0;
 	fp->fi_fhlen = current_fh->fh_handle.fh_size;
