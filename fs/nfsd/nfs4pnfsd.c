@@ -226,14 +226,19 @@ free_layout(struct nfs4_layout *lp)
 	kmem_cache_free(pnfs_layout_slab, lp);
 }
 
+static void update_layout_stateid_locked(struct nfs4_layout_state *ls, stateid_t *sid)
+{
+	update_stateid(&(ls)->ls_stid.sc_stateid);
+	memcpy((sid), &(ls)->ls_stid.sc_stateid, sizeof(stateid_t));
+	dprintk("%s Updated ls_stid to %d on layoutstate %p\n",
+		__func__, sid->si_generation, ls);
+}
+
 static void update_layout_stateid(struct nfs4_layout_state *ls, stateid_t *sid)
 {
 	spin_lock(&layout_lock);
-	update_stateid(&(ls)->ls_stid.sc_stateid);
-	memcpy((sid), &(ls)->ls_stid.sc_stateid, sizeof(stateid_t));
+	update_layout_stateid_locked(ls, sid);
 	spin_unlock(&layout_lock);
-	dprintk("%s Updated ls_stid to %d on layoutstate %p\n",
-		__func__, sid->si_generation, ls);
 }
 
 static void
@@ -684,7 +689,7 @@ pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
 		}
 	}
 	if (ls && layouts_found && lrp->lrs_present)
-		update_layout_stateid(ls, &lrp->lr_sid);
+		update_layout_stateid_locked(ls, &lrp->lr_sid);
 	spin_unlock(&layout_lock);
 
 	return layouts_found;
