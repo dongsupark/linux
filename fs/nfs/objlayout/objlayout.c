@@ -264,7 +264,7 @@ objlayout_read_done(struct objlayout_io_res *oir, ssize_t status, bool sync)
 		pnfs_ld_read_done(rdata);
 	else {
 		INIT_WORK(&rdata->task.u.tk_work, _rpc_read_complete);
-		schedule_work(&rdata->task.u.tk_work);
+		pnfsiod_queue_work(&rdata->task.u.tk_work);
 	}
 }
 
@@ -345,7 +345,7 @@ objlayout_write_done(struct objlayout_io_res *oir, ssize_t status, bool sync)
 		pnfs_ld_write_done(wdata);
 	else {
 		INIT_WORK(&wdata->task.u.tk_work, _rpc_write_complete);
-		schedule_work(&wdata->task.u.tk_work);
+		pnfsiod_queue_work(&wdata->task.u.tk_work);
 	}
 }
 
