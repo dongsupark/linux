@@ -46,6 +46,12 @@ typedef struct {
 	u32             cl_id;
 } clientid_t;
 
+static inline int
+same_clid(clientid_t *cl1, clientid_t *cl2)
+{
+	return (cl1->cl_boot == cl2->cl_boot) && (cl1->cl_id == cl2->cl_id);
+}
+
 typedef struct {
 	clientid_t	so_clid;
 	u32		so_id;
