@@ -1090,7 +1090,6 @@ out:
 static bool
 cl_has_file_layout(struct nfs4_client *clp, struct nfs4_file *fp, stateid_t *lsid)
 {
-	struct nfs4_stid *stid;
 	struct nfs4_layout_state *ls;
 
 	spin_lock(&layout_lock);
