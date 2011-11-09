@@ -30,7 +30,7 @@
 #include "nfsfh.h"
 #include "nfsd.h"
 
-#define NFSDDBG_FACILITY                NFSDDBG_PROC
+#define NFSDDBG_FACILITY                NFSDDBG_FILELAYOUT
 
 /* Just use a linked list. Do not expect more than 32 dlm_device_entries
  * the first implementation will just use one device per cluster file system
