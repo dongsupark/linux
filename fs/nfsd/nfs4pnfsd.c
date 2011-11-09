@@ -23,7 +23,7 @@
 
 #include "pnfsd.h"
 
-#define NFSDDBG_FACILITY                NFSDDBG_PROC
+#define NFSDDBG_FACILITY                NFSDDBG_PNFS
 
 static DEFINE_SPINLOCK(layout_lock);
 
