@@ -1390,7 +1390,7 @@ device_slice(dev_t devid)
 	struct block_device	*bd	= blkdev_get_by_dev(devid, FMODE_READ, NULL);
 	boolean_t		rval	= False;
 	
-	if (bd) {
+	if (!IS_ERR(bd)) {
 		if (bd->bd_disk->minors > 1)
 			rval = True;
 		blkdev_put(bd, FMODE_READ);
