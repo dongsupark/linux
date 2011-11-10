@@ -1390,11 +1390,14 @@ device_slice(dev_t devid)
 	struct block_device	*bd	= blkdev_get_by_dev(devid, FMODE_READ, NULL);
 	boolean_t		rval	= False;
 	
+	dprintk("%s: dev_id=%u:%u\n", __func__, MAJOR(devid), MINOR(devid));
 	if (!IS_ERR(bd)) {
+		dprintk("%s: minors=%d\n", __func__, bd->bd_disk->minors);
 		if (bd->bd_disk->minors > 1)
 			rval = True;
 		blkdev_put(bd, FMODE_READ);
 	}
+	dprintk("%s: ret=%d\n", __func__, rval);
 	return rval;
 }
 
