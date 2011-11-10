@@ -571,8 +571,7 @@ fill_invalid_ext:
 			unlock_page(page);
 
 			ret = bl_mark_sectors_init(be->be_inval, isect,
-						       PAGE_CACHE_SECTORS,
-						       NULL);
+						       PAGE_CACHE_SECTORS);
 			if (unlikely(ret)) {
 				dprintk("%s bl_mark_sectors_init fail %d\n",
 					__func__, ret);
@@ -621,8 +620,7 @@ next_page:
 		}
 		if (be->be_state == PNFS_BLOCK_INVALID_DATA) {
 			ret = bl_mark_sectors_init(be->be_inval, isect,
-						       PAGE_CACHE_SECTORS,
-						       NULL);
+						       PAGE_CACHE_SECTORS);
 			if (unlikely(ret)) {
 				dprintk("%s bl_mark_sectors_init fail %d\n",
 					__func__, ret);
