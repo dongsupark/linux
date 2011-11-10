@@ -989,10 +989,14 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 	if (lrp->args.lr_return_type == RETURN_FILE) {
 		fp = find_file(ino);
 		if (!fp) {
-			printk(KERN_ERR "%s: RETURN_FILE: no nfs4_file for "
-				"ino %p:%lu\n",
+			dprintk("%s: RETURN_FILE: no nfs4_file for ino %p:%lu\n",
 				__func__, ino, ino ? ino->i_ino : 0L);
-			goto out;
+			/* If we had a layout on the file the nfs4_file would
+			 * be referenced and we should have found it. Since we
+			 * don't then it means all layouts were ROC and at this
+			 * point we returned all of them on file close.
+			 */
+			goto out_no_fs_call;
 		}
 
 		/* Check the stateid */
@@ -1046,6 +1050,7 @@ out:
 	/* call exported filesystem layout_return (ignore return-code) */
 	fs_layout_return(sb, ino, lrp, 0, recall_cookie);
 
+out_no_fs_call:
 	dprintk("pNFS %s: exit status %d\n", __func__, status);
 	return status;
 }
