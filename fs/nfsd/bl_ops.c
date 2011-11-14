@@ -55,7 +55,7 @@
 #endif
 
 
-typedef enum {True, False} boolean_t;
+typedef enum {False = 0, True = !False} boolean_t;
 /* ---- block layoutget and commit structure ---- */
 typedef struct bl_layout_rec {
 	struct list_head	blr_hash,
