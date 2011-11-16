@@ -66,7 +66,7 @@ typedef struct bl_layout_rec {
 	u64			blr_orig_size,
 				blr_commit_size,
 				blr_ext_size;
-	spinlock_t		blr_lock;	// Protects blr_layouts
+	struct mutex		blr_lock;	// Protects blr_layouts
 } bl_layout_rec_t;
 
 static struct list_head layout_hash;
@@ -399,7 +399,7 @@ bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 	}
 	BUG_ON(!r);
 	
-	spin_lock(&r->blr_lock);
+	mutex_lock(&r->blr_lock);
 	
 	if (layout_cache_fill_from(r, &bl_possible, &res->lg_seg)) {
 		/*
@@ -441,7 +441,7 @@ layoutget_cleanup:
 		}
 	}
 
-	spin_unlock(&r->blr_lock);
+	mutex_unlock(&r->blr_lock);
 	if (unlikely(nfserr)) {
 		if (del_on_error == True)
 			layout_inode_del(i);
@@ -539,9 +539,9 @@ bl_layoutreturn(struct inode *i,
 	
 	r = layout_inode_find(i);
 	if (r) {
-		spin_lock(&r->blr_lock);
+		mutex_lock(&r->blr_lock);
 		layout_cache_del(r, &args->lr_seg);
-		spin_unlock(&r->blr_lock);
+		mutex_unlock(&r->blr_lock);
 		dprintk("    ext_size %Lu, i_size %Lu, orig_size %Lu\n",
 		    r->blr_ext_size, i->i_size, r->blr_orig_size);
 	}
@@ -589,7 +589,7 @@ bl_layoutrecall(struct inode *inode, int type, u64 offset, u64 len, bool with_nf
 restart:
 	r = layout_inode_find(inode);
 	if (r && len && !r->blr_recalled) {
-		spin_lock(&r->blr_lock);
+		mutex_lock(&r->blr_lock);
 		list_for_each_entry(b, &r->blr_layouts, bll_list) {
 			if (!r->blr_recalled && !b->bll_recalled &&
 			    (offset >= b->bll_foff) && (offset < BLL_F_END(b))) {
@@ -622,14 +622,14 @@ restart:
 				 * the lock. The request will come in on the
 				 * same thread which will cause a deadlock.
 				 */
-				spin_unlock(&r->blr_lock);
+				mutex_unlock(&r->blr_lock);
 				_nfsd_layout_recall_cb(sb, inode, &lr, with_nfs4_state_lock);
 				adj = MIN(b->bll_len - (offset - b->bll_foff),
 				    len);
 				offset += adj;
 				len -= adj;
 				if (!len) {
-					spin_lock(&r->blr_lock);
+					mutex_lock(&r->blr_lock);
 					break;
 				}
 				/*
@@ -640,7 +640,7 @@ restart:
 				goto restart;
 			}
 		}
-		spin_unlock(&r->blr_lock);
+		mutex_unlock(&r->blr_lock);
 	}
 	
 	dprintk("<-- %s\n", __func__);
@@ -1449,7 +1449,7 @@ layout_inode_add(struct inode *i, bl_layout_rec_t **p)
 	r->blr_ext_size	= 0;
 	r->blr_recalled	= 0;
 	INIT_LIST_HEAD(&r->blr_layouts);
-	spin_lock_init(&r->blr_lock);
+	mutex_init(&r->blr_lock);
 	spin_lock(&layout_hashtbl_lock);
 	list_add_tail(&r->blr_hash, &layout_hash);
 	spin_unlock(&layout_hashtbl_lock);
@@ -1498,13 +1498,12 @@ layout_inode_del(struct inode *i)
 	spin_lock(&layout_hashtbl_lock);
 	r = __layout_inode_find(i);
 	if (r) {
-		spin_lock(&r->blr_lock);
+		/* FIXME: cannot acquire mutex while holding a spin lock
+		 * need kref?
+		 */
 		if (list_empty(&r->blr_layouts)) {
 			list_del(&r->blr_hash);
-			spin_unlock(&r->blr_lock);
 			kfree(r);
-		} else {
-			spin_unlock(&r->blr_lock);
 		}
 	} else {
 		dprintk("%s: failed to find inode [0x%x:%lu] in table for delete\n",
