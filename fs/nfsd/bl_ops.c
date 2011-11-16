@@ -1300,7 +1300,7 @@ extents_get(struct fiemap_extent_info *fei, struct inode *i, u64 foff, u64 len)
 	    (1 << i->i_sb->s_blocksize_bits) - 1);
 	set_fs(old_fs);
 	
-	if (rval || !fei->fi_extents_mapped) {
+	if (rval < 0 || !fei->fi_extents_mapped) {
 		dprintk("    No extents. Wanted %d, got %d: rval=%d\n",
 			fei->fi_extents_max, fei->fi_extents_mapped, rval);
 		kfree(fe);
