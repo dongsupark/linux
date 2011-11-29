@@ -97,8 +97,10 @@ set_pnfs_layoutdriver(struct nfs_server *server, const struct nfs_fh *mntfh,
 {
 	struct pnfs_layoutdriver_type *ld_type = NULL;
 
-	if (id == 0)
+	if (id == 0) {
+		dprintk("%s: layout type %u\n", __func__, id);
 		goto out_no_driver;
+	}
 	if (!(server->nfs_client->cl_exchange_flags &
 		 (EXCHGID4_FLAG_USE_NON_PNFS | EXCHGID4_FLAG_USE_PNFS_MDS))) {
 		printk(KERN_ERR "%s: id %u cl_exchange_flags 0x%x\n", __func__,
