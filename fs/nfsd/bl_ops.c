@@ -182,6 +182,7 @@ pnfs_block_enabled(struct inode *inode, int ex_flags)
 int
 bl_layout_type(struct super_block *sb)
 {
+	dprintk("%s --> %d\n", __func__, LAYOUT_BLOCK_VOLUME);
 	return LAYOUT_BLOCK_VOLUME;
 }
 
