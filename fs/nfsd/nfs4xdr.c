@@ -2576,6 +2576,8 @@ out_acl:
 
 		if (sb && sb->s_pnfs_op && sb->s_pnfs_op->layout_type)
 			type = sb->s_pnfs_op->layout_type(sb);
+		dprintk("%s: sb=%p s_pnfs_op=%p layout_type()=%p layout_type=%u\n",
+			__func__, sb, sb->s_pnfs_op, sb->s_pnfs_op ? sb->s_pnfs_op->layout_type : NULL, type);
 		if (type) {
 			if ((buflen -= 4) < 0)	/* type */
 				goto out_resource;
@@ -2588,6 +2590,7 @@ out_acl:
 	if (bmval2 & FATTR4_WORD2_LAYOUT_BLKSIZE) {
 		if ((buflen -= 4) < 0)
 			goto out_resource;
+		dprintk("%s: layout_blksize=%lu\n", __func__, stat.blksize);
 		WRITE32(stat.blksize);
 	}
 #endif /* CONFIG_PNFSD */
