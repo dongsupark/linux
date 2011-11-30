@@ -989,6 +989,7 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 	if (lrp->args.lr_return_type == RETURN_FILE) {
 		fp = find_file(ino);
 		if (!fp) {
+			nfs4_unlock_state();
 			dprintk("%s: RETURN_FILE: no nfs4_file for ino %p:%lu\n",
 				__func__, ino, ino ? ino->i_ino : 0L);
 			/* If we had a layout on the file the nfs4_file would
