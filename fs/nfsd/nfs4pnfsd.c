@@ -416,15 +416,14 @@ find_sbid_id(u64 id)
 	return sb;
 }
 
-u64
-find_create_sbid(struct super_block *sb)
+static u64
+__find_sbid(struct super_block *sb)
 {
 	struct sbid_tracker *sbid;
 	unsigned long hash_idx = sbid_hashval(sb);
 	int pos = 0;
 	u64 id = 0;
 
-	spin_lock(&layout_lock);
 	list_for_each_entry (sbid, &sbid_hashtbl[hash_idx], hash) {
 		pos++;
 		if (sbid->sb != sb)
@@ -434,6 +433,29 @@ find_create_sbid(struct super_block *sb)
 		id = sbid->id;
 		break;
 	}
+
+	return id;
+}
+
+u64
+find_sbid(struct super_block *sb)
+{
+	u64 id;
+
+	spin_lock(&layout_lock);
+	id = __find_sbid(sb);
+	spin_unlock(&layout_lock);
+
+	return id;
+}
+
+u64
+find_create_sbid(struct super_block *sb)
+{
+	u64 id;
+
+	spin_lock(&layout_lock);
+	id = __find_sbid(sb);
 	spin_unlock(&layout_lock);
 
 	if (!id)
