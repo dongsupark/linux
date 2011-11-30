@@ -94,7 +94,7 @@ static pnfs_blocklayout_devinfo_t *bld_slice(struct list_head *volumes,
     dev_t devid, int my_loc, int idx);
 static int layout_cache_fill_from(bl_layout_rec_t *r, struct list_head *h,
     struct nfsd4_layout_seg *seg);
-struct list_head *layout_cache_iter(bl_layout_rec_t *r,
+struct list_head *layout_cache_iter(struct super_block *, bl_layout_rec_t *r,
     struct list_head *bl_possible, struct nfsd4_layout_seg *seg);
 static void layout_cache_merge(bl_layout_rec_t *r, struct list_head *h);
 static int layout_cache_update(bl_layout_rec_t *r, struct list_head *h);
@@ -116,8 +116,8 @@ static void extents_count(struct fiemap_extent_info *fei, struct inode *i,
 static boolean_t extents_get(struct fiemap_extent_info *fei, struct inode *i,
     u64 foff, u64 len);
 static boolean_t extents_process(struct fiemap_extent_info *fei,
-    struct list_head *bl_candidates, struct nfsd4_layout_seg *, dev_t dev,
-    pnfs_blocklayout_layout_t *b);
+    struct list_head *bl_candidates, struct nfsd4_layout_seg *,
+    u64 sbid, dev_t dev, pnfs_blocklayout_layout_t *b);
 static void extents_cleanup(struct fiemap_extent_info *fei);
 
 void
@@ -419,7 +419,7 @@ bl_layoutget(struct inode *i, struct exp_xdr_stream *xdr,
 	res->lg_return_on_close	= 1;
 	res->lg_seg.length	= 0;
 	
-	bl_candidates = layout_cache_iter(r, &bl_possible, &res->lg_seg);
+	bl_candidates = layout_cache_iter(i->i_sb, r, &bl_possible, &res->lg_seg);
 	if (!bl_candidates) {
 		nfserr = NFS4ERR_LAYOUTTRYLATER;
 		goto layoutget_cleanup;
@@ -774,8 +774,8 @@ layout_cache_fill_from(bl_layout_rec_t *r, struct list_head *h,
 }
 
 struct list_head *
-layout_cache_iter(bl_layout_rec_t *r, struct list_head *bl_possible,
-    struct nfsd4_layout_seg *seg)
+layout_cache_iter(struct super_block *sb, bl_layout_rec_t *r,
+		  struct list_head *bl_possible, struct nfsd4_layout_seg *seg)
 {
 	pnfs_blocklayout_layout_t	*b,
 					*n		= NULL;
@@ -783,6 +783,7 @@ layout_cache_iter(bl_layout_rec_t *r, struct list_head *bl_possible,
 	struct fiemap_extent_info	fei;
 	struct inode			*i;
 	dev_t				dev;
+	u64				sbid = find_sbid(sb);
 	
 	dev	= r->blr_rdev;
 	i	= r->blr_inode;
@@ -809,7 +810,7 @@ layout_cache_iter(bl_layout_rec_t *r, struct list_head *bl_possible,
 				    b->bll_len) == False)
 					goto cleanup;
 				if (extents_process(&fei, bl_candidates,
-				    seg, dev, b) == False)
+						    seg, sbid, dev, b) == False)
 					goto cleanup;
 				extents_cleanup(&fei);
 				
@@ -824,7 +825,7 @@ layout_cache_iter(bl_layout_rec_t *r, struct list_head *bl_possible,
 				n = bll_alloc(b->bll_foff, b->bll_len,
 				    BLOCK_LAYOUT_NEW, bl_candidates);
 				n->bll_es = PNFS_BLOCK_NONE_DATA;
-				n->bll_vol_id.sbid = 0;
+				n->bll_vol_id.sbid = sbid;
 				n->bll_vol_id.devid = dev;
 				seg->length += b->bll_len;
 			} else {
@@ -1176,7 +1177,8 @@ layout_cache_fill_from_list(bl_layout_rec_t *r, struct list_head *h,
 	pnfs_blocklayout_layout_t	*b,
 					*n;
 	enum pnfs_block_extent_state4	s;
-	
+	u64				sbid = find_sbid(r->blr_inode->i_sb);
+
 	list_for_each_entry(b, &r->blr_layouts, bll_list) {
 		if (seg->offset < b->bll_foff) {
 			n = bll_alloc(seg->offset,
@@ -1217,7 +1219,7 @@ layout_cache_fill_from_list(bl_layout_rec_t *r, struct list_head *h,
 				return False;
 			
 			n->bll_soff = b->bll_soff + seg->offset - b->bll_foff;
-			n->bll_vol_id.sbid = 0;
+			n->bll_vol_id.sbid = sbid;
 			n->bll_vol_id.devid = b->bll_vol_id.devid;
 			n->bll_es = s;
 			seg->offset += n->bll_len;
@@ -1231,7 +1233,7 @@ layout_cache_fill_from_list(bl_layout_rec_t *r, struct list_head *h,
 
 static u64
 bll_alloc_holey(struct list_head *bl_candidates, u64 offset, u64 length,
-    dev_t dev)
+		u64 sbid, dev_t dev)
 {
 	pnfs_blocklayout_layout_t	*n;
 	
@@ -1239,7 +1241,7 @@ bll_alloc_holey(struct list_head *bl_candidates, u64 offset, u64 length,
 	if (!n)
 		return 0;
 	n->bll_es = PNFS_BLOCK_NONE_DATA;
-	n->bll_vol_id.sbid = 0;
+	n->bll_vol_id.sbid = sbid;
 	n->bll_vol_id.devid = dev;
 	
 	return n->bll_len;
@@ -1322,7 +1324,7 @@ extents_get(struct fiemap_extent_info *fei, struct inode *i, u64 foff, u64 len)
  */
 static boolean_t
 extents_process(struct fiemap_extent_info *fei, struct list_head *bl_candidates,
-    struct nfsd4_layout_seg *seg, dev_t dev, pnfs_blocklayout_layout_t *b)
+    struct nfsd4_layout_seg *seg, u64 sbid, dev_t dev, pnfs_blocklayout_layout_t *b)
 {
 	struct fiemap_extent		*fep,
 					*fep_last	= NULL;
@@ -1352,7 +1354,7 @@ extents_process(struct fiemap_extent_info *fei, struct list_head *bl_candidates,
 			    _2SECTS(fep_last->fe_length));
 			last_end = fep_last->fe_logical + fep_last->fe_length;
 			rval = bll_alloc_holey(bl_candidates, last_end,
-			    fep->fe_logical - last_end, dev);
+			    fep->fe_logical - last_end, sbid, dev);
 			if (!rval)
 				return False;
 			seg->length += rval;
@@ -1368,7 +1370,7 @@ extents_process(struct fiemap_extent_info *fei, struct list_head *bl_candidates,
 		n->bll_soff = fep->fe_physical;
 		n->bll_es = seg->iomode == IOMODE_READ ?
 		    PNFS_BLOCK_READ_DATA : PNFS_BLOCK_READWRITE_DATA;
-		n->bll_vol_id.sbid = 0;
+		n->bll_vol_id.sbid = sbid;
 		n->bll_vol_id.devid = dev;
 		seg->length += fep->fe_length;
 		print_bll(n, "New extent");
@@ -1637,7 +1639,7 @@ bll_alloc_dup(pnfs_blocklayout_layout_t *b, enum bl_cache_state c,
 	if (n) {
 		n->bll_es			= b->bll_es;
 		n->bll_soff			= b->bll_soff;
-		n->bll_vol_id.devid		= b->bll_vol_id.devid;
+		n->bll_vol_id			= b->bll_vol_id;
 	}
 	return n;
 }
