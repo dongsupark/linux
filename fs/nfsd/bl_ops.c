@@ -26,9 +26,9 @@
 #include <linux/dm-ioctl.h>
 #include <asm/uaccess.h>
 #include <linux/falloc.h>
-#include <linux/nfsd/nfsd4_block.h>
 
 #include "pnfsd.h"
+#include "nfsd4_block.h"
 
 #define NFSDDBG_FACILITY	NFSDDBG_PNFS
 

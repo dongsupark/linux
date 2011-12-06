@@ -37,7 +37,7 @@
 #include "acl.h"
 #include "idmap.h"
 #include "pnfsd.h"
-#include <linux/nfsd/nfsd4_block.h>
+#include "nfsd4_block.h"
 #endif /* CONFIG_NFSD_V4 */
 
 #include "nfsd.h"
