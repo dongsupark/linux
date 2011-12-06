@@ -15,9 +15,9 @@
 #include <linux/sunrpc/rpc_pipe_fs.h>
 #include <linux/proc_fs.h>
 #include <linux/nfs_fs.h>
-
 #include <linux/nfsd/debug.h>
-#include <linux/nfsd/nfsd4_block.h>
+
+#include "nfsd4_block.h"
 
 #define NFSDDBG_FACILITY NFSDDBG_PNFS
 
