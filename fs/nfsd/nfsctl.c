@@ -15,11 +15,11 @@
 #include <linux/sunrpc/gss_krb5_enctypes.h>
 #include <linux/module.h>
 #include <linux/nfsd/nfs4pnfsdlm.h>
-#include <linux/nfsd/nfsd4_block.h>
 
 #include "idmap.h"
 #include "nfsd.h"
 #include "cache.h"
+#include "nfsd4_block.h"
 
 /*
  *	We have a single directory with several nodes in it.
