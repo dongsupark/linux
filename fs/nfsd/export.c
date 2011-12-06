@@ -16,12 +16,12 @@
 #include <linux/module.h>
 #include <linux/exportfs.h>
 #include <linux/nfsd/nfsd4_pnfs.h>
-#include <linux/nfsd/nfsd4_block.h>
 #include <net/ipv6.h>
 
 #include "nfsd.h"
 #include "nfsfh.h"
 #include "pnfsd.h"
+#include "nfsd4_block.h"
 
 #define NFSDDBG_FACILITY	NFSDDBG_EXPORT
 
