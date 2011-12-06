@@ -48,7 +48,6 @@
 #include <linux/sunrpc/svcauth_gss.h>
 #include <linux/exportfs.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
-#include <linux/nfsd/nfsd4_block.h>
 
 #include "idmap.h"
 #include "acl.h"
@@ -57,6 +56,7 @@
 #include "state.h"
 #include "cache.h"
 #include "pnfsd.h"
+#include "nfsd4_block.h"
 
 #define NFSDDBG_FACILITY		NFSDDBG_XDR
 
