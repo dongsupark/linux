@@ -35,13 +35,13 @@
 #include <linux/file.h>
 #include <linux/slab.h>
 #include <linux/nfsd/nfs4layoutxdr.h>
-#include <linux/nfsd/nfsd4_block.h>
 
 #include "idmap.h"
 #include "cache.h"
 #include "xdr4.h"
 #include "vfs.h"
 #include "pnfsd.h"
+#include "nfsd4_block.h"
 
 #define NFSDDBG_FACILITY		NFSDDBG_PROC
 
