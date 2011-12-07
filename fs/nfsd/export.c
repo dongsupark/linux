@@ -381,6 +381,7 @@ static int pnfsd_check_export(struct inode *inode, int *flags)
 	return 0;
 #endif /* CONFIG_PNFSD_LOCAL_EXPORT */
 
+#if defined(CONFIG_PNFSD_BLOCK)
 	if (pnfs_block_enabled(inode, *flags)) {
 		if (!inode->i_sb->s_pnfs_op) {
 			dprintk("set pnfs block export structure\n");
@@ -392,6 +393,7 @@ static int pnfsd_check_export(struct inode *inode, int *flags)
 
 		return 0;
 	}
+#endif /* CONFIG_PNFSD_BLOCK */
 
 #endif /* CONFIG_PNFSD */
 
