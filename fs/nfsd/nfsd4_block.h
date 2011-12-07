@@ -77,7 +77,7 @@ typedef struct bl_comm {
 
 #ifdef CONFIG_PNFSD_BLOCK
 
-bool pnfs_block_enabled(struct inode *, int);
+bool pnfs_block_enabled(struct inode *, int ex_flags);
 void nfsd_bl_init(void);
 int bl_layout_type(struct super_block *sb);
 int bl_getdeviceiter(struct super_block *, u32 layout_type,
@@ -97,12 +97,26 @@ int bl_layoutrecall(struct inode *inode, int type, u64 offset, u64 len, bool wit
 int bl_init_proc(void);
 int bl_upcall(bl_comm_t *, bl_comm_msg_t *, bl_comm_res_t **);
 
+
+static inline int
+bl_recall_layout(struct inode *inode, int type, u64 offset, u64 len, bool with_nfs4_state_lock)
+{
+	if (pnfs_block_enabled(inode, 0))
+		return bl_layoutrecall(inode, type, offset, len, with_nfs4_state_lock);
+}
+
 extern bl_comm_t	*bl_comm_global;	// Ugly...
 
 #else
 
-static inline bool pnfs_block_enabled(struct inode *, int) { return false; }
+static inline bool pnfs_block_enabled(struct inode *i, int ex_flags) { return false; }
 static inline void nfsd_bl_init(void) {}
+
+static inline int bl_recall_layout(struct inode *inode, int type, u64 offset,
+				   u64 len, bool with_nfs4_state_lock)
+{
+	return 0;
+}
 
 #endif /* CONFIG_PNFSD_BLOCK */
 #endif /* __KERNEL__ */
