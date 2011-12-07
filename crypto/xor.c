@@ -95,7 +95,8 @@ do_xor_speed(struct xor_block_template *tmpl, void *b1, void *b2)
 
 	ns_end -= ns_begin;
 	if (ns_end > 0)
-		speed = BENCH_SIZE / 1024 * count * NSEC_PER_SEC / ns_end;
+		speed = BENCH_SIZE / 1024 * count *
+				(unsigned)(NSEC_PER_SEC / ns_end);
 	else
 		speed = 17;
 	tmpl->speed = speed;
