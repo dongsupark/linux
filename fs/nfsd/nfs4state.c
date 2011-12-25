@@ -97,12 +97,6 @@ __nfs4_lock_state(const char *func)
 #define BUG_ON_UNLOCKED_STATE() BUG_ON(client_mutex_owner != current)
 
 void
-nfs4_bug_on_unlocked_state(void)
-{
-	BUG_ON(client_mutex_owner != current);
-}
-
-void
 nfs4_unlock_state(void)
 {
 	client_mutex_owner = NULL;
