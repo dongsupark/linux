@@ -97,9 +97,12 @@ void
 __nfs4_lock_state(const char *func)
 {
 	if (!mutex_trylock(&client_mutex)) {
-		printk("state lock taken by pid=%d func=%s\n",
-		       task_pid_nr(client_mutex_owner),
-		       client_mutex_func);
+		const char *mutex_func = client_mutex_func;
+		struct task_struct *mutex_owner = client_mutex_owner;
+
+		if (mutex_owner)
+			dprintk("state lock contention: held by pid=%d func=%s\n",
+				task_pid_nr(mutex_owner), mutex_func);
 		mutex_lock(&client_mutex);
 	}
 	client_mutex_owner = current;
