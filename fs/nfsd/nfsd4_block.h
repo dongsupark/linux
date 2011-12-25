@@ -103,6 +103,8 @@ bl_recall_layout(struct inode *inode, int type, u64 offset, u64 len, bool with_n
 {
 	if (pnfs_block_enabled(inode, 0))
 		return bl_layoutrecall(inode, type, offset, len, with_nfs4_state_lock);
+	else
+		return 0;
 }
 
 extern bl_comm_t	*bl_comm_global;	// Ugly...
