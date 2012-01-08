@@ -4448,6 +4448,7 @@ static int decode_first_pnfs_layout_type(struct xdr_stream *xdr,
 
 	/* pNFS is not supported by the underlying file system */
 	if (num == 0) {
+		dprintk("%s: num=0\n", __func__);
 		*layouttype = 0;
 		return 0;
 	}
@@ -4460,6 +4461,7 @@ static int decode_first_pnfs_layout_type(struct xdr_stream *xdr,
 	if (unlikely(!p))
 		goto out_overflow;
 	*layouttype = be32_to_cpup(p);
+	dprintk("%s: layouttype=0x%x\n", __func__, *layouttype);
 	return 0;
 out_overflow:
 	print_overflow_msg(__func__, xdr);

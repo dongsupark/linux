@@ -97,8 +97,10 @@ set_pnfs_layoutdriver(struct nfs_server *server, const struct nfs_fh *mntfh,
 {
 	struct pnfs_layoutdriver_type *ld_type = NULL;
 
-	if (id == 0)
+	if (id == 0) {
+		dprintk("%s: layout type %u\n", __func__, id);
 		goto out_no_driver;
+	}
 	if (!(server->nfs_client->cl_exchange_flags &
 		 (EXCHGID4_FLAG_USE_NON_PNFS | EXCHGID4_FLAG_USE_PNFS_MDS))) {
 		printk(KERN_ERR "%s: id %u cl_exchange_flags 0x%x\n", __func__,
@@ -1178,6 +1180,15 @@ void pnfs_ld_write_done(struct nfs_write_data *data)
 		put_lseg(data->lseg);
 		data->lseg = NULL;
 		dprintk("pnfs write error = %d\n", data->pnfs_error);
+		if (NFS_SERVER(data->inode)->pnfs_curr_ld->flags &
+						PNFS_LAYOUTRET_ON_ERROR) {
+			/* Don't lo_commit on error, Server will needs to
+			 * preform a file recovery.
+			 */
+			clear_bit(NFS_INO_LAYOUTCOMMIT,
+				  &NFS_I(data->inode)->flags);
+			pnfs_return_layout(data->inode);
+		}
 	}
 	data->mds_ops->rpc_release(data);
 }
@@ -1267,6 +1278,9 @@ static void pnfs_ld_handle_read_error(struct nfs_read_data *data)
 	put_lseg(data->lseg);
 	data->lseg = NULL;
 	dprintk("pnfs write error = %d\n", data->pnfs_error);
+	if (NFS_SERVER(data->inode)->pnfs_curr_ld->flags &
+						PNFS_LAYOUTRET_ON_ERROR)
+		pnfs_return_layout(data->inode);
 
 	nfs_pageio_init_read_mds(&pgio, data->inode);
 
