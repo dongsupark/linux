@@ -96,7 +96,8 @@ void ore_layout_2_pnfs_layout(struct pnfs_osd_layout *pl,
 
 static void _align_io(struct ore_layout *layout, u64 *offset, u64 *length)
 {
-	u64 stripe_size = layout->group_width * layout->stripe_unit;
+	u64 stripe_size = (layout->group_width - layout->parity) *
+							layout->stripe_unit;
 	u64 group_size = stripe_size * layout->group_depth;
 
 	*offset = div64_u64(*offset, group_size) * group_size;
