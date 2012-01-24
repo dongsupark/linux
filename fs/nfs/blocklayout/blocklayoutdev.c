@@ -122,7 +122,9 @@ nfs4_blk_decode_device(struct nfs_server *server,
 	int offset, len, i, rc;
 
 	dprintk("%s CREATING PIPEFS MESSAGE\n", __func__);
-	dprintk("%s: deviceid: %s, mincount: %d\n", __func__, dev->dev_id.data,
+	dprintk("%s: dev_id: (%x:%x:%x:%x), mincount: %d\n", __func__,
+		((unsigned *)dev->dev_id.data)[0], ((unsigned *)dev->dev_id.data)[1],
+		((unsigned *)dev->dev_id.data)[2], ((unsigned *)dev->dev_id.data)[3],
 		dev->mincount);
 
 	memset(&msg, 0, sizeof(msg));
@@ -181,10 +183,12 @@ nfs4_blk_decode_device(struct nfs_server *server,
 
 	rv->bm_mdev = bd;
 	memcpy(&rv->bm_mdevid, &dev->dev_id, sizeof(struct nfs4_deviceid));
-	dprintk("%s Created device %s with bd_block_size %u\n",
+	dprintk("%s Created device %s with bd_block_size %u dev_id (%x:%x:%x:%x)\n",
 		__func__,
 		bd->bd_disk->disk_name,
-		bd->bd_block_size);
+		bd->bd_block_size,
+		((unsigned *)rv->bm_mdevid.data)[0], ((unsigned *)rv->bm_mdevid.data)[1],
+		((unsigned *)rv->bm_mdevid.data)[2], ((unsigned *)rv->bm_mdevid.data)[3]);
 
 out:
 	kfree(msg.data);
@@ -199,7 +203,9 @@ static struct block_device *translate_devid(struct pnfs_layout_hdr *lo,
 	struct block_mount_id *mid;
 	struct pnfs_block_dev *dev;
 
-	dprintk("%s enter, lo=%p, id=%p\n", __func__, lo, id);
+	dprintk("%s enter, lo=%p, id=%p dev_id=(%x:%x:%x:%x)\n", __func__, lo, id,
+		((unsigned *)id->data)[0], ((unsigned *)id->data)[1],
+		((unsigned *)id->data)[2], ((unsigned *)id->data)[3]);
 	mid = BLK_ID(lo);
 	spin_lock(&mid->bm_lock);
 	list_for_each_entry(dev, &mid->bm_devlist, bm_node) {

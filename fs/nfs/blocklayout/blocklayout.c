@@ -902,7 +902,9 @@ nfs4_blk_get_deviceinfo(struct nfs_server *server, const struct nfs_fh *fh,
 	dev->pglen = PAGE_SIZE * max_pages;
 	dev->mincount = 0;
 
-	dprintk("%s: dev_id: %s\n", __func__, dev->dev_id.data);
+	dprintk("%s: dev_id: (%x:%x:%x:%x)\n", __func__,
+		((unsigned *)dev->dev_id.data)[0], ((unsigned *)dev->dev_id.data)[1],
+		((unsigned *)dev->dev_id.data)[2], ((unsigned *)dev->dev_id.data)[3]);
 	rc = nfs4_proc_getdeviceinfo(server, dev);
 	dprintk("%s getdevice info returns %d\n", __func__, rc);
 	if (rc) {
