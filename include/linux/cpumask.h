@@ -10,7 +10,15 @@
 #include <linux/threads.h>
 #include <linux/bitmap.h>
 
+#ifdef CONFIG_CPUMASK_OFFSTACK
+/*
+ * This is never declared, so you can't accidentally create one (see
+ * cpumask_var_t) or copy them by assignment (see cpumask_copy).
+ */
+struct cpumask;
+#else
 typedef struct cpumask { DECLARE_BITMAP(bits, NR_CPUS); } cpumask_t;
+#endif /* CONFIG_CPUMASK_OFFSTACK */
 
 /**
  * cpumask_bits - get the bits in a cpumask
@@ -19,7 +27,14 @@ typedef struct cpumask { DECLARE_BITMAP(bits, NR_CPUS); } cpumask_t;
  * You should only assume nr_cpu_ids bits of this mask are valid.  This is
  * a macro so it's const-correct.
  */
+#ifdef CONFIG_CPUMASK_OFFSTACK
+static inline unsigned long *cpumask_bits(const struct cpumask *mask)
+{
+	return (unsigned long *)mask;
+}
+#else
 #define cpumask_bits(maskp) ((maskp)->bits)
+#endif
 
 #if NR_CPUS == 1
 #define nr_cpu_ids		1
