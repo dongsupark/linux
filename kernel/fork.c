@@ -521,7 +521,7 @@ struct mm_struct *mm_alloc(void)
 	if (!mm)
 		return NULL;
 
-	memset(mm, 0, sizeof(*mm));
+	memset(mm, 0, mm_struct_size());
 	mm_init_cpumask(mm);
 	return mm_init(mm, current);
 }
@@ -746,7 +746,7 @@ struct mm_struct *dup_mm(struct task_struct *tsk)
 	if (!mm)
 		goto fail_nomem;
 
-	memcpy(mm, oldmm, sizeof(*mm));
+	memcpy(mm, oldmm, mm_struct_size());
 	mm_init_cpumask(mm);
 
 	/* Initializing for Swap token stuff */
@@ -1600,15 +1600,8 @@ void __init proc_caches_init(void)
 	fs_cachep = kmem_cache_create("fs_cache",
 			sizeof(struct fs_struct), 0,
 			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_NOTRACK, NULL);
-	/*
-	 * FIXME! The "sizeof(struct mm_struct)" currently includes the
-	 * whole struct cpumask for the OFFSTACK case. We could change
-	 * this to *only* allocate as much of it as required by the
-	 * maximum number of CPU's we can ever have.  The cpumask_allocation
-	 * is at the end of the structure, exactly for that reason.
-	 */
 	mm_cachep = kmem_cache_create("mm_struct",
-			sizeof(struct mm_struct), ARCH_MIN_MMSTRUCT_ALIGN,
+			mm_struct_size(), ARCH_MIN_MMSTRUCT_ALIGN,
 			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_NOTRACK, NULL);
 	vm_area_cachep = KMEM_CACHE(vm_area_struct, SLAB_PANIC);
 	mmap_init();

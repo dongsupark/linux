@@ -386,14 +386,15 @@ struct mm_struct {
 	pgtable_t pmd_huge_pte; /* protected by page_table_lock */
 #endif
 #ifdef CONFIG_CPUMASK_OFFSTACK
-	struct cpumask cpumask_allocation;
+	/* This must be at the end! */
+	DECLARE_BITMAP(cpumask_allocation, CONFIG_NR_CPUS);
 #endif
 };
 
 static inline void mm_init_cpumask(struct mm_struct *mm)
 {
 #ifdef CONFIG_CPUMASK_OFFSTACK
-	mm->cpu_vm_mask_var = &mm->cpumask_allocation;
+	mm->cpu_vm_mask_var = to_cpumask(mm->cpumask_allocation);
 #endif
 }
 
@@ -403,4 +404,20 @@ static inline cpumask_t *mm_cpumask(struct mm_struct *mm)
 	return mm->cpu_vm_mask_var;
 }
 
+static inline size_t mm_struct_size(void)
+{
+#ifdef CONFIG_CPUMASK_OFFSTACK
+	/*
+	 * We reduce mm_struct allocations as cpu_vm_mask_var only
+	 * needs cpumask_size() bytes.  cpu_vm_mask must be a NR_CPUS
+	 * bitmap at the end for this to work.
+	 */
+	BUILD_BUG_ON(offsetof(struct mm_struct, cpumask_allocation)
+		     + BITS_TO_LONGS(CONFIG_NR_CPUS)*sizeof(long)
+		     != sizeof(struct mm_struct));
+	return offsetof(struct mm_struct, cpumask_allocation) + cpumask_size();
+#else
+	return sizeof(struct mm_struct);
+#endif
+}
 #endif /* _LINUX_MM_TYPES_H */
