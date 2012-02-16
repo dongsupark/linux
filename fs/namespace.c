@@ -2576,7 +2576,9 @@ void __init mnt_init(void)
 	for (u = 0; u < HASH_SIZE; u++)
 		INIT_LIST_HEAD(&mount_hashtable[u]);
 
-	br_lock_init(vfsmount_lock);
+	err = br_lock_init(vfsmount_lock, GFP_KERNEL);
+	if (err)
+		panic("Failed to init vfsmount_lock: %d\n", err);
 
 	err = sysfs_init();
 	if (err)
