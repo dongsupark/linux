@@ -464,7 +464,7 @@ int irq_set_percpu_devid(unsigned int irq)
 	if (desc->percpu_enabled)
 		return -EINVAL;
 
-	desc->percpu_enabled = kzalloc(sizeof(*desc->percpu_enabled), GFP_KERNEL);
+	desc->percpu_enabled = kzalloc(cpumask_size(), GFP_KERNEL);
 
 	if (!desc->percpu_enabled)
 		return -ENOMEM;
