@@ -5,6 +5,7 @@
 #include <linux/module.h>
 #include <linux/bootmem.h>
 
+#ifndef CONFIG_DISABLE_OBSOLETE_CPUMASK_FUNCTIONS
 int __first_cpu(const cpumask_t *srcp)
 {
 	return min_t(int, NR_CPUS, find_first_bit(srcp->bits, NR_CPUS));
@@ -37,6 +38,7 @@ int __any_online_cpu(const cpumask_t *mask)
 	return cpu;
 }
 EXPORT_SYMBOL(__any_online_cpu);
+#endif /* CONFIG_DISABLE_OBSOLETE_CPUMASK_FUNCTIONS */
 
 /**
  * cpumask_next_and - get the next cpu in *src1p & *src2p

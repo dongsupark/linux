@@ -1917,7 +1917,7 @@ static inline int set_cpus_allowed_ptr(struct task_struct *p,
 }
 #endif
 
-#ifndef CONFIG_CPUMASK_OFFSTACK
+#ifndef CONFIG_DISABLE_OBSOLETE_CPUMASK_FUNCTIONS
 static inline int set_cpus_allowed(struct task_struct *p, cpumask_t new_mask)
 {
 	return set_cpus_allowed_ptr(p, &new_mask);

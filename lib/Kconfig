@@ -246,9 +246,13 @@ config CPUMASK_OFFSTACK
 	  them on the stack.  This is a bit more expensive, but avoids
 	  stack overflow.
 
+# Only ask if we haven't set cpumask_offstack.
 config DISABLE_OBSOLETE_CPUMASK_FUNCTIONS
-       bool "Disable obsolete cpumask functions" if DEBUG_PER_CPU_MAPS
-       depends on EXPERIMENTAL && BROKEN
+       bool "Disable obsolete cpumask functions" if !CPUMASK_OFFSTACK
+       default y if CPUMASK_OFFSTACK
+       help
+	 Remove the definitions of the obsolete cpus_ functions which are
+	 dangerous with offstack (ie. dynamically allocated) cpumasks.
 
 config CPU_RMAP
 	bool
