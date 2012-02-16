@@ -3051,6 +3051,7 @@ nfsd4_encode_open(struct nfsd4_compoundres *resp, __be32 nfserr, struct nfsd4_op
 			RESERVE_SPACE(8);
 			WRITE32(open->op_why_no_deleg);
 			WRITE32(0);	/* deleg signaling not supported yet */
+			break;
 		default:
 			RESERVE_SPACE(4);
 			WRITE32(open->op_why_no_deleg);
