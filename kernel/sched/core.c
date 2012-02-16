@@ -4411,7 +4411,7 @@ long sched_getaffinity(pid_t pid, struct cpumask *mask)
 		goto out_unlock;
 
 	raw_spin_lock_irqsave(&p->pi_lock, flags);
-	cpumask_and(mask, &p->cpus_allowed, cpu_online_mask);
+	cpumask_and(mask, tsk_cpus_allowed(p), cpu_online_mask);
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
 
 out_unlock:
@@ -4886,7 +4886,7 @@ void do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
 	if (p->sched_class && p->sched_class->set_cpus_allowed)
 		p->sched_class->set_cpus_allowed(p, new_mask);
 
-	cpumask_copy(&p->cpus_allowed, new_mask);
+	cpumask_copy(tsk_cpus_allowed(p), new_mask);
 	p->rt.nr_cpus_allowed = cpumask_weight(new_mask);
 }
 
@@ -4922,7 +4922,7 @@ int set_cpus_allowed_ptr(struct task_struct *p, const struct cpumask *new_mask)
 
 	rq = task_rq_lock(p, &flags);
 
-	if (cpumask_equal(&p->cpus_allowed, new_mask))
+	if (cpumask_equal(tsk_cpus_allowed(p), new_mask))
 		goto out;
 
 	if (!cpumask_intersects(new_mask, cpu_active_mask)) {

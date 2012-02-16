@@ -127,6 +127,13 @@ extern struct cred init_cred;
 
 #define INIT_TASK_COMM "swapper"
 
+#ifdef CONFIG_CPUMASK_OFFSTACK
+extern DECLARE_BITMAP(init_task_cpus_allowed, NR_CPUS);
+#define INIT_TASK_CPUS_ALLOWED (to_cpumask(init_task_cpus_allowed))
+#else
+#define INIT_TASK_CPUS_ALLOWED { { CPU_BITS_ALL } }
+#endif
+
 /*
  *  INIT_TASK is used to set up the first task table, touch at
  * your own risk!. Base=0, limit=0x1fffff (=2MB)
@@ -141,7 +148,7 @@ extern struct cred init_cred;
 	.static_prio	= MAX_PRIO-20,					\
 	.normal_prio	= MAX_PRIO-20,					\
 	.policy		= SCHED_NORMAL,					\
-	.cpus_allowed	= CPU_MASK_ALL,					\
+	.cpus_allowed	= INIT_TASK_CPUS_ALLOWED,			\
 	.mm		= NULL,						\
 	.active_mm	= &init_mm,					\
 	.se		= {						\

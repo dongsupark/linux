@@ -810,7 +810,7 @@ void rebuild_sched_domains(void)
 static int cpuset_test_cpumask(struct task_struct *tsk,
 			       struct cgroup_scanner *scan)
 {
-	return !cpumask_equal(&tsk->cpus_allowed,
+	return !cpumask_equal(tsk->cpus_allowed,
 			(cgroup_cs(scan->cg))->cpus_allowed);
 }
 
@@ -2221,7 +2221,7 @@ int cpuset_cpus_allowed_fallback(struct task_struct *tsk)
 	 * the pending set_cpus_allowed_ptr() will fix things.
 	 */
 
-	cpu = cpumask_any_and(&tsk->cpus_allowed, cpu_active_mask);
+	cpu = cpumask_any_and(tsk->cpus_allowed, cpu_active_mask);
 	if (cpu >= nr_cpu_ids) {
 		/*
 		 * Either tsk->cpus_allowed is wrong (see above) or it

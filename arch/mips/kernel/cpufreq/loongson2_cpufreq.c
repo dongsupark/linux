@@ -64,7 +64,7 @@ static int loongson2_cpufreq_target(struct cpufreq_policy *policy,
 	if (!cpu_online(cpu))
 		return -ENODEV;
 
-	cpus_allowed = current->cpus_allowed;
+	cpus_allowed = *current->cpus_allowed;
 	set_cpus_allowed_ptr(current, cpumask_of(cpu));
 
 	if (cpufreq_frequency_table_target

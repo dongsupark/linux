@@ -258,7 +258,7 @@ int dcdbas_smi_request(struct smi_cmd *smi_cmd)
 	if (!alloc_cpumask_var(&old_mask, GFP_KERNEL))
 		return -ENOMEM;
 
-	cpumask_copy(old_mask, &current->cpus_allowed);
+	cpumask_copy(old_mask, current->cpus_allowed);
 	set_cpus_allowed_ptr(current, cpumask_of(0));
 	if (smp_processor_id() != 0) {
 		dev_dbg(&dcdbas_pdev->dev, "%s: failed to get CPU 0\n",

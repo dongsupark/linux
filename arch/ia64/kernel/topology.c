@@ -361,7 +361,7 @@ static int __cpuinit cache_add_dev(struct device * sys_dev)
 	if (all_cpu_cache_info[cpu].kobj.parent)
 		return 0;
 
-	oldmask = current->cpus_allowed;
+	oldmask = *current->cpus_allowed;
 	retval = set_cpus_allowed_ptr(current, cpumask_of(cpu));
 	if (unlikely(retval))
 		return retval;

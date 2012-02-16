@@ -910,7 +910,7 @@ static int acpi_processor_get_throttling(struct acpi_processor *pr)
 	/*
 	 * Migrate task to the cpu pointed by pr.
 	 */
-	cpumask_copy(saved_mask, &current->cpus_allowed);
+	cpumask_copy(saved_mask, current->cpus_allowed);
 	/* FIXME: use work_on_cpu() */
 	if (set_cpus_allowed_ptr(current, cpumask_of(pr->id))) {
 		/* Can't migrate to the target pr->id CPU. Exit */
@@ -1099,7 +1099,7 @@ int acpi_processor_set_throttling(struct acpi_processor *pr,
 		return -ENODEV;
 	}
 
-	cpumask_copy(saved_mask, &current->cpus_allowed);
+	cpumask_copy(saved_mask, current->cpus_allowed);
 	t_state.target_state = state;
 	p_throttling = &(pr->throttling);
 	cpumask_and(online_throttling_cpus, cpu_online_mask,

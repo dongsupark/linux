@@ -92,7 +92,7 @@ static int integrator_set_target(struct cpufreq_policy *policy,
 	/*
 	 * Save this threads cpus_allowed mask.
 	 */
-	cpus_allowed = current->cpus_allowed;
+	cpus_allowed = *current->cpus_allowed;
 
 	/*
 	 * Bind to the specified CPU.  When this call returns,
@@ -163,7 +163,7 @@ static unsigned int integrator_get(unsigned int cpu)
 	u_int cm_osc;
 	struct icst_vco vco;
 
-	cpus_allowed = current->cpus_allowed;
+	cpus_allowed = *current->cpus_allowed;
 
 	set_cpus_allowed(current, cpumask_of_cpu(cpu));
 	BUG_ON(cpu != smp_processor_id());

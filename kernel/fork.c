@@ -215,9 +215,15 @@ void __init fork_init(unsigned long mempages)
 #ifndef ARCH_MIN_TASKALIGN
 #define ARCH_MIN_TASKALIGN	L1_CACHE_BYTES
 #endif
+	unsigned int task_size = sizeof(struct task_struct);
+
+#ifdef CONFIG_CPUMASK_OFFSTACK
+	task_size += BITS_TO_LONGS(nr_cpu_ids) * sizeof(long);
+#endif /* CONFIG_CPUMASK_OFFSTACK */
+
 	/* create a slab on which task_structs can be allocated */
 	task_struct_cachep =
-		kmem_cache_create("task_struct", sizeof(struct task_struct),
+		kmem_cache_create("task_struct", task_size,
 			ARCH_MIN_TASKALIGN, SLAB_PANIC | SLAB_NOTRACK, NULL);
 #endif
 
@@ -263,6 +269,11 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	tsk = alloc_task_struct_node(node);
 	if (!tsk)
 		return NULL;
+
+#ifdef CONFIG_CPUMASK_OFFSTACK
+	/* cpumask sits at end of task struct. */
+	tsk->cpus_allowed = (void *)(tsk + 1);
+#endif
 
 	ti = alloc_thread_info_node(tsk, node);
 	if (!ti) {
@@ -1785,3 +1796,7 @@ int unshare_files(struct files_struct **displaced)
 	task_unlock(task);
 	return 0;
 }
+
+#ifdef CONFIG_CPUMASK_OFFSTACK
+DECLARE_BITMAP(init_task_cpus_allowed, NR_CPUS) = CPU_BITS_ALL;
+#endif

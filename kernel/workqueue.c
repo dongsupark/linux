@@ -1287,7 +1287,7 @@ __acquires(&gcwq->lock)
 		if (gcwq->flags & GCWQ_DISASSOCIATED)
 			return false;
 		if (task_cpu(task) == gcwq->cpu &&
-		    cpumask_equal(&current->cpus_allowed,
+		    cpumask_equal(current->cpus_allowed,
 				  get_cpu_mask(gcwq->cpu)))
 			return true;
 		spin_unlock_irq(&gcwq->lock);

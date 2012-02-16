@@ -177,7 +177,7 @@ void cmci_rediscover(int dying)
 		return;
 	if (!alloc_cpumask_var(&old, GFP_KERNEL))
 		return;
-	cpumask_copy(old, &current->cpus_allowed);
+	cpumask_copy(old, current->cpus_allowed);
 
 	for_each_online_cpu(cpu) {
 		if (cpu == dying)

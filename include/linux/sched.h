@@ -1281,7 +1281,7 @@ struct task_struct {
 #endif
 
 	unsigned int policy;
-	cpumask_t cpus_allowed;
+	cpumask_var_t cpus_allowed;
 
 #ifdef CONFIG_PREEMPT_RCU
 	int rcu_read_lock_nesting;
@@ -1602,7 +1602,7 @@ struct task_struct {
 };
 
 /* Future-safe accessor for struct task_struct's cpus_allowed. */
-#define tsk_cpus_allowed(tsk) (&(tsk)->cpus_allowed)
+#define tsk_cpus_allowed(tsk) ((tsk)->cpus_allowed)
 
 /*
  * Priority of a process goes from 0..MAX_PRIO-1, valid RT

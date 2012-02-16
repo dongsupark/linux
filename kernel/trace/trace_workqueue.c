@@ -53,7 +53,7 @@ probe_workqueue_insertion(void *ignore,
 			  struct task_struct *wq_thread,
 			  struct work_struct *work)
 {
-	int cpu = cpumask_first(&wq_thread->cpus_allowed);
+	int cpu = cpumask_first(wq_thread->cpus_allowed);
 	struct cpu_workqueue_stats *node;
 	unsigned long flags;
 
@@ -75,7 +75,7 @@ probe_workqueue_execution(void *ignore,
 			  struct task_struct *wq_thread,
 			  struct work_struct *work)
 {
-	int cpu = cpumask_first(&wq_thread->cpus_allowed);
+	int cpu = cpumask_first(wq_thread->cpus_allowed);
 	struct cpu_workqueue_stats *node;
 	unsigned long flags;
 
@@ -121,7 +121,7 @@ static void
 probe_workqueue_destruction(void *ignore, struct task_struct *wq_thread)
 {
 	/* Workqueue only execute on one cpu */
-	int cpu = cpumask_first(&wq_thread->cpus_allowed);
+	int cpu = cpumask_first(wq_thread->cpus_allowed);
 	struct cpu_workqueue_stats *node, *next;
 	unsigned long flags;
 

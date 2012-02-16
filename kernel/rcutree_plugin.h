@@ -1515,7 +1515,7 @@ static void rcu_yield(void (*f)(unsigned long), unsigned long arg)
 static int rcu_cpu_kthread_should_stop(int cpu)
 {
 	while (cpu_is_offline(cpu) ||
-	       !cpumask_equal(&current->cpus_allowed, cpumask_of(cpu)) ||
+	       !cpumask_equal(current->cpus_allowed, cpumask_of(cpu)) ||
 	       smp_processor_id() != cpu) {
 		if (kthread_should_stop())
 			return 1;
@@ -1523,7 +1523,7 @@ static int rcu_cpu_kthread_should_stop(int cpu)
 		per_cpu(rcu_cpu_kthread_cpu, cpu) = raw_smp_processor_id();
 		local_bh_enable();
 		schedule_timeout_uninterruptible(1);
-		if (!cpumask_equal(&current->cpus_allowed, cpumask_of(cpu)))
+		if (!cpumask_equal(current->cpus_allowed, cpumask_of(cpu)))
 			set_cpus_allowed_ptr(current, cpumask_of(cpu));
 		local_bh_disable();
 	}
