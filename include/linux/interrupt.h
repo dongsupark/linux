@@ -269,7 +269,7 @@ struct irq_affinity_notify {
 	unsigned int irq;
 	struct kref kref;
 	struct work_struct work;
-	void (*notify)(struct irq_affinity_notify *, const cpumask_t *mask);
+	void (*notify)(struct irq_affinity_notify *, const struct cpumask *mask);
 	void (*release)(struct kref *ref);
 };
 

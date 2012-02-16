@@ -219,7 +219,7 @@ void free_irq_cpu_rmap(struct cpu_rmap *rmap)
 EXPORT_SYMBOL(free_irq_cpu_rmap);
 
 static void
-irq_cpu_rmap_notify(struct irq_affinity_notify *notify, const cpumask_t *mask)
+irq_cpu_rmap_notify(struct irq_affinity_notify *notify, const struct cpumask *mask)
 {
 	struct irq_glue *glue =
 		container_of(notify, struct irq_glue, notify);
