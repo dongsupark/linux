@@ -608,13 +608,11 @@ static inline int cpulist_parse(const char *buf, struct cpumask *dstp)
 /**
  * cpumask_size - size to allocate for a 'struct cpumask' in bytes
  *
- * This will eventually be a runtime variable, depending on nr_cpu_ids.
+ * This can be a runtime variable, depending on nr_cpu_ids.
  */
 static inline size_t cpumask_size(void)
 {
-	/* FIXME: Once all cpumask assignments are eliminated, this
-	 * can be nr_cpumask_bits */
-	return BITS_TO_LONGS(NR_CPUS) * sizeof(long);
+	return BITS_TO_LONGS(nr_cpumask_bits) * sizeof(long);
 }
 
 /*
