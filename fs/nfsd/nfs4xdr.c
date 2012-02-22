@@ -2562,7 +2562,8 @@ out_acl:
 		WRITE64(stat.ino);
 	}
 #if defined(CONFIG_PNFSD)
-	if (bmval1 & FATTR4_WORD1_FS_LAYOUT_TYPES) {
+	if ((bmval1 & FATTR4_WORD1_FS_LAYOUT_TYPES) ||
+	    (bmval2 & FATTR4_WORD2_LAYOUT_TYPES)) {
 		struct super_block *sb = dentry->d_inode->i_sb;
 		int type = 0;
 
