@@ -3818,7 +3818,7 @@ nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
 		       __be32 nfserr,
 		       struct nfsd4_pnfs_layoutget *lgp)
 {
-	int maxcount, leadcount;
+	u32 maxcount, leadcount;
 	struct super_block *sb;
 	struct exp_xdr_stream xdr;
 	__be32 *p, *p_save, *p_start = resp->p;
@@ -3840,12 +3840,13 @@ nfsd4_encode_layoutget(struct nfsd4_compoundres *resp,
 	ADJUST_ARGS();
 
 	/* Ensure have room for ret_on_close, off, len, iomode, type */
-	maxcount -= leadcount;
-	if (maxcount < 0) {
-		printk(KERN_ERR "%s: buffer too small\n", __func__);
+	if (maxcount < leadcount) {
+		dprintk("%s: buffer too small for response header (%u < %u)\n",
+			__func__, maxcount, leadcount);
 		nfserr = nfserr_toosmall;
 		goto err;
 	}
+	maxcount -= leadcount;
 
 	/* Set xdr info so file system can encode layout */
 	xdr.p = p_save = resp->p;
