@@ -703,6 +703,25 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 
 	dprintk("NFSD: %s Begin\n", __func__);
 
+	/* verify minlength and range as per RFC5661:
+	 *  o  If loga_length is less than loga_minlength,
+	 *     the metadata server MUST return NFS4ERR_INVAL.
+	 *  o  If the sum of loga_offset and loga_minlength exceeds
+	 *     NFS4_UINT64_MAX, and loga_minlength is not
+	 *     NFS4_UINT64_MAX, the error NFS4ERR_INVAL MUST result.
+	 *  o  If the sum of loga_offset and loga_length exceeds
+	 *     NFS4_UINT64_MAX, and loga_length is not NFS4_UINT64_MAX,
+	 *     the error NFS4ERR_INVAL MUST result.
+	 */
+	if ((lgp->lg_seg.length < lgp->lg_minlength) ||
+	    (lgp->lg_minlength != NFS4_MAX_UINT64 &&
+	     lgp->lg_minlength > NFS4_MAX_UINT64 - lgp->lg_seg.offset) ||
+	    (lgp->lg_seg.length != NFS4_MAX_UINT64 &&
+	     lgp->lg_seg.length > NFS4_MAX_UINT64 - lgp->lg_seg.offset)) {
+		nfserr = nfserr_inval;
+		goto out;
+	}
+
 	args.lg_sbid = find_create_sbid(sb);
 	if (!args.lg_sbid) {
 		nfserr = nfserr_layouttrylater;
