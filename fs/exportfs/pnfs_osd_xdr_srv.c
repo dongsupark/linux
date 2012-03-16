@@ -179,6 +179,42 @@ static enum nfsstat4 _encode_string(struct exp_xdr_stream *xdr,
 	return 0;
 }
 
+/* struct pnfs_osd_targetaddr {
+ *	u32				ota_available;
+ *	struct pnfs_osd_net_addr	ota_netaddr;
+ * };
+ */
+static inline enum nfsstat4 pnfs_osd_xdr_encode_targetaddr(
+	struct exp_xdr_stream *xdr,
+	struct pnfs_osd_targetaddr *taddr)
+{
+	__be32 *p;
+
+	/* ota_available */
+	p = exp_xdr_reserve_space(xdr, 4);
+	if (!p)
+		return NFS4ERR_TOOSMALL;
+	p = exp_xdr_encode_u32(p, taddr->ota_available);
+
+	/* encode r_netid */
+	p = exp_xdr_reserve_space(xdr, 4 + taddr->ota_netaddr.r_netid.len);
+	if (!p)
+		return NFS4ERR_TOOSMALL;
+
+	p = exp_xdr_encode_opaque(p,
+				taddr->ota_netaddr.r_netid.data,
+				taddr->ota_netaddr.r_netid.len);
+
+	/* encode r_addr */
+	p = exp_xdr_reserve_space(xdr, 4 + taddr->ota_netaddr.r_addr.len);
+	if (!p)
+		return NFS4ERR_TOOSMALL;
+	p = exp_xdr_encode_opaque(p,
+				taddr->ota_netaddr.r_addr.data,
+				taddr->ota_netaddr.r_addr.len);
+	return 0;
+}
+
 /* struct pnfs_osd_deviceaddr {
  *	struct pnfs_osd_targetid	oda_targetid;
  *	struct pnfs_osd_targetaddr	oda_targetaddr;
@@ -194,17 +230,20 @@ enum nfsstat4 pnfs_osd_xdr_encode_deviceaddr(
 	__be32 *p;
 	enum nfsstat4 err;
 
-	p = exp_xdr_reserve_space(xdr, 4 + 4 + sizeof(devaddr->oda_lun));
+	p = exp_xdr_reserve_space(xdr, sizeof(u32));
 	if (!p)
 		return NFS4ERR_TOOSMALL;
 
 	/* Empty oda_targetid */
 	p = exp_xdr_encode_u32(p, OBJ_TARGET_ANON);
 
-	/* Empty oda_targetaddr for now */
-	p = exp_xdr_encode_u32(p, 0);
+	/* oda_targetaddr */
+	err = pnfs_osd_xdr_encode_targetaddr(xdr, &devaddr->oda_targetaddr);
+	if (err)
+		return err;
 
 	/* oda_lun */
+	p = exp_xdr_reserve_space(xdr, sizeof(devaddr->oda_lun));
 	exp_xdr_encode_bytes(p, devaddr->oda_lun, sizeof(devaddr->oda_lun));
 
 	err = _encode_string(xdr, &devaddr->oda_systemid);
