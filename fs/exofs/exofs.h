@@ -56,6 +56,9 @@
 struct exofs_dev {
 	struct ore_dev ored;
 	unsigned did;
+	unsigned urilen;
+	uint8_t *uri;
+	struct kobject ed_kobj;
 };
 /*
  * our extension to the in-memory superblock
@@ -73,6 +76,7 @@ struct exofs_sb_info {
 	struct ore_layout	layout;		/* Default files layout       */
 	struct ore_comp one_comp;		/* id & cred of partition id=0*/
 	struct ore_components oc;		/* comps for the partition    */
+	struct kobject	s_kobj;			/* holds per-sbi kobject      */
 };
 
 /*

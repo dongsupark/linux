@@ -39,6 +39,7 @@
 #include <linux/exportfs.h>
 #include <linux/slab.h>
 
+#include "sys.h"
 #include "exofs.h"
 
 #define EXOFS_DBGMSG2(M...) do {} while (0)
@@ -472,6 +473,7 @@ static void exofs_put_super(struct super_block *sb)
 	_exofs_print_device("Unmounting", NULL, ore_comp_dev(&sbi->oc, 0),
 			    sbi->one_comp.obj.partition);
 
+	exofs_sysfs_cluster_del(sbi);
 	bdi_destroy(&sbi->bdi);
 	exofs_free_sbi(sbi);
 	sb->s_fs_info = NULL;
@@ -632,6 +634,11 @@ static int exofs_read_lookup_dev_table(struct exofs_sb_info *sbi,
 	memcpy(&sbi->oc.ods[numdevs], &sbi->oc.ods[0],
 		(numdevs - 1) * sizeof(sbi->oc.ods[0]));
 
+	/* create sysfs entries to hold the current exofs cluster instance.
+	 * There will be one sysfs dirent for cluster osdname per exofs mount
+	 */
+	exofs_sysfs_cluster_add(&dt->dt_dev_table[0], sbi);
+
 	for (i = 0; i < numdevs; i++) {
 		struct exofs_fscb fscb;
 		struct osd_dev_info odi;
@@ -657,6 +664,7 @@ static int exofs_read_lookup_dev_table(struct exofs_sb_info *sbi,
 			eds[i].ored.od = fscb_od;
 			++sbi->oc.numdevs;
 			fscb_od = NULL;
+			exofs_sysfs_odev_add(&eds[i], sbi);
 			continue;
 		}
 
@@ -682,6 +690,7 @@ static int exofs_read_lookup_dev_table(struct exofs_sb_info *sbi,
 				  odi.osdname);
 			goto out;
 		}
+		exofs_sysfs_odev_add(&eds[i], sbi);
 
 		/* TODO: verify other information is correct and FS-uuid
 		 *	 matches. Benny what did you say about device table
@@ -845,6 +854,7 @@ static int exofs_fill_super(struct super_block *sb, void *data, int silent)
 		goto free_sbi;
 	}
 
+	exofs_sysfs_print();
 	_exofs_print_device("Mounting", opts->dev_name,
 			    ore_comp_dev(&sbi->oc, 0),
 			    sbi->one_comp.obj.partition);
@@ -1024,6 +1034,9 @@ static int __init init_exofs(void)
 	if (err)
 		goto out_d;
 
+	/* We don't fail if sysfs creation failed */
+	exofs_sysfs_init();
+
 	return 0;
 out_d:
 	destroy_inodecache();
@@ -1033,6 +1046,7 @@ out:
 
 static void __exit exit_exofs(void)
 {
+	exofs_sysfs_uninit();
 	unregister_filesystem(&exofs_type);
 	destroy_inodecache();
 }
