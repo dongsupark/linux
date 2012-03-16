@@ -321,6 +321,7 @@ int exofs_get_device_info(struct super_block *sb, struct exp_xdr_stream *xdr,
 {
 	struct exofs_sb_info *sbi = sb->s_fs_info;
 	struct pnfs_osd_deviceaddr devaddr;
+	struct exofs_dev *edev;
 	const struct osd_dev_info *odi;
 	u64 devno = devid->devid;
 	__be32 *start;
@@ -334,13 +335,18 @@ int exofs_get_device_info(struct super_block *sb, struct exp_xdr_stream *xdr,
 		return -ENODEV;
 	}
 
-	odi = osduld_device_info(sbi->oc.ods[devno]->od);
+	edev = container_of(sbi->oc.ods[devno], typeof(*edev), ored);
+	odi = osduld_device_info(edev->ored.od);
 
 	devaddr.oda_systemid.len = odi->systemid_len;
 	devaddr.oda_systemid.data = (void *)odi->systemid; /* !const cast */
 
 	devaddr.oda_osdname.len = odi->osdname_len ;
 	devaddr.oda_osdname.data = (void *)odi->osdname;/* !const cast */
+
+	devaddr.oda_targetaddr.ota_available = OBJ_OTA_AVAILABLE;
+	devaddr.oda_targetaddr.ota_netaddr.r_addr.data = (void *)edev->uri;
+	devaddr.oda_targetaddr.ota_netaddr.r_addr.len = edev->urilen;
 
 	/* skip opaque size, will be filled-in later */
 	start = exp_xdr_reserve_qwords(xdr, 1);
