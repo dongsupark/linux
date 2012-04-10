@@ -108,7 +108,8 @@ bool nfsd4_validate_pnfs_dlm_device(char *ds_list, int *num_ds)
 		struct sockaddr_storage tempAddr;
 		int ipLen = strcspn(start, ",");
 
-		if (!rpc_pton(start, ipLen, (struct sockaddr *)&tempAddr, sizeof(tempAddr)))
+		if (!rpc_pton(&init_net, start, ipLen,
+			      (struct sockaddr *)&tempAddr, sizeof(tempAddr)))
 			return false;
 		(*num_ds)++;
 		start += ipLen + 1;
