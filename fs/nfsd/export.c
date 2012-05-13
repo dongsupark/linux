@@ -421,7 +421,7 @@ static int check_export(struct inode *inode, int *flags, unsigned char *uuid)
 		return -EINVAL;
 	}
 
-	return pnfsd_check_export(inode, flags);
+	return 0;
 }
 
 #ifdef CONFIG_NFSD_V4
@@ -624,6 +624,13 @@ static int svc_export_parse(struct cache_detail *cd, char *mesg, int mlen)
 				   exp.ex_uuid);
 		if (err)
 			goto out4;
+
+		if (exp.ex_pnfs) {
+			err = pnfsd_check_export(exp.ex_path.dentry->d_inode,
+						 &exp.ex_flags);
+			if (err)
+				goto out4;
+		}
 	}
 
 	expp = svc_export_lookup(&exp);
