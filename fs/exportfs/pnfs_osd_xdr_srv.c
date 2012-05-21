@@ -88,8 +88,7 @@ static inline enum nfsstat4 pnfs_osd_xdr_encode_objid(
 	if (!p)
 		return NFS4ERR_TOOSMALL;
 
-	p = exp_xdr_encode_u64(p, dev_id->sbid);
-	p = exp_xdr_encode_u64(p, dev_id->devid);
+	p = nfsd4_encode_deviceid(p, dev_id);
 	p = exp_xdr_encode_u64(p, object_id->oid_partition_id);
 	p = exp_xdr_encode_u64(p, object_id->oid_object_id);
 
