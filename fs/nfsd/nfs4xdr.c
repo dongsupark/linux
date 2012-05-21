@@ -3641,7 +3641,7 @@ nfsd4_encode_devlist_iterator(struct nfsd4_compoundres *resp,
 
 		/* Encode device id and layout type */
 		RESERVE_SPACE(sizeof(struct nfsd4_pnfs_deviceid));
-		WRITE64((__be64)sbid);
+		WRITE64(sbid);
 		WRITE64(res.gd_devid);	/* devid minor */
 		ADJUST_ARGS();
 		(*dev_count)++;

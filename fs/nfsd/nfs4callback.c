@@ -511,8 +511,7 @@ static void encode_cb_device4args(struct xdr_stream *xdr,
 		else
 			*p++ = cpu_to_be32(20);
 		*p++ = cpu_to_be32(cbd[i].cbd_layout_type);
-		p = xdr_encode_hyper(p, cbd[i].cbd_devid.sbid);
-		xdr_encode_hyper(p, cbd[i].cbd_devid.devid);
+		p = nfsd4_encode_deviceid(p, &cbd[i].cbd_devid);
 
 		if (cbd[i].cbd_notify_type == NOTIFY_DEVICEID4_CHANGE) {
 			p = xdr_reserve_space(xdr, 4);
