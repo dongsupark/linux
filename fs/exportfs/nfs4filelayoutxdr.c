@@ -174,8 +174,7 @@ filelayout_encode_layout(struct exp_xdr_stream *xdr,
 	p++;
 
 	/* encode device id */
-	p = exp_xdr_encode_u64(p, flp->device_id.sbid);
-	p = exp_xdr_encode_u64(p, flp->device_id.devid);
+	p = nfsd4_encode_deviceid(p, &flp->device_id);
 
 	/* set and encode flags */
 	nfl_util = flp->lg_stripe_unit;
