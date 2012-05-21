@@ -170,10 +170,9 @@ find_pnfs_ds_stateid(stateid_t *stidp)
 	hashval = stateid_hashval(stidp);
 	list_for_each_entry(local, &ds_stid_hashtbl[hashval], ds_hash)
 		if (!memcmp(&local->ds_stid.si_opaque, &stidp->si_opaque, sizeof(stidp->si_opaque))) {
-			stateid_t *sid = &local->ds_stid;
 			dprintk("NFSD: %s <-- %p ds_flags %lx " STATEID_FMT "\n",
 				__func__, local, local->ds_flags,
-				STATEID_VAL(sid));
+				STATEID_VAL(&local->ds_stid));
 			return local;
 		}
 	return NULL;
