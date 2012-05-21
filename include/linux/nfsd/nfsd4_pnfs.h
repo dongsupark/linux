@@ -44,6 +44,13 @@ struct nfsd4_pnfs_deviceid {
 	u64	devid;			/* filesystem-wide unique device ID */
 };
 
+static inline __be32 *nfsd4_encode_deviceid(__be32 *p,
+					const struct nfsd4_pnfs_deviceid *dp)
+{
+        p = exp_xdr_encode_u64(p, dp->sbid);
+        return exp_xdr_encode_u64(p, dp->devid);
+}
+
 struct nfsd4_pnfs_dev_iter_res {
 	u64		gd_cookie;	/* request/repsonse */
 	u64		gd_verf;	/* request/repsonse */
