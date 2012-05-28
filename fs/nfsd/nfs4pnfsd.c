@@ -1248,7 +1248,7 @@ void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
 
 		empty = list_empty(&fp->fi_layouts);
 		fs_layout_return(fp->fi_inode->i_sb, fp->fi_inode, &lr,
-				 LR_FLAG_EXPIRE,
+				 LR_FLAG_INTERN,
 				 empty ? PNFS_LAST_LAYOUT_NO_RECALLS : NULL);
 	}
 	spin_unlock(&layout_lock);
