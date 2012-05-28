@@ -1229,7 +1229,9 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
 {
 	struct nfs4_layout *lo, *nextlp;
+	bool found = false;
 
+	dprintk("%s: fp=%p clp=%p", __func__, fp, clp);
 	spin_lock(&layout_lock);
 	list_for_each_entry_safe (lo, nextlp, &fp->fi_layouts, lo_perfile) {
 		struct nfsd4_pnfs_layoutreturn lr;
@@ -1247,11 +1249,15 @@ void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
 		destroy_layout(lo); /* do not access lp after this */
 
 		empty = list_empty(&fp->fi_layouts);
+		found = true;
+		dprintk("%s: fp=%p clp=%p: return on close", __func__, fp, clp);
 		fs_layout_return(fp->fi_inode->i_sb, fp->fi_inode, &lr,
 				 LR_FLAG_INTERN,
 				 empty ? PNFS_LAST_LAYOUT_NO_RECALLS : NULL);
 	}
 	spin_unlock(&layout_lock);
+	if (!found)
+		dprintk("%s: no layout found", __func__);
 }
 
 void pnfs_expire_client(struct nfs4_client *clp)
