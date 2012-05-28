@@ -161,6 +161,7 @@ alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
 	spin_lock(&layout_lock);
 	list_add(&new->ls_perfile, &fp->fi_layout_states);
 	spin_unlock(&layout_lock);
+	new->ls_roc = false;
 	return new;
 }
 
@@ -287,6 +288,15 @@ static void update_layout_stateid(struct nfs4_layout_state *ls, stateid_t *sid)
 	spin_unlock(&layout_lock);
 }
 
+static void update_layout_roc(struct nfs4_layout_state *ls, bool roc)
+{
+	if (roc) {
+		ls->ls_roc = true;
+		dprintk("%s: Marked return_on_close on layoutstate %p\n",
+			__func__, ls);
+	}
+}
+
 static void
 init_layout(struct nfs4_layout *lp,
 	    struct nfs4_layout_state *ls,
@@ -294,8 +304,7 @@ init_layout(struct nfs4_layout *lp,
 	    struct nfs4_client *clp,
 	    struct svc_fh *current_fh,
 	    struct nfsd4_layout_seg *seg,
-	    stateid_t *stateid,
-	    bool roc)
+	    stateid_t *stateid)
 {
 	dprintk("pNFS %s: lp %p ls %p clp %p fp %p ino %p\n", __func__,
 		lp, ls, clp, fp, fp->fi_inode);
@@ -306,7 +315,6 @@ init_layout(struct nfs4_layout *lp,
 	memcpy(&lp->lo_seg, seg, sizeof(lp->lo_seg));
 	get_layout_state(ls);		/* put on destroy_layout */
 	lp->lo_state = ls;
-	lp->lo_roc = roc;
 	update_layout_stateid(ls, stateid);
 	list_add_tail(&lp->lo_perclnt, &clp->cl_layouts);
 	list_add_tail(&lp->lo_perfile, &fp->fi_layouts);
@@ -812,6 +820,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 
 	lgp->lg_seg = res.lg_seg;
 	lgp->lg_roc = res.lg_return_on_close;
+	update_layout_roc(ls, res.lg_return_on_close);
 
 	/* SUCCESS!
 	 * Can the new layout be merged into an existing one?
@@ -821,7 +830,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 		goto out_freelayout;
 
 	/* Can't merge, so let's initialize this new layout */
-	init_layout(lp, ls, fp, clp, lgp->lg_fhp, &res.lg_seg, &lgp->lg_sid, res.lg_return_on_close);
+	init_layout(lp, ls, fp, clp, lgp->lg_fhp, &res.lg_seg, &lgp->lg_sid);
 out_unlock:
 	if (ls)
 		put_layout_state(ls);
@@ -1227,7 +1236,7 @@ void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
 		bool empty;
 
 		/* Check for a match */
-		if (!lo->lo_roc || lo->lo_client != clp)
+		if (!lo->lo_state->ls_roc || lo->lo_client != clp)
 			continue;
 
 		/* Return the layout */

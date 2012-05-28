@@ -45,6 +45,7 @@ struct nfs4_layout_state {
 	struct kref		ls_ref;
 	struct nfs4_stid	ls_stid;
 	struct list_head	ls_perfile;
+	bool			ls_roc;
 };
 
 /* outstanding layout */
@@ -55,7 +56,6 @@ struct nfs4_layout {
 	struct nfs4_client		*lo_client;
 	struct nfs4_layout_state	*lo_state;
 	struct nfsd4_layout_seg		lo_seg;
-	bool				lo_roc;
 };
 
 struct pnfs_inval_state {
