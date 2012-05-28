@@ -153,6 +153,11 @@ pnfsd_lexp_layout_get(struct inode *inode,
 	res->lg_seg.offset = 0;
 	res->lg_seg.length = NFS4_MAX_UINT64;
 #endif  /* CONFIG_PNFSD_LEXP_LAYOUT_SEGMENTS */
+#ifdef     CONFIG_PNFSD_LEXP_RETURN_ON_CLOSE
+	res->lg_return_on_close = true;
+#else   /* CONFIG_PNFSD_LEXP_RETURN_ON_CLOSE */
+	res->lg_return_on_close = false;
+#endif  /* CONFIG_PNFSD_LEXP_RETURN_ON_CLOSE */
 
 	layout = kzalloc(sizeof(*layout), GFP_KERNEL);
 	if (layout == NULL) {
