@@ -893,6 +893,7 @@ pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
 	struct nfs4_layout *lp, *nextlp;
 
 	dprintk("%s: clp %p fp %p\n", __func__, clp, fp);
+	lrp->lrs_present = 1;
 	spin_lock(&layout_lock);
 	list_for_each_entry_safe (lp, nextlp, &fp->fi_layouts, lo_perfile) {
 		dprintk("%s: lp %p client %p,%p lo_type %x,%x iomode %d,%d\n",
