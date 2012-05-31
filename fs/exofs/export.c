@@ -29,6 +29,9 @@
 
 #include "linux/nfsd/pnfs_osd_xdr_srv.h"
 
+/* TODO: put in sysfs per sb */
+const static unsigned sb_shared_num_stripes = 8;
+
 static int exofs_layout_type(struct super_block *sb)
 {
 	return LAYOUT_OSD2_OBJECTS;
@@ -94,14 +97,27 @@ void ore_layout_2_pnfs_layout(struct pnfs_osd_layout *pl,
 	}
 }
 
-static void _align_io(struct ore_layout *layout, u64 *offset, u64 *length)
+static bool _align_io(struct ore_layout *layout, struct nfsd4_layout_seg *lseg,
+		      bool shared)
 {
 	u64 stripe_size = (layout->group_width - layout->parity) *
 							layout->stripe_unit;
 	u64 group_size = stripe_size * layout->group_depth;
 
-	*offset = div64_u64(*offset, group_size) * group_size;
-	*length = group_size;
+	/* TODO: Don't ignore shared flag. Single writer can get a full group */
+	if (lseg->iomode != IOMODE_READ &&
+	    (layout->parity || (layout->mirrors_p1 > 1))) {
+		/* RAID writes */
+		lseg->offset = div64_u64(lseg->offset, stripe_size) *
+								stripe_size;
+		lseg->length = stripe_size * sb_shared_num_stripes;
+		return true;
+	} else {
+		/* reads or no data redundancy */
+		lseg->offset = div64_u64(lseg->offset, group_size) * group_size;
+		lseg->length = group_size;
+		return false;
+	}
 }
 
 static enum nfsstat4 exofs_layout_get(
@@ -116,20 +132,40 @@ static enum nfsstat4 exofs_layout_get(
 	struct pnfs_osd_layout layout;
 	__be32 *start;
 	unsigned i;
-	bool in_recall;
+	bool in_recall, need_recall;
 	enum nfsstat4 nfserr;
 
 	EXOFS_DBGMSG("(0x%lx) REQUESTED offset=0x%llx len=0x%llx iomod=0x%x\n",
 		     inode->i_ino, res->lg_seg.offset,
 		     res->lg_seg.length, res->lg_seg.iomode);
 
-	_align_io(&sbi->layout, &res->lg_seg.offset, &res->lg_seg.length);
-	res->lg_seg.iomode = IOMODE_RW;
+	need_recall = _align_io(&sbi->layout, &res->lg_seg,
+				test_bit(OBJ_LAYOUT_IS_GIVEN, &oi->i_flags));
 	res->lg_return_on_close = true;
 
 	EXOFS_DBGMSG("(0x%lx) RETURNED offset=0x%llx len=0x%llx iomod=0x%x\n",
 		     inode->i_ino, res->lg_seg.offset,
 		     res->lg_seg.length, res->lg_seg.iomode);
+
+	if (need_recall) {
+		int rc = cb_layout_recall(inode, IOMODE_RW, res->lg_seg.offset,
+				      res->lg_seg.length, (void *)0x17);
+		switch (rc) {
+		case 0:
+		case -EAGAIN:
+			EXOFS_DBGMSG("(0x%lx) @@@ Sharing of RAID5/1 stripe\n",
+				     inode->i_ino);
+			return NFS4ERR_RECALLCONFLICT;
+		default:
+			/* This is fine for now */
+			/* TODO: Fence object off */
+			EXOFS_DBGMSG("(0x%lx) !!!cb_layout_recall => %d\n",
+				     inode->i_ino, rc);
+			/*fallthrough*/
+		case -ENOENT:
+			break;
+		}
+	}
 
 	/* skip opaque size, will be filled-in later */
 	start = exp_xdr_reserve_qwords(xdr, 1);
