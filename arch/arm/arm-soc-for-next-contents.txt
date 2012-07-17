@@ -92,6 +92,7 @@ next/clk:
 tegra/common-clk	git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git for-3.6/common-clk
 omap/am33xx-clk		git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-devel-am33xx-data-for-v3.6
 				depends on omap/cleanup2
+imx/clk			git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-clk
 
 next/dma:
 samsung/dma		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/devel-dma-ops
