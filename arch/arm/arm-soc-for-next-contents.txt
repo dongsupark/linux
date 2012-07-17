@@ -98,6 +98,10 @@ next/dma:
 samsung/dma		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/devel-dma-ops
 
 ---
+staging/io-cleanup-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci
+				waiting for more test results
+
+---
 next/drivers: (dropped for now)
 devel/led-driver	git://git.kernel.org/pub/scm/linux/kernel/git/cooloney/linux-leds.git for-arm-soc
 
