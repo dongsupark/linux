@@ -20,6 +20,7 @@ imx/cleanup		git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-cleanup
 tegra/cleanup		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git for-3.6/cleanup
 tegra/fixes		git://git.kernel.org/pub/scm/linux/kernel/git/swarren/linux-tegra.git for-3.6/fixes
 samsung/cleanup		git://git.kernel.org/pub/scm/linux/kernel/git/kgene/linux-samsung.git next/cleanup-samsung
+clps711x/cleanup	patches from Alexander Shiyan
 
 next/soc:
 nomadik/drivercfg	git://git.kernel.org/pub/scm/linux/kernel/git/linusw/linux-nomadik.git nomadik-for-arm-soc
