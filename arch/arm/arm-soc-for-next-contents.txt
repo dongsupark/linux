@@ -11,6 +11,7 @@ dependencies:
 next/fixes-non-critical:
 omap/fixes-non-critical	git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-fixes-non-critical-for-v3.6
 mxs/fixes		git://git.linaro.org/people/shawnguo/linux-2.6.git mxs/fixes-for-3.6
+-			patch from Tony Prisk
 
 next/cleanup:
 at91/cleanup		git://github.com/at91linux/linux-at91.git tags/at91-for-next-cleanup
