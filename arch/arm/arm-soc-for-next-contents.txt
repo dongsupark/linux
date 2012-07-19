@@ -72,6 +72,7 @@ mvebu/newsoc		git://github.com/Marvell-Semi/EBU_mainline_public.git mvebu_for-ne
 				rebased to v3.5-rc5
 omap/minimal-omap5	git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap devel-omap5
 				depends on omap/cleanup2
+socfpga			patch from Dinh Nguyen <dinguyen@altera.com>
 
 next/defconfig:
 lpc32xx/defconfig	git://git.antcom.de/linux-2.6.git lpc32xx/defconfig
