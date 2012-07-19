@@ -6164,13 +6164,13 @@ static void nfs4_layoutget_done(struct rpc_task *task, void *calldata)
 	dprintk("<-- %s\n", __func__);
 }
 
-static u32 max_response_pages(struct nfs_server *server)
+static size_t max_response_pages(struct nfs_server *server)
 {
 	u32 max_resp_sz = server->nfs_client->cl_session->fc_attrs.max_resp_sz;
 	return nfs_page_array_len(0, max_resp_sz);
 }
 
-static void free_pagevec(struct page **pages, u32 size)
+static void free_pagevec(struct page **pages, size_t size)
 {
 	int i;
 
@@ -6185,7 +6185,7 @@ static void free_pagevec(struct page **pages, u32 size)
 	kfree(pages);
 }
 
-static struct page **alloc_pagevec(u32 size, gfp_t gfp_flags)
+static struct page **alloc_pagevec(size_t size, gfp_t gfp_flags)
 {
 	struct page **pages;
 	int i;
@@ -6212,7 +6212,7 @@ static void nfs4_layoutget_release(void *calldata)
 {
 	struct nfs4_layoutget *lgp = calldata;
 	struct nfs_server *server = NFS_SERVER(lgp->args.inode);
-	u32 max_pages = max_response_pages(server);
+	size_t max_pages = max_response_pages(server);
 
 	dprintk("--> %s\n", __func__);
 	free_pagevec(lgp->args.layout.pages, max_pages);
@@ -6230,7 +6230,7 @@ static const struct rpc_call_ops nfs4_layoutget_call_ops = {
 void nfs4_proc_layoutget(struct nfs4_layoutget *lgp, gfp_t gfp_flags)
 {
 	struct nfs_server *server = NFS_SERVER(lgp->args.inode);
-	u32 max_pages = max_response_pages(server);
+	size_t max_pages = max_response_pages(server);
 	struct rpc_task *task;
 	struct rpc_message msg = {
 		.rpc_proc = &nfs4_procedures[NFSPROC4_CLNT_LAYOUTGET],
