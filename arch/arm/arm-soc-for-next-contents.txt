@@ -6,7 +6,7 @@ It also includes a couple of directly applied patches for build breaks with subj
 The next/* branches are kept in the order in which they get applied.
 
 dependencies:
-<none at this time>
+depends/regulators	git://git.kernel.org/pub/scm/linux/kernel/git/broonie/regulator.git tags/topic/fixed
 
 next/fixes-non-critical:
 omap/fixes-non-critical	git://git.kernel.org/pub/scm/linux/kernel/git/tmlind/linux-omap tags/omap-fixes-non-critical-for-v3.6
@@ -110,6 +110,12 @@ imx/clk			git://git.pengutronix.de/git/imx/linux-2.6.git tags/imx-clk
 ---
 staging/io-cleanup-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci
 				waiting for more test results
+
+late/soc
+renesas/soc		git://git.kernel.org/pub/scm/linux/kernel/git/rafael/renesas.git soc
+
+late/board
+renesas/board		git://git.kernel.org/pub/scm/linux/kernel/git/rafael/renesas.git board
 
 ---
 next/drivers: (dropped for now)
