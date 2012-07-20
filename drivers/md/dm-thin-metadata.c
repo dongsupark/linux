@@ -80,6 +80,12 @@
 #define THIN_METADATA_CACHE_SIZE 64
 #define SECTOR_TO_BLOCK_SHIFT 3
 
+/*
+ *  3 for btree insert +
+ *  2 for btree lookup used within space map
+ */
+#define THIN_MAX_CONCURRENT_LOCKS 5
+
 /* This should be plenty */
 #define SPACE_MAP_ROOT_SIZE 128
 
@@ -172,7 +178,6 @@ struct dm_pool_metadata {
 
 	struct rw_semaphore root_lock;
 	uint32_t time;
-	int need_commit;
 	dm_block_t root;
 	dm_block_t details_root;
 	struct list_head thin_devices;
@@ -338,6 +343,20 @@ static int subtree_equal(void *context, void *value1_le, void *value2_le)
 
 /*----------------------------------------------------------------*/
 
+static int superblock_lock_zero(struct dm_pool_metadata *pmd,
+				struct dm_block **sblock)
+{
+	return dm_bm_write_lock_zero(pmd->bm, THIN_SUPERBLOCK_LOCATION,
+				     &sb_validator, sblock);
+}
+
+static int superblock_lock(struct dm_pool_metadata *pmd,
+			   struct dm_block **sblock)
+{
+	return dm_bm_write_lock(pmd->bm, THIN_SUPERBLOCK_LOCATION,
+				&sb_validator, sblock);
+}
+
 static int superblock_all_zeroes(struct dm_block_manager *bm, int *result)
 {
 	int r;
@@ -375,8 +394,7 @@ static int init_pmd(struct dm_pool_metadata *pmd,
 	struct dm_block *sblock;
 
 	if (create) {
-		r = dm_tm_create_with_sm(bm, THIN_SUPERBLOCK_LOCATION,
-					 &sb_validator, &tm, &sm, &sblock);
+		r = dm_tm_create_with_sm(bm, THIN_SUPERBLOCK_LOCATION, &tm, &sm);
 		if (r < 0) {
 			DMERR("tm_create_with_sm failed");
 			return r;
@@ -385,38 +403,40 @@ static int init_pmd(struct dm_pool_metadata *pmd,
 		data_sm = dm_sm_disk_create(tm, nr_blocks);
 		if (IS_ERR(data_sm)) {
 			DMERR("sm_disk_create failed");
-			dm_tm_unlock(tm, sblock);
 			r = PTR_ERR(data_sm);
 			goto bad;
 		}
 	} else {
-		struct thin_disk_superblock *disk_super = NULL;
-		size_t space_map_root_offset =
-			offsetof(struct thin_disk_superblock, metadata_space_map_root);
+		struct thin_disk_superblock *disk_super;
 
-		r = dm_tm_open_with_sm(bm, THIN_SUPERBLOCK_LOCATION,
-				       &sb_validator, space_map_root_offset,
-				       SPACE_MAP_ROOT_SIZE, &tm, &sm, &sblock);
+		r = dm_bm_read_lock(bm, THIN_SUPERBLOCK_LOCATION,
+				    &sb_validator, &sblock);
 		if (r < 0) {
-			DMERR("tm_open_with_sm failed");
+			DMERR("couldn't read superblock");
 			return r;
 		}
 
 		disk_super = dm_block_data(sblock);
+		r = dm_tm_open_with_sm(bm, THIN_SUPERBLOCK_LOCATION,
+				       disk_super->metadata_space_map_root,
+				       sizeof(disk_super->metadata_space_map_root),
+				       &tm, &sm);
+		if (r < 0) {
+			DMERR("tm_open_with_sm failed");
+			dm_bm_unlock(sblock);
+			return r;
+		}
+
 		data_sm = dm_sm_disk_open(tm, disk_super->data_space_map_root,
 					  sizeof(disk_super->data_space_map_root));
 		if (IS_ERR(data_sm)) {
 			DMERR("sm_disk_open failed");
+			dm_bm_unlock(sblock);
 			r = PTR_ERR(data_sm);
 			goto bad;
 		}
-	}
 
-
-	r = dm_tm_unlock(tm, sblock);
-	if (r < 0) {
-		DMERR("couldn't unlock superblock");
-		goto bad_data_sm;
+		dm_bm_unlock(sblock);
 	}
 
 	pmd->bm = bm;
@@ -469,7 +489,6 @@ static int init_pmd(struct dm_pool_metadata *pmd,
 
 	init_rwsem(&pmd->root_lock);
 	pmd->time = 0;
-	pmd->need_commit = 0;
 	pmd->details_root = 0;
 	pmd->trans_id = 0;
 	pmd->flags = 0;
@@ -492,11 +511,6 @@ static int __begin_transaction(struct dm_pool_metadata *pmd)
 	u32 features;
 	struct thin_disk_superblock *disk_super;
 	struct dm_block *sblock;
-
-	/*
-	 * __maybe_commit_transaction() resets these
-	 */
-	WARN_ON(pmd->need_commit);
 
 	/*
 	 * We re-read the superblock every time.  Shouldn't need to do this
@@ -573,8 +587,6 @@ static int __write_changed_details(struct dm_pool_metadata *pmd)
 			list_del(&td->list);
 			kfree(td);
 		}
-
-		pmd->need_commit = 1;
 	}
 
 	return 0;
@@ -599,9 +611,6 @@ static int __commit_transaction(struct dm_pool_metadata *pmd)
 	if (r < 0)
 		goto out;
 
-	if (!pmd->need_commit)
-		goto out;
-
 	r = dm_sm_commit(pmd->data_sm);
 	if (r < 0)
 		goto out;
@@ -618,8 +627,7 @@ static int __commit_transaction(struct dm_pool_metadata *pmd)
 	if (r < 0)
 		goto out;
 
-	r = dm_bm_write_lock(pmd->bm, THIN_SUPERBLOCK_LOCATION,
-			     &sb_validator, &sblock);
+	r = superblock_lock(pmd, &sblock);
 	if (r)
 		goto out;
 
@@ -641,8 +649,6 @@ static int __commit_transaction(struct dm_pool_metadata *pmd)
 		goto out_locked;
 
 	r = dm_tm_commit(pmd->tm, sblock);
-	if (!r)
-		pmd->need_commit = 0;
 
 out:
 	return r;
@@ -669,17 +675,14 @@ struct dm_pool_metadata *dm_pool_metadata_open(struct block_device *bdev,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	/*
-	 * Max hex locks:
-	 *  3 for btree insert +
-	 *  2 for btree lookup used within space map
-	 */
 	bm = dm_block_manager_create(bdev, THIN_METADATA_BLOCK_SIZE,
-				     THIN_METADATA_CACHE_SIZE, 5);
-	if (!bm) {
+				     THIN_METADATA_CACHE_SIZE,
+				     THIN_MAX_CONCURRENT_LOCKS);
+	if (IS_ERR(bm)) {
+		r = PTR_ERR(bm);
 		DMERR("could not create block manager");
 		kfree(pmd);
-		return ERR_PTR(-ENOMEM);
+		return ERR_PTR(r);
 	}
 
 	r = superblock_all_zeroes(bm, &create);
@@ -688,7 +691,6 @@ struct dm_pool_metadata *dm_pool_metadata_open(struct block_device *bdev,
 		kfree(pmd);
 		return ERR_PTR(r);
 	}
-
 
 	r = init_pmd(pmd, bm, 0, create);
 	if (r) {
@@ -708,8 +710,7 @@ struct dm_pool_metadata *dm_pool_metadata_open(struct block_device *bdev,
 	/*
 	 * Create.
 	 */
-	r = dm_bm_write_lock(pmd->bm, THIN_SUPERBLOCK_LOCATION,
-			     &sb_validator, &sblock);
+	r = superblock_lock_zero(pmd, &sblock);
 	if (r)
 		goto bad;
 
@@ -739,7 +740,6 @@ struct dm_pool_metadata *dm_pool_metadata_open(struct block_device *bdev,
 	}
 
 	pmd->flags = 0;
-	pmd->need_commit = 1;
 	r = dm_pool_commit_metadata(pmd);
 	if (r < 0) {
 		DMERR("%s: dm_pool_commit_metadata() failed, error = %d",
@@ -1037,8 +1037,6 @@ static int __delete_device(struct dm_pool_metadata *pmd, dm_thin_id dev)
 	if (r)
 		return r;
 
-	pmd->need_commit = 1;
-
 	return 0;
 }
 
@@ -1066,7 +1064,6 @@ int dm_pool_set_metadata_transaction_id(struct dm_pool_metadata *pmd,
 	}
 
 	pmd->trans_id = new_id;
-	pmd->need_commit = 1;
 	up_write(&pmd->root_lock);
 
 	return 0;
@@ -1108,8 +1105,6 @@ static int __reserve_metadata_snap(struct dm_pool_metadata *pmd)
 
 		dm_tm_dec(pmd->tm, held_root);
 		dm_tm_unlock(pmd->tm, copy);
-		pmd->need_commit = 1;
-
 		return -EBUSY;
 	}
 
@@ -1131,20 +1126,15 @@ static int __reserve_metadata_snap(struct dm_pool_metadata *pmd)
 	/*
 	 * Write the held root into the superblock.
 	 */
-	r = dm_bm_write_lock(pmd->bm, THIN_SUPERBLOCK_LOCATION,
-			     &sb_validator, &sblock);
+	r = superblock_lock(pmd, &sblock);
 	if (r) {
 		dm_tm_dec(pmd->tm, held_root);
-		pmd->need_commit = 1;
 		return r;
 	}
 
 	disk_super = dm_block_data(sblock);
 	disk_super->held_root = cpu_to_le64(held_root);
 	dm_bm_unlock(sblock);
-
-	pmd->need_commit = 1;
-
 	return 0;
 }
 
@@ -1166,15 +1156,13 @@ static int __release_metadata_snap(struct dm_pool_metadata *pmd)
 	struct dm_block *sblock, *copy;
 	dm_block_t held_root;
 
-	r = dm_bm_write_lock(pmd->bm, THIN_SUPERBLOCK_LOCATION,
-			     &sb_validator, &sblock);
+	r = superblock_lock(pmd, &sblock);
 	if (r)
 		return r;
 
 	disk_super = dm_block_data(sblock);
 	held_root = le64_to_cpu(disk_super->held_root);
 	disk_super->held_root = cpu_to_le64(0);
-	pmd->need_commit = 1;
 
 	dm_bm_unlock(sblock);
 
@@ -1262,7 +1250,7 @@ dm_thin_id dm_thin_dev_id(struct dm_thin_device *td)
 	return td->id;
 }
 
-static int __snapshotted_since(struct dm_thin_device *td, uint32_t time)
+static bool __snapshotted_since(struct dm_thin_device *td, uint32_t time)
 {
 	return td->snapshotted_time > time;
 }
@@ -1312,7 +1300,6 @@ static int __insert(struct dm_thin_device *td, dm_block_t block,
 	struct dm_pool_metadata *pmd = td->pmd;
 	dm_block_t keys[2] = { td->id, block };
 
-	pmd->need_commit = 1;
 	value = cpu_to_le64(pack_block_time(data_block, pmd->time));
 	__dm_bless_for_disk(&value);
 
@@ -1353,7 +1340,6 @@ static int __remove(struct dm_thin_device *td, dm_block_t block)
 
 	td->mapped_blocks--;
 	td->changed = 1;
-	pmd->need_commit = 1;
 
 	return 0;
 }
@@ -1374,10 +1360,7 @@ int dm_pool_alloc_data_block(struct dm_pool_metadata *pmd, dm_block_t *result)
 	int r;
 
 	down_write(&pmd->root_lock);
-
 	r = dm_sm_new_block(pmd->data_sm, result);
-	pmd->need_commit = 1;
-
 	up_write(&pmd->root_lock);
 
 	return r;
@@ -1514,11 +1497,7 @@ static int __resize_data_dev(struct dm_pool_metadata *pmd, dm_block_t new_count)
 		return -EINVAL;
 	}
 
-	r = dm_sm_extend(pmd->data_sm, new_count - old_count);
-	if (!r)
-		pmd->need_commit = 1;
-
-	return r;
+	return dm_sm_extend(pmd->data_sm, new_count - old_count);
 }
 
 int dm_pool_resize_data_dev(struct dm_pool_metadata *pmd, dm_block_t new_count)
