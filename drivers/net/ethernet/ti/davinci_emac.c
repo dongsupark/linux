@@ -58,6 +58,12 @@
 #include <linux/io.h>
 #include <linux/uaccess.h>
 #include <linux/davinci_emac.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
+#include <linux/of_net.h>
+
+#include <mach/mux.h>
 
 #include <asm/irq.h>
 #include <asm/page.h>
@@ -339,6 +345,9 @@ struct emac_priv {
 	u32 rx_addr_type;
 	atomic_t cur_tx;
 	const char *phy_id;
+#ifdef CONFIG_OF
+	struct device_node *phy_node;
+#endif
 	struct phy_device *phydev;
 	spinlock_t lock;
 	/*platform specific members*/
@@ -375,7 +384,7 @@ static char *emac_rxhost_errcodes[16] = {
 #define emac_ctrl_write(reg, val) iowrite32(val, (priv->ctrl_base + (reg)))
 
 /**
- * emac_dump_regs: Dump important EMAC registers to debug terminal
+ * emac_dump_regs - Dump important EMAC registers to debug terminal
  * @priv: The DaVinci EMAC private adapter structure
  *
  * Executes ethtool set cmd & sets phy mode
@@ -466,7 +475,7 @@ static void emac_dump_regs(struct emac_priv *priv)
 }
 
 /**
- * emac_get_drvinfo: Get EMAC driver information
+ * emac_get_drvinfo - Get EMAC driver information
  * @ndev: The DaVinci EMAC network adapter
  * @info: ethtool info structure containing name and version
  *
@@ -481,7 +490,7 @@ static void emac_get_drvinfo(struct net_device *ndev,
 }
 
 /**
- * emac_get_settings: Get EMAC settings
+ * emac_get_settings - Get EMAC settings
  * @ndev: The DaVinci EMAC network adapter
  * @ecmd: ethtool command
  *
@@ -500,7 +509,7 @@ static int emac_get_settings(struct net_device *ndev,
 }
 
 /**
- * emac_set_settings: Set EMAC settings
+ * emac_set_settings - Set EMAC settings
  * @ndev: The DaVinci EMAC network adapter
  * @ecmd: ethtool command
  *
@@ -518,7 +527,7 @@ static int emac_set_settings(struct net_device *ndev, struct ethtool_cmd *ecmd)
 }
 
 /**
- * emac_get_coalesce : Get interrupt coalesce settings for this device
+ * emac_get_coalesce - Get interrupt coalesce settings for this device
  * @ndev : The DaVinci EMAC network adapter
  * @coal : ethtool coalesce settings structure
  *
@@ -536,7 +545,7 @@ static int emac_get_coalesce(struct net_device *ndev,
 }
 
 /**
- * emac_set_coalesce : Set interrupt coalesce settings for this device
+ * emac_set_coalesce - Set interrupt coalesce settings for this device
  * @ndev : The DaVinci EMAC network adapter
  * @coal : ethtool coalesce settings structure
  *
@@ -614,11 +623,9 @@ static int emac_set_coalesce(struct net_device *ndev,
 }
 
 
-/**
- * ethtool_ops: DaVinci EMAC Ethtool structure
+/* ethtool_ops: DaVinci EMAC Ethtool structure
  *
  * Ethtool support for EMAC adapter
- *
  */
 static const struct ethtool_ops ethtool_ops = {
 	.get_drvinfo = emac_get_drvinfo,
@@ -631,7 +638,7 @@ static const struct ethtool_ops ethtool_ops = {
 };
 
 /**
- * emac_update_phystatus: Update Phy status
+ * emac_update_phystatus - Update Phy status
  * @priv: The DaVinci EMAC private adapter structure
  *
  * Updates phy status and takes action for network queue if required
@@ -697,7 +704,7 @@ static void emac_update_phystatus(struct emac_priv *priv)
 }
 
 /**
- * hash_get: Calculate hash value from mac address
+ * hash_get - Calculate hash value from mac address
  * @addr: mac address to delete from hash table
  *
  * Calculates hash value from mac address
@@ -723,9 +730,9 @@ static u32 hash_get(u8 *addr)
 }
 
 /**
- * hash_add: Hash function to add mac addr from hash table
+ * hash_add - Hash function to add mac addr from hash table
  * @priv: The DaVinci EMAC private adapter structure
- * mac_addr: mac address to delete from hash table
+ * @mac_addr: mac address to delete from hash table
  *
  * Adds mac address to the internal hash table
  *
@@ -765,9 +772,9 @@ static int hash_add(struct emac_priv *priv, u8 *mac_addr)
 }
 
 /**
- * hash_del: Hash function to delete mac addr from hash table
+ * hash_del - Hash function to delete mac addr from hash table
  * @priv: The DaVinci EMAC private adapter structure
- * mac_addr: mac address to delete from hash table
+ * @mac_addr: mac address to delete from hash table
  *
  * Removes mac address from the internal hash table
  *
@@ -807,7 +814,7 @@ static int hash_del(struct emac_priv *priv, u8 *mac_addr)
 #define EMAC_ALL_MULTI_CLR	3
 
 /**
- * emac_add_mcast: Set multicast address in the EMAC adapter (Internal)
+ * emac_add_mcast - Set multicast address in the EMAC adapter (Internal)
  * @priv: The DaVinci EMAC private adapter structure
  * @action: multicast operation to perform
  * mac_addr: mac address to set
@@ -855,7 +862,7 @@ static void emac_add_mcast(struct emac_priv *priv, u32 action, u8 *mac_addr)
 }
 
 /**
- * emac_dev_mcast_set: Set multicast address in the EMAC adapter
+ * emac_dev_mcast_set - Set multicast address in the EMAC adapter
  * @ndev: The DaVinci EMAC network adapter
  *
  * Set multicast addresses in EMAC adapter
@@ -901,7 +908,7 @@ static void emac_dev_mcast_set(struct net_device *ndev)
  *************************************************************************/
 
 /**
- * emac_int_disable: Disable EMAC module interrupt (from adapter)
+ * emac_int_disable - Disable EMAC module interrupt (from adapter)
  * @priv: The DaVinci EMAC private adapter structure
  *
  * Disable EMAC interrupt on the adapter
@@ -931,7 +938,7 @@ static void emac_int_disable(struct emac_priv *priv)
 }
 
 /**
- * emac_int_enable: Enable EMAC module interrupt (from adapter)
+ * emac_int_enable - Enable EMAC module interrupt (from adapter)
  * @priv: The DaVinci EMAC private adapter structure
  *
  * Enable EMAC interrupt on the adapter
@@ -967,7 +974,7 @@ static void emac_int_enable(struct emac_priv *priv)
 }
 
 /**
- * emac_irq: EMAC interrupt handler
+ * emac_irq - EMAC interrupt handler
  * @irq: interrupt number
  * @dev_id: EMAC network adapter data structure ptr
  *
@@ -1060,7 +1067,7 @@ static void emac_tx_handler(void *token, int len, int status)
 }
 
 /**
- * emac_dev_xmit: EMAC Transmit function
+ * emac_dev_xmit - EMAC Transmit function
  * @skb: SKB pointer
  * @ndev: The DaVinci EMAC network adapter
  *
@@ -1111,7 +1118,7 @@ fail_tx:
 }
 
 /**
- * emac_dev_tx_timeout: EMAC Transmit timeout function
+ * emac_dev_tx_timeout - EMAC Transmit timeout function
  * @ndev: The DaVinci EMAC network adapter
  *
  * Called when system detects that a skb timeout period has expired
@@ -1138,7 +1145,7 @@ static void emac_dev_tx_timeout(struct net_device *ndev)
 }
 
 /**
- * emac_set_type0addr: Set EMAC Type0 mac address
+ * emac_set_type0addr - Set EMAC Type0 mac address
  * @priv: The DaVinci EMAC private adapter structure
  * @ch: RX channel number
  * @mac_addr: MAC address to set in device
@@ -1165,7 +1172,7 @@ static void emac_set_type0addr(struct emac_priv *priv, u32 ch, char *mac_addr)
 }
 
 /**
- * emac_set_type1addr: Set EMAC Type1 mac address
+ * emac_set_type1addr - Set EMAC Type1 mac address
  * @priv: The DaVinci EMAC private adapter structure
  * @ch: RX channel number
  * @mac_addr: MAC address to set in device
@@ -1187,7 +1194,7 @@ static void emac_set_type1addr(struct emac_priv *priv, u32 ch, char *mac_addr)
 }
 
 /**
- * emac_set_type2addr: Set EMAC Type2 mac address
+ * emac_set_type2addr - Set EMAC Type2 mac address
  * @priv: The DaVinci EMAC private adapter structure
  * @ch: RX channel number
  * @mac_addr: MAC address to set in device
@@ -1213,7 +1220,7 @@ static void emac_set_type2addr(struct emac_priv *priv, u32 ch,
 }
 
 /**
- * emac_setmac: Set mac address in the adapter (internal function)
+ * emac_setmac - Set mac address in the adapter (internal function)
  * @priv: The DaVinci EMAC private adapter structure
  * @ch: RX channel number
  * @mac_addr: MAC address to set in device
@@ -1242,7 +1249,7 @@ static void emac_setmac(struct emac_priv *priv, u32 ch, char *mac_addr)
 }
 
 /**
- * emac_dev_setmac_addr: Set mac address in the adapter
+ * emac_dev_setmac_addr - Set mac address in the adapter
  * @ndev: The DaVinci EMAC network adapter
  * @addr: MAC address to set in device
  *
@@ -1277,7 +1284,7 @@ static int emac_dev_setmac_addr(struct net_device *ndev, void *addr)
 }
 
 /**
- * emac_hw_enable: Enable EMAC hardware for packet transmission/reception
+ * emac_hw_enable - Enable EMAC hardware for packet transmission/reception
  * @priv: The DaVinci EMAC private adapter structure
  *
  * Enables EMAC hardware for packet processing - enables PHY, enables RX
@@ -1347,7 +1354,7 @@ static int emac_hw_enable(struct emac_priv *priv)
 }
 
 /**
- * emac_poll: EMAC NAPI Poll function
+ * emac_poll - EMAC NAPI Poll function
  * @ndev: The DaVinci EMAC network adapter
  * @budget: Number of receive packets to process (as told by NAPI layer)
  *
@@ -1430,7 +1437,7 @@ static int emac_poll(struct napi_struct *napi, int budget)
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
 /**
- * emac_poll_controller: EMAC Poll controller function
+ * emac_poll_controller - EMAC Poll controller function
  * @ndev: The DaVinci EMAC network adapter
  *
  * Polled functionality used by netconsole and others in non interrupt mode
@@ -1489,7 +1496,7 @@ static void emac_adjust_link(struct net_device *ndev)
  *************************************************************************/
 
 /**
- * emac_devioctl: EMAC adapter ioctl
+ * emac_devioctl - EMAC adapter ioctl
  * @ndev: The DaVinci EMAC network adapter
  * @ifrq: request parameter
  * @cmd: command parameter
@@ -1516,7 +1523,7 @@ static int match_first_device(struct device *dev, void *data)
 }
 
 /**
- * emac_dev_open: EMAC device open
+ * emac_dev_open - EMAC device open
  * @ndev: The DaVinci EMAC network adapter
  *
  * Called when system wants to start the interface. We init TX/RX channels
@@ -1649,7 +1656,7 @@ rollback:
 }
 
 /**
- * emac_dev_stop: EMAC device stop
+ * emac_dev_stop - EMAC device stop
  * @ndev: The DaVinci EMAC network adapter
  *
  * Called when system wants to stop or down the interface. We stop the network
@@ -1691,7 +1698,7 @@ static int emac_dev_stop(struct net_device *ndev)
 }
 
 /**
- * emac_dev_getnetstats: EMAC get statistics function
+ * emac_dev_getnetstats - EMAC get statistics function
  * @ndev: The DaVinci EMAC network adapter
  *
  * Called when system wants to get statistics from the device.
@@ -1762,8 +1769,79 @@ static const struct net_device_ops emac_netdev_ops = {
 #endif
 };
 
+#ifdef CONFIG_OF
+static struct emac_platform_data
+	*davinci_emac_of_get_pdata(struct platform_device *pdev,
+	struct emac_priv *priv)
+{
+	struct device_node *np;
+	struct emac_platform_data *pdata = NULL;
+	const u8 *mac_addr;
+	u32 data;
+	int ret;
+
+	pdata = pdev->dev.platform_data;
+	if (!pdata) {
+		pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
+		if (!pdata)
+			goto nodata;
+	}
+
+	np = pdev->dev.of_node;
+	if (!np)
+		goto nodata;
+	else
+		pdata->version = EMAC_VERSION_2;
+
+	if (!is_valid_ether_addr(pdata->mac_addr)) {
+		mac_addr = of_get_mac_address(np);
+		if (mac_addr)
+			memcpy(pdata->mac_addr, mac_addr, ETH_ALEN);
+	}
+
+	ret = of_property_read_u32(np, "ti,davinci-ctrl-reg-offset", &data);
+	if (!ret)
+		pdata->ctrl_reg_offset = data;
+
+	ret = of_property_read_u32(np, "ti,davinci-ctrl-mod-reg-offset",
+		&data);
+	if (!ret)
+		pdata->ctrl_mod_reg_offset = data;
+
+	ret = of_property_read_u32(np, "ti,davinci-ctrl-ram-offset", &data);
+	if (!ret)
+		pdata->ctrl_ram_offset = data;
+
+	ret = of_property_read_u32(np, "ti,davinci-ctrl-ram-size", &data);
+	if (!ret)
+		pdata->ctrl_ram_size = data;
+
+	ret = of_property_read_u32(np, "ti,davinci-rmii-en", &data);
+	if (!ret)
+		pdata->rmii_en = data;
+
+	ret = of_property_read_u32(np, "ti,davinci-no-bd-ram", &data);
+	if (!ret)
+		pdata->no_bd_ram = data;
+
+	priv->phy_node = of_parse_phandle(np, "phy-handle", 0);
+	if (!priv->phy_node)
+		pdata->phy_id = "";
+
+	pdev->dev.platform_data = pdata;
+nodata:
+	return  pdata;
+}
+#else
+static struct emac_platform_data
+	*davinci_emac_of_get_pdata(struct platform_device *pdev,
+	struct emac_priv *priv)
+{
+	return  pdev->dev.platform_data;
+}
+#endif
 /**
- * davinci_emac_probe: EMAC device probe
+ * davinci_emac_probe - EMAC device probe
  * @pdev: The DaVinci EMAC device that we are removing
  *
  * Called when probing for emac devicesr. We get details of instances and
@@ -1804,7 +1882,7 @@ static int __devinit davinci_emac_probe(struct platform_device *pdev)
 
 	spin_lock_init(&priv->lock);
 
-	pdata = pdev->dev.platform_data;
+	pdata = davinci_emac_of_get_pdata(pdev, priv);
 	if (!pdata) {
 		dev_err(&pdev->dev, "no platform data\n");
 		rc = -ENODEV;
@@ -1949,7 +2027,7 @@ free_clk:
 }
 
 /**
- * davinci_emac_remove: EMAC device remove
+ * davinci_emac_remove - EMAC device remove
  * @pdev: The DaVinci EMAC device that we are removing
  *
  * Called when removing the device driver. We disable clock usage and release
@@ -2015,21 +2093,26 @@ static const struct dev_pm_ops davinci_emac_pm_ops = {
 	.resume		= davinci_emac_resume,
 };
 
-/**
- * davinci_emac_driver: EMAC platform driver structure
- */
+static const struct of_device_id davinci_emac_of_match[] = {
+	{.compatible = "ti,davinci-dm6467-emac", },
+	{},
+};
+MODULE_DEVICE_TABLE(of, davinci_emac_of_match);
+
+/* davinci_emac_driver: EMAC platform driver structure */
 static struct platform_driver davinci_emac_driver = {
 	.driver = {
 		.name	 = "davinci_emac",
 		.owner	 = THIS_MODULE,
 		.pm	 = &davinci_emac_pm_ops,
+		.of_match_table = of_match_ptr(davinci_emac_of_match),
 	},
 	.probe = davinci_emac_probe,
 	.remove = __devexit_p(davinci_emac_remove),
 };
 
 /**
- * davinci_emac_init: EMAC driver module init
+ * davinci_emac_init - EMAC driver module init
  *
  * Called when initializing the driver. We register the driver with
  * the platform.
@@ -2041,7 +2124,7 @@ static int __init davinci_emac_init(void)
 late_initcall(davinci_emac_init);
 
 /**
- * davinci_emac_exit: EMAC driver module exit
+ * davinci_emac_exit - EMAC driver module exit
  *
  * Called when exiting the driver completely. We unregister the driver with
  * the platform and exit
