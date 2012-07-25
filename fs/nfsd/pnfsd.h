@@ -42,8 +42,8 @@
 
 /* outstanding layout stateid */
 struct nfs4_layout_state {
+	struct nfs4_stid	ls_stid; /* must be first field */
 	struct kref		ls_ref;
-	struct nfs4_stid	ls_stid;
 	struct list_head	ls_perfile;
 	bool			ls_roc;
 };
@@ -130,5 +130,10 @@ int nfsd_device_notify_cb(struct super_block *,
 void nfsd4_cb_notify_device(struct nfs4_notify_device *);
 void pnfs_set_device_notify(clientid_t *, unsigned int types);
 void pnfs_clear_device_notify(struct nfs4_client *);
+
+static inline struct nfs4_layout_state *layoutstateid(struct nfs4_stid *s)
+{
+	return container_of(s, struct nfs4_layout_state, ls_stid);
+}
 
 #endif /* LINUX_NFSD_PNFSD_H */
