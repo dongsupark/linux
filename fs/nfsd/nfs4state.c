@@ -305,7 +305,7 @@ void nfsd4_init_stid(struct nfs4_stid *stid, struct nfs4_client *cl, unsigned ch
 	s->si_generation = 0;
 }
 
-static struct nfs4_stid *nfs4_alloc_stid(struct nfs4_client *cl, struct kmem_cache *slab)
+struct nfs4_stid *nfs4_alloc_stid(struct nfs4_client *cl, struct kmem_cache *slab)
 {
 	struct idr *stateids = &cl->cl_stateids;
 
