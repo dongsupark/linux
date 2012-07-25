@@ -152,7 +152,7 @@ alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
 {
 	struct nfs4_layout_state *new;
 
-	new = kmem_cache_alloc(layout_state_slab, GFP_KERNEL);
+	new = layoutstateid(nfs4_alloc_stid(clp, layout_state_slab));
 	if (!new)
 		return new;
 	kref_init(&new->ls_ref);
