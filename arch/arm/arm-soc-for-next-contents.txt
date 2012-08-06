@@ -21,6 +21,7 @@ next/dt:
 next/defconfig:
 
 next/boards:
+pxa/board	git://github.com/hzhuang1/linux.git board
 
 ----
 
