@@ -1,0 +1,23 @@
+Importing i2c based on e7882d6c40874a5b5033ca85f7508a602a60b662
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard e7882d6c40874a5b5033ca85f7508a602a60b662
+HEAD is now at e7882d6 Merge branch 'for-linus-2' of git://git.kernel.org/pub/scm/linux/kernel/git/viro/vfs
+$ git am ../quilt/i2c/i2c-mux-support-class.patch
+Applying: i2c-mux: Add support for device auto-detection
+$ git am ../quilt/i2c/i2c-i801-asus-multiplexing-2.patch
+Applying: i2c-i801: Support SMBus multiplexing on Asus Z8 series
+$ git am ../quilt/i2c/i2c-smbus-convert-kzalloc-to-devm_kzalloc.patch
+Applying: i2c-smbus: Convert kzalloc to devm_kzalloc
+$ git am ../quilt/i2c/i2c-convert-struct-i2c_msg-initialization-to-c99-format.patch
+Applying: i2c: Convert struct i2c_msg initialization to C99 format
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 947f4e8...a918790 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 1a9b4993b70fb1884716902774dc9025b457760d
+Unchanged quilt series jdelvare-hwmon
+Importing rr based on v3.5-8192-g1fad1e9
+Unchanged quilt series rr
+Importing device-mapper based on v3.5-7815-g37cd960
+Unchanged quilt series device-mapper
