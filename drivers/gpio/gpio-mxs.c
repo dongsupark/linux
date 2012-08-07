@@ -290,7 +290,8 @@ static int __devinit mxs_gpio_probe(struct platform_device *pdev)
 		return err;
 
 	port->bgc.gc.to_irq = mxs_gpio_to_irq;
-	port->bgc.gc.base = port->id * 32;
+	port->bgc.gc.base = (pdev->id < 0) ? of_alias_get_id(np, "gpio") * 32 :
+					     pdev->id * 32;
 
 	err = gpiochip_add(&port->bgc.gc);
 	if (err) {
