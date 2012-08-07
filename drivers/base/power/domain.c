@@ -1323,7 +1323,7 @@ int __pm_genpd_add_device(struct generic_pm_domain *genpd, struct device *dev,
 		}
 
 	ret = dev_pm_get_subsys_data(dev);
-	if (ret)
+	if (ret < 0)
 		goto out;
 
 	genpd->device_count++;
@@ -1624,7 +1624,7 @@ int pm_genpd_add_callbacks(struct device *dev, struct gpd_dev_ops *ops,
 	device_pm_lock();
 
 	ret = dev_pm_get_subsys_data(dev);
-	if (ret)
+	if (ret < 0)
 		goto out;
 
 	spin_lock_irq(&dev->power.lock);
