@@ -1,0 +1,57 @@
+This file lists all branches that are pulled into the for-next branch
+of git://git.kernel.org/pub/scm/linux/kernel/git/arm/arm-soc.git
+and their external dependencies.
+
+It also includes a couple of directly applied patches for build breaks with subject
+The next/* branches are kept in the order in which they get applied.
+
+fixes:
+--		maintainers file update from Linus Walleij
+
+next/fixes-non-critical:
+
+next/cleanup:
+
+next/maintainers:
+
+next/soc:
+
+next/dt:
+
+next/defconfig:
+
+next/boards:
+pxa/board	git://github.com/hzhuang1/linux.git board
+
+----
+
+From Rob Herring <robherring2@gmail.com>:
+
+This is the 2nd part of mach/io.h removals. This series removes io.h on
+platforms with PCI by creating a fixed virtual I/O mapping and a common
+__io() macro.
+
+This version has changed a bit to accommodate Tegra converting its PCIe
+host to a platform driver. Now the virtual space is only reserved during
+early boot before .map_io() is called. The mapping is not created until
+calling pci_ioremap_io which can be done at any point after vmalloc is
+initialized.
+
+I've gone back to fixed 64K windows for each PCI bus. This allows
+removing all the i/o resource setup from the individually platforms and
+placing it within the common ARM PCI code.
+
+I've only tested versatilepb under qemu (with the model hacked up to
+actually enable i/o space), so any testing is appreciated. iop3xx and
+mv78xx0 have some risk of breaking as the PCI bus addresses are moved
+to 0 from matching the cpu host bus addesss.
+
+staging/io-cleanup-pci:   git://sources.calxeda.com/kernel/linux.git io-cleanup-pci-v2
+				waiting for more test results
+
+next/drivers: (dropped for now)
+devel/led-driver	git://git.kernel.org/pub/scm/linux/kernel/git/cooloney/linux-leds.git for-arm-soc
+
+
+
+
