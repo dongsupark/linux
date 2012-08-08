@@ -97,6 +97,8 @@ struct clock_event_device {
 	void			(*broadcast)(const struct cpumask *mask);
 	void			(*set_mode)(enum clock_event_mode mode,
 					    struct clock_event_device *);
+	void			(*suspend)(struct clock_event_device *);
+	void			(*resume)(struct clock_event_device *);
 	unsigned long		min_delta_ticks;
 	unsigned long		max_delta_ticks;
 
@@ -155,6 +157,9 @@ clockevents_calc_mult_shift(struct clock_event_device *ce, u32 freq, u32 minsec)
 	return clocks_calc_mult_shift(&ce->mult, &ce->shift, NSEC_PER_SEC,
 				      freq, minsec);
 }
+
+extern void clockevents_suspend(void);
+extern void clockevents_resume(void);
 
 #ifdef CONFIG_GENERIC_CLOCKEVENTS
 extern void clockevents_notify(unsigned long reason, void *arg);
