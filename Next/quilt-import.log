@@ -1,0 +1,19 @@
+Importing i2c based on e7882d6c40874a5b5033ca85f7508a602a60b662
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on e7882d6c40874a5b5033ca85f7508a602a60b662
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard e7882d6c40874a5b5033ca85f7508a602a60b662
+HEAD is now at e7882d6 Merge branch 'for-linus-2' of git://git.kernel.org/pub/scm/linux/kernel/git/viro/vfs
+$ git am ../quilt/jdelvare-hwmon/hwmon-via-cputemp-use-get_online_cpus-to-avoid-races-involving-cpu-hotplug.patch
+Applying: hwmon: (via-cputemp) Use get_online_cpus to avoid races involving CPU hotplug
+$ git am ../quilt/jdelvare-hwmon/hwmon-coretemp-use-get_online_cpus-to-avoid-races-involving-cpu-hotplug.patch
+Applying: hwmon: (coretemp) Use get_online_cpus to avoid races involving CPU hotplug
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 7a48eb8...4ac1223 master     -> quilt/jdelvare-hwmon  (forced update)
+Importing rr based on v3.5-8192-g1fad1e9
+Unchanged quilt series rr
+Importing device-mapper based on v3.5-7815-g37cd960
+Unchanged quilt series device-mapper
