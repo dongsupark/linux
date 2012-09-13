@@ -1192,24 +1192,27 @@ out:
 }
 
 static bool
-cl_has_file_layout(struct nfs4_client *clp, struct nfs4_file *fp, stateid_t *lsid)
+cl_has_file_layout(struct nfs4_client *clp, struct nfs4_file *fp,
+		   stateid_t *lsid, struct nfsd4_pnfs_cb_layout *cbl)
 {
-	struct nfs4_layout_state *ls;
+	struct nfs4_layout *lo;
+	bool ret = false;
 
 	spin_lock(&layout_lock);
-	list_for_each_entry (ls, &fp->fi_layout_states, ls_perfile)
-		if (same_clid(&ls->ls_stid.sc_stateid.si_opaque.so_clid,
-			      &clp->cl_clientid)) {
+	list_for_each_entry(lo, &fp->fi_layouts, lo_perfile) {
+		if (same_clid(&lo->lo_client->cl_clientid, &clp->cl_clientid) &&
+		    lo_seg_overlapping(&cbl->cbl_seg, &lo->lo_seg) &&
+		    (cbl->cbl_seg.iomode & lo->lo_seg.iomode))
 			goto found;
-		}
-	spin_unlock(&layout_lock);
-	return false;
-
+	}
+	goto unlock;
 found:
-	update_layout_stateid_locked(ls, lsid);
+	/* Im going to send a recall on this latout update state */
+	update_layout_stateid_locked(lo->lo_state, lsid);
+	ret = true;
+unlock:
 	spin_unlock(&layout_lock);
-
-	return true;
+	return ret;
 }
 
 static int
@@ -1241,7 +1244,7 @@ cl_has_layout(struct nfs4_client *clp, struct nfsd4_pnfs_cb_layout *cbl,
 {
 	switch (cbl->cbl_recall_type) {
 	case RETURN_FILE:
-		return cl_has_file_layout(clp, lrfile, lsid);
+		return cl_has_file_layout(clp, lrfile, lsid, cbl);
 	case RETURN_FSID:
 		return cl_has_fsid_layout(clp, &cbl->cbl_fsid);
 	default:
