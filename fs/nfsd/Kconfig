@@ -139,3 +139,10 @@ config PNFSD_LEXP_RETURN_ON_CLOSE
 	default y
 	help
 	  Set return_on_close response flag.
+
+config PNFSD_LEXP_COMMIT_THRU_MDS
+	bool "Reply to LAYOUTGET with commit_thru_mds set to true"
+	depends on PNFSD_LOCAL_EXPORT
+	default n
+	help
+	  Set commit_thru_mds nfl_util response flag.
