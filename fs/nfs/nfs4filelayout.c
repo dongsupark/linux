@@ -266,11 +266,16 @@ filelayout_set_layoutcommit(struct nfs_write_data *wdata)
 	struct nfs_pgio_header *hdr = wdata->header;
 
 	if (FILELAYOUT_LSEG(hdr->lseg)->commit_through_mds ||
-	    wdata->res.verf->committed == NFS_FILE_SYNC)
+	    wdata->res.verf->committed == NFS_FILE_SYNC) {
+		dprintk("%s inode %lu commit_through_mds %d committed %d\n",
+			__func__, hdr->inode->i_ino,
+			FILELAYOUT_LSEG(hdr->lseg)->commit_through_mds != 0,
+			wdata->res.verf->committed == NFS_FILE_SYNC);
 		return;
+	}
 
 	pnfs_set_layoutcommit(wdata);
-	dprintk("%s ionde %lu pls_end_pos %lu\n", __func__, hdr->inode->i_ino,
+	dprintk("%s inode %lu pls_end_pos %lu\n", __func__, hdr->inode->i_ino,
 		(unsigned long) NFS_I(hdr->inode)->layout->plh_lwb);
 }
 
