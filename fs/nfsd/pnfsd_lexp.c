@@ -168,7 +168,11 @@ pnfsd_lexp_layout_get(struct inode *inode,
 	/* Set file layout response args */
 	layout->lg_layout_type = LAYOUT_NFSV4_1_FILES;
 	layout->lg_stripe_type = STRIPE_SPARSE;
+#ifdef CONFIG_PNFSD_LEXP_COMMIT_THRU_MDS
 	layout->lg_commit_through_mds = true;
+#else
+	layout->lg_commit_through_mds = false;
+#endif
 	layout->lg_stripe_unit = get_stripe_unit(inode->i_sb->s_blocksize);
 	layout->lg_fh_length = 1;
 	layout->device_id.sbid = arg->lg_sbid;
