@@ -460,14 +460,8 @@ struct nfsd4_pnfs_layoutcommit {
 	struct nfsd4_pnfs_layoutcommit_res res;
 };
 
-enum layoutreturn_flags {
-	LR_FLAG_INTERN = 1 << 0,	/* internal return */
-	LR_FLAG_EXPIRE = 1 << 1,	/* return on client expiration */
-};
-
 struct nfsd4_pnfs_layoutreturn {
 	struct nfsd4_pnfs_layoutreturn_arg args;
-	u32			lr_flags;
 	stateid_t		lr_sid;		/* request/resopnse */
 	u32			lrs_present;	/* response */
 };
