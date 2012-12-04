@@ -360,7 +360,7 @@ void fs_layout_return(struct super_block *sb, struct inode *ino,
 	if (unlikely(!sb->s_pnfs_op->layout_return))
 		return;
 
-	lrp->lr_flags = flags;
+	lrp->args.lr_flags = flags;
 	lrp->args.lr_cookie = recall_cookie;
 
 	if (!ino) /* FSID or ALL */

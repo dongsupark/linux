@@ -112,6 +112,11 @@ struct nfsd4_pnfs_layoutcommit_res {
 
 #define PNFS_LAST_LAYOUT_NO_RECALLS ((void *)-1) /* used with lr_cookie below */
 
+enum layoutreturn_flags {
+	LR_FLAG_INTERN = 1 << 0,	/* internal return */
+	LR_FLAG_EXPIRE = 1 << 1,	/* return on client expiration */
+};
+
 struct nfsd4_pnfs_layoutreturn_arg {
 	u32			lr_return_type;	/* request */
 	struct nfsd4_layout_seg	lr_seg;		/* request */
@@ -119,6 +124,7 @@ struct nfsd4_pnfs_layoutreturn_arg {
 	u32			lrf_body_len;	/* request */
 	void			*lrf_body;	/* request */
 	void			*lr_cookie;	/* fs private */
+	enum layoutreturn_flags	lr_flags;	/* internal flags */
 };
 
 /* pNFS Metadata to Data server state communication */
