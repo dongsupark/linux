@@ -1242,7 +1242,7 @@ void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
 		bool empty;
 
 		/* Check for a match */
-		if (!lo->lo_state->ls_roc || lo->lo_client != clp)
+		if (lo->lo_client != clp)
 			continue;
 
 		/* Return the layout */
