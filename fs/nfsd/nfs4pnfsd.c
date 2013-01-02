@@ -893,7 +893,7 @@ pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
 	struct nfs4_layout *lp, *nextlp;
 
 	dprintk("%s: clp %p fp %p\n", __func__, clp, fp);
-	lrp->lrs_present = 1;
+	lrp->lrs_present = 0;
 	spin_lock(&layout_lock);
 	list_for_each_entry_safe (lp, nextlp, &fp->fi_layouts, lo_perfile) {
 		dprintk("%s: lp %p client %p,%p lo_type %x,%x iomode %d,%d\n",
@@ -901,19 +901,22 @@ pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
 			lp->lo_client, clp,
 			lp->lo_seg.layout_type, lrp->args.lr_seg.layout_type,
 			lp->lo_seg.iomode, lrp->args.lr_seg.iomode);
-		if (lp->lo_client != clp ||
-		    lp->lo_seg.layout_type != lrp->args.lr_seg.layout_type ||
+		if (lp->lo_client != clp)
+			continue;
+		if (lp->lo_seg.layout_type != lrp->args.lr_seg.layout_type ||
 		    (lp->lo_seg.iomode != lrp->args.lr_seg.iomode &&
 		     lrp->args.lr_seg.iomode != IOMODE_ANY) ||
-		     !lo_seg_overlapping(&lp->lo_seg, &lrp->args.lr_seg))
+		     !lo_seg_overlapping(&lp->lo_seg, &lrp->args.lr_seg)) {
+			lrp->lrs_present = 1;
 			continue;
+		}
 		layouts_found++;
 		trim_layout(&lp->lo_seg, &lrp->args.lr_seg);
 		if (!lp->lo_seg.length) {
-			lrp->lrs_present = 0;
 			dequeue_layout(lp);
 			destroy_layout(lp);
-		}
+		} else
+			lrp->lrs_present = 1;
 	}
 	if (ls && layouts_found && lrp->lrs_present)
 		update_layout_stateid_locked(ls, &lrp->lr_sid);
