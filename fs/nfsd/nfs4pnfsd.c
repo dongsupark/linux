@@ -345,7 +345,6 @@ destroy_layout(struct nfs4_layout *lp)
 		__func__, lp, clp, fp, fp->fi_inode);
 
 	kmem_cache_free(pnfs_layout_slab, lp);
-	list_del_init(&ls->ls_perfile);
 	/* release references taken by init_layout */
 	put_layout_state(ls);
 	put_nfs4_file(fp);
@@ -1249,6 +1248,7 @@ void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
 		memset(&lr, 0, sizeof(lr));
 		lr.args.lr_return_type = RETURN_FILE;
 		lr.args.lr_seg = lo->lo_seg;
+		list_del_init(&lo->lo_state->ls_perfile);	/* just to be on the safe side */
 		dequeue_layout(lo);
 		destroy_layout(lo); /* do not access lp after this */
 
@@ -1301,6 +1301,7 @@ void pnfs_expire_client(struct nfs4_client *clp)
 			lr.args.lr_seg = lp->lo_seg;
 			empty = list_empty(&lp->lo_file->fi_layouts);
 			BUG_ON(lp->lo_client != clp);
+			list_del_init(&lp->lo_state->ls_perfile);	/* just to be on the safe side */
 			dequeue_layout(lp);
 			destroy_layout(lp); /* do not access lp after this */
 		}
