@@ -187,7 +187,7 @@ nfsd4_set_pnfs_dlm_device(char *pnfs_dlm_device, int len)
 		dprintk("%s pnfs_dlm_device %s:%s already in cache "
 			" replace ds_list with new ds_list %s\n", __func__,
 			found->disk_name, found->ds_list, new->ds_list);
-		memset(found->ds_list, 0, DISK_NAME_LEN);
+		memset(found->ds_list, 0, NFSD_DLM_DS_LIST_MAX);
 		memcpy(found->ds_list, new->ds_list, strlen(new->ds_list));
 		found->num_ds = new->num_ds;
 		kfree(new);
