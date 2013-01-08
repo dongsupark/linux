@@ -1064,6 +1064,7 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 	u64 ex_fsid = current_fh->fh_export->ex_fsid;
 	void *recall_cookie = NULL;
 	LIST_HEAD(lo_destroy_list);
+	int lr_flags = 0;
 
 	dprintk("NFSD: %s\n", __func__);
 
@@ -1098,9 +1099,12 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 		layouts_found = pnfs_return_file_layouts(clp, fp, lrp, ls,
 							 &lo_destroy_list);
 		put_layout_state(ls);
+		if (!lrp->lrs_present)
+			lr_flags |= LR_FLAG_CL_EMPTY;
 	} else {
 		layouts_found = pnfs_return_client_layouts(clp, lrp, ex_fsid,
 							   &lo_destroy_list);
+		lr_flags |= LR_FLAG_CL_EMPTY;
 	}
 
 	dprintk("pNFS %s: clp %p fp %p layout_type 0x%x iomode %d "
@@ -1136,7 +1140,7 @@ out:
 	nfs4_unlock_state();
 
 	pnfsd_return_lo_list(&lo_destroy_list, ino ? ino : sb->s_root->d_inode,
-			     lrp, 0, recall_cookie);
+			     lrp, lr_flags, recall_cookie);
 
 out_no_fs_call:
 	dprintk("pNFS %s: exit status %d\n", __func__, status);
@@ -1252,24 +1256,29 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 	struct inode *inode;
 	void *recall_cookie;
 	LIST_HEAD(lo_destroy_list);
+	int lr_flags = LR_FLAG_INTERN;
 
 	dprintk("%s: clp %p fp %p: simulating layout_return\n", __func__,
 		clr->clr_client, clr->clr_file);
 
-	if (clr->cb.cbl_recall_type == RETURN_FILE)
+	if (clr->cb.cbl_recall_type == RETURN_FILE) {
 		pnfs_return_file_layouts(clr->clr_client, clr->clr_file, &lr,
 					 NULL, &lo_destroy_list);
-	else
+		if (!lr.lrs_present)
+			lr_flags |= LR_FLAG_CL_EMPTY;
+	} else {
 		pnfs_return_client_layouts(clr->clr_client, &lr,
 					   clr->cb.cbl_fsid.major,
 					   &lo_destroy_list);
+		lr_flags |= LR_FLAG_CL_EMPTY;
+	}
 
 	spin_lock(&layout_lock);
 	recall_cookie = layoutrecall_done(clr);
 	spin_unlock(&layout_lock);
 
 	inode = clr->clr_file->fi_inode ?: clr->clr_sb->s_root->d_inode;
-	pnfsd_return_lo_list(&lo_destroy_list, inode, &lr, LR_FLAG_INTERN,
+	pnfsd_return_lo_list(&lo_destroy_list, inode, &lr, lr_flags,
 			     recall_cookie);
 }
 
