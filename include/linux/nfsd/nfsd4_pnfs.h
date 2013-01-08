@@ -110,8 +110,6 @@ struct nfsd4_pnfs_layoutcommit_res {
 	u64			lc_newsize;	/* response */
 };
 
-#define PNFS_LAST_LAYOUT_NO_RECALLS ((void *)-1) /* used with lr_cookie below */
-
 enum layoutreturn_flags {
 	LR_FLAG_INTERN = 1 << 0,	/* internal return */
 	LR_FLAG_EXPIRE = 1 << 1,	/* return on client expiration */
