@@ -350,20 +350,18 @@ destroy_layout(struct nfs4_layout *lp)
 	put_nfs4_file(fp);
 }
 
-void fs_layout_return(struct super_block *sb, struct inode *ino,
-		      struct nfsd4_pnfs_layoutreturn *lrp, int flags,
-		      void *recall_cookie)
+static void fs_layout_return(struct inode *ino,
+			     struct nfsd4_pnfs_layoutreturn *lrp,
+			     int flags, void *recall_cookie)
 {
 	int ret;
+	struct super_block *sb = ino->i_sb;
 
 	if (unlikely(!sb->s_pnfs_op->layout_return))
 		return;
 
 	lrp->args.lr_flags = flags;
 	lrp->args.lr_cookie = recall_cookie;
-
-	if (!ino) /* FSID or ALL */
-		ino = sb->s_root->d_inode;
 
 	ret = sb->s_pnfs_op->layout_return(ino, &lrp->args);
 	dprintk("%s: inode %lu iomode=%d offset=0x%llx length=0x%llx "
@@ -1081,7 +1079,7 @@ out:
 	nfs4_unlock_state();
 
 	/* call exported filesystem layout_return (ignore return-code) */
-	fs_layout_return(sb, ino, lrp, 0, recall_cookie);
+	fs_layout_return(ino, lrp, 0, recall_cookie);
 
 out_no_fs_call:
 	dprintk("pNFS %s: exit status %d\n", __func__, status);
@@ -1201,9 +1199,8 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 		inode = igrab(clr->clr_file->fi_inode);
 		if (WARN_ON(!inode))
 			return;
-	} else {
-		inode = NULL;
-	}
+	} else
+		inode = clr->clr_sb->s_root->d_inode;
 
 	dprintk("%s: clp %p fp %p: simulating layout_return\n", __func__,
 		clr->clr_client, clr->clr_file);
@@ -1219,8 +1216,7 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 	recall_cookie = layoutrecall_done(clr);
 	spin_unlock(&layout_lock);
 
-	fs_layout_return(clr->clr_sb, inode, &lr, LR_FLAG_INTERN,
-			 recall_cookie);
+	fs_layout_return(inode, &lr, LR_FLAG_INTERN, recall_cookie);
 	iput(inode);
 }
 
@@ -1255,8 +1251,7 @@ void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
 		empty = list_empty(&fp->fi_layouts);
 		found = true;
 		dprintk("%s: fp=%p clp=%p: return on close", __func__, fp, clp);
-		fs_layout_return(fp->fi_inode->i_sb, fp->fi_inode, &lr,
-				 LR_FLAG_INTERN,
+		fs_layout_return(fp->fi_inode, &lr, LR_FLAG_INTERN,
 				 empty ? PNFS_LAST_LAYOUT_NO_RECALLS : NULL);
 	}
 	spin_unlock(&layout_lock);
@@ -1315,7 +1310,7 @@ void pnfs_expire_client(struct nfs4_client *clp)
 		dprintk("%s: inode %lu lp %p clp %p\n", __func__, inode->i_ino,
 			lp, clp);
 
-		fs_layout_return(inode->i_sb, inode, &lr, LR_FLAG_EXPIRE,
+		fs_layout_return(inode, &lr, LR_FLAG_EXPIRE,
 				 empty ? PNFS_LAST_LAYOUT_NO_RECALLS : NULL);
 		iput(inode);
 	}
