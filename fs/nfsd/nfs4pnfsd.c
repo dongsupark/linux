@@ -921,15 +921,21 @@ pnfsd_return_lo_list(struct list_head *lo_destroy_list, struct inode *ino_orig,
 		struct inode *inode = lo->lo_file->fi_inode;
 		struct nfsd4_pnfs_layoutreturn lr;
 		bool empty;
+		int lr_flags = flags;
 
 		memset(&lr, 0, sizeof(lr));
 		lr.args.lr_return_type = RETURN_FILE;
 		lr.args.lr_seg = lo->lo_seg;
 
+		spin_lock(&layout_lock);
+		if (list_empty(&lo->lo_file->fi_layouts))
+			lr_flags |= LR_FLAG_EMPTY;
+		spin_unlock(&layout_lock);
+
 		list_del(&lo->lo_perfile);
 		empty = list_empty(lo_destroy_list);
 
-		fs_layout_return(inode, &lr, flags, empty ? cb_cookie : NULL);
+		fs_layout_return(inode, &lr, lr_flags, empty ? cb_cookie : NULL);
 
 		destroy_layout(lo); /* this will put the lo_file */
 	}

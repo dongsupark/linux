@@ -114,6 +114,7 @@ enum layoutreturn_flags {
 	LR_FLAG_INTERN = 1 << 0,	/* internal return */
 	LR_FLAG_EXPIRE = 1 << 1,	/* return on client expiration */
 	LR_FLAG_CL_EMPTY = 1 << 2,	/* No more layout for returning client */
+	LR_FLAG_EMPTY = 1 << 3,		/* No more layout for file */
 };
 
 struct nfsd4_pnfs_layoutreturn_arg {
