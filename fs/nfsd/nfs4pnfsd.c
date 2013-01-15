@@ -759,7 +759,7 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 
 	if (is_layout_recalled(clp, lgp->lg_fhp, &lgp->lg_seg)) {
 		nfserr = nfserr_recallconflict;
-		goto out;
+		goto out_unlock;
 	}
 
 	/* pre-alloc layout in case we can't merge after we call
