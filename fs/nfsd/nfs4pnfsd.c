@@ -251,10 +251,10 @@ nfs4_process_layout_stateid(struct nfs4_client *clp, struct nfs4_file *fp,
 			status = nfserr_bad_stateid;
 			goto out;
 		}
+		get_layout_state(ls);
 	}
 	status = 0;
 
-	get_layout_state(ls);
 	*lsp = ls;
 	dprintk("%s: layout stateid=" STATEID_FMT " ref=%d\n", __func__,
 		STATEID_VAL(&ls->ls_stid.sc_stateid), atomic_read(&ls->ls_ref.refcount));
