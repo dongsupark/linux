@@ -157,10 +157,6 @@ alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
 		return new;
 	kref_init(&new->ls_ref);
 	nfsd4_init_stid(&new->ls_stid, clp, NFS4_LAYOUT_STID);
-	INIT_LIST_HEAD(&new->ls_perfile);
-	spin_lock(&layout_lock);
-	list_add(&new->ls_perfile, &fp->fi_layout_states);
-	spin_unlock(&layout_lock);
 	new->ls_roc = false;
 	return new;
 }
@@ -178,11 +174,6 @@ destroy_layout_state(struct kref *kref)
 			container_of(kref, struct nfs4_layout_state, ls_ref);
 
 	nfsd4_unhash_stid(&ls->ls_stid);
-	if (!list_empty(&ls->ls_perfile)) {
-		spin_lock(&layout_lock);
-		list_del(&ls->ls_perfile);
-		spin_unlock(&layout_lock);
-	}
 	kfree(ls);
 }
 
@@ -1310,7 +1301,6 @@ void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
 			continue;
 
 		/* Return the layout */
-		list_del_init(&lo->lo_state->ls_perfile);	/* just to be on the safe side */
 		dequeue_layout(lo);
 		list_add_tail(&lo->lo_perfile, &lo_destroy_list);
 	}
