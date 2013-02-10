@@ -286,7 +286,9 @@ int  ore_get_rw_state(struct ore_layout *layout, struct ore_components *oc,
 	if (length) {
 		ore_calc_stripe_info(layout, offset, length, &ios->si);
 		ios->length = ios->si.length;
-		ios->nr_pages = (ios->length + PAGE_SIZE - 1) / PAGE_SIZE;
+		ios->nr_pages = ((ios->offset & (PAGE_SIZE - 1)) +
+		                 ios->length +
+		                 PAGE_SIZE - 1) / PAGE_SIZE;
 		if (layout->parity)
 			_ore_post_alloc_raid_stuff(ios);
 	}
