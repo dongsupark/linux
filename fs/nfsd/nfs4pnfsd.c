@@ -454,7 +454,7 @@ alloc_init_layoutrecall(struct nfsd4_pnfs_cb_layout *cbl,
 
 	kref_init(&clr->clr_ref);
 	INIT_LIST_HEAD(&clr->clr_perclnt);
-	INIT_WORK(&clr->clr_recall.cb_work, nfsd4_do_callback_rpc);
+	nfsd4_init_callback(&clr->clr_recall);
 
 	dprintk("NFSD %s return %p\n", __func__, clr);
 	return clr;
