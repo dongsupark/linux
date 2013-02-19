@@ -285,7 +285,6 @@ struct nfs4_client {
 	struct list_head	cl_layouts;	/* outstanding layouts */
 	struct list_head	cl_layoutrecalls; /* outstanding layoutrecall
 						     callbacks */
-	atomic_t		cl_deviceref;	/* Num outstanding devs */
 #endif /* CONFIG_PNFSD */
 };
 
