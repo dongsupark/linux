@@ -504,12 +504,12 @@ extern struct nfs4_file *find_file(struct inode *);
 extern struct nfs4_file *find_alloc_file(struct inode *, struct svc_fh *);
 extern void put_nfs4_file(struct nfs4_file *);
 extern void get_nfs4_file(struct nfs4_file *);
-extern struct nfs4_client *find_confirmed_client(clientid_t *, bool sessions);
+extern struct nfs4_client *find_confirmed_client(clientid_t *, bool sessions, struct nfsd_net *);
 extern struct nfs4_stid *nfs4_alloc_stid(struct nfs4_client *cl, struct kmem_cache *slab);
 extern void nfsd4_init_stid(struct nfs4_stid *, struct nfs4_client *, unsigned char type);
 extern void nfsd4_unhash_stid(struct nfs4_stid *);
 extern struct nfs4_stid *find_stateid(struct nfs4_client *, stateid_t *);
-extern __be32 nfsd4_lookup_stateid(stateid_t *, unsigned char typemask, struct nfs4_stid **, bool sessions);
+extern __be32 nfsd4_lookup_stateid(stateid_t *, unsigned char typemask, struct nfs4_stid **, bool sessions, struct nfsd_net *);
 extern int filter_confirmed_clients(int (* func)(struct nfs4_client *, void *), void *);
 
 #if defined(CONFIG_PNFSD)

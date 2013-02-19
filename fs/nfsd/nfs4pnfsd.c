@@ -22,6 +22,7 @@
  *****************************************************************************/
 
 #include "pnfsd.h"
+#include "netns.h"
 
 #define NFSDDBG_FACILITY                NFSDDBG_PNFS
 
@@ -195,7 +196,8 @@ nfs4_process_layout_stateid(struct nfs4_client *clp, struct nfs4_file *fp,
 	status = nfsd4_lookup_stateid(stateid,
 				      (NFS4_OPEN_STID | NFS4_LOCK_STID |
 				       NFS4_DELEG_STID | NFS4_LAYOUT_STID),
-				      &stid, true);
+				      &stid, true,
+				      net_generic(clp->net, nfsd_net_id));
 	if (status)
 		goto out;
 
@@ -633,7 +635,8 @@ merge_layout(struct nfs4_file *fp,
 }
 
 __be32
-nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
+nfs4_pnfs_get_layout(struct svc_rqst *rqstp,
+		     struct nfsd4_pnfs_layoutget *lgp,
 		     struct exp_xdr_stream *xdr)
 {
 	u32 status;
@@ -685,7 +688,8 @@ nfs4_pnfs_get_layout(struct nfsd4_pnfs_layoutget *lgp,
 
 	nfs4_lock_state();
 	fp = find_alloc_file(ino, lgp->lg_fhp);
-	clp = find_confirmed_client((clientid_t *)&lgp->lg_seg.clientid, true);
+	clp = find_confirmed_client((clientid_t *)&lgp->lg_seg.clientid, true,
+				    net_generic(SVC_NET(rqstp), nfsd_net_id));
 	dprintk("pNFS %s: fp %p clp %p\n", __func__, fp, clp);
 	if (!fp || !clp) {
 		nfserr = nfserr_inval;
