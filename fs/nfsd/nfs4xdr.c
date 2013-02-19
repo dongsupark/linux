@@ -3766,8 +3766,15 @@ nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, __be32 nfserr,
 
 	nfserr = sb->s_pnfs_op->get_device_info(sb, &xdr, gdev->gd_layout_type,
 						&gdev->gd_devid);
-	if (nfserr)
-		goto err;
+	if (nfserr) {
+		/* Rewind to the beginning */
+		p = p_in;
+		ADJUST_ARGS();
+		if (nfserr == -ETOOSMALL)
+			goto toosmall;
+		printk(KERN_ERR "%s: export ERROR %d\n", __func__, nfserr);
+		goto out;
+	}
 
 	/* The file system should never write 0 bytes without
 	 * returning an error
@@ -3782,21 +3789,11 @@ nfsd4_encode_getdevinfo(struct nfsd4_compoundres *resp, __be32 nfserr,
 	ADJUST_ARGS();
 
 handle_notifications:
-	/* Encode supported device notifications */
+	/* Encode supported device notifications.
+	 * Note: Currently none are supported.
+	 */
 	RESERVE_SPACE(4);
-	if (sb->s_pnfs_op->set_device_notify) {
-		struct pnfs_devnotify_arg dn_args;
-
-		dn_args.dn_layout_type = gdev->gd_layout_type;
-		dn_args.dn_devid = gdev->gd_devid;
-		dn_args.dn_notify_types = gdev->gd_notify_types;
-		nfserr = sb->s_pnfs_op->set_device_notify(sb, &dn_args);
-		if (nfserr)
-			goto err;
-		WRITE32(dn_args.dn_notify_types);
-	} else {
-		WRITE32(0);
-	}
+	WRITE32(0);
 	ADJUST_ARGS();
 
 out:
@@ -3806,14 +3803,6 @@ toosmall:
 	RESERVE_SPACE(4);
 	WRITE32((p_save ? (xdr.p - p_save) * 4 : 0) + type_notify_len);
 	ADJUST_ARGS();
-	goto out;
-err:
-	/* Rewind to the beginning */
-	p = p_in;
-	ADJUST_ARGS();
-	if (nfserr == -ETOOSMALL)
-		goto toosmall;
-	printk(KERN_ERR "%s: export ERROR %d\n", __func__, nfserr);
 	goto out;
 }
 
