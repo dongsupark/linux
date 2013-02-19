@@ -260,13 +260,6 @@ struct pnfsd_cb_operations {
 	/* Generic callbacks */
 	int (*cb_layout_recall) (struct super_block *, struct inode *,
 				 struct nfsd4_pnfs_cb_layout *);
-
-	/* pNFS Files layout specific callbacks */
-
-	/* Callback from fs on MDS only */
-	int (*cb_get_state) (struct super_block *, struct pnfs_get_state *);
-	/* Callback from fs on DS only */
-	int (*cb_change_state) (struct pnfs_get_state *);
 };
 
 #endif /* _LINUX_NFSD_NFSD4_PNFS_H */
