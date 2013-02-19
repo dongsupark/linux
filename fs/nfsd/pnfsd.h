@@ -61,8 +61,7 @@ struct nfs4_layout {
 u64 find_create_sbid(struct super_block *);
 struct super_block *find_sbid_id(u64);
 __be32 nfs4_pnfs_get_layout(struct svc_rqst *, struct nfsd4_pnfs_layoutget *, struct exp_xdr_stream *);
-int nfs4_pnfs_return_layout(struct super_block *, struct svc_fh *,
-					struct nfsd4_pnfs_layoutreturn *);
+int nfs4_pnfs_return_layout(struct svc_rqst *, struct super_block *, struct svc_fh *, struct nfsd4_pnfs_layoutreturn *);
 int put_layoutrecall(struct nfs4_layoutrecall *);
 void nomatching_layout(struct nfs4_layoutrecall *);
 void *layoutrecall_done(struct nfs4_layoutrecall *);

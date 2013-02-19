@@ -510,7 +510,6 @@ extern void nfsd4_init_stid(struct nfs4_stid *, struct nfs4_client *, unsigned c
 extern void nfsd4_unhash_stid(struct nfs4_stid *);
 extern struct nfs4_stid *find_stateid(struct nfs4_client *, stateid_t *);
 extern __be32 nfsd4_lookup_stateid(stateid_t *, unsigned char typemask, struct nfs4_stid **, bool sessions, struct nfsd_net *);
-extern int filter_confirmed_clients(int (* func)(struct nfs4_client *, void *), void *);
 
 #if defined(CONFIG_PNFSD)
 extern int nfsd4_init_pnfs_slabs(void);

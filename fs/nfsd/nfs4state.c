@@ -1456,24 +1456,6 @@ find_unconfirmed_client_by_name(struct xdr_netobj *name, struct nfsd_net *nn)
 	return find_clp_in_name_tree(name, &nn->unconf_name_tree);
 }
 
-int
-filter_confirmed_clients(int (* func)(struct nfs4_client *, void *),
-			 void *arg)
-{
-	struct nfs4_client *clp, *next;
-	int i, status = 0;
-
-	for (i = 0; i < CLIENT_HASH_SIZE; i++)
-		list_for_each_entry_safe (clp, next, &conf_str_hashtbl[i],
-					  cl_strhash) {
-			status = func(clp, arg);
-			if (status)
-				break;
-		}
-
-	return status;
-}
-
 static void
 gen_callback(struct nfs4_client *clp, struct nfsd4_setclientid *se, struct svc_rqst *rqstp)
 {

@@ -1002,7 +1002,9 @@ recall_return_partial_match(struct nfs4_layoutrecall *clr,
 	       lo_seg_overlapping(&clr->cb.cbl_seg, &lrp->args.lr_seg);
 }
 
-int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
+int nfs4_pnfs_return_layout(struct svc_rqst *rqstp,
+			    struct super_block *sb,
+			    struct svc_fh *current_fh,
 			    struct nfsd4_pnfs_layoutreturn *lrp)
 {
 	int status = 0;
@@ -1019,7 +1021,8 @@ int nfs4_pnfs_return_layout(struct super_block *sb, struct svc_fh *current_fh,
 	dprintk("NFSD: %s\n", __func__);
 
 	nfs4_lock_state();
-	clp = find_confirmed_client((clientid_t *)&lrp->args.lr_seg.clientid, true);
+	clp = find_confirmed_client((clientid_t *)&lrp->args.lr_seg.clientid,
+				    true, net_generic(SVC_NET(rqstp), nfsd_net_id));
 	if (!clp)
 		goto out;
 
