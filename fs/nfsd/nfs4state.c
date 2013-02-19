@@ -5090,7 +5090,6 @@ nfs4_state_shutdown_net(struct net *net)
 
 	nfsd4_client_tracking_exit(net);
 	nfs4_state_destroy_net(net);
-	nfs4_pnfs_state_shutdown();
 }
 
 void
