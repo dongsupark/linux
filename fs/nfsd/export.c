@@ -346,9 +346,6 @@ static int svc_export_upcall(struct cache_detail *cd, struct cache_head *h)
 #if defined(CONFIG_PNFSD)
 static struct pnfsd_cb_operations pnfsd_cb_op = {
 	.cb_layout_recall = nfsd_layout_recall_cb,
-
-	.cb_get_state = nfs4_pnfs_cb_get_state,
-	.cb_change_state = nfs4_pnfs_cb_change_state,
 };
 #endif /* CONFIG_PNFSD */
 

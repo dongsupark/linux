@@ -531,7 +531,6 @@ static void unhash_generic_stateid(struct nfs4_ol_stateid *stp)
 {
 	list_del(&stp->st_perfile);
 	list_del(&stp->st_perstateowner);
-	release_pnfs_ds_dev_list(stp);
 }
 
 static void close_generic_stateid(struct nfs4_ol_stateid *stp)
@@ -2519,9 +2518,6 @@ static void init_open_stateid(struct nfs4_ol_stateid *stp, struct nfs4_file *fp,
 
 	nfsd4_init_stid(&stp->st_stid, clp, NFS4_OPEN_STID);
 	INIT_LIST_HEAD(&stp->st_lockowners);
-#if defined(CONFIG_PNFSD)
-	INIT_LIST_HEAD(&stp->st_pnfs_ds_id);
-#endif /* CONFIG_PNFSD */
 	list_add(&stp->st_perstateowner, &oo->oo_owner.so_stateids);
 	list_add(&stp->st_perfile, &fp->fi_stateids);
 	stp->st_stateowner = &oo->oo_owner;
@@ -4108,9 +4104,6 @@ alloc_init_lock_stateid(struct nfs4_lockowner *lo, struct nfs4_file *fp, struct 
 	if (stp == NULL)
 		return NULL;
 	nfsd4_init_stid(&stp->st_stid, clp, NFS4_LOCK_STID);
-#if defined(CONFIG_PNFSD)
-	INIT_LIST_HEAD(&stp->st_pnfs_ds_id);
-#endif /* CONFIG_PNFSD */
 	list_add(&stp->st_perfile, &fp->fi_stateids);
 	list_add(&stp->st_perstateowner, &lo->lo_owner.so_stateids);
 	stp->st_stateowner = &lo->lo_owner;
@@ -4872,9 +4865,6 @@ nfs4_state_init(void)
 		INIT_LIST_HEAD(&file_hashtbl[i]);
 	}
 	INIT_LIST_HEAD(&del_recall_lru);
-#if defined(CONFIG_PNFSD)
-	nfs4_pnfs_state_init();
-#endif /* CONFIG_PNFSD */
 }
 
 /*
