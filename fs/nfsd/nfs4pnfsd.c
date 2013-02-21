@@ -434,7 +434,6 @@ find_create_sbid(struct super_block *sb)
  */
 static struct nfs4_layoutrecall *
 alloc_init_layoutrecall(struct nfsd4_pnfs_cb_layout *cbl,
-			struct nfs4_client *clp,
 			struct nfs4_file *lrfile)
 {
 	struct nfs4_layoutrecall *clr;
@@ -449,7 +448,6 @@ alloc_init_layoutrecall(struct nfsd4_pnfs_cb_layout *cbl,
 	memset(clr, 0, sizeof(*clr));
 	if (lrfile)
 		get_nfs4_file(lrfile);
-	clr->clr_client = clp;
 	clr->clr_file = lrfile;
 	clr->cb = *cbl;
 
@@ -490,6 +488,9 @@ put_layoutrecall(struct nfs4_layoutrecall *clr)
 	return kref_put(&clr->clr_ref, destroy_layoutrecall);
 }
 
+/*
+ * Note: must be called under the layout lock
+ */
 void *
 layoutrecall_done(struct nfs4_layoutrecall *clr)
 {
@@ -1109,67 +1110,6 @@ out_no_fs_call:
 	return status;
 }
 
-static bool
-cl_has_file_layout(struct nfs4_client *clp, struct nfs4_file *fp,
-		   stateid_t *lsid, struct nfsd4_pnfs_cb_layout *cbl)
-{
-	struct nfs4_layout *lo;
-	bool ret = false;
-
-	spin_lock(&layout_lock);
-	list_for_each_entry(lo, &fp->fi_layouts, lo_perfile) {
-		if (same_clid(&lo->lo_client->cl_clientid, &clp->cl_clientid) &&
-		    lo_seg_overlapping(&cbl->cbl_seg, &lo->lo_seg) &&
-		    (cbl->cbl_seg.iomode & lo->lo_seg.iomode))
-			goto found;
-	}
-	goto unlock;
-found:
-	/* Im going to send a recall on this latout update state */
-	update_layout_stateid_locked(lo->lo_state, lsid);
-	ret = true;
-unlock:
-	spin_unlock(&layout_lock);
-	return ret;
-}
-
-static int
-cl_has_fsid_layout(struct nfs4_client *clp, struct nfs4_fsid *fsid)
-{
-	int found = 0;
-	struct nfs4_layout *lp;
-
-	/* note: minor version unused */
-	spin_lock(&layout_lock);
-	list_for_each_entry(lp, &clp->cl_layouts, lo_perclnt)
-		if (lp->lo_file->fi_fsid.major == fsid->major) {
-			found = 1;
-			break;
-		}
-	spin_unlock(&layout_lock);
-	return found;
-}
-
-static int
-cl_has_any_layout(struct nfs4_client *clp)
-{
-	return !list_empty(&clp->cl_layouts);
-}
-
-static int
-cl_has_layout(struct nfs4_client *clp, struct nfsd4_pnfs_cb_layout *cbl,
-	      struct nfs4_file *lrfile, stateid_t *lsid)
-{
-	switch (cbl->cbl_recall_type) {
-	case RETURN_FILE:
-		return cl_has_file_layout(clp, lrfile, lsid, cbl);
-	case RETURN_FSID:
-		return cl_has_fsid_layout(clp, &cbl->cbl_fsid);
-	default:
-		return cl_has_any_layout(clp);
-	}
-}
-
 /*
  * Called without the layout_lock.
  */
@@ -1292,33 +1232,40 @@ struct create_recall_list_arg {
 };
 
 /*
- * look for matching layout for the given client
- * and add a pending layout recall to the todo list
- * if found any.
- * returns:
- *   0 if layouts found or negative error.
+ * Note: must be called under the layout lock
  */
-static int
-lo_recall_per_client(struct nfs4_client *clp, void *p)
+static struct nfs4_layout_state *
+should_recall_file_layout(struct nfsd4_pnfs_cb_layout *cbl,
+			  struct nfs4_file *fp)
 {
-	stateid_t lsid;
-	struct nfs4_layoutrecall *pending;
-	struct create_recall_list_arg *arg = p;
+	struct nfs4_layout_state *ls, *ret = NULL;
+	stateid_t *stid = (stateid_t *)&cbl->cbl_sid;
+	struct nfs4_layout *lo;
 
-	memset(&lsid, 0, sizeof(lsid));
-	if (!cl_has_layout(clp, arg->cbl, arg->lrfile, &lsid))
-		return 0;
+	dprintk("%s: ino=%lu clientid=%llux iomode=%u", __func__,
+		fp->fi_inode->i_ino, cbl->cbl_seg.clientid,
+		cbl->cbl_seg.iomode);
 
-	/* Matching put done by layoutreturn */
-	pending = alloc_init_layoutrecall(arg->cbl, clp, arg->lrfile);
-	/* out of memory, drain todo queue */
-	if (!pending)
-		return -ENOMEM;
+	list_for_each_entry (ls, &fp->fi_lo_states, ls_perfile) {
+		if (!is_null_stid(stid) &&
+		    !same_stid(stid, &ls->ls_stid.sc_stateid))
+			continue;
 
-	*(stateid_t *)&pending->cb.cbl_sid = lsid;
-	list_add(&pending->clr_perclnt, arg->todolist);
-	arg->todo_count++;
-	return 0;
+		if (cbl->cbl_seg.clientid &&
+		    !same_clid(&ls->ls_client->cl_clientid,
+			       (clientid_t *)&cbl->cbl_seg.clientid))
+			continue;
+
+		list_for_each_entry (lo, &ls->ls_layouts, lo_perstate)
+			if (cbl->cbl_seg.layout_type == lo->lo_seg.layout_type &&
+			    lo_seg_overlapping(&cbl->cbl_seg, &lo->lo_seg) &&
+			    (cbl->cbl_seg.iomode & lo->lo_seg.iomode)) {
+				ret = ls;
+				break;
+			}
+	}
+
+	return ret;
 }
 
 /* Create a layoutrecall structure for each client based on the
@@ -1328,37 +1275,41 @@ create_layout_recall_list(struct list_head *todolist, unsigned *todo_len,
 			  struct nfsd4_pnfs_cb_layout *cbl,
 			  struct nfs4_file *lrfile)
 {
-	struct nfs4_client *clp;
-	struct create_recall_list_arg arg = {
-		.cbl = cbl,
-		.lrfile = lrfile,
-		.todolist = todolist,
-	};
+	struct nfs4_layout_state *ls;
+	struct nfs4_layoutrecall *pending;
 	int status = 0;
 
-#if 0
 	dprintk("%s: -->\n", __func__);
 
-	/* If client given by fs, just do single client */
-	if (cbl->cbl_seg.clientid) {
-		clp = find_confirmed_client((clientid_t *)&cbl->cbl_seg.clientid, true);
-		if (!clp) {
-			status = -ENOENT;
-			dprintk("%s: clientid %llx not found\n", __func__,
-				(unsigned long long)cbl->cbl_seg.clientid);
-			goto out;
-		}
+	/* We do not support wildcard recalls yet */
+	if (cbl->cbl_recall_type != RETURN_FILE)
+		return -EOPNOTSUPP;
 
-		status = lo_recall_per_client(clp, &arg);
-	} else {
-		/* Check all clients for layout matches */
-		status = filter_confirmed_clients(lo_recall_per_client, &arg);
+	/* Matching put done by layoutreturn */
+	pending = alloc_init_layoutrecall(cbl, lrfile);
+	if (!pending)
+		return -ENOMEM;
+
+	switch (cbl->cbl_recall_type) {
+	case RETURN_FILE:
+		spin_lock(&layout_lock);
+		ls = should_recall_file_layout(cbl, lrfile);
+		if (ls) {
+			update_layout_stateid_locked(ls,
+					(stateid_t *)&pending->cb.cbl_sid);
+			pending->clr_client = ls->ls_client;
+			list_add(&pending->clr_perclnt, todolist);
+			(*todo_len)++;
+		}
+		spin_unlock(&layout_lock);
+		break;
+	case RETURN_FSID:
+	default:
+		WARN_ON(1);
+		return -EINVAL;	/* not supported yet */
 	}
 
-out:
-	*todo_len = arg.todo_count;
 	dprintk("%s: <-- list len %u status %d\n", __func__, *todo_len, status);
-#endif
 	return status;
 }
 
@@ -1380,7 +1331,7 @@ spawn_layout_recall(struct super_block *sb, struct list_head *todolist,
 		pending = list_entry(todolist->next, struct nfs4_layoutrecall,
 				     clr_perclnt);
 
-		parent = alloc_init_layoutrecall(&pending->cb, NULL,
+		parent = alloc_init_layoutrecall(&pending->cb,
 						 pending->clr_file);
 		if (unlikely(!parent)) {
 			/* We want forward progress. If parent cannot be

@@ -49,6 +49,7 @@ struct nfs4_layout_state {
 	struct list_head	ls_perfile;
 	struct nfs4_file	*ls_file;
 	struct list_head	ls_layouts;
+	struct list_head	ls_lo_recalls;
 	bool			ls_roc;
 };
 

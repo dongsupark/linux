@@ -62,6 +62,19 @@ typedef struct {
 	stateid_opaque_t        si_opaque;
 } stateid_t;
 
+static inline bool
+is_null_stid(stateid_t *stid)
+{
+	return stid->si_opaque.so_id == 0;
+}
+
+static inline int
+same_stid(stateid_t *stid1, stateid_t *stid2)
+{
+	return !memcmp(&stid1->si_opaque, &stid2->si_opaque,
+		       NFS4_STATEID_OTHER_SIZE);
+}
+
 #define STATEID_FMT	"(%08x/%08x/%08x/%08x)"
 #define STATEID_VAL(s) \
 	(s)->si_opaque.so_clid.cl_boot, \

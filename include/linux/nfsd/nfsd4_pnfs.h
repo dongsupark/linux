@@ -200,6 +200,27 @@ struct pnfs_export_operations {
 	int (*can_merge_layouts) (u32 layout_type);
 };
 
+/*
+ * @cbl_recall_type	Indicates RETURN_FILE, RETURN_FSID, or RETURN_ALL
+ *
+ * @cbl_seg		Indicates a the layout_type and iomode to recall,
+ * 			IOMODE_READ, IOMODE_RW, or IOMODE_ANY.
+ * 			For RETURN_FILE, offset and length can be given to recall
+ * 			a particular range.  To recall the layout for the whole
+ * 			file, offset is set to 0 and length to NFS4_MAX_UINT64.
+ *
+ * cbl_layoutchanged	Set to true to provide a hint to the client not to
+ * 			attempt flushing dirty data to the data servers
+ * 			using the recalled layout.
+ *
+ * cbl_sid		For RETURN_FILE, non-zero stateid indicates a particular
+ * 			stateid (file/clientid tuple) to recall.
+ *
+ * cbl_fsid		For RETURN_FSID, indicated the fsid to recall.
+ *
+ * cbl_cookie		A private file system value to be given on the final
+ *			layoutreturn completing the layout recall.
+ */
 struct nfsd4_pnfs_cb_layout {
 	u32			cbl_recall_type;	/* request */
 	struct nfsd4_layout_seg cbl_seg;		/* request */
