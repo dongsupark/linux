@@ -146,3 +146,8 @@ config PNFSD_LEXP_COMMIT_THRU_MDS
 	default n
 	help
 	  Set commit_thru_mds nfl_util response flag.
+
+config PNFSD_LEXP_INJECT_IO_ERRORS
+	bool "Inject I/O errors"
+	depends on PNFSD_LOCAL_EXPORT
+	default n

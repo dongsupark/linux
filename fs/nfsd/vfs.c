@@ -948,6 +948,17 @@ nfsd_vfs_read(struct svc_rqst *rqstp, struct svc_fh *fhp, struct file *file,
 		set_fs(oldfs);
 	}
 
+#ifdef CONFIG_PNFSD_LEXP_INJECT_IO_ERRORS
+	if (host_err >= 0) {
+		static int count;
+
+		if (count++ >= 5) {
+			count = 0;
+			dprintk("%s: injecting I/O error\n", __func__);
+			host_err = -EIO;
+		}
+	}
+#endif
 	if (host_err >= 0) {
 		nfsdstats.io_read += host_err;
 		*count = host_err;
@@ -1032,6 +1043,18 @@ nfsd_vfs_write(struct svc_rqst *rqstp, struct svc_fh *fhp, struct file *file,
 	oldfs = get_fs(); set_fs(KERNEL_DS);
 	host_err = vfs_writev(file, (struct iovec __user *)vec, vlen, &offset);
 	set_fs(oldfs);
+#ifdef CONFIG_PNFSD_LEXP_INJECT_IO_ERRORS
+	if (host_err >= 0) {
+		static int count;
+
+		if (count++ >= 5) {
+			count = 0;
+			dprintk("%s: injecting I/O error\n", __func__);
+			host_err = -EIO;
+			goto out_nfserr;
+		}
+	}
+#endif
 	if (host_err < 0)
 		goto out_nfserr;
 	*cnt = host_err;
