@@ -28,6 +28,8 @@
 
 static DEFINE_SPINLOCK(layout_lock);
 
+#define ASSERT_LAYOUT_LOCKED()	assert_spin_locked(&layout_lock);
+
 /*
  * Layout state - NFSv4.1 pNFS
  */
