@@ -225,6 +225,8 @@ pnfs_detach_layout_hdr(struct pnfs_layout_hdr *lo)
 {
 	struct nfs_inode *nfsi = NFS_I(lo->plh_inode);
 	dprintk("%s: freeing layout cache %p\n", __func__, lo);
+	WARN_ON_ONCE(test_and_clear_bit(NFS_INO_LAYOUTCOMMIT, &nfsi->flags));
+	WARN_ON_ONCE(test_and_clear_bit(NFS_INO_LAYOUTCOMMITTING, &nfsi->flags));
 	nfsi->layout = NULL;
 	/* Reset MDS Threshold I/O counters */
 	nfsi->write_io = 0;
@@ -1700,11 +1702,15 @@ pnfs_layoutcommit_inode(struct inode *inode, bool sync)
 	loff_t end_pos;
 	int status = 0;
 
-	dprintk("--> %s inode %lu\n", __func__, inode->i_ino);
+	if (!test_bit(NFS_INO_LAYOUTCOMMIT, &nfsi->flags)) {
+		dprintk("%s: inode %lu: not required\n", __func__, inode->i_ino);
+		return 0;
+	}
 
-	if (!test_bit(NFS_INO_LAYOUTCOMMIT, &nfsi->flags))
+	if (WARN_ON(!nfsi->layout))
 		return 0;
 
+	dprintk("--> %s inode %lu\n", __func__, inode->i_ino);
 	/* Note kzalloc ensures data->res.seq_res.sr_slot == NULL */
 	data = kzalloc(sizeof(*data), GFP_NOFS);
 	if (!data) {
