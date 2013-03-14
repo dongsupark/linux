@@ -1211,10 +1211,11 @@ pnfs_generic_pg_init_read(struct nfs_pageio_descriptor *pgio, struct nfs_page *r
 
 	WARN_ON_ONCE(pgio->pg_lseg != NULL);
 
-	if (req->wb_offset != req->wb_pgbase) {
-		nfs_pageio_reset_read_mds(pgio);
-		return;
-	}
+	if (req->wb_offset != req->wb_pgbase)
+		dprintk("%s: inode=%ld: offset=%llu wb_bytes=%u wb_offset=%u wb_pgbase=%u\n",
+			__func__, pgio->pg_inode->i_ino,
+			(((unsigned long long)req->wb_index) << PAGE_CACHE_SHIFT) + req->wb_offset,
+			req->wb_bytes, req->wb_offset, req->wb_pgbase);
 
 	if (pgio->pg_dreq == NULL)
 		rd_size = i_size_read(pgio->pg_inode) - req_offset(req);
@@ -1240,10 +1241,11 @@ pnfs_generic_pg_init_write(struct nfs_pageio_descriptor *pgio,
 {
 	WARN_ON_ONCE(pgio->pg_lseg != NULL);
 
-	if (req->wb_offset != req->wb_pgbase) {
-		nfs_pageio_reset_write_mds(pgio);
-		return;
-	}
+	if (req->wb_offset != req->wb_pgbase)
+		dprintk("%s: inode=%ld: offset=%llu wb_bytes=%u wb_offset=%u wb_pgbase=%u\n",
+			__func__, pgio->pg_inode->i_ino,
+			(((unsigned long long)req->wb_index) << PAGE_CACHE_SHIFT) + req->wb_offset,
+			req->wb_bytes, req->wb_offset, req->wb_pgbase);
 
 	pgio->pg_lseg = pnfs_update_layout(pgio->pg_inode,
 					   req->wb_context,
