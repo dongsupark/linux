@@ -432,8 +432,15 @@ void update_mmu_cache(struct vm_area_struct *vma, unsigned long vaddress,
 
 	/* icache doesn't snoop dcache, thus needs to be made coherent here */
 	if (vma->vm_flags & VM_EXEC) {
-		unsigned long paddr =  pte_val(*ptep) & PAGE_MASK;
-		__inv_icache_page(paddr, vaddr);
+		struct page *page = pfn_to_page(pte_pfn(*ptep));
+
+		/* if page was dcache dirty, flush now */
+		int dirty = test_and_clear_bit(PG_arch_1, &page->flags);
+		if (dirty) {
+			unsigned long paddr =  pte_val(*ptep) & PAGE_MASK;
+			__flush_dcache_page(paddr);
+			__inv_icache_page(paddr, vaddr);
+		}
 	}
 }
 
