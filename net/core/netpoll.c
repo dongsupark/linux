@@ -47,7 +47,7 @@ static struct sk_buff_head skb_pool;
 
 static atomic_t trapped;
 
-static struct srcu_struct netpoll_srcu;
+DEFINE_STATIC_SRCU(netpoll_srcu);
 
 #define USEC_PER_POLL	50
 #define NETPOLL_RX_ENABLED  1
@@ -383,8 +383,9 @@ void netpoll_send_skb_on_dev(struct netpoll *np, struct sk_buff *skb,
 			if (__netif_tx_trylock(txq)) {
 				if (!netif_xmit_stopped(txq)) {
 					if (vlan_tx_tag_present(skb) &&
-					    !(netif_skb_features(skb) & NETIF_F_HW_VLAN_TX)) {
-						skb = __vlan_put_tag(skb, vlan_tx_tag_get(skb));
+					    !vlan_hw_offload_capable(netif_skb_features(skb),
+								     skb->vlan_proto)) {
+						skb = __vlan_put_tag(skb, skb->vlan_proto, vlan_tx_tag_get(skb));
 						if (unlikely(!skb))
 							break;
 						skb->vlan_tci = 0;
@@ -1212,7 +1213,6 @@ EXPORT_SYMBOL(netpoll_setup);
 static int __init netpoll_init(void)
 {
 	skb_queue_head_init(&skb_pool);
-	init_srcu_struct(&netpoll_srcu);
 	return 0;
 }
 core_initcall(netpoll_init);

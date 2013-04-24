@@ -149,7 +149,8 @@ static const char qlcnic_gstrings_test[][ETH_GSTRING_LEN] = {
 
 static inline int qlcnic_82xx_statistics(void)
 {
-	return QLCNIC_STATS_LEN + ARRAY_SIZE(qlcnic_83xx_mac_stats_strings);
+	return ARRAY_SIZE(qlcnic_device_gstrings_stats) +
+	       ARRAY_SIZE(qlcnic_83xx_mac_stats_strings);
 }
 
 static inline int qlcnic_83xx_statistics(void)
@@ -858,9 +859,11 @@ clear_diag_irq:
 	return ret;
 }
 
-#define QLCNIC_ILB_PKT_SIZE 64
-#define QLCNIC_NUM_ILB_PKT	16
-#define QLCNIC_ILB_MAX_RCV_LOOP 10
+#define QLCNIC_ILB_PKT_SIZE		64
+#define QLCNIC_NUM_ILB_PKT		16
+#define QLCNIC_ILB_MAX_RCV_LOOP		10
+#define QLCNIC_LB_PKT_POLL_DELAY_MSEC	1
+#define QLCNIC_LB_PKT_POLL_COUNT	20
 
 static void qlcnic_create_loopback_buff(unsigned char *data, u8 mac[])
 {
@@ -897,9 +900,9 @@ int qlcnic_do_lb_test(struct qlcnic_adapter *adapter, u8 mode)
 		loop = 0;
 
 		do {
-			msleep(1);
+			msleep(QLCNIC_LB_PKT_POLL_DELAY_MSEC);
 			qlcnic_process_rcv_ring_diag(sds_ring);
-			if (loop++ > QLCNIC_ILB_MAX_RCV_LOOP)
+			if (loop++ > QLCNIC_LB_PKT_POLL_COUNT)
 				break;
 		} while (!adapter->ahw->diag_cnt);
 
@@ -1070,8 +1073,7 @@ qlcnic_get_strings(struct net_device *dev, u32 stringset, u8 *data)
 	}
 }
 
-static void
-qlcnic_fill_stats(u64 *data, void *stats, int type)
+static u64 *qlcnic_fill_stats(u64 *data, void *stats, int type)
 {
 	if (type == QLCNIC_MAC_STATS) {
 		struct qlcnic_mac_statistics *mac_stats =
@@ -1120,6 +1122,7 @@ qlcnic_fill_stats(u64 *data, void *stats, int type)
 		*data++ = QLCNIC_FILL_STATS(esw_stats->local_frames);
 		*data++ = QLCNIC_FILL_STATS(esw_stats->numbytes);
 	}
+	return data;
 }
 
 static void qlcnic_get_ethtool_stats(struct net_device *dev,
@@ -1147,7 +1150,7 @@ static void qlcnic_get_ethtool_stats(struct net_device *dev,
 		/* Retrieve MAC statistics from firmware */
 		memset(&mac_stats, 0, sizeof(struct qlcnic_mac_statistics));
 		qlcnic_get_mac_stats(adapter, &mac_stats);
-		qlcnic_fill_stats(data, &mac_stats, QLCNIC_MAC_STATS);
+		data = qlcnic_fill_stats(data, &mac_stats, QLCNIC_MAC_STATS);
 	}
 
 	if (!(adapter->flags & QLCNIC_ESWITCH_ENABLED))
@@ -1159,7 +1162,7 @@ static void qlcnic_get_ethtool_stats(struct net_device *dev,
 	if (ret)
 		return;
 
-	qlcnic_fill_stats(data, &port_stats.rx, QLCNIC_ESW_STATS);
+	data = qlcnic_fill_stats(data, &port_stats.rx, QLCNIC_ESW_STATS);
 	ret = qlcnic_get_port_stats(adapter, adapter->ahw->pci_func,
 			QLCNIC_QUERY_TX_COUNTER, &port_stats.tx);
 	if (ret)
@@ -1176,7 +1179,8 @@ static int qlcnic_set_led(struct net_device *dev,
 	int err = -EIO, active = 1;
 
 	if (qlcnic_83xx_check(adapter))
-		return -EOPNOTSUPP;
+		return qlcnic_83xx_set_led(dev, state);
+
 	if (adapter->ahw->op_mode == QLCNIC_NON_PRIV_FUNC) {
 		netdev_warn(dev, "LED test not supported for non "
 				"privilege function\n");
@@ -1536,4 +1540,26 @@ const struct ethtool_ops qlcnic_ethtool_ops = {
 	.get_dump_flag = qlcnic_get_dump_flag,
 	.get_dump_data = qlcnic_get_dump_data,
 	.set_dump = qlcnic_set_dump,
+};
+
+const struct ethtool_ops qlcnic_sriov_vf_ethtool_ops = {
+	.get_settings		= qlcnic_get_settings,
+	.get_drvinfo		= qlcnic_get_drvinfo,
+	.get_regs_len		= qlcnic_get_regs_len,
+	.get_regs		= qlcnic_get_regs,
+	.get_link		= ethtool_op_get_link,
+	.get_eeprom_len		= qlcnic_get_eeprom_len,
+	.get_eeprom		= qlcnic_get_eeprom,
+	.get_ringparam		= qlcnic_get_ringparam,
+	.set_ringparam		= qlcnic_set_ringparam,
+	.get_channels		= qlcnic_get_channels,
+	.get_pauseparam		= qlcnic_get_pauseparam,
+	.get_wol		= qlcnic_get_wol,
+	.get_strings		= qlcnic_get_strings,
+	.get_ethtool_stats	= qlcnic_get_ethtool_stats,
+	.get_sset_count		= qlcnic_get_sset_count,
+	.get_coalesce		= qlcnic_get_intr_coalesce,
+	.set_coalesce		= qlcnic_set_intr_coalesce,
+	.set_msglevel		= qlcnic_set_msglevel,
+	.get_msglevel		= qlcnic_get_msglevel,
 };
