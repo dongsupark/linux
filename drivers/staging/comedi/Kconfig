@@ -488,6 +488,7 @@ config COMEDI_NI_LABPC_ISA
 	tristate "NI Lab-PC and compatibles ISA support"
 	select COMEDI_NI_LABPC
 	depends on VIRT_TO_BUS
+	depends on BROKEN
 	---help---
 	  Enable support for National Instruments Lab-PC and compatibles
 	  Lab-PC-1200, Lab-PC-1200AI, Lab-PC+.
@@ -1024,6 +1025,7 @@ config COMEDI_NI_LABPC_PCI
 	tristate "NI Lab-PC PCI-1200 support"
 	select COMEDI_NI_LABPC
 	select COMEDI_MITE
+	depends on BROKEN
 	---help---
 	  Enable support for National Instruments Lab-PC PCI-1200.
 
@@ -1151,6 +1153,7 @@ config COMEDI_NI_DAQ_DIO24_CS
 config COMEDI_NI_LABPC_CS
 	tristate "NI DAQCard-1200 PCMCIA support"
 	select COMEDI_NI_LABPC
+	depends on BROKEN
 	---help---
 	  Enable support for the National Instruments PCMCIA DAQCard-1200
 
