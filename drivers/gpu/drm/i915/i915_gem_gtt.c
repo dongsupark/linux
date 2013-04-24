@@ -28,8 +28,6 @@
 #include "i915_trace.h"
 #include "intel_drv.h"
 
-typedef uint32_t gen6_gtt_pte_t;
-
 /* PPGTT stuff */
 #define GEN6_GTT_ADDR_ENCODE(addr)	((addr) | (((addr) >> 28) & 0xff0))
 
@@ -44,33 +42,60 @@ typedef uint32_t gen6_gtt_pte_t;
 #define GEN6_PTE_CACHE_LLC_MLC		(3 << 1)
 #define GEN6_PTE_ADDR_ENCODE(addr)	GEN6_GTT_ADDR_ENCODE(addr)
 
-static inline gen6_gtt_pte_t gen6_pte_encode(struct drm_device *dev,
-					     dma_addr_t addr,
-					     enum i915_cache_level level)
+static gen6_gtt_pte_t gen6_pte_encode(struct drm_device *dev,
+				      dma_addr_t addr,
+				      enum i915_cache_level level)
 {
 	gen6_gtt_pte_t pte = GEN6_PTE_VALID;
 	pte |= GEN6_PTE_ADDR_ENCODE(addr);
 
 	switch (level) {
 	case I915_CACHE_LLC_MLC:
-		/* Haswell doesn't set L3 this way */
-		if (IS_HASWELL(dev))
-			pte |= GEN6_PTE_CACHE_LLC;
-		else
-			pte |= GEN6_PTE_CACHE_LLC_MLC;
+		pte |= GEN6_PTE_CACHE_LLC_MLC;
 		break;
 	case I915_CACHE_LLC:
 		pte |= GEN6_PTE_CACHE_LLC;
 		break;
 	case I915_CACHE_NONE:
-		if (IS_HASWELL(dev))
-			pte |= HSW_PTE_UNCACHED;
-		else
-			pte |= GEN6_PTE_UNCACHED;
+		pte |= GEN6_PTE_UNCACHED;
 		break;
 	default:
 		BUG();
 	}
+
+	return pte;
+}
+
+#define BYT_PTE_WRITEABLE		(1 << 1)
+#define BYT_PTE_SNOOPED_BY_CPU_CACHES	(1 << 2)
+
+static gen6_gtt_pte_t byt_pte_encode(struct drm_device *dev,
+				     dma_addr_t addr,
+				     enum i915_cache_level level)
+{
+	gen6_gtt_pte_t pte = GEN6_PTE_VALID;
+	pte |= GEN6_PTE_ADDR_ENCODE(addr);
+
+	/* Mark the page as writeable.  Other platforms don't have a
+	 * setting for read-only/writable, so this matches that behavior.
+	 */
+	pte |= BYT_PTE_WRITEABLE;
+
+	if (level != I915_CACHE_NONE)
+		pte |= BYT_PTE_SNOOPED_BY_CPU_CACHES;
+
+	return pte;
+}
+
+static gen6_gtt_pte_t hsw_pte_encode(struct drm_device *dev,
+				     dma_addr_t addr,
+				     enum i915_cache_level level)
+{
+	gen6_gtt_pte_t pte = GEN6_PTE_VALID;
+	pte |= GEN6_PTE_ADDR_ENCODE(addr);
+
+	if (level != I915_CACHE_NONE)
+		pte |= GEN6_PTE_CACHE_LLC;
 
 	return pte;
 }
@@ -154,9 +179,9 @@ static void gen6_ppgtt_clear_range(struct i915_hw_ppgtt *ppgtt,
 	unsigned first_pte = first_entry % I915_PPGTT_PT_ENTRIES;
 	unsigned last_pte, i;
 
-	scratch_pte = gen6_pte_encode(ppgtt->dev,
-				      ppgtt->scratch_page_dma_addr,
-				      I915_CACHE_LLC);
+	scratch_pte = ppgtt->pte_encode(ppgtt->dev,
+					ppgtt->scratch_page_dma_addr,
+					I915_CACHE_LLC);
 
 	while (num_entries) {
 		last_pte = first_pte + num_entries;
@@ -191,8 +216,8 @@ static void gen6_ppgtt_insert_entries(struct i915_hw_ppgtt *ppgtt,
 		dma_addr_t page_addr;
 
 		page_addr = sg_page_iter_dma_address(&sg_iter);
-		pt_vaddr[act_pte] = gen6_pte_encode(ppgtt->dev, page_addr,
-						    cache_level);
+		pt_vaddr[act_pte] = ppgtt->pte_encode(ppgtt->dev, page_addr,
+						      cache_level);
 		if (++act_pte == I915_PPGTT_PT_ENTRIES) {
 			kunmap_atomic(pt_vaddr);
 			act_pt++;
@@ -236,6 +261,13 @@ static int gen6_ppgtt_init(struct i915_hw_ppgtt *ppgtt)
 	first_pd_entry_in_global_pt =
 		gtt_total_entries(dev_priv->gtt) - I915_PPGTT_PD_ENTRIES;
 
+	if (IS_HASWELL(dev)) {
+		ppgtt->pte_encode = hsw_pte_encode;
+	} else if (IS_VALLEYVIEW(dev)) {
+		ppgtt->pte_encode = byt_pte_encode;
+	} else {
+		ppgtt->pte_encode = gen6_pte_encode;
+	}
 	ppgtt->num_pd_entries = I915_PPGTT_PD_ENTRIES;
 	ppgtt->enable = gen6_ppgtt_enable;
 	ppgtt->clear_range = gen6_ppgtt_clear_range;
@@ -438,7 +470,8 @@ static void gen6_ggtt_insert_entries(struct drm_device *dev,
 
 	for_each_sg_page(st->sgl, &sg_iter, st->nents, 0) {
 		addr = sg_page_iter_dma_address(&sg_iter);
-		iowrite32(gen6_pte_encode(dev, addr, level), &gtt_entries[i]);
+		iowrite32(dev_priv->gtt.pte_encode(dev, addr, level),
+			  &gtt_entries[i]);
 		i++;
 	}
 
@@ -450,7 +483,7 @@ static void gen6_ggtt_insert_entries(struct drm_device *dev,
 	 */
 	if (i != 0)
 		WARN_ON(readl(&gtt_entries[i-1])
-			!= gen6_pte_encode(dev, addr, level));
+			!= dev_priv->gtt.pte_encode(dev, addr, level));
 
 	/* This next bit makes the above posting read even more important. We
 	 * want to flush the TLBs only after we're certain all the PTE updates
@@ -475,8 +508,9 @@ static void gen6_ggtt_clear_range(struct drm_device *dev,
 		 first_entry, num_entries, max_entries))
 		num_entries = max_entries;
 
-	scratch_pte = gen6_pte_encode(dev, dev_priv->gtt.scratch_page_dma,
-				      I915_CACHE_LLC);
+	scratch_pte = dev_priv->gtt.pte_encode(dev,
+					       dev_priv->gtt.scratch_page_dma,
+					       I915_CACHE_LLC);
 	for (i = 0; i < num_entries; i++)
 		iowrite32(scratch_pte, &gtt_base[i]);
 	readl(gtt_base);
@@ -823,6 +857,13 @@ int i915_gem_gtt_init(struct drm_device *dev)
 	} else {
 		dev_priv->gtt.gtt_probe = gen6_gmch_probe;
 		dev_priv->gtt.gtt_remove = gen6_gmch_remove;
+		if (IS_HASWELL(dev)) {
+			dev_priv->gtt.pte_encode = hsw_pte_encode;
+		} else if (IS_VALLEYVIEW(dev)) {
+			dev_priv->gtt.pte_encode = byt_pte_encode;
+		} else {
+			dev_priv->gtt.pte_encode = gen6_pte_encode;
+		}
 	}
 
 	ret = dev_priv->gtt.gtt_probe(dev, &dev_priv->gtt.total,
