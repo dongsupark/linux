@@ -313,7 +313,7 @@ static inline void sem_lock_and_putref(struct sem_array *sma)
 
 static inline void sem_getref_and_unlock(struct sem_array *sma)
 {
-	ipc_rcu_getref(sma);
+	WARN_ON_ONCE(!ipc_rcu_getref(sma));
 	sem_unlock(sma, -1);
 }
 
@@ -329,7 +329,7 @@ static inline void sem_putref(struct sem_array *sma)
 static inline void sem_getref(struct sem_array *sma)
 {
 	sem_lock(sma, NULL, -1);
-	ipc_rcu_getref(sma);
+	WARN_ON_ONCE(!ipc_rcu_getref(sma));
 	sem_unlock(sma, -1);
 }
 
@@ -1131,7 +1131,10 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 		int i;
 		struct sem_undo *un;
 
-		ipc_rcu_getref(sma);
+		if (!ipc_rcu_getref(sma)) {
+			rcu_read_unlock();
+			return -EIDRM;
+		}
 		rcu_read_unlock();
 
 		if(nsems > SEMMSL_FAST) {
@@ -1400,8 +1403,7 @@ static struct sem_undo *find_alloc_undo(struct ipc_namespace *ns, int semid)
 	struct sem_array *sma;
 	struct sem_undo_list *ulp;
 	struct sem_undo *un, *new;
-	int nsems;
-	int error;
+	int nsems, error;
 
 	error = get_undo_list(&ulp);
 	if (error)
@@ -1423,7 +1425,11 @@ static struct sem_undo *find_alloc_undo(struct ipc_namespace *ns, int semid)
 	}
 
 	nsems = sma->sem_nsems;
-	ipc_rcu_getref(sma);
+	if (!ipc_rcu_getref(sma)) {
+		rcu_read_unlock();
+		un = ERR_PTR(-EIDRM);
+		goto out;
+	}
 	rcu_read_unlock();
 
 	/* step 2: allocate new undo structure */
