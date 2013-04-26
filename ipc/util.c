@@ -520,7 +520,7 @@ static inline int rcu_use_vmalloc(int size)
  */
 void *ipc_rcu_alloc(int size)
 {
-	void* out;
+	void *out;
 
 	/*
 	 * We prepend the allocation with the rcu struct, and
