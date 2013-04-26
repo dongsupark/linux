@@ -353,6 +353,8 @@
  *  0x8100: fast clock controls
  *
  * DPIO is VLV only.
+ *
+ * Note: digital port B is DDI0, digital pot C is DDI1
  */
 #define DPIO_PKT			(VLV_DISPLAY_BASE + 0x2100)
 #define  DPIO_RID			(0<<24)
@@ -369,8 +371,20 @@
 #define  DPIO_SFR_BYPASS		(1<<1)
 #define  DPIO_RESET			(1<<0)
 
+#define _DPIO_TX3_SWING_CTL4_A		0x690
+#define _DPIO_TX3_SWING_CTL4_B		0x2a90
+#define DPIO_TX3_SWING_CTL4(pipe) _PIPE(pipe, _DPIO_TX_SWING_CTL4_A, \
+					_DPIO_TX3_SWING_CTL4_B)
+
+/*
+ * Per pipe/PLL DPIO regs
+ */
 #define _DPIO_DIV_A			0x800c
 #define   DPIO_POST_DIV_SHIFT		(28) /* 3 bits */
+#define   DPIO_POST_DIV_DAC		0
+#define   DPIO_POST_DIV_HDMIDP		1 /* DAC 225-400M rate */
+#define   DPIO_POST_DIV_LVDS1		2
+#define   DPIO_POST_DIV_LVDS2		3
 #define   DPIO_K_SHIFT			(24) /* 4 bits */
 #define   DPIO_P1_SHIFT			(21) /* 3 bits */
 #define   DPIO_P2_SHIFT			(16) /* 5 bits */
@@ -396,14 +410,111 @@
 #define _DPIO_CORE_CLK_B		0x803c
 #define DPIO_CORE_CLK(pipe) _PIPE(pipe, _DPIO_CORE_CLK_A, _DPIO_CORE_CLK_B)
 
+#define _DPIO_IREF_CTL_A		0x8040
+#define _DPIO_IREF_CTL_B		0x8060
+#define DPIO_IREF_CTL(pipe) _PIPE(pipe, _DPIO_IREF_CTL_A, _DPIO_IREF_CTL_B)
+
+#define DPIO_IREF_BCAST			0xc044
+#define _DPIO_IREF_A			0x8044
+#define _DPIO_IREF_B			0x8064
+#define DPIO_IREF(pipe) _PIPE(pipe, _DPIO_IREF_A, _DPIO_IREF_B)
+
+#define _DPIO_PLL_CML_A			0x804c
+#define _DPIO_PLL_CML_B			0x806c
+#define DPIO_PLL_CML(pipe) _PIPE(pipe, _DPIO_PLL_CML_A, _DPIO_PLL_CML_B)
+
 #define _DPIO_LFP_COEFF_A		0x8048
 #define _DPIO_LFP_COEFF_B		0x8068
 #define DPIO_LFP_COEFF(pipe) _PIPE(pipe, _DPIO_LFP_COEFF_A, _DPIO_LFP_COEFF_B)
 
+#define DPIO_CALIBRATION		0x80ac
+
 #define DPIO_FASTCLK_DISABLE		0x8100
 
-#define DPIO_DATA_CHANNEL1		0x8220
-#define DPIO_DATA_CHANNEL2		0x8420
+/*
+ * Per DDI channel DPIO regs
+ */
+
+#define _DPIO_PCS_TX_0			0x8200
+#define _DPIO_PCS_TX_1			0x8400
+#define   DPIO_PCS_TX_LANE2_RESET	(1<<16)
+#define   DPIO_PCS_TX_LANE1_RESET	(1<<7)
+#define DPIO_PCS_TX(port) _PORT(port, _DPIO_PCS_TX_0, _DPIO_PCS_TX_1)
+
+#define _DPIO_PCS_CLK_0			0x8204
+#define _DPIO_PCS_CLK_1			0x8404
+#define   DPIO_PCS_CLK_CRI_RXEB_EIOS_EN	(1<<22)
+#define   DPIO_PCS_CLK_CRI_RXDIGFILTSG_EN (1<<21)
+#define   DPIO_PCS_CLK_DATAWIDTH_SHIFT	(6)
+#define   DPIO_PCS_CLK_SOFT_RESET	(1<<5)
+#define DPIO_PCS_CLK(port) _PORT(port, _DPIO_PCS_CLK_0, _DPIO_PCS_CLK_1)
+
+#define _DPIO_PCS_CTL_OVR1_A		0x8224
+#define _DPIO_PCS_CTL_OVR1_B		0x8424
+#define DPIO_PCS_CTL_OVER1(port) _PORT(port, _DPIO_PCS_CTL_OVR1_A, \
+				       _DPIO_PCS_CTL_OVR1_B)
+
+#define _DPIO_PCS_STAGGER0_A		0x822c
+#define _DPIO_PCS_STAGGER0_B		0x842c
+#define DPIO_PCS_STAGGER0(port) _PORT(port, _DPIO_PCS_STAGGER0_A, \
+				      _DPIO_PCS_STAGGER0_B)
+
+#define _DPIO_PCS_STAGGER1_A		0x8230
+#define _DPIO_PCS_STAGGER1_B		0x8430
+#define DPIO_PCS_STAGGER1(port) _PORT(port, _DPIO_PCS_STAGGER1_A, \
+				      _DPIO_PCS_STAGGER1_B)
+
+#define _DPIO_PCS_CLOCKBUF0_A		0x8238
+#define _DPIO_PCS_CLOCKBUF0_B		0x8438
+#define DPIO_PCS_CLOCKBUF0(port) _PORT(port, _DPIO_PCS_CLOCKBUF0_A, \
+				       _DPIO_PCS_CLOCKBUF0_B)
+
+#define _DPIO_PCS_CLOCKBUF8_A		0x825c
+#define _DPIO_PCS_CLOCKBUF8_B		0x845c
+#define DPIO_PCS_CLOCKBUF8(port) _PORT(port, _DPIO_PCS_CLOCKBUF8_A, \
+				       _DPIO_PCS_CLOCKBUF8_B)
+
+#define _DPIO_TX_SWING_CTL2_A		0x8288
+#define _DPIO_TX_SWING_CTL2_B		0x8488
+#define DPIO_TX_SWING_CTL2(port) _PORT(port, _DPIO_TX_SWING_CTL2_A, \
+				       _DPIO_TX_SWING_CTL2_B)
+
+#define _DPIO_TX_SWING_CTL3_A		0x828c
+#define _DPIO_TX_SWING_CTL3_B		0x848c
+#define DPIO_TX_SWING_CTL3(port) _PORT(port, _DPIO_TX_SWING_CTL3_A, \
+				       _DPIO_TX_SWING_CTL3_B)
+
+#define _DPIO_TX_SWING_CTL4_A		0x8290
+#define _DPIO_TX_SWING_CTL4_B		0x8490
+#define DPIO_TX_SWING_CTL4(port) _PORT(port, _DPIO_TX_SWING_CTL4_A, \
+				       _DPIO_TX_SWING_CTL4_B)
+
+#define _DPIO_TX_OCALINIT_0		0x8294
+#define _DPIO_TX_OCALINIT_1		0x8494
+#define   DPIO_TX_OCALINIT_EN		(1<<31)
+#define DPIO_TX_OCALINIT(port) _PORT(port, _DPIO_TX_OCALINIT_0, \
+				     _DPIO_TX_OCALINIT_1)
+
+#define _DPIO_TX_CTL_0			0x82ac
+#define _DPIO_TX_CTL_1			0x84ac
+#define DPIO_TX_CTL(port) _PORT(port, _DPIO_TX_CTL_0, _DPIO_TX_CTL_1)
+
+#define _DPIO_TX_LANE_0			0x82b8
+#define _DPIO_TX_LANE_1			0x84b8
+#define DPIO_TX_LANE(port) _PORT(port, _DPIO_TX_LANE_0, _DPIO_TX_LANE_1)
+
+#define _DPIO_DATA_CHANNEL1		0x8220
+#define _DPIO_DATA_CHANNEL2		0x8420
+#define DPIO_DATA_CHANNEL(port) _PORT(port, _DPIO_DATA_CHANNEL1, _DPIO_DATA_CHANNEL2)
+
+#define _DPIO_PORT0_PCS0		0x0220
+#define _DPIO_PORT0_PCS1		0x0420
+#define _DPIO_PORT1_PCS2		0x2620
+#define _DPIO_PORT1_PCS3		0x2820
+#define DPIO_DATA_LANE_A(port) _PORT(port, _DPIO_PORT0_PCS0, _DPIO_PORT1_PCS2)
+#define DPIO_DATA_LANE_B(port) _PORT(port, _DPIO_PORT0_PCS1, _DPIO_PORT1_PCS3)
+#define DPIO_DATA_CHANNEL1              0x8220
+#define DPIO_DATA_CHANNEL2              0x8420
 
 /*
  * Fence registers
@@ -529,7 +640,11 @@
 
 #define ERROR_GEN6	0x040a0
 #define GEN7_ERR_INT	0x44040
-#define   ERR_INT_MMIO_UNCLAIMED (1<<13)
+#define   ERR_INT_POISON		(1<<31)
+#define   ERR_INT_MMIO_UNCLAIMED	(1<<13)
+#define   ERR_INT_FIFO_UNDERRUN_C	(1<<6)
+#define   ERR_INT_FIFO_UNDERRUN_B	(1<<3)
+#define   ERR_INT_FIFO_UNDERRUN_A	(1<<0)
 
 #define FPGA_DBG		0x42300
 #define   FPGA_DBG_RM_NOCLAIM	(1<<31)
@@ -965,7 +1080,10 @@
 #define   DPLL_FPA01_P1_POST_DIV_MASK	0x00ff0000 /* i915 */
 #define   DPLL_FPA01_P1_POST_DIV_MASK_PINEVIEW	0x00ff8000 /* Pineview */
 #define   DPLL_LOCK_VLV			(1<<15)
+#define   DPLL_INTEGRATED_CRI_CLK_VLV	(1<<14)
 #define   DPLL_INTEGRATED_CLOCK_VLV	(1<<13)
+#define   DPLL_PORTC_READY_MASK		(0xf << 4)
+#define   DPLL_PORTB_READY_MASK		(0xf)
 
 #define   DPLL_FPA01_P1_POST_DIV_MASK_I830	0x001f0000
 /*
@@ -1969,6 +2087,10 @@
 #define   BLM_PIPE_A			(0 << 29)
 #define   BLM_PIPE_B			(1 << 29)
 #define   BLM_PIPE_C			(2 << 29) /* ivb + */
+#define   BLM_TRANSCODER_A		BLM_PIPE_A /* hsw */
+#define   BLM_TRANSCODER_B		BLM_PIPE_B
+#define   BLM_TRANSCODER_C		BLM_PIPE_C
+#define   BLM_TRANSCODER_EDP		(3 << 29)
 #define   BLM_PIPE(pipe)		((pipe) << 29)
 #define   BLM_POLARITY_I965		(1 << 28) /* gen4 only */
 #define   BLM_PHASE_IN_INTERUPT_STATUS	(1 << 26)
@@ -3508,7 +3630,7 @@
 #define DE_PIPEA_FIFO_UNDERRUN  (1 << 0)
 
 /* More Ivybridge lolz */
-#define DE_ERR_DEBUG_IVB		(1<<30)
+#define DE_ERR_INT_IVB			(1<<30)
 #define DE_GSE_IVB			(1<<29)
 #define DE_PCH_EVENT_IVB		(1<<28)
 #define DE_DP_A_HOTPLUG_IVB		(1<<27)
@@ -3667,6 +3789,7 @@
 				 SDE_PORTC_HOTPLUG_CPT |	\
 				 SDE_PORTB_HOTPLUG_CPT)
 #define SDE_GMBUS_CPT		(1 << 17)
+#define SDE_ERROR_CPT		(1 << 16)
 #define SDE_AUDIO_CP_REQ_C_CPT	(1 << 10)
 #define SDE_AUDIO_CP_CHG_C_CPT	(1 << 9)
 #define SDE_FDI_RXC_CPT		(1 << 8)
@@ -3690,6 +3813,12 @@
 #define SDEIMR  0xc4004
 #define SDEIIR  0xc4008
 #define SDEIER  0xc400c
+
+#define SERR_INT			0xc4040
+#define  SERR_INT_POISON		(1<<31)
+#define  SERR_INT_TRANS_C_FIFO_UNDERRUN	(1<<6)
+#define  SERR_INT_TRANS_B_FIFO_UNDERRUN	(1<<3)
+#define  SERR_INT_TRANS_A_FIFO_UNDERRUN	(1<<0)
 
 /* digital port hotplug */
 #define PCH_PORT_HOTPLUG        0xc4030		/* SHOTPLUG_CTL */
@@ -4315,6 +4444,7 @@
 #define   GEN6_RC_CTL_RC6_ENABLE		(1<<18)
 #define   GEN6_RC_CTL_RC1e_ENABLE		(1<<20)
 #define   GEN6_RC_CTL_RC7_ENABLE		(1<<22)
+#define   GEN7_RC_CTL_TO_MODE			(1<<28)
 #define   GEN6_RC_CTL_EI_MODE(x)		((x)<<27)
 #define   GEN6_RC_CTL_HW_ENABLE			(1<<31)
 #define GEN6_RP_DOWN_TIMEOUT			0xA010
@@ -4406,11 +4536,31 @@
 #define   IOSF_BAR_SHIFT			1
 #define   IOSF_SB_BUSY				(1<<0)
 #define   IOSF_PORT_PUNIT			0x4
+#define   IOSF_PORT_NC				0x11
 #define VLV_IOSF_DATA				0x182104
 #define VLV_IOSF_ADDR				0x182108
 
 #define PUNIT_OPCODE_REG_READ			6
 #define PUNIT_OPCODE_REG_WRITE			7
+
+#define PUNIT_REG_GPU_LFM			0xd3
+#define PUNIT_REG_GPU_FREQ_REQ			0xd4
+#define PUNIT_REG_GPU_FREQ_STS			0xd8
+#define PUNIT_REG_MEDIA_TURBO_FREQ_REQ		0xdc
+
+#define PUNIT_FUSE_BUS2				0xf6 /* bits 47:40 */
+#define PUNIT_FUSE_BUS1				0xf5 /* bits 55:48 */
+
+#define IOSF_NC_FB_GFX_FREQ_FUSE		0x1c
+#define   FB_GFX_MAX_FREQ_FUSE_SHIFT		3
+#define   FB_GFX_MAX_FREQ_FUSE_MASK		0x000007f8
+#define   FB_GFX_FGUARANTEED_FREQ_FUSE_SHIFT	11
+#define   FB_GFX_FGUARANTEED_FREQ_FUSE_MASK	0x0007f800
+#define IOSF_NC_FB_GFX_FMAX_FUSE_HI		0x34
+#define   FB_FMAX_VMIN_FREQ_HI_MASK		0x00000007
+#define IOSF_NC_FB_GFX_FMAX_FUSE_LO		0x30
+#define   FB_FMAX_VMIN_FREQ_LO_SHIFT		27
+#define   FB_FMAX_VMIN_FREQ_LO_MASK		0xf8000000
 
 #define GEN6_GT_CORE_STATUS		0x138060
 #define   GEN6_CORE_CPD_STATE_MASK	(7<<4)
@@ -4793,6 +4943,9 @@
 #define _PIPE_A_CSC_COEFF_RV_GV	0x49020
 #define _PIPE_A_CSC_COEFF_BV	0x49024
 #define _PIPE_A_CSC_MODE	0x49028
+#define   CSC_BLACK_SCREEN_OFFSET	(1 << 2)
+#define   CSC_POSITION_BEFORE_GAMMA	(1 << 1)
+#define   CSC_MODE_YUV_TO_RGB		(1 << 0)
 #define _PIPE_A_CSC_PREOFF_HI	0x49030
 #define _PIPE_A_CSC_PREOFF_ME	0x49034
 #define _PIPE_A_CSC_PREOFF_LO	0x49038
@@ -4813,10 +4966,6 @@
 #define _PIPE_B_CSC_POSTOFF_HI	0x49140
 #define _PIPE_B_CSC_POSTOFF_ME	0x49144
 #define _PIPE_B_CSC_POSTOFF_LO	0x49148
-
-#define CSC_BLACK_SCREEN_OFFSET (1 << 2)
-#define CSC_POSITION_BEFORE_GAMMA (1 << 1)
-#define CSC_MODE_YUV_TO_RGB (1 << 0)
 
 #define PIPE_CSC_COEFF_RY_GY(pipe) _PIPE(pipe, _PIPE_A_CSC_COEFF_RY_GY, _PIPE_B_CSC_COEFF_RY_GY)
 #define PIPE_CSC_COEFF_BY(pipe) _PIPE(pipe, _PIPE_A_CSC_COEFF_BY, _PIPE_B_CSC_COEFF_BY)

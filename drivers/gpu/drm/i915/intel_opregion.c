@@ -152,7 +152,6 @@ static u32 asle_set_backlight(struct drm_device *dev, u32 bclp)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct opregion_asle __iomem *asle = dev_priv->opregion.asle;
-	u32 max;
 
 	DRM_DEBUG_DRIVER("bclp = 0x%08x\n", bclp);
 
@@ -163,8 +162,7 @@ static u32 asle_set_backlight(struct drm_device *dev, u32 bclp)
 	if (bclp > 255)
 		return ASLE_BACKLIGHT_FAILED;
 
-	max = intel_panel_get_max_backlight(dev);
-	intel_panel_set_backlight(dev, bclp * max / 255);
+	intel_panel_set_backlight(dev, bclp, 255);
 	iowrite32((bclp*0x64)/0xff | ASLE_CBLV_VALID, &asle->cblv);
 
 	return 0;
@@ -174,29 +172,22 @@ static u32 asle_set_als_illum(struct drm_device *dev, u32 alsi)
 {
 	/* alsi is the current ALS reading in lux. 0 indicates below sensor
 	   range, 0xffff indicates above sensor range. 1-0xfffe are valid */
-	return 0;
+	DRM_DEBUG_DRIVER("Illum is not supported\n");
+	return ASLE_ALS_ILLUM_FAILED;
 }
 
 static u32 asle_set_pwm_freq(struct drm_device *dev, u32 pfmb)
 {
-	struct drm_i915_private *dev_priv = dev->dev_private;
-	if (pfmb & ASLE_PFMB_PWM_VALID) {
-		u32 blc_pwm_ctl = I915_READ(BLC_PWM_CTL);
-		u32 pwm = pfmb & ASLE_PFMB_PWM_MASK;
-		blc_pwm_ctl &= BACKLIGHT_DUTY_CYCLE_MASK;
-		pwm = pwm >> 9;
-		/* FIXME - what do we do with the PWM? */
-	}
-	return 0;
+	DRM_DEBUG_DRIVER("PWM freq is not supported\n");
+	return ASLE_PWM_FREQ_FAILED;
 }
 
 static u32 asle_set_pfit(struct drm_device *dev, u32 pfit)
 {
 	/* Panel fitting is currently controlled by the X code, so this is a
 	   noop until modesetting support works fully */
-	if (!(pfit & ASLE_PFIT_VALID))
-		return ASLE_PFIT_FAILED;
-	return 0;
+	DRM_DEBUG_DRIVER("Pfit is not supported\n");
+	return ASLE_PFIT_FAILED;
 }
 
 void intel_opregion_asle_intr(struct drm_device *dev)
@@ -231,43 +222,6 @@ void intel_opregion_asle_intr(struct drm_device *dev)
 	iowrite32(asle_stat, &asle->aslc);
 }
 
-void intel_opregion_gse_intr(struct drm_device *dev)
-{
-	struct drm_i915_private *dev_priv = dev->dev_private;
-	struct opregion_asle __iomem *asle = dev_priv->opregion.asle;
-	u32 asle_stat = 0;
-	u32 asle_req;
-
-	if (!asle)
-		return;
-
-	asle_req = ioread32(&asle->aslc) & ASLE_REQ_MSK;
-
-	if (!asle_req) {
-		DRM_DEBUG_DRIVER("non asle set request??\n");
-		return;
-	}
-
-	if (asle_req & ASLE_SET_ALS_ILLUM) {
-		DRM_DEBUG_DRIVER("Illum is not supported\n");
-		asle_stat |= ASLE_ALS_ILLUM_FAILED;
-	}
-
-	if (asle_req & ASLE_SET_BACKLIGHT)
-		asle_stat |= asle_set_backlight(dev, ioread32(&asle->bclp));
-
-	if (asle_req & ASLE_SET_PFIT) {
-		DRM_DEBUG_DRIVER("Pfit is not supported\n");
-		asle_stat |= ASLE_PFIT_FAILED;
-	}
-
-	if (asle_req & ASLE_SET_PWM_FREQ) {
-		DRM_DEBUG_DRIVER("PWM freq is not supported\n");
-		asle_stat |= ASLE_PWM_FREQ_FAILED;
-	}
-
-	iowrite32(asle_stat, &asle->aslc);
-}
 #define ASLE_ALS_EN    (1<<0)
 #define ASLE_BLC_EN    (1<<1)
 #define ASLE_PFIT_EN   (1<<2)
@@ -282,9 +236,7 @@ void intel_opregion_enable_asle(struct drm_device *dev)
 		if (IS_MOBILE(dev))
 			intel_enable_asle(dev);
 
-		iowrite32(ASLE_ALS_EN | ASLE_BLC_EN | ASLE_PFIT_EN |
-			  ASLE_PFMB_EN,
-			  &asle->tche);
+		iowrite32(ASLE_BLC_EN, &asle->tche);
 		iowrite32(1, &asle->ardy);
 	}
 }
