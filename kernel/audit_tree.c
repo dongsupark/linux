@@ -619,8 +619,8 @@ void audit_trim_trees(void)
 		trim_marked(tree);
 		drop_collected_mounts(root_mnt);
 skip_it:
-		mutex_lock(&audit_filter_mutex);
 		put_tree(tree);
+		mutex_lock(&audit_filter_mutex);
 	}
 	list_del(&cursor);
 	mutex_unlock(&audit_filter_mutex);
