@@ -426,7 +426,7 @@ void nilfs_clear_dirty_page(struct page *page, bool silent)
 			lock_buffer(bh);
 			if (!silent) {
 				nilfs_warning(sb, __func__,
-					"discard block %llu, size %lu",
+					"discard block %llu, size %zu",
 					(u64)bh->b_blocknr, bh->b_size);
 			}
 			clear_buffer_dirty(bh);
