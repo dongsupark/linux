@@ -47,4 +47,32 @@ config RAPIDIO_DEBUG
 
 	  If you are unsure about this, say N here.
 
+choice
+	prompt "Enumeration method"
+	depends on RAPIDIO
+	help
+	  There are different enumeration and discovery mechanisms offered
+	  for RapidIO subsystem. You may select single built-in method or
+	  or any number of methods to be built as modules.
+	  Selecting a built-in method disables use of loadable methods.
+
+	  If unsure, select Basic built-in.
+
+config RAPIDIO_ENUM_BASIC
+	tristate "Basic"
+	help
+	  This option includes basic RapidIO fabric enumeration and discovery
+	  mechanism similar to one described in RapidIO specification Annex 1.
+
+endchoice
+
+config RAPIDIO_ENUM_AUTO
+	bool "Automatic RapidIO enumeration/discovery start"
+	depends on RAPIDIO && RAPIDIO_ENUM_BASIC = y
+	help
+	  Say Y if you want RapidIO subsystem to start fabric enumeration and
+	  discovery automatically during kernel initialization time.
+	  If you are unsure, say N here. You will be able to start RapidIO
+	  fabric enumeration or discovery later by a user request.
+
 source "drivers/rapidio/switches/Kconfig"

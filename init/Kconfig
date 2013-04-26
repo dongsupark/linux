@@ -98,10 +98,13 @@ config HAVE_KERNEL_XZ
 config HAVE_KERNEL_LZO
 	bool
 
+config HAVE_KERNEL_LZ4
+	bool
+
 choice
 	prompt "Kernel compression mode"
 	default KERNEL_GZIP
-	depends on HAVE_KERNEL_GZIP || HAVE_KERNEL_BZIP2 || HAVE_KERNEL_LZMA || HAVE_KERNEL_XZ || HAVE_KERNEL_LZO
+	depends on HAVE_KERNEL_GZIP || HAVE_KERNEL_BZIP2 || HAVE_KERNEL_LZMA || HAVE_KERNEL_XZ || HAVE_KERNEL_LZO || HAVE_KERNEL_LZ4
 	help
 	  The linux kernel is a kind of self-extracting executable.
 	  Several compression algorithms are available, which differ
@@ -167,6 +170,18 @@ config KERNEL_LZO
 	  Its compression ratio is the poorest among the choices. The kernel
 	  size is about 10% bigger than gzip; however its speed
 	  (both compression and decompression) is the fastest.
+
+config KERNEL_LZ4
+	bool "LZ4"
+	depends on HAVE_KERNEL_LZ4
+	help
+	  LZ4 is an LZ77-type compressor with a fixed, byte-oriented encoding.
+	  A preliminary version of LZ4 de/compression tool is available at
+	  <https://code.google.com/p/lz4/>.
+
+	  Its compression ratio is worse than LZO. The size of the kernel
+	  is about 8% bigger than LZO. But the decompression speed is
+	  faster than LZO.
 
 endchoice
 
@@ -931,6 +946,23 @@ config MEMCG_KMEM
 	  the kmem extension can use it to guarantee that no group of processes
 	  will ever exhaust kernel resources alone.
 
+config MEMCG_DEBUG_ASYNC_DESTROY
+	bool "Memory Resource Controller Debug asynchronous object destruction"
+	depends on MEMCG_KMEM || MEMCG_SWAP
+	default n
+	help
+	  When a memcg is destroyed, the memory consumed by it may not be
+	  immediately freed. This is because when some extensions are used, such
+	  as swap or kernel memory, objects can outlive the group and hold a
+	  reference to it.
+
+	  If this is the case, the dangling_memcgs file will show information
+	  about what are the memcgs still alive, and which references are still
+	  preventing it to be freed. There is nothing wrong with that, but it is
+	  very useful when debugging, to know where this memory is being held.
+	  This is a developer-oriented debugging facility only, and no
+	  guarantees of interface stability will be given.
+
 config CGROUP_HUGETLB
 	bool "HugeTLB Resource Controller for Control Groups"
 	depends on RESOURCE_COUNTERS && HUGETLB_PAGE
@@ -1221,6 +1253,35 @@ config SYSCTL
 config ANON_INODES
 	bool
 
+config HAVE_UID16
+	bool
+
+config SYSCTL_EXCEPTION_TRACE
+	bool
+	help
+	  Enable support for /proc/sys/debug/exception-trace.
+
+config SYSCTL_ARCH_UNALIGN_NO_WARN
+	bool
+	help
+	  Enable support for /proc/sys/kernel/ignore-unaligned-usertrap
+	  Allows arch to define/use @no_unaligned_warning to possibly warn
+	  about unaligned access emulation going on under the hood.
+
+config SYSCTL_ARCH_UNALIGN_ALLOW
+	bool
+	help
+	  Enable support for /proc/sys/kernel/unaligned-trap
+	  Allows arches to define/use @unaligned_enabled to runtime toggle
+	  the unaligned access emulation.
+	  see arch/parisc/kernel/unaligned.c for reference
+
+config HOTPLUG
+	def_bool y
+
+config HAVE_PCSPKR_PLATFORM
+	bool
+
 menuconfig EXPERT
 	bool "Configure standard kernel features (expert users)"
 	# Unhide debug options, to make the on-by-default options visible
@@ -1230,9 +1291,6 @@ menuconfig EXPERT
           to be disabled or tweaked. This is for specialized
           environments which can tolerate a "non-standard" kernel.
           Only use this if you really know what you are doing.
-
-config HAVE_UID16
-	bool
 
 config UID16
 	bool "Enable 16-bit UID system calls" if EXPERT
@@ -1258,26 +1316,6 @@ config SYSCTL_SYSCALL
 
 	  If unsure say N here.
 
-config SYSCTL_EXCEPTION_TRACE
-	bool
-	help
-	  Enable support for /proc/sys/debug/exception-trace.
-
-config SYSCTL_ARCH_UNALIGN_NO_WARN
-	bool
-	help
-	  Enable support for /proc/sys/kernel/ignore-unaligned-usertrap
-	  Allows arch to define/use @no_unaligned_warning to possibly warn
-	  about unaligned access emulation going on under the hood.
-
-config SYSCTL_ARCH_UNALIGN_ALLOW
-	bool
-	help
-	  Enable support for /proc/sys/kernel/unaligned-trap
-	  Allows arches to define/use @unaligned_enabled to runtime toggle
-	  the unaligned access emulation.
-	  see arch/parisc/kernel/unaligned.c for reference
-
 config KALLSYMS
 	 bool "Load all symbols for debugging/ksymoops" if EXPERT
 	 default y
@@ -1302,9 +1340,6 @@ config KALLSYMS_ALL
 	   something like this).
 
 	   Say N unless you really need all symbols.
-
-config HOTPLUG
-	def_bool y
 
 config PRINTK
 	default y
@@ -1343,9 +1378,6 @@ config PCSPKR_PLATFORM
 	help
           This option allows to disable the internal PC-Speaker
           support, saving some memory.
-
-config HAVE_PCSPKR_PLATFORM
-	bool
 
 config BASE_FULL
 	default y
@@ -1418,8 +1450,17 @@ config AIO
 	default y
 	help
 	  This option enables POSIX asynchronous I/O which may by used
-          by some high performance threaded applications. Disabling
-          this option saves about 7k.
+	  by some high performance threaded applications. Disabling
+	  this option saves about 7k.
+
+config PCI_QUIRKS
+	default y
+	bool "Enable PCI quirk workarounds" if EXPERT
+	depends on PCI
+	help
+	  This enables workarounds for various PCI chipset
+	  bugs/quirks. Disable this only if your target machine is
+	  unaffected by PCI quirks.
 
 config EMBEDDED
 	bool "Embedded system"
@@ -1493,15 +1534,6 @@ config VM_EVENT_COUNTERS
 	  This option allows the disabling of the VM event counters
 	  on EXPERT systems.  /proc/vmstat will only show page counts
 	  if VM event counters are disabled.
-
-config PCI_QUIRKS
-	default y
-	bool "Enable PCI quirk workarounds" if EXPERT
-	depends on PCI
-	help
-	  This enables workarounds for various PCI chipset
-          bugs/quirks. Disable this only if your target machine is
-          unaffected by PCI quirks.
 
 config SLUB_DEBUG
 	default y

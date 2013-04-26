@@ -817,6 +817,10 @@ static void jit_free_defer(struct work_struct *arg)
 void bpf_jit_free(struct sk_filter *fp)
 {
 	if (fp->bpf_func != sk_run_filter) {
+		/*
+		 * bpf_jit_free() can be called from softirq; module_free()
+		 * requires process context.
+		 */
 		struct work_struct *work = (struct work_struct *)fp->bpf_func;
 
 		INIT_WORK(work, jit_free_defer);
