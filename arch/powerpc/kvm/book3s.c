@@ -160,8 +160,7 @@ void kvmppc_core_queue_external(struct kvm_vcpu *vcpu,
 	kvmppc_book3s_queue_irqprio(vcpu, vec);
 }
 
-void kvmppc_core_dequeue_external(struct kvm_vcpu *vcpu,
-                                  struct kvm_interrupt *irq)
+void kvmppc_core_dequeue_external(struct kvm_vcpu *vcpu)
 {
 	kvmppc_book3s_dequeue_irqprio(vcpu, BOOK3S_INTERRUPT_EXTERNAL);
 	kvmppc_book3s_dequeue_irqprio(vcpu, BOOK3S_INTERRUPT_EXTERNAL_LEVEL);
@@ -530,6 +529,12 @@ int kvm_vcpu_ioctl_get_one_reg(struct kvm_vcpu *vcpu, struct kvm_one_reg *reg)
 			val = get_reg_val(reg->id, vcpu->arch.vscr.u[3]);
 			break;
 #endif /* CONFIG_ALTIVEC */
+		case KVM_REG_PPC_DEBUG_INST: {
+			u32 opcode = INS_TW;
+			r = copy_to_user((u32 __user *)(long)reg->addr,
+					 &opcode, sizeof(u32));
+			break;
+		}
 		default:
 			r = -EINVAL;
 			break;
