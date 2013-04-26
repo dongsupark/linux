@@ -1,0 +1,19 @@
+Importing jdelvare-hwmon based on 10b38669d64c757cfd927e3820292c580ed70aae
+Unchanged quilt series jdelvare-hwmon
+Importing device-mapper based on v3.9-rc6
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 31880c37c11e28cb81c70757e38392b42e695dc6
+HEAD is now at 31880c3 Linux 3.9-rc6
+$ git am ../quilt/device-mapper/dm-cache-fix-error-return-code-in-cache_create.patch
+Applying: Return -ENOMEM if memory allocation fails in cache_create
+$ git am ../quilt/device-mapper/dm-snapshot-fix-error-return-code-in-snapshot_ctr.patch
+Applying: Return -ENOMEM instead of success if unable to allocate pending
+$ git am ../quilt/device-mapper/dm-cache-policy-fix-description-of-lookup-fn.patch
+Applying: Correct the documented requirement on the return code from dm cache policy
+$ git am ../quilt/device-mapper/dm-bufio-avoid-a-possible-__vmalloc-deadlock.patch
+Applying: This patch uses memalloc_noio_save to avoid a possible deadlock in
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:device-mapper/master
+From ../quilt-tmp
+ + 583a170...f8efabf master     -> device-mapper/master  (forced update)
