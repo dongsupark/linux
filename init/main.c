@@ -9,6 +9,8 @@
  *  Simplified starting of init:  Michael A. Griffith <grif@acm.org> 
  */
 
+#define DEBUG
+
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
