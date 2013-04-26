@@ -244,10 +244,8 @@ int __swap_writepage(struct page *page, struct writeback_control *wbc,
 			 */
 			set_page_dirty(page);
 			ClearPageReclaim(page);
-			if (printk_ratelimit()) {
-				pr_err("Write-error on dio swapfile (%Lu)\n",
-					(unsigned long long)page_file_offset(page));
-			}
+			pr_err_ratelimited("Write error on dio swapfile (%Lu)\n",
+				(unsigned long long)page_file_offset(page));
 		}
 		end_page_writeback(page);
 		return ret;
