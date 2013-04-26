@@ -1115,10 +1115,9 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 				err = -EIDRM;
 				goto out_free;
 			}
-			sem_unlock(sma, -1);
-		}
+		} else
+			sem_lock(sma, NULL, -1);
 
-		sem_lock(sma, NULL, -1);
 		for (i = 0; i < sma->sem_nsems; i++)
 			sem_io[i] = sma->sem_base[i].semval;
 		sem_unlock(sma, -1);
