@@ -190,21 +190,26 @@ void __init sem_init (void)
 }
 
 /*
- * If the sem_array contains just one semaphore, or if multiple
- * semops are performed in one syscall, or if there are complex
- * operations pending, the whole sem_array is locked.
- * If one semop is performed on an array with multiple semaphores,
- * get a shared lock on the array, and lock the individual semaphore.
+ * If the request contains only one semaphore operation, and there are
+ * no complex transactions pending, lock only the semaphore involved.
+ * Otherwise, lock the entire semaphore array, since we either have
+ * multiple semaphores in our own semops, or we need to look at
+ * semaphores from other pending complex operations.
  *
  * Carefully guard against sma->complex_count changing between zero
  * and non-zero while we are spinning for the lock. The value of
  * sma->complex_count cannot change while we are holding the lock,
  * so sem_unlock should be fine.
+ *
+ * The global lock path checks that all the local locks have been released,
+ * checking each local lock once. This means that the local lock paths
+ * cannot start their critical sections while the global lock is held.
  */
 static inline int sem_lock(struct sem_array *sma, struct sembuf *sops,
 			      int nsops)
 {
 	int locknum;
+ again:
 	if (nsops == 1 && !sma->complex_count) {
 		struct sem *sem = sma->sem_base + sops->sem_num;
 
@@ -217,17 +222,34 @@ static inline int sem_lock(struct sem_array *sma, struct sembuf *sops,
 		 */
 		if (unlikely(sma->complex_count)) {
 			spin_unlock(&sem->lock);
-			goto lock_all;
+			goto lock_array;
 		}
+
+		/*
+		 * Another process is holding the global lock on the
+		 * sem_array; we cannot enter our critical section,
+		 * but have to wait for the global lock to be released.
+		 */
+		if (unlikely(spin_is_locked(&sma->sem_perm.lock))) {
+			spin_unlock(&sem->lock);
+			spin_unlock_wait(&sma->sem_perm.lock);
+			goto again;
+		}
+
 		locknum = sops->sem_num;
 	} else {
 		int i;
-		/* Lock the sem_array, and all the semaphore locks */
- lock_all:
+		/*
+		 * Lock the semaphore array, and wait for all of the
+		 * individual semaphore locks to go away.  The code
+		 * above ensures no new single-lock holders will enter
+		 * their critical section while the array lock is held.
+		 */
+ lock_array:
 		spin_lock(&sma->sem_perm.lock);
 		for (i = 0; i < sma->sem_nsems; i++) {
 			struct sem *sem = sma->sem_base + i;
-			spin_lock(&sem->lock);
+			spin_unlock_wait(&sem->lock);
 		}
 		locknum = -1;
 	}
@@ -237,11 +259,6 @@ static inline int sem_lock(struct sem_array *sma, struct sembuf *sops,
 static inline void sem_unlock(struct sem_array *sma, int locknum)
 {
 	if (locknum == -1) {
-		int i;
-		for (i = 0; i < sma->sem_nsems; i++) {
-			struct sem *sem = sma->sem_base + i;
-			spin_unlock(&sem->lock);
-		}
 		spin_unlock(&sma->sem_perm.lock);
 	} else {
 		struct sem *sem = sma->sem_base + locknum;
@@ -426,7 +443,6 @@ static int newary(struct ipc_namespace *ns, struct ipc_params *params)
 	for (i = 0; i < nsems; i++) {
 		INIT_LIST_HEAD(&sma->sem_base[i].sem_pending);
 		spin_lock_init(&sma->sem_base[i].lock);
-		spin_lock(&sma->sem_base[i].lock);
 	}
 
 	sma->complex_count = 0;
