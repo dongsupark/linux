@@ -1382,6 +1382,26 @@ EXPORT_SYMBOL_GPL(rio_dma_prep_slave_sg);
 #endif /* CONFIG_RAPIDIO_DMA_ENGINE */
 
 /**
+ * rio_find_mport - find RIO mport by its ID
+ * @mport_id: number (ID) of mport device
+ *
+ * Given a RIO mport number, the desired mport is located
+ * in the global list of mports. If the mport is found, a pointer to its
+ * data structure is returned.  If no mport is found, %NULL is returned.
+ */
+struct rio_mport *rio_find_mport(int mport_id)
+{
+	struct rio_mport *port = NULL;
+
+	list_for_each_entry(port, &rio_mports, node) {
+		if (port->id == mport_id)
+			return port;
+	}
+
+	return NULL;
+}
+
+/**
  * rio_register_scan - enumeration/discovery method registration interface
  * @mport_id: mport device ID for which fabric scan routine has to be set
  *            (RIO_MPORT_ANY = set for all available mports)
@@ -1470,7 +1490,7 @@ static void disc_work_handler(struct work_struct *_work)
 	work = container_of(_work, struct rio_disc_work, work);
 	pr_debug("RIO: discovery work for mport %d %s\n",
 		 work->mport->id, work->mport->name);
-	work->mport->nscan->discover(work->mport);
+	work->mport->nscan->discover(work->mport, 0);
 }
 
 int rio_init_mports(void)
@@ -1489,7 +1509,7 @@ int rio_init_mports(void)
 	list_for_each_entry(port, &rio_mports, node) {
 		if (port->host_deviceid >= 0) {
 			if (port->nscan)
-				port->nscan->enumerate(port);
+				port->nscan->enumerate(port, 0);
 		} else
 			n++;
 	}
@@ -1539,7 +1559,9 @@ no_disc:
 	return 0;
 }
 
+#ifdef CONFIG_RAPIDIO_ENUM_AUTO
 device_initcall_sync(rio_init_mports);
+#endif
 
 static int hdids[RIO_MAX_MPORTS + 1];
 
