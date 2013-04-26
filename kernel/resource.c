@@ -175,7 +175,7 @@ static void free_resource(struct resource *res)
 	}
 }
 
-static struct resource *get_resource(gfp_t flags)
+static struct resource *alloc_resource(gfp_t flags)
 {
 	struct resource *res = NULL;
 
@@ -814,7 +814,7 @@ static void __init __reserve_region_with_split(struct resource *root,
 {
 	struct resource *parent = root;
 	struct resource *conflict;
-	struct resource *res = get_resource(GFP_ATOMIC);
+	struct resource *res = alloc_resource(GFP_ATOMIC);
 	struct resource *next_res = NULL;
 
 	if (!res)
@@ -849,7 +849,7 @@ static void __init __reserve_region_with_split(struct resource *root,
 			end = res->end;
 			res->end = conflict->start - 1;
 			if (conflict->end < end) {
-				next_res = get_resource(GFP_ATOMIC);
+				next_res = alloc_resource(GFP_ATOMIC);
 				if (!next_res) {
 					free_resource(res);
 					break;
@@ -941,7 +941,7 @@ struct resource * __request_region(struct resource *parent,
 				   const char *name, int flags)
 {
 	DECLARE_WAITQUEUE(wait, current);
-	struct resource *res = get_resource(GFP_KERNEL);
+	struct resource *res = alloc_resource(GFP_KERNEL);
 
 	if (!res)
 		return NULL;
@@ -1097,8 +1097,8 @@ int release_mem_region_adjustable(struct resource *parent,
 	if ((start < parent->start) || (end > parent->end))
 		return ret;
 
-	/* The get_resource() result gets checked later */
-	new_res = get_resource(GFP_KERNEL);
+	/* The alloc_resource() result gets checked later */
+	new_res = alloc_resource(GFP_KERNEL);
 
 	p = &parent->child;
 	write_lock(&resource_lock);
