@@ -1763,8 +1763,7 @@ void exit_sem(struct task_struct *tsk)
 		struct sem_array *sma;
 		struct sem_undo *un;
 		struct list_head tasks;
-		int semid;
-		int i;
+		int semid, i;
 
 		rcu_read_lock();
 		un = list_entry_rcu(ulp->list_proc.next,
@@ -1780,12 +1779,13 @@ void exit_sem(struct task_struct *tsk)
 		}
 
 		sma = sem_obtain_object_check(tsk->nsproxy->ipc_ns, un->semid);
-		sem_lock(sma, NULL, -1);
-
 		/* exit_sem raced with IPC_RMID, nothing to do */
-		if (IS_ERR(sma))
+		if (IS_ERR(sma)) {
+			rcu_read_unlock();
 			continue;
+		}
 
+		sem_lock(sma, NULL, -1);
 		un = __lookup_undo(ulp, semid);
 		if (un == NULL) {
 			/* exit_sem raced with IPC_RMID+semget() that created
