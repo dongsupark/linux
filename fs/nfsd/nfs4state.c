@@ -4937,6 +4937,8 @@ nfs4_state_destroy_net(struct net *net)
 	struct nfsd_net *nn = net_generic(net, nfsd_net_id);
 	struct rb_node *node, *tmp;
 
+	nfs4_lock_state();
+
 	for (i = 0; i < CLIENT_HASH_SIZE; i++) {
 		while (!list_empty(&nn->conf_id_hashtbl[i])) {
 			clp = list_entry(nn->conf_id_hashtbl[i].next, struct nfs4_client, cl_idhash);
@@ -4953,6 +4955,7 @@ nfs4_state_destroy_net(struct net *net)
 		destroy_client(clp);
 	}
 
+	nfs4_unlock_state();
 	kfree(nn->sessionid_hashtbl);
 	kfree(nn->lockowner_ino_hashtbl);
 	kfree(nn->ownerstr_hashtbl);
