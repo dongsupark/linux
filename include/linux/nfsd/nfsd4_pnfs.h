@@ -59,7 +59,6 @@ struct nfsd4_pnfs_dev_iter_res {
 };
 
 struct nfsd4_layout_seg {
-	u64	clientid;
 	u32	layout_type;
 	u32	iomode;
 	u64	offset;

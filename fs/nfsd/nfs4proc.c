@@ -1243,8 +1243,6 @@ nfsd4_layoutcommit(struct svc_rqst *rqstp,
 		__func__, lcp->args.lc_newoffset, lcp->args.lc_last_wr + 1,
 		ino->i_size);
 
-	/* Set clientid from sessionid */
-	copy_clientid((clientid_t *)&lcp->args.lc_seg.clientid, cstate->session);
 	lcp->res.lc_size_chg = 0;
 	if (sb->s_pnfs_op->layout_commit) {
 		status = sb->s_pnfs_op->layout_commit(ino, &lcp->args, &lcp->res);
