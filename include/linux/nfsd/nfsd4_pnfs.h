@@ -81,6 +81,7 @@ struct nfsd4_pnfs_layoutget_arg {
 	u64			lg_minlength;
 	u64			lg_sbid;
 	const struct knfsd_fh	*lg_fh;
+	nfs4_stateid		lg_sid;
 };
 
 struct nfsd4_pnfs_layoutget_res {

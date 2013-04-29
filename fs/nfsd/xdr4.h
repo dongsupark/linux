@@ -452,6 +452,7 @@ struct nfsd4_pnfs_layoutget {
 	stateid_t		lg_sid;		/* request/response */
 	struct nfsd4_layout_seg	lg_seg;		/* request/response */
 	u32			lg_roc;		/* response */
+	clientid_t		lg_clientid;
 };
 
 struct nfsd4_pnfs_layoutcommit {

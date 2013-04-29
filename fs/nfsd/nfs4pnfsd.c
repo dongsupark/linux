@@ -691,7 +691,7 @@ nfs4_pnfs_get_layout(struct svc_rqst *rqstp,
 
 	nfs4_lock_state();
 	fp = find_alloc_file(ino, lgp->lg_fhp);
-	clp = find_confirmed_client((clientid_t *)&lgp->lg_seg.clientid, true,
+	clp = find_confirmed_client(&lgp->lg_clientid, true,
 				    net_generic(SVC_NET(rqstp), nfsd_net_id));
 	dprintk("pNFS %s: fp %p clp %p\n", __func__, fp, clp);
 	if (!fp || !clp) {
@@ -718,10 +718,13 @@ nfs4_pnfs_get_layout(struct svc_rqst *rqstp,
 		goto out_unlock;
 	}
 
+	memcpy(&args.lg_sid, &lgp->lg_sid, sizeof(args.lg_sid));
+
 	dprintk("pNFS %s: pre-export type 0x%x maxcount %Zd "
-		"iomode %u offset %llu length %llu\n",
+		"ls %p stateid " STATEID_FMT " iomode %u offset %llu length %llu\n",
 		__func__, lgp->lg_seg.layout_type,
 		exp_xdr_qbytes(xdr->end - xdr->p),
+		ls, STATEID_VAL(&lgp->lg_sid),
 		lgp->lg_seg.iomode, lgp->lg_seg.offset, lgp->lg_seg.length);
 
 	/* FIXME: need to eliminate the use of the state lock */

@@ -1193,9 +1193,8 @@ nfsd4_layoutget(struct svc_rqst *rqstp,
 		goto out;
 	}
 
-	/* Set up arguments so layout can be retrieved at encode time */
 	lgp->lg_fhp = current_fh;
-	copy_clientid((clientid_t *)&lgp->lg_seg.clientid, cstate->session);
+	copy_clientid(&lgp->lg_clientid, cstate->session);
 	status = nfs_ok;
 out:
 	return status;
