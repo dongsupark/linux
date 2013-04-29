@@ -223,12 +223,6 @@ pnfsd_lexp_layout_return(struct inode *inode,
 	return 0;
 }
 
-static int pnfsd_lexp_get_state(struct inode *inode, struct knfsd_fh *fh,
-				struct pnfs_get_state *p)
-{
-	return 0;	/* just use the current stateid */
-}
-
 static struct pnfs_export_operations pnfsd_lexp_ops = {
 	.layout_type = pnfsd_lexp_layout_type,
 	.get_device_info = pnfsd_lexp_get_device_info,
@@ -236,7 +230,6 @@ static struct pnfs_export_operations pnfsd_lexp_ops = {
 	.layout_get = pnfsd_lexp_layout_get,
 	.layout_commit = pnfsd_lexp_layout_commit,
 	.layout_return = pnfsd_lexp_layout_return,
-	.get_state = pnfsd_lexp_get_state,
 };
 
 void
