@@ -1247,18 +1247,13 @@ should_recall_file_layout(struct nfsd4_pnfs_cb_layout *cbl,
 	stateid_t *stid = (stateid_t *)&cbl->cbl_sid;
 	struct nfs4_layout *lo;
 
-	dprintk("%s: ino=%lu clientid=%llux iomode=%u", __func__,
-		fp->fi_inode->i_ino, cbl->cbl_seg.clientid,
+	dprintk("%s: ino=%lu stateid=" STATEID_FMT " iomode=%u", __func__,
+		fp->fi_inode->i_ino, STATEID_VAL(stid),
 		cbl->cbl_seg.iomode);
 
 	list_for_each_entry (ls, &fp->fi_lo_states, ls_perfile) {
 		if (!is_null_stid(stid) &&
 		    !same_stid(stid, &ls->ls_stid.sc_stateid))
-			continue;
-
-		if (cbl->cbl_seg.clientid &&
-		    !same_clid(&ls->ls_client->cl_clientid,
-			       (clientid_t *)&cbl->cbl_seg.clientid))
 			continue;
 
 		list_for_each_entry (lo, &ls->ls_layouts, lo_perstate)
