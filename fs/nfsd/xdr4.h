@@ -463,7 +463,7 @@ struct nfsd4_pnfs_layoutcommit {
 
 struct nfsd4_pnfs_layoutreturn {
 	struct nfsd4_pnfs_layoutreturn_arg args;
-	stateid_t		lr_sid;		/* request/resopnse */
+	clientid_t		lr_clientid;	/* request */
 	u32			lrs_present;	/* response */
 };
 

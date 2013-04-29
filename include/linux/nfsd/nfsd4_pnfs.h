@@ -117,6 +117,7 @@ struct nfsd4_pnfs_layoutreturn_arg {
 	u32			lr_reclaim;	/* request */
 	u32			lrf_body_len;	/* request */
 	void			*lrf_body;	/* request */
+	nfs4_stateid		lr_sid;		/* request/response */
 	void			*lr_cookie;	/* fs private */
 	enum layoutreturn_flags	lr_flags;	/* internal flags */
 };

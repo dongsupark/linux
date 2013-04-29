@@ -1560,7 +1560,7 @@ nfsd4_decode_layoutreturn(struct nfsd4_compoundargs *argp,
 		READ_BUF(16);
 		READ64(lrp->args.lr_seg.offset);
 		READ64(lrp->args.lr_seg.length);
-		nfsd4_decode_stateid(argp, &lrp->lr_sid);
+		nfsd4_decode_stateid(argp, (stateid_t *)&lrp->args.lr_sid);
 		READ_BUF(4);
 		READ32(lrp->args.lrf_body_len);
 		if (lrp->args.lrf_body_len > 0) {
@@ -3925,7 +3925,7 @@ nfsd4_encode_layoutreturn(struct nfsd4_compoundres *resp, __be32 nfserr,
 	WRITE32(lrp->lrs_present != 0);    /* got stateid? */
 	ADJUST_ARGS();
 	if (lrp->lrs_present)
-		nfsd4_encode_stateid(resp, &lrp->lr_sid);
+		nfsd4_encode_stateid(resp, (stateid_t *)&lrp->args.lr_sid);
 out:
 	return nfserr;
 }

@@ -927,7 +927,7 @@ pnfs_return_file_layouts(struct nfsd4_pnfs_layoutreturn *lrp,
 			lrp->lrs_present = 1;
 	}
 	if (ls && layouts_found && lrp->lrs_present)
-		update_layout_stateid_locked(ls, &lrp->lr_sid);
+		update_layout_stateid_locked(ls, (stateid_t *)&lrp->args.lr_sid);
 	spin_unlock(&layout_lock);
 
 	return layouts_found;
@@ -1035,7 +1035,7 @@ int nfs4_pnfs_return_layout(struct svc_rqst *rqstp,
 	dprintk("NFSD: %s\n", __func__);
 
 	nfs4_lock_state();
-	clp = find_confirmed_client((clientid_t *)&lrp->args.lr_seg.clientid,
+	clp = find_confirmed_client(&lrp->lr_clientid,
 				    true, net_generic(SVC_NET(rqstp), nfsd_net_id));
 	if (!clp)
 		goto out;
@@ -1058,7 +1058,9 @@ int nfs4_pnfs_return_layout(struct svc_rqst *rqstp,
 
 		/* Check the stateid */
 		dprintk("%s PROCESS LO_STATEID inode %p\n", __func__, ino);
-		status = nfs4_process_layout_stateid(clp, fp, &lrp->lr_sid, &ls, false);
+		status = nfs4_process_layout_stateid(clp, fp,
+						     (stateid_t *)&lrp->args.lr_sid,
+						     &ls, false);
 		if (status)
 			goto out_put_file;
 

@@ -1324,7 +1324,7 @@ nfsd4_layoutreturn(struct svc_rqst *rqstp,
 	}
 
 	/* Set clientid from sessionid */
-	copy_clientid((clientid_t *)&lrp->args.lr_seg.clientid, cstate->session);
+	copy_clientid(&lrp->lr_clientid, cstate->session);
 	lrp->lrs_present = 0;
 	status = nfs4_pnfs_return_layout(rqstp, sb, current_fh, lrp);
 out:
