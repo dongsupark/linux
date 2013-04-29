@@ -253,7 +253,7 @@ is_inode_pnfsd_lexp(struct inode *inode)
 static bool
 has_layout(struct nfs4_file *fp)
 {
-	return !list_empty(&fp->fi_layouts);
+	return !list_empty(&fp->fi_lo_states);
 }
 
 /*
