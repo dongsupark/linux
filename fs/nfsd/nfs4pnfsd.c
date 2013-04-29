@@ -626,7 +626,6 @@ merge_layout(struct nfs4_layout_state *ls, struct nfsd4_layout_seg *seg)
 	spin_lock(&layout_lock);
 	list_for_each_entry (lp, &ls->ls_layouts, lo_perstate)
 		if (lp->lo_seg.layout_type == seg->layout_type &&
-		    lp->lo_seg.clientid == seg->clientid &&
 		    lp->lo_seg.iomode == seg->iomode &&
 		    (ret = lo_seg_mergeable(&lp->lo_seg, seg))) {
 			extend_layout(&lp->lo_seg, seg);
