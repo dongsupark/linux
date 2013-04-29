@@ -548,10 +548,10 @@ same_fsid(struct nfs4_fsid *fsid, struct svc_fh *current_fh)
  */
 static int
 is_layout_recalled(struct nfs4_client *clp,
-		   struct svc_fh *current_fh,
-		   struct nfsd4_layout_seg *seg)
+		   struct nfsd4_pnfs_layoutget *lgp)
 {
 	struct nfs4_layoutrecall *clr;
+	struct nfsd4_layout_seg *seg = &lgp->lg_seg;
 
 	spin_lock(&layout_lock);
 	list_for_each_entry (clr, &clp->cl_layoutrecalls, clr_perclnt) {
@@ -560,13 +560,13 @@ is_layout_recalled(struct nfs4_client *clp,
 		if (clr->cb.cbl_recall_type == RETURN_ALL)
 			goto found;
 		if (clr->cb.cbl_recall_type == RETURN_FSID) {
-			if (same_fsid(&clr->cb.cbl_fsid, current_fh))
+			if (same_fsid(&clr->cb.cbl_fsid, lgp->lg_fhp))
 				goto found;
 			else
 				continue;
 		}
 		BUG_ON(clr->cb.cbl_recall_type != RETURN_FILE);
-		if (clr->cb.cbl_seg.clientid == seg->clientid &&
+		if (same_stid((stateid_t *)&clr->cb.cbl_sid, &lgp->lg_sid) &&
 		    lo_seg_overlapping(&clr->cb.cbl_seg, seg))
 			goto found;
 	}
@@ -704,7 +704,7 @@ nfs4_pnfs_get_layout(struct svc_rqst *rqstp,
 	if (nfserr)
 		goto out_unlock;
 
-	if (is_layout_recalled(clp, lgp->lg_fhp, &lgp->lg_seg)) {
+	if (is_layout_recalled(clp, lgp)) {
 		nfserr = nfserr_recallconflict;
 		goto out_unlock;
 	}
