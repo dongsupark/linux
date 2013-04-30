@@ -1310,6 +1310,7 @@ create_layout_recall_list(struct list_head *todolist, unsigned *todo_len,
 	};
 	int status = 0;
 
+#if 0
 	dprintk("%s: -->\n", __func__);
 
 	/* If client given by fs, just do single client */
@@ -1331,6 +1332,7 @@ create_layout_recall_list(struct list_head *todolist, unsigned *todo_len,
 out:
 	*todo_len = arg.todo_count;
 	dprintk("%s: <-- list len %u status %d\n", __func__, *todo_len, status);
+#endif
 	return status;
 }
 
