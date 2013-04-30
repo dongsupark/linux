@@ -132,6 +132,8 @@ alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
 	kref_init(&new->ls_ref);
 	nfsd4_init_stid(&new->ls_stid, clp, NFS4_LAYOUT_STID);
 	INIT_LIST_HEAD(&new->ls_perfile);
+	get_nfs4_file(fp);	/* released on destroy_layout_state */
+	new->ls_file = fp;
 	new->ls_roc = false;
 	spin_lock(&layout_lock);
 	list_add(&new->ls_perfile, &fp->fi_lo_states);
@@ -157,6 +159,7 @@ destroy_layout_state(struct kref *kref)
 		list_del(&ls->ls_perfile);
 		spin_unlock(&layout_lock);
 	}
+	put_nfs4_file(ls->ls_file);
 	kmem_cache_free(layout_state_slab, ls);
 }
 
