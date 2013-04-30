@@ -1446,11 +1446,6 @@ _nfsd_layout_recall_cb(struct super_block *sb, struct inode *inode,
 	       cbl->cbl_seg.iomode != IOMODE_RW &&
 	       cbl->cbl_seg.iomode != IOMODE_ANY);
 
-	if (nfsd_serv == NULL) {
-		dprintk("NFSD nfsd_layout_recall_cb: nfsd_serv == NULL\n");
-		return -ENOENT;
-	}
-
 	if (!with_nfs4_state_lock)
 		nfs4_lock_state();
 	status = -ENOENT;
