@@ -155,7 +155,7 @@ destroy_layout_state(struct kref *kref)
 		list_del(&ls->ls_perfile);
 		spin_unlock(&layout_lock);
 	}
-	kfree(ls);
+	kmem_cache_free(layout_state_slab, ls);
 }
 
 /*
