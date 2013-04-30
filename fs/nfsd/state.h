@@ -283,6 +283,7 @@ struct nfs4_client {
 	struct net		*net;
 #if defined(CONFIG_PNFSD)
 	struct list_head	cl_layouts;	/* outstanding layouts */
+	struct list_head	cl_lo_states;	/* outstanding layout states */
 	struct list_head	cl_layoutrecalls; /* outstanding layoutrecall
 						     callbacks */
 #endif /* CONFIG_PNFSD */

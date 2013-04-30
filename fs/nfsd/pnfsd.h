@@ -44,6 +44,8 @@
 struct nfs4_layout_state {
 	struct nfs4_stid	ls_stid; /* must be first field */
 	struct kref		ls_ref;
+	struct list_head	ls_perclnt;
+	struct nfs4_client	*ls_client;
 	struct list_head	ls_perfile;
 	struct nfs4_file	*ls_file;
 	bool			ls_roc;

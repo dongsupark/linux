@@ -131,11 +131,14 @@ alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
 		return new;
 	kref_init(&new->ls_ref);
 	nfsd4_init_stid(&new->ls_stid, clp, NFS4_LAYOUT_STID);
+	INIT_LIST_HEAD(&new->ls_perclnt);
 	INIT_LIST_HEAD(&new->ls_perfile);
+	new->ls_client = clp;
 	get_nfs4_file(fp);	/* released on destroy_layout_state */
 	new->ls_file = fp;
 	new->ls_roc = false;
 	spin_lock(&layout_lock);
+	list_add(&new->ls_perclnt, &clp->cl_lo_states);
 	list_add(&new->ls_perfile, &fp->fi_lo_states);
 	spin_unlock(&layout_lock);
 	return new;
@@ -147,6 +150,17 @@ get_layout_state(struct nfs4_layout_state *ls)
 	kref_get(&ls->ls_ref);
 }
 
+/*
+ * Note: always called under the layout_lock
+ */
+static void
+unhash_layout_state(struct nfs4_layout_state *ls)
+{
+	ASSERT_LAYOUT_LOCKED();
+	list_del_init(&ls->ls_perclnt);
+	list_del_init(&ls->ls_perfile);
+}
+
 static void
 destroy_layout_state(struct kref *kref)
 {
@@ -156,7 +170,7 @@ destroy_layout_state(struct kref *kref)
 	nfsd4_unhash_stid(&ls->ls_stid);
 	if (!list_empty(&ls->ls_perfile)) {
 		spin_lock(&layout_lock);
-		list_del(&ls->ls_perfile);
+		unhash_layout_state(ls);
 		spin_unlock(&layout_lock);
 	}
 	put_nfs4_file(ls->ls_file);
