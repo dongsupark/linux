@@ -412,7 +412,7 @@ struct nfs4_file {
 	bool			fi_had_conflict;
 #if defined(CONFIG_PNFSD)
 	struct list_head	fi_layouts;
-	struct list_head	fi_layout_states;
+	struct list_head	fi_lo_states;
 	/* used by layoutget / layoutrecall */
 	struct nfs4_fsid	fi_fsid;
 	u32			fi_fhlen;

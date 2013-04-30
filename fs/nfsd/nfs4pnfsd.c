@@ -133,7 +133,7 @@ alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
 	nfsd4_init_stid(&new->ls_stid, clp, NFS4_LAYOUT_STID);
 	INIT_LIST_HEAD(&new->ls_perfile);
 	spin_lock(&layout_lock);
-	list_add(&new->ls_perfile, &fp->fi_layout_states);
+	list_add(&new->ls_perfile, &fp->fi_lo_states);
 	spin_unlock(&layout_lock);
 	new->ls_roc = false;
 	return new;
