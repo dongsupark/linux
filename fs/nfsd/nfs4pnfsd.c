@@ -622,6 +622,7 @@ merge_layout(struct nfs4_file *fp,
 {
 	struct nfs4_layout *lp = NULL;
 
+	spin_lock(&layout_lock);
 	list_for_each_entry (lp, &fp->fi_layouts, lo_perfile)
 		if (lp->lo_seg.layout_type == seg->layout_type &&
 		    lp->lo_seg.clientid == seg->clientid &&
@@ -630,6 +631,7 @@ merge_layout(struct nfs4_file *fp,
 			extend_layout(&lp->lo_seg, seg);
 			break;
 		}
+	spin_unlock(&layout_lock);
 
 	return lp;
 }
