@@ -578,7 +578,7 @@ found:
 /*
  * are two octet ranges overlapping or adjacent?
  */
-static int
+static bool
 lo_seg_mergeable(struct nfsd4_layout_seg *l1, struct nfsd4_layout_seg *l2)
 {
 	u64 start1 = l1->offset;
@@ -615,25 +615,26 @@ extend_layout(struct nfsd4_layout_seg *lo, struct nfsd4_layout_seg *lg)
 		      lo_end : lo_end - lo_start;
 }
 
-static struct nfs4_layout *
+static bool
 merge_layout(struct nfs4_file *fp,
 	     struct nfs4_client *clp,
 	     struct nfsd4_layout_seg *seg)
 {
-	struct nfs4_layout *lp = NULL;
+	bool ret = false;
+	struct nfs4_layout *lp;
 
 	spin_lock(&layout_lock);
 	list_for_each_entry (lp, &fp->fi_layouts, lo_perfile)
 		if (lp->lo_seg.layout_type == seg->layout_type &&
 		    lp->lo_seg.clientid == seg->clientid &&
 		    lp->lo_seg.iomode == seg->iomode &&
-		    lo_seg_mergeable(&lp->lo_seg, seg)) {
+		    (ret = lo_seg_mergeable(&lp->lo_seg, seg))) {
 			extend_layout(&lp->lo_seg, seg);
 			break;
 		}
 	spin_unlock(&layout_lock);
 
-	return lp;
+	return ret;
 }
 
 __be32
