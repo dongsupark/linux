@@ -1321,7 +1321,6 @@ static struct nfs4_client *create_client(struct xdr_netobj name,
 	INIT_LIST_HEAD(&clp->cl_openowners);
 	INIT_LIST_HEAD(&clp->cl_delegations);
 #if defined(CONFIG_PNFSD)
-	INIT_LIST_HEAD(&clp->cl_layouts);
 	INIT_LIST_HEAD(&clp->cl_lo_states);
 	INIT_LIST_HEAD(&clp->cl_layoutrecalls);
 #endif /* CONFIG_PNFSD */
@@ -2364,7 +2363,6 @@ static void nfsd4_init_file(struct nfs4_file *fp, struct inode *ino,
 	memset(fp->fi_fds, 0, sizeof(fp->fi_fds));
 	memset(fp->fi_access, 0, sizeof(fp->fi_access));
 #if defined(CONFIG_PNFSD)
-	INIT_LIST_HEAD(&fp->fi_layouts);
 	INIT_LIST_HEAD(&fp->fi_lo_states);
 	fp->fi_fsid.major = current_fh->fh_export->ex_fsid;
 	fp->fi_fsid.minor = 0;

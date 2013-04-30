@@ -133,6 +133,7 @@ alloc_init_layout_state(struct nfs4_client *clp, struct nfs4_file *fp,
 	nfsd4_init_stid(&new->ls_stid, clp, NFS4_LAYOUT_STID);
 	INIT_LIST_HEAD(&new->ls_perclnt);
 	INIT_LIST_HEAD(&new->ls_perfile);
+	INIT_LIST_HEAD(&new->ls_layouts);
 	new->ls_client = clp;
 	get_nfs4_file(fp);	/* released on destroy_layout_state */
 	new->ls_file = fp;
@@ -276,13 +277,6 @@ static void update_layout_stateid_locked(struct nfs4_layout_state *ls, stateid_t
 		__func__, sid->si_generation, ls);
 }
 
-static void update_layout_stateid(struct nfs4_layout_state *ls, stateid_t *sid)
-{
-	spin_lock(&layout_lock);
-	update_layout_stateid_locked(ls, sid);
-	spin_unlock(&layout_lock);
-}
-
 static void update_layout_roc(struct nfs4_layout_state *ls, bool roc)
 {
 	if (roc) {
@@ -295,35 +289,28 @@ static void update_layout_roc(struct nfs4_layout_state *ls, bool roc)
 static void
 init_layout(struct nfs4_layout *lp,
 	    struct nfs4_layout_state *ls,
-	    struct nfs4_file *fp,
-	    struct nfs4_client *clp,
 	    struct svc_fh *current_fh,
 	    struct nfsd4_layout_seg *seg,
 	    stateid_t *stateid)
 {
-	dprintk("pNFS %s: lp %p ls %p clp %p fp %p ino %p\n", __func__,
-		lp, ls, clp, fp, fp->fi_inode);
+	dprintk("pNFS %s: lp %p ls %p ino %lu\n", __func__,
+		lp, ls, ls->ls_file->fi_inode->i_ino);
 
-	get_nfs4_file(fp);
-	lp->lo_client = clp;
-	lp->lo_file = fp;
 	memcpy(&lp->lo_seg, seg, sizeof(lp->lo_seg));
 	get_layout_state(ls);		/* put on destroy_layout */
 	lp->lo_state = ls;
-	update_layout_stateid(ls, stateid);
-	list_add_tail(&lp->lo_perclnt, &clp->cl_layouts);
-	list_add_tail(&lp->lo_perfile, &fp->fi_layouts);
+	spin_lock(&layout_lock);
+	update_layout_stateid_locked(ls, stateid);
+	list_add_tail(&lp->lo_perstate, &ls->ls_layouts);
+	spin_unlock(&layout_lock);
 	dprintk("pNFS %s end\n", __func__);
 }
 
-/*
- * Note: always called under the layout_lock
- */
 static void
 dequeue_layout(struct nfs4_layout *lp)
 {
-	list_del(&lp->lo_perclnt);
-	list_del(&lp->lo_perfile);
+	ASSERT_LAYOUT_LOCKED();
+	list_del_init(&lp->lo_perstate);
 }
 
 /*
@@ -332,20 +319,15 @@ dequeue_layout(struct nfs4_layout *lp)
 static void
 destroy_layout(struct nfs4_layout *lp)
 {
-	struct nfs4_client *clp;
-	struct nfs4_file *fp;
 	struct nfs4_layout_state *ls;
 
-	clp = lp->lo_client;
-	fp = lp->lo_file;
 	ls = lp->lo_state;
-	dprintk("pNFS %s: lp %p clp %p fp %p ino %p\n",
-		__func__, lp, clp, fp, fp->fi_inode);
+	dprintk("pNFS %s: lp %p ls %p ino %lu\n",
+		__func__, lp, ls, ls->ls_file->fi_inode->i_ino);
 
 	kmem_cache_free(pnfs_layout_slab, lp);
 	/* release references taken by init_layout */
 	put_layout_state(ls);
-	put_nfs4_file(fp);
 }
 
 static void fs_layout_return(struct inode *ino,
@@ -635,15 +617,13 @@ extend_layout(struct nfsd4_layout_seg *lo, struct nfsd4_layout_seg *lg)
 }
 
 static bool
-merge_layout(struct nfs4_file *fp,
-	     struct nfs4_client *clp,
-	     struct nfsd4_layout_seg *seg)
+merge_layout(struct nfs4_layout_state *ls, struct nfsd4_layout_seg *seg)
 {
 	bool ret = false;
 	struct nfs4_layout *lp;
 
 	spin_lock(&layout_lock);
-	list_for_each_entry (lp, &fp->fi_layouts, lo_perfile)
+	list_for_each_entry (lp, &ls->ls_layouts, lo_perstate)
 		if (lp->lo_seg.layout_type == seg->layout_type &&
 		    lp->lo_seg.clientid == seg->clientid &&
 		    lp->lo_seg.iomode == seg->iomode &&
@@ -795,11 +775,11 @@ nfs4_pnfs_get_layout(struct svc_rqst *rqstp,
 	 * Can the new layout be merged into an existing one?
 	 * If so, free unused layout struct
 	 */
-	if (can_merge && merge_layout(fp, clp, &res.lg_seg))
+	if (can_merge && merge_layout(ls, &res.lg_seg))
 		goto out_freelayout;
 
 	/* Can't merge, so let's initialize this new layout */
-	init_layout(lp, ls, fp, clp, lgp->lg_fhp, &res.lg_seg, &lgp->lg_sid);
+	init_layout(lp, ls, lgp->lg_fhp, &res.lg_seg, &lgp->lg_sid);
 out_unlock:
 	if (ls)
 		put_layout_state(ls);
@@ -883,8 +863,8 @@ pnfsd_return_lo_list(struct list_head *lo_destroy_list, struct inode *ino_orig,
 		return;
 	}
 
-	list_for_each_entry_safe(lo, nextlp, lo_destroy_list, lo_perfile) {
-		struct inode *inode = lo->lo_file->fi_inode;
+	list_for_each_entry_safe(lo, nextlp, lo_destroy_list, lo_perstate) {
+		struct inode *inode = lo->lo_state->ls_file->fi_inode;
 		struct nfsd4_pnfs_layoutreturn lr;
 		bool empty;
 		int lr_flags = flags;
@@ -894,39 +874,39 @@ pnfsd_return_lo_list(struct list_head *lo_destroy_list, struct inode *ino_orig,
 		lr.args.lr_seg = lo->lo_seg;
 
 		spin_lock(&layout_lock);
-		if (list_empty(&lo->lo_file->fi_layouts))
+		if (list_empty(&lo->lo_state->ls_file->fi_lo_states))
 			lr_flags |= LR_FLAG_EMPTY;
 		spin_unlock(&layout_lock);
 
-		list_del(&lo->lo_perfile);
+		list_del(&lo->lo_perstate);
 		empty = list_empty(lo_destroy_list);
 
 		fs_layout_return(inode, &lr, lr_flags, empty ? cb_cookie : NULL);
 
-		destroy_layout(lo); /* this will put the lo_file */
+		destroy_layout(lo);
 	}
 }
 
+/*
+ * Return layouts for RETURN_FILE
+ */
 static int
-pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
-			 struct nfsd4_pnfs_layoutreturn *lrp,
+pnfs_return_file_layouts(struct nfsd4_pnfs_layoutreturn *lrp,
 			 struct nfs4_layout_state *ls,
 			 struct list_head *lo_destroy_list)
 {
 	int layouts_found = 0;
 	struct nfs4_layout *lp, *nextlp;
 
-	dprintk("%s: clp %p fp %p\n", __func__, clp, fp);
+	dprintk("%s: ls %p\n", __func__, ls);
 	lrp->lrs_present = 0;
 	spin_lock(&layout_lock);
-	list_for_each_entry_safe (lp, nextlp, &fp->fi_layouts, lo_perfile) {
-		dprintk("%s: lp %p client %p,%p lo_type %x,%x iomode %d,%d\n",
-			__func__, lp,
-			lp->lo_client, clp,
+	list_for_each_entry_safe (lp, nextlp, &ls->ls_layouts, lo_perstate) {
+		dprintk("%s: lp %p ls %p inode %lu lo_type %x,%x iomode %d,%d\n",
+			__func__, lp, lp->lo_state,
+			lp->lo_state->ls_file->fi_inode->i_ino,
 			lp->lo_seg.layout_type, lrp->args.lr_seg.layout_type,
 			lp->lo_seg.iomode, lrp->args.lr_seg.iomode);
-		if (lp->lo_client != clp)
-			continue;
 		if (lp->lo_seg.layout_type != lrp->args.lr_seg.layout_type ||
 		    (lp->lo_seg.iomode != lrp->args.lr_seg.iomode &&
 		     lrp->args.lr_seg.iomode != IOMODE_ANY) ||
@@ -938,7 +918,7 @@ pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
 		trim_layout(&lp->lo_seg, &lrp->args.lr_seg);
 		if (!lp->lo_seg.length) {
 			dequeue_layout(lp);
-			list_add_tail(&lp->lo_perfile, lo_destroy_list);
+			list_add_tail(&lp->lo_perstate, lo_destroy_list);
 		} else
 			lrp->lrs_present = 1;
 	}
@@ -949,28 +929,36 @@ pnfs_return_file_layouts(struct nfs4_client *clp, struct nfs4_file *fp,
 	return layouts_found;
 }
 
+/*
+ * Return layouts for RETURN_FSID or RETURN_ALL
+ */
 static int
 pnfs_return_client_layouts(struct nfs4_client *clp,
 			   struct nfsd4_pnfs_layoutreturn *lrp, u64 ex_fsid,
 			   struct list_head *lo_destroy_list)
 {
 	int layouts_found = 0;
+	struct nfs4_layout_state *ls, *nextls;
 	struct nfs4_layout *lp, *nextlp;
 
 	spin_lock(&layout_lock);
-	list_for_each_entry_safe (lp, nextlp, &clp->cl_layouts, lo_perclnt) {
-		if (lrp->args.lr_seg.layout_type != lp->lo_seg.layout_type ||
-		   (lrp->args.lr_seg.iomode != lp->lo_seg.iomode &&
-		    lrp->args.lr_seg.iomode != IOMODE_ANY))
-			continue;
-
+	list_for_each_entry_safe (ls, nextls, &clp->cl_lo_states, ls_perclnt) {
 		if (lrp->args.lr_return_type == RETURN_FSID &&
-		    !same_fsid_major(&lp->lo_file->fi_fsid, ex_fsid))
+		    !same_fsid_major(&ls->ls_file->fi_fsid, ex_fsid))
 			continue;
 
-		layouts_found++;
-		dequeue_layout(lp);
-		list_add_tail(&lp->lo_perfile, lo_destroy_list);
+		list_for_each_entry_safe (lp, nextlp, &ls->ls_layouts, lo_perstate) {
+			if (lrp->args.lr_seg.layout_type != lp->lo_seg.layout_type)
+				break;
+
+			if (lrp->args.lr_seg.iomode != lp->lo_seg.iomode &&
+			    lrp->args.lr_seg.iomode != IOMODE_ANY)
+				continue;
+
+			layouts_found++;
+			dequeue_layout(lp);
+			list_add_tail(&lp->lo_perstate, lo_destroy_list);
+		}
 	}
 	spin_unlock(&layout_lock);
 
@@ -1071,8 +1059,7 @@ int nfs4_pnfs_return_layout(struct svc_rqst *rqstp,
 			goto out_put_file;
 
 		/* update layouts */
-		layouts_found = pnfs_return_file_layouts(clp, fp, lrp, ls,
-							 &lo_destroy_list);
+		layouts_found = pnfs_return_file_layouts(lrp, ls, &lo_destroy_list);
 		put_layout_state(ls);
 		if (!lrp->lrs_present)
 			lr_flags |= LR_FLAG_CL_EMPTY;
@@ -1202,8 +1189,13 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 		clr->clr_client, clr->clr_file);
 
 	if (clr->cb.cbl_recall_type == RETURN_FILE) {
-		pnfs_return_file_layouts(clr->clr_client, clr->clr_file, &lr,
-					 NULL, &lo_destroy_list);
+		struct nfs4_layout_state *ls;
+
+		list_for_each_entry (ls, &clr->clr_client->cl_lo_states, ls_perclnt)
+			if (ls->ls_file == clr->clr_file) {
+				pnfs_return_file_layouts(&lr, ls, &lo_destroy_list);
+				break;
+			}
 		if (!lr.lrs_present)
 			lr_flags |= LR_FLAG_CL_EMPTY;
 	} else {
@@ -1222,6 +1214,15 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
 			     recall_cookie);
 }
 
+void strip_layout_state(struct nfs4_layout_state *ls, struct list_head *lo_destroy_list)
+{
+	unhash_layout_state(ls);
+	if (!list_empty(&ls->ls_layouts)) {
+		list_splice(&ls->ls_layouts, lo_destroy_list);
+		INIT_LIST_HEAD(&ls->ls_layouts);
+	}
+}
+
 /* Return On Close:
  *   Look for all layouts of @fp that belong to @clp, if ROC is set, remove
  *   the layout and simulate a layout_return. Surly the client has forgotten
@@ -1229,30 +1230,27 @@ nomatching_layout(struct nfs4_layoutrecall *clr)
  */
 void pnfsd_roc(struct nfs4_client *clp, struct nfs4_file *fp)
 {
-	struct nfs4_layout *lo, *nextlp;
+	struct nfs4_layout_state *ls, *nextls;
 	LIST_HEAD(lo_destroy_list);
 
 	/* TODO: We need to also free layout recalls like pnfs_expire_client */
 	dprintk("%s: fp=%p clp=%p", __func__, fp, clp);
 	spin_lock(&layout_lock);
-	list_for_each_entry_safe (lo, nextlp, &fp->fi_layouts, lo_perfile) {
-		/* Check for a match */
-		if (lo->lo_client != clp)
+	list_for_each_entry_safe (ls, nextls, &fp->fi_lo_states, ls_perfile) {
+		if (ls->ls_client != clp)
 			continue;
 
-		/* Return the layout */
-		list_del_init(&lo->lo_state->ls_perfile);	/* just to be on the safe side */
-		dequeue_layout(lo);
-		list_add_tail(&lo->lo_perfile, &lo_destroy_list);
+		strip_layout_state(ls, &lo_destroy_list);
+		break;
 	}
 	spin_unlock(&layout_lock);
 
-	pnfsd_return_lo_list(&lo_destroy_list, NULL, NULL, LR_FLAG_INTERN, NULL);
+	pnfsd_return_lo_list(&lo_destroy_list, fp->fi_inode, NULL, LR_FLAG_INTERN, NULL);
 }
 
 void pnfs_expire_client(struct nfs4_client *clp)
 {
-	struct nfs4_layout *lo, *nextlo;
+	struct nfs4_layout_state *ls, *nextls;
 	LIST_HEAD(lo_destroy_list);
 
 	for (;;) {
@@ -1275,12 +1273,11 @@ void pnfs_expire_client(struct nfs4_client *clp)
 	}
 
 	spin_lock(&layout_lock);
-	list_for_each_entry_safe (lo, nextlo, &clp->cl_layouts, lo_perclnt) {
-		BUG_ON(lo->lo_client != clp);
-		dequeue_layout(lo);
-		list_add_tail(&lo->lo_perfile, &lo_destroy_list);
-		dprintk("%s: inode %lu lp %p clp %p\n", __func__,
-			lo->lo_file->fi_inode->i_ino, lo, clp);
+	list_for_each_entry_safe (ls, nextls, &clp->cl_lo_states, ls_perclnt) {
+		BUG_ON(ls->ls_client != clp);
+		strip_layout_state(ls, &lo_destroy_list);
+		dprintk("%s: inode %lu ls %p clp %p\n", __func__,
+			ls->ls_file->fi_inode->i_ino, ls, clp);
 	}
 	spin_unlock(&layout_lock);
 

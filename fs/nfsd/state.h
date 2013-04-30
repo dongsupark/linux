@@ -282,7 +282,6 @@ struct nfs4_client {
 						/* wait here for slots */
 	struct net		*net;
 #if defined(CONFIG_PNFSD)
-	struct list_head	cl_layouts;	/* outstanding layouts */
 	struct list_head	cl_lo_states;	/* outstanding layout states */
 	struct list_head	cl_layoutrecalls; /* outstanding layoutrecall
 						     callbacks */
@@ -412,7 +411,6 @@ struct nfs4_file {
 	struct inode		*fi_inode;
 	bool			fi_had_conflict;
 #if defined(CONFIG_PNFSD)
-	struct list_head	fi_layouts;
 	struct list_head	fi_lo_states;
 	/* used by layoutget / layoutrecall */
 	struct nfs4_fsid	fi_fsid;

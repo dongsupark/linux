@@ -48,15 +48,13 @@ struct nfs4_layout_state {
 	struct nfs4_client	*ls_client;
 	struct list_head	ls_perfile;
 	struct nfs4_file	*ls_file;
+	struct list_head	ls_layouts;
 	bool			ls_roc;
 };
 
 /* outstanding layout */
 struct nfs4_layout {
-	struct list_head		lo_perfile;	/* hash by f_id */
-	struct list_head		lo_perclnt;	/* hash by clientid */
-	struct nfs4_file		*lo_file;	/* backpointer */
-	struct nfs4_client		*lo_client;
+	struct list_head		lo_perstate;
 	struct nfs4_layout_state	*lo_state;
 	struct nfsd4_layout_seg		lo_seg;
 };
