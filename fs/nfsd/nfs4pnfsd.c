@@ -1416,8 +1416,10 @@ spawn_layout_recall(struct super_block *sb, struct list_head *todolist,
 		pending->parent = parent;
 		get_layoutrecall(pending);
 		/* Add to list so corresponding layoutreturn can find req */
+		spin_lock(&layout_lock);
 		list_add(&pending->clr_perclnt,
 			 &pending->clr_client->cl_layoutrecalls);
+		spin_unlock(&layout_lock);
 
 		nfsd4_cb_layout(pending);
 		--todo_len;
