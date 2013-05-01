@@ -1268,8 +1268,10 @@ should_recall_file_layout(struct nfsd4_pnfs_cb_layout *cbl,
 	return ret;
 }
 
-/* Create a layoutrecall structure for each client based on the
- * original structure. */
+/*
+ * Create a layoutrecall structure for each client based on the
+ * original structure.
+ */
 int
 create_layout_recall_list(struct list_head *todolist, unsigned *todo_len,
 			  struct nfsd4_pnfs_cb_layout *cbl,
@@ -1348,7 +1350,7 @@ spawn_layout_recall(struct super_block *sb, struct list_head *todolist,
 				put_layoutrecall(pending);
 			}
 			--todo_len;
-				status = -ENOMEM;
+			status = -ENOMEM;
 		}
 	}
 
