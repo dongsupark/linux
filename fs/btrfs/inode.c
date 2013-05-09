@@ -6931,7 +6931,8 @@ struct btrfs_dio_private {
 	struct bio *orig_bio;
 };
 
-static void btrfs_endio_direct_read(struct bio *bio, int err)
+static void btrfs_endio_direct_read(struct bio *bio, int err,
+				    struct batch_complete *batch)
 {
 	struct btrfs_dio_private *dip = bio->bi_private;
 	struct bio_vec *bvec_end = bio->bi_io_vec + bio->bi_vcnt - 1;
@@ -6984,10 +6985,11 @@ failed:
 	/* If we had a csum failure make sure to clear the uptodate flag */
 	if (err)
 		clear_bit(BIO_UPTODATE, &bio->bi_flags);
-	dio_end_io(bio, err);
+	dio_end_io(bio, err, batch);
 }
 
-static void btrfs_endio_direct_write(struct bio *bio, int err)
+static void btrfs_endio_direct_write(struct bio *bio, int err,
+				     struct batch_complete *batch)
 {
 	struct btrfs_dio_private *dip = bio->bi_private;
 	struct inode *inode = dip->inode;
@@ -7029,7 +7031,7 @@ out_done:
 	/* If we had an error make sure to clear the uptodate flag */
 	if (err)
 		clear_bit(BIO_UPTODATE, &bio->bi_flags);
-	dio_end_io(bio, err);
+	dio_end_io(bio, err, batch);
 }
 
 static int __btrfs_submit_bio_start_direct_io(struct inode *inode, int rw,
@@ -7043,7 +7045,8 @@ static int __btrfs_submit_bio_start_direct_io(struct inode *inode, int rw,
 	return 0;
 }
 
-static void btrfs_end_dio_bio(struct bio *bio, int err)
+static void btrfs_end_dio_bio(struct bio *bio, int err,
+			      struct batch_complete *batch)
 {
 	struct btrfs_dio_private *dip = bio->bi_private;
 
