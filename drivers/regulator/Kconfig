@@ -66,7 +66,7 @@ config REGULATOR_USERSPACE_CONSUMER
 
 config REGULATOR_GPIO
 	tristate "GPIO regulator support"
-	depends on GENERIC_GPIO
+	depends on GPIOLIB
 	help
 	  This driver provides support for regulators that can be
 	  controlled via gpios.
@@ -471,6 +471,16 @@ config REGULATOR_TWL4030
 	help
 	  This driver supports the voltage regulators provided by
 	  this family of companion chips.
+
+config REGULATOR_TI_ABB
+	bool "TI Adaptive Body Bias on-chip LDO"
+	depends on ARCH_OMAP
+	help
+	  Select this option to support Texas Instruments' on-chip Adaptive Body
+	  Bias (ABB) LDO regulators. It is recommended that this option be
+	  enabled on required TI SoC. Certain Operating Performance Points
+	  on TI SoCs may be unstable without enabling this as it provides
+	  device specific optimized bias to allow/optimize functionality.
 
 config REGULATOR_VEXPRESS
 	tristate "Versatile Express regulators"
