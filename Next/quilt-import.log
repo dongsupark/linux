@@ -1,0 +1,53 @@
+Importing jdelvare-hwmon based on 1aaf6d3d3d1e95f4be07e32dd84aa1c93855fbbd
+Unchanged quilt series jdelvare-hwmon
+Importing device-mapper based on v3.9-11789-ge0fd9af
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard e0fd9affeb64088eff407dfc98bbd3a5c17ea479
+HEAD is now at e0fd9af Merge tag 'rdma-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/roland/infiniband
+$ git am ../quilt/device-mapper/dm-stripe-fix-regression-in-stripe_width-calculation.patch
+Applying: Fix a regression in the calculation of the stripe_width in the
+$ git am ../quilt/device-mapper/dm-cache-fix-error-return-code-in-cache_create.patch
+Applying: Return -ENOMEM if memory allocation fails in cache_create
+$ git am ../quilt/device-mapper/dm-snapshot-fix-error-return-code-in-snapshot_ctr.patch
+Applying: Return -ENOMEM instead of success if unable to allocate pending
+$ git am ../quilt/device-mapper/dm-bufio-avoid-a-possible-__vmalloc-deadlock.patch
+Applying: This patch uses memalloc_noio_save to avoid a possible deadlock in
+$ git am ../quilt/device-mapper/dm-table-fix-write-same-support.patch
+Applying: If device_not_write_same_capable() returns true then the iterate_devices
+$ git am ../quilt/device-mapper/dm-mpath-enable-WRITE-SAME-support.patch
+Applying: Enable WRITE SAME support in dm multipath.  As far as multipath is
+$ git am ../quilt/device-mapper/dm-cache-tune-migration-throttling.patch
+Applying: Tune the dm cache migration throttling.
+$ git am ../quilt/device-mapper/dm-persistent-data-fix-error-message-typos.patch
+Applying: Fix some typos in dm-space-map-metadata.c error messages.
+$ git am ../quilt/device-mapper/dm-document-iterate_devices.patch
+Applying: Document iterate_devices in device-mapper.h.
+$ git am ../quilt/device-mapper/dm-cache-policy-fix-description-of-lookup-fn.patch
+Applying: Correct the documented requirement on the return code from dm cache policy
+$ git am ../quilt/device-mapper/dm-cache-fix-typos-in-comments.patch
+Applying: Fix up some typos in dm-cache comments.
+$ git am ../quilt/device-mapper/dm-cache-replace-memcpy-with-struct-assignment.patch
+Applying: Use struct assignment rather than memcpy in dm cache.
+$ git am ../quilt/device-mapper/dm-thin-refactor-data-dev-resize.patch
+Applying: Refactor device size functions in preparation for similar metadata
+$ git am ../quilt/device-mapper/dm-thin-open-dev-read-only-when-possible.patch
+Applying: If a thin pool is created in read-only-metadata mode then only open the
+$ git am ../quilt/device-mapper/dm-persistent-data-support-space-map-resizing.patch
+Applying: Support extending a dm persistent data metadata space map.
+$ git am ../quilt/device-mapper/dm-thin-detect-metadata-device-resizing.patch
+Applying: Allow the dm thin pool metadata device to be extended.
+$ git am ../quilt/device-mapper/dm-persistent-data-add-threshold-callback-to-space-map.patch
+Applying: Add a threshold callback function to the persistent data space map
+$ git am ../quilt/device-mapper/dm-persistent-metadata-add-space-map-threshold-callback.patch
+Applying: Add a threshold callback to dm persistent data space maps.
+$ git am ../quilt/device-mapper/dm-thin-generate-event-when-metadata-threshold-passed.patch
+Applying: Generate a dm event when the amount of remaining thin pool metadata
+$ git am ../quilt/device-mapper/dm-cache-move-config-fns.patch
+Applying: Move process_config_option() in dm-cache-target.c to make the
+$ git am ../quilt/device-mapper/dm-cache-set-config-value.patch
+Applying: Share configuration option processing code between the dm cache
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:device-mapper/master
+From ../quilt-tmp
+ + 6a9ebbe...2bb1cc4 master     -> device-mapper/master  (forced update)
