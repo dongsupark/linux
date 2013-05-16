@@ -2434,7 +2434,8 @@ static void kmemleak_load_module(const struct module *mod,
 		const char *name = info->secstrings + info->sechdrs[i].sh_name;
 		if (!(info->sechdrs[i].sh_flags & SHF_ALLOC))
 			continue;
-		if (!strstarts(name, ".data") && !strstarts(name, ".bss"))
+		if (!strstarts(name, ".data") && !strstarts(name, ".bss") &&
+			!strstarts(name, ".ref.data"))
 			continue;
 
 		kmemleak_scan_area((void *)info->sechdrs[i].sh_addr,
