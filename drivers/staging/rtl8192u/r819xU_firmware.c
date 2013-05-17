@@ -67,7 +67,7 @@ bool fw_download_code(struct net_device *dev, u8 *code_virtual_address, u32 buff
 		skb  = dev_alloc_skb(frag_length + 4);
 		#endif
 		memcpy((unsigned char *)(skb->cb),&dev,sizeof(dev));
-		tcb_desc = (cb_desc*)(skb->cb + MAX_DEV_ADDR_SIZE);
+		tcb_desc = (cb_desc *)(skb->cb + MAX_DEV_ADDR_SIZE);
 		tcb_desc->queue_index = TXCMD_QUEUE;
 		tcb_desc->bCmdOrInit = DESC_PACKET_TYPE_INIT;
 		tcb_desc->bLastIniPkt = bLastIniPkt;
@@ -125,7 +125,7 @@ fwSendNullPacket(
 	//Get TCB and local buffer from common pool. (It is shared by CmdQ, MgntQ, and USB coalesce DataQ)
 	skb  = dev_alloc_skb(Length+ 4);
 	memcpy((unsigned char *)(skb->cb),&dev,sizeof(dev));
-	tcb_desc = (cb_desc*)(skb->cb + MAX_DEV_ADDR_SIZE);
+	tcb_desc = (cb_desc *)(skb->cb + MAX_DEV_ADDR_SIZE);
 	tcb_desc->queue_index = TXCMD_QUEUE;
 	tcb_desc->bCmdOrInit = DESC_PACKET_TYPE_INIT;
 	tcb_desc->bLastIniPkt = bLastInitPacket;
@@ -333,7 +333,7 @@ bool init_firmware(struct net_device *dev)
 			goto download_firmware_fail;
 		}
 
-		switch(init_step) {
+		switch (init_step) {
 		case FW_INIT_STEP0_BOOT:
 			/* Download boot
 			 * initialize command descriptor.
