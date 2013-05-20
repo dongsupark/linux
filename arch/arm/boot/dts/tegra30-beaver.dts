@@ -7,7 +7,7 @@
 	compatible = "nvidia,beaver", "nvidia,tegra30";
 
 	memory {
-		reg = <0x80000000 0x80000000>;
+		reg = <0x80000000 0x7ff00000>;
 	};
 
 	pinmux {
@@ -389,6 +389,19 @@
 			enable-active-high;
 			gpio = <&gpio 95 0>; /* gpio PL7 */
 			vin-supply = <&sys_3v3_reg>;
+		};
+	};
+
+	gpio-leds {
+		compatible = "gpio-leds";
+
+		gpled1 {
+			label = "LED1"; /* CR5A1 (blue) */
+			gpios = <&gpio 89 0>; /* gpio PL1 */
+		};
+		gpled2 {
+			label = "LED2"; /* CR4A2 (green) */
+			gpios = <&gpio 88 0>; /* gpio PL0 */
 		};
 	};
 };
