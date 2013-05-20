@@ -1,0 +1,13 @@
+Importing jdelvare-hwmon based on 1aaf6d3d3d1e95f4be07e32dd84aa1c93855fbbd
+Unchanged quilt series jdelvare-hwmon
+Importing device-mapper based on v3.10-rc1
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard f722406faae2d073cc1d01063d1123c35425939e
+HEAD is now at f722406 Linux 3.10-rc1
+$ git am ../quilt/device-mapper/dm-thin-fix-metadata-dev-resize-detection.patch
+Applying: Fix detection of the need to resize the dm thin metadata device.
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:device-mapper/master
+From ../quilt-tmp
+   f722406..11531a4  master     -> device-mapper/master
