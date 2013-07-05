@@ -2503,6 +2503,7 @@ scsi_device_set_state(struct scsi_device *sdev, enum scsi_device_state state)
 		case SDEV_RUNNING:
 		case SDEV_QUIESCE:
 		case SDEV_BLOCK:
+		case SDEV_CREATED_BLOCK:
 			break;
 		default:
 			goto illegal;
@@ -2885,33 +2886,25 @@ scsi_internal_device_unblock(struct scsi_device *sdev,
 {
 	struct request_queue *q = sdev->request_queue; 
 	unsigned long flags;
+	int res;
 
 	/*
 	 * Try to transition the scsi device to SDEV_RUNNING or one of the
 	 * offlined states and goose the device queue if successful.
 	 */
-	if ((sdev->sdev_state == SDEV_BLOCK) ||
-	    (sdev->sdev_state == SDEV_TRANSPORT_OFFLINE))
-		sdev->sdev_state = new_state;
-	else if (sdev->sdev_state == SDEV_CREATED_BLOCK) {
-		if (new_state == SDEV_TRANSPORT_OFFLINE ||
-		    new_state == SDEV_OFFLINE)
-			sdev->sdev_state = new_state;
-		else
-			sdev->sdev_state = SDEV_CREATED;
-	} else if (sdev->sdev_state != SDEV_CANCEL &&
-		 sdev->sdev_state != SDEV_OFFLINE)
-		return -EINVAL;
-
-	if (q->mq_ops) {
-		blk_mq_start_stopped_hw_queues(q, false);
-	} else {
-		spin_lock_irqsave(q->queue_lock, flags);
-		blk_start_queue(q);
-		spin_unlock_irqrestore(q->queue_lock, flags);
+	if (sdev->sdev_state == SDEV_CREATED_BLOCK && new_state == SDEV_RUNNING)
+		new_state = SDEV_CREATED;
+	res = scsi_device_set_state(sdev, new_state);
+	if (!scsi_device_blocked(sdev)) {
+		if (q->mq_ops) {
+			blk_mq_start_stopped_hw_queues(q, false);
+		} else {
+			spin_lock_irqsave(q->queue_lock, flags);
+			blk_start_queue(q);
+			spin_unlock_irqrestore(q->queue_lock, flags);
+		}
 	}
-
-	return 0;
+	return res;
 }
 EXPORT_SYMBOL_GPL(scsi_internal_device_unblock);
 
