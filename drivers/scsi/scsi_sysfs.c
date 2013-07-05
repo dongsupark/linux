@@ -699,10 +699,9 @@ store_state_field(struct device *dev, struct device_attribute *attr,
 			break;
 		}
 	}
-	if (!state)
-		return -EINVAL;
-
-	if (scsi_device_set_state(sdev, state))
+	if (state == 0 || state == SDEV_CANCEL ||
+	    state == SDEV_CANCEL_OFFLINE || state == SDEV_DEL ||
+	    scsi_device_set_state(sdev, state) != 0)
 		return -EINVAL;
 	return count;
 }
