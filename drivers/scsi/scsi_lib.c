@@ -1281,6 +1281,7 @@ scsi_prep_state_check(struct scsi_device *sdev, struct request *req)
 		switch (sdev->sdev_state) {
 		case SDEV_OFFLINE:
 		case SDEV_TRANSPORT_OFFLINE:
+		case SDEV_CANCEL_OFFLINE:
 			/*
 			 * If the device is offline we refuse to process any
 			 * commands.  The device must be brought online
@@ -2534,9 +2535,17 @@ scsi_device_set_state(struct scsi_device *sdev, enum scsi_device_state state)
 		case SDEV_CREATED:
 		case SDEV_RUNNING:
 		case SDEV_QUIESCE:
+		case SDEV_BLOCK:
+			break;
+		default:
+			goto illegal;
+		}
+		break;
+
+	case SDEV_CANCEL_OFFLINE:
+		switch (oldstate) {
 		case SDEV_OFFLINE:
 		case SDEV_TRANSPORT_OFFLINE:
-		case SDEV_BLOCK:
 			break;
 		default:
 			goto illegal;
@@ -2550,6 +2559,7 @@ scsi_device_set_state(struct scsi_device *sdev, enum scsi_device_state state)
 		case SDEV_OFFLINE:
 		case SDEV_TRANSPORT_OFFLINE:
 		case SDEV_CANCEL:
+		case SDEV_CANCEL_OFFLINE:
 		case SDEV_CREATED_BLOCK:
 			break;
 		default:

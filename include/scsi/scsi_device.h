@@ -35,6 +35,8 @@ enum scsi_device_state {
 				 * All commands allowed */
 	SDEV_CANCEL,		/* beginning to delete device
 				 * Only error handler commands allowed */
+	SDEV_CANCEL_OFFLINE,	/* beginning to delete offline device
+				 * No commands allowed */
 	SDEV_DEL,		/* device deleted 
 				 * no commands allowed */
 	SDEV_QUIESCE,		/* Device quiescent.  No block commands
@@ -473,6 +475,7 @@ static inline int scsi_device_online(struct scsi_device *sdev)
 {
 	return (sdev->sdev_state != SDEV_OFFLINE &&
 		sdev->sdev_state != SDEV_TRANSPORT_OFFLINE &&
+		sdev->sdev_state != SDEV_CANCEL_OFFLINE &&
 		sdev->sdev_state != SDEV_DEL);
 }
 static inline int scsi_device_blocked(struct scsi_device *sdev)
@@ -488,6 +491,7 @@ static inline int scsi_device_created(struct scsi_device *sdev)
 static inline int scsi_device_being_removed(struct scsi_device *sdev)
 {
 	return sdev->sdev_state == SDEV_CANCEL ||
+		sdev->sdev_state == SDEV_CANCEL_OFFLINE ||
 		sdev->sdev_state == SDEV_DEL;
 }
 
