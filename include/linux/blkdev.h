@@ -1082,7 +1082,7 @@ static inline void blk_post_runtime_resume(struct request_queue *q, int err) {}
  * schedule() where blk_schedule_flush_plug() is called.
  */
 struct blk_plug {
-	struct list_head list; /* requests */
+	struct bio_list list;
 	struct list_head mq_list; /* blk-mq requests */
 	struct list_head cb_list; /* md requires an unplug callback */
 };
@@ -1122,7 +1122,7 @@ static inline bool blk_needs_flush_plug(struct task_struct *tsk)
 	struct blk_plug *plug = tsk->plug;
 
 	return plug &&
-		(!list_empty(&plug->list) ||
+		(!bio_list_empty(&plug->list) ||
 		 !list_empty(&plug->mq_list) ||
 		 !list_empty(&plug->cb_list));
 }
