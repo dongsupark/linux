@@ -7636,13 +7636,6 @@ out:
 	bio_put(bio);
 }
 
-static struct bio *btrfs_dio_bio_alloc(struct block_device *bdev,
-				       u64 first_sector, gfp_t gfp_flags)
-{
-	int nr_vecs = bio_get_nr_vecs(bdev);
-	return btrfs_bio_alloc(bdev, first_sector, nr_vecs, gfp_flags);
-}
-
 static inline int btrfs_lookup_and_bind_dio_csum(struct btrfs_root *root,
 						 struct inode *inode,
 						 struct btrfs_dio_private *dip,
@@ -7761,7 +7754,8 @@ static int btrfs_submit_direct_hook(int rw, struct btrfs_dio_private *dip,
 	else
 		async_submit = 1;
 
-	bio = btrfs_dio_bio_alloc(orig_bio->bi_bdev, start_sector, GFP_NOFS);
+	bio = btrfs_bio_alloc(orig_bio->bi_bdev, start_sector,
+			      BIO_MAX_PAGES, GFP_NOFS);
 	if (!bio)
 		return -ENOMEM;
 
