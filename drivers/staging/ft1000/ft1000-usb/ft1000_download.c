@@ -1,12 +1,8 @@
-//=====================================================
-// CopyRight (C) 2007 Qualcomm Inc. All Rights Reserved.
-//
-//
-// This file is part of Express Card USB Driver
-//
-// $Id:
-//====================================================
-// 20090926; aelias; removed compiler warnings; ubuntu 9.04; 2.6.28-15-generic
+/*
+* CopyRight (C) 2007 Qualcomm Inc. All Rights Reserved.
+*
+* This file is part of Express Card USB Driver
+*/
 
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -111,19 +107,8 @@ struct dsp_image_info {
 };
 
 
-//---------------------------------------------------------------------------
-// Function:    check_usb_db
-//
-// Parameters:  struct ft1000_usb  - device structure
-//
-// Returns:     0 - success
-//
-// Description: This function checks if the doorbell register is cleared
-//
-// Notes:
-//
-//---------------------------------------------------------------------------
-static u32 check_usb_db (struct ft1000_usb *ft1000dev)
+/* checks if the doorbell register is cleared */
+static u32 check_usb_db(struct ft1000_usb *ft1000dev)
 {
 	int loopcnt;
 	u16 temp;
@@ -169,20 +154,7 @@ static u32 check_usb_db (struct ft1000_usb *ft1000dev)
 	return HANDSHAKE_MAG_TIMEOUT_VALUE;
 }
 
-//---------------------------------------------------------------------------
-// Function:    get_handshake
-//
-// Parameters:  struct ft1000_usb  - device structure
-//              u16 expected_value - the handshake value expected
-//
-// Returns:     handshakevalue - success
-//              HANDSHAKE_TIMEOUT_VALUE - failure
-//
-// Description: This function gets the handshake and compare with the expected value
-//
-// Notes:
-//
-//---------------------------------------------------------------------------
+/* gets the handshake and compares it with the expected value */
 static u16 get_handshake(struct ft1000_usb *ft1000dev, u16 expected_value)
 {
 	u16 handshake;
@@ -229,20 +201,7 @@ static u16 get_handshake(struct ft1000_usb *ft1000dev, u16 expected_value)
 	return HANDSHAKE_TIMEOUT_VALUE;
 }
 
-//---------------------------------------------------------------------------
-// Function:    put_handshake
-//
-// Parameters:  struct ft1000_usb  - device structure
-//              u16 handshake_value - handshake to be written
-//
-// Returns:     none
-//
-// Description: This function write the handshake value to the handshake location
-//              in DPRAM
-//
-// Notes:
-//
-//---------------------------------------------------------------------------
+/* write the handshake value to the handshake location */
 static void put_handshake(struct ft1000_usb *ft1000dev,u16 handshake_value)
 {
 	u32 tempx;
@@ -316,18 +275,6 @@ static void put_handshake_usb(struct ft1000_usb *ft1000dev,u16 handshake_value)
         for (i=0; i<1000; i++);
 }
 
-//---------------------------------------------------------------------------
-// Function:    get_request_type
-//
-// Parameters:  struct ft1000_usb  - device structure
-//
-// Returns:     request type - success
-//
-// Description: This function returns the request type
-//
-// Notes:
-//
-//---------------------------------------------------------------------------
 static u16 get_request_type(struct ft1000_usb *ft1000dev)
 {
 	u16 request_type;
@@ -380,18 +327,6 @@ static u16 get_request_type_usb(struct ft1000_usb *ft1000dev)
 	return request_type;
 }
 
-//---------------------------------------------------------------------------
-// Function:    get_request_value
-//
-// Parameters:  struct ft1000_usb  - device structure
-//
-// Returns:     request value - success
-//
-// Description: This function returns the request value
-//
-// Notes:
-//
-//---------------------------------------------------------------------------
 static long get_request_value(struct ft1000_usb *ft1000dev)
 {
 	u32 value;
@@ -416,19 +351,7 @@ static long get_request_value(struct ft1000_usb *ft1000dev)
 }
 
 
-//---------------------------------------------------------------------------
-// Function:    put_request_value
-//
-// Parameters:  struct ft1000_usb  - device structure
-//              long lvalue - value to be put into DPRAM location DWNLD_MAG1_SIZE_LOC
-//
-// Returns:     none
-//
-// Description: This function writes a value to DWNLD_MAG1_SIZE_LOC
-//
-// Notes:
-//
-//---------------------------------------------------------------------------
+/* writes a value to DWNLD_MAG1_SIZE_LOC */
 static void put_request_value(struct ft1000_usb *ft1000dev, long lvalue)
 {
 	u32    tempx;
@@ -441,18 +364,7 @@ static void put_request_value(struct ft1000_usb *ft1000dev, long lvalue)
 
 
 
-//---------------------------------------------------------------------------
-// Function:    hdr_checksum
-//
-// Parameters:  struct pseudo_hdr *pHdr - Pseudo header pointer
-//
-// Returns:     checksum - success
-//
-// Description: This function returns the checksum of the pseudo header
-//
-// Notes:
-//
-//---------------------------------------------------------------------------
+/* returns the checksum of the pseudo header */
 static u16 hdr_checksum(struct pseudo_hdr *pHdr)
 {
 	u16   *usPtr = (u16 *)pHdr;
@@ -477,23 +389,12 @@ static int check_buffers(u16 *buff_w, u16 *buff_r, int len, int offset)
 	return 0;
 }
 
-//---------------------------------------------------------------------------
-// Function:    write_blk
-//
-// Parameters:  struct ft1000_usb  - device structure
-//              u16 **pUsFile - DSP image file pointer in u16
-//              u8  **pUcFile - DSP image file pointer in u8
-//              long   word_length - length of the buffer to be written
-//                                   to DPRAM
-//
-// Returns:     STATUS_SUCCESS - success
-//              STATUS_FAILURE - failure
-//
-// Description: This function writes a block of DSP image to DPRAM
-//
-// Notes:
-//
-//---------------------------------------------------------------------------
+/* writes a block of DSP image to DPRAM
+ * Parameters:  struct ft1000_usb  - device structure
+ *              u16 **pUsFile - DSP image file pointer in u16
+ *              u8  **pUcFile - DSP image file pointer in u8
+ *              long word_length - length of the buffer to be written to DPRAM
+ */
 static u32 write_blk (struct ft1000_usb *ft1000dev, u16 **pUsFile, u8 **pUcFile, long word_length)
 {
    u32 Status = STATUS_SUCCESS;
@@ -616,23 +517,12 @@ static void usb_dnld_complete (struct urb *urb)
     //DEBUG("****** usb_dnld_complete\n");
 }
 
-//---------------------------------------------------------------------------
-// Function:    write_blk_fifo
-//
-// Parameters:  struct ft1000_usb  - device structure
-//              u16 **pUsFile - DSP image file pointer in u16
-//              u8  **pUcFile - DSP image file pointer in u8
-//              long   word_length - length of the buffer to be written
-//                                   to DPRAM
-//
-// Returns:     STATUS_SUCCESS - success
-//              STATUS_FAILURE - failure
-//
-// Description: This function writes a block of DSP image to DPRAM
-//
-// Notes:
-//
-//---------------------------------------------------------------------------
+/* writes a block of DSP image to DPRAM
+ * Parameters:  struct ft1000_usb  - device structure
+ *              u16 **pUsFile - DSP image file pointer in u16
+ *              u8  **pUcFile - DSP image file pointer in u8
+ *              long word_length - length of the buffer to be written to DPRAM
+ */
 static u32 write_blk_fifo(struct ft1000_usb *ft1000dev, u16 **pUsFile,
 			  u8 **pUcFile, long word_length)
 {
@@ -664,18 +554,28 @@ static u32 write_blk_fifo(struct ft1000_usb *ft1000dev, u16 **pUsFile,
 	return Status;
 }
 
-//---------------------------------------------------------------------------
-//
-//  Function:   scram_dnldr
-//
-//  Synopsis:   Scramble downloader for Harley based ASIC via USB interface
-//
-//  Arguments:  pFileStart              - pointer to start of file
-//              FileLength              - file length
-//
-//  Returns:    status                  - return code
-//---------------------------------------------------------------------------
+static int scram_start_dwnld(struct ft1000_usb *ft1000dev, u16 *hshake,
+		u32 *state)
+{
+	int status = STATUS_SUCCESS;
 
+	DEBUG("FT1000:STATE_START_DWNLD\n");
+	if (ft1000dev->usbboot)
+		*hshake = get_handshake_usb(ft1000dev, HANDSHAKE_DSP_BL_READY);
+	else
+		*hshake = get_handshake(ft1000dev, HANDSHAKE_DSP_BL_READY);
+	if (*hshake == HANDSHAKE_DSP_BL_READY) {
+		DEBUG("scram_dnldr: handshake is HANDSHAKE_DSP_BL_READY, call put_handshake(HANDSHAKE_DRIVER_READY)\n");
+		put_handshake(ft1000dev, HANDSHAKE_DRIVER_READY);
+	} else {
+		DEBUG("FT1000:download:Download error: Handshake failed\n");
+		status = STATUS_FAILURE;
+	}
+	*state = STATE_BOOT_DWNLD;
+	return status;
+}
+
+/* Scramble downloader for Harley based ASIC via USB interface */
 u16 scram_dnldr(struct ft1000_usb *ft1000dev, void *pFileStart,
 		u32 FileLength)
 {
@@ -733,34 +633,13 @@ u16 scram_dnldr(struct ft1000_usb *ft1000dev, void *pFileStart,
 
 	loader_code_address = file_hdr->loader_code_address;
 	loader_code_size = file_hdr->loader_code_size;
-	correct_version = FALSE;
+	correct_version = false;
 
 	while ((status == STATUS_SUCCESS) && (state != STATE_DONE_FILE)) {
 		switch (state) {
 		case STATE_START_DWNLD:
-			DEBUG("FT1000:STATE_START_DWNLD\n");
-			if (ft1000dev->usbboot)
-				handshake =
-				    get_handshake_usb(ft1000dev,
-						      HANDSHAKE_DSP_BL_READY);
-			else
-				handshake =
-				    get_handshake(ft1000dev,
-						  HANDSHAKE_DSP_BL_READY);
-
-			if (handshake == HANDSHAKE_DSP_BL_READY) {
-				DEBUG
-				    ("scram_dnldr: handshake is HANDSHAKE_DSP_BL_READY, call put_handshake(HANDSHAKE_DRIVER_READY)\n");
-				put_handshake(ft1000dev,
-					      HANDSHAKE_DRIVER_READY);
-			} else {
-				DEBUG
-				    ("FT1000:download:Download error: Handshake failed\n");
-				status = STATUS_FAILURE;
-			}
-
-			state = STATE_BOOT_DWNLD;
-
+			status = scram_start_dwnld(ft1000dev, &handshake,
+						   &state);
 			break;
 
 		case STATE_BOOT_DWNLD:
@@ -1036,7 +915,7 @@ u16 scram_dnldr(struct ft1000_usb *ft1000dev, void *pFileStart,
 						status =
 						    fix_ft1000_write_dpram32
 						    (ft1000dev, dpram++,
-						     (u8 *) & templong);
+						     (u8 *) &templong);
 
 					}
 					break;
@@ -1044,7 +923,7 @@ u16 scram_dnldr(struct ft1000_usb *ft1000dev, void *pFileStart,
 				case REQUEST_CODE_BY_VERSION:
 					DEBUG
 					    ("FT1000:download:REQUEST_CODE_BY_VERSION\n");
-					correct_version = FALSE;
+					correct_version = false;
 					requested_version =
 					    get_request_value(ft1000dev);
 
@@ -1061,7 +940,7 @@ u16 scram_dnldr(struct ft1000_usb *ft1000dev, void *pFileStart,
 
 						if (dsp_img_info->version ==
 						    requested_version) {
-							correct_version = TRUE;
+							correct_version = true;
 							DEBUG
 							    ("FT1000:download: correct_version is TRUE\n");
 							s_file =
@@ -1137,13 +1016,13 @@ u16 scram_dnldr(struct ft1000_usb *ft1000dev, void *pFileStart,
 			if (pseudo_header->checksum ==
 			    hdr_checksum(pseudo_header)) {
 				if (pseudo_header->portdest !=
-				    0x80 /* Dsp OAM */ ) {
+				    0x80 /* Dsp OAM */) {
 					state = STATE_DONE_PROV;
 					break;
 				}
 				pseudo_header_len = ntohs(pseudo_header->length);	/* Byte length for PROV records */
 
-				// Get buffer for provisioning data
+				/* Get buffer for provisioning data */
 				pbuffer =
 				    kmalloc((pseudo_header_len +
 					     sizeof(struct pseudo_hdr)),
@@ -1201,9 +1080,8 @@ u16 scram_dnldr(struct ft1000_usb *ft1000dev, void *pFileStart,
 			break;
 		}		/* End Switch */
 
-		if (status != STATUS_SUCCESS) {
+		if (status != STATUS_SUCCESS)
 			break;
-		}
 
 /****
       // Check if Card is present
