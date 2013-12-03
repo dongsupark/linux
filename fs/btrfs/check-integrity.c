@@ -2963,6 +2963,9 @@ int btrfsic_submit_bh(int rw, struct buffer_head *bh)
 static void __btrfsic_submit_bio(int rw, struct bio *bio)
 {
 	struct btrfsic_dev_state *dev_state;
+	struct bio_vec bvec = { 0 };
+	struct bvec_iter iter = bio->bi_iter;
+	struct page *page;
 
 	if (!btrfsic_is_initialized)
 		return;
@@ -2979,7 +2982,7 @@ static void __btrfsic_submit_bio(int rw, struct bio *bio)
 		int bio_is_patched;
 		char **mapped_datav;
 
-		dev_bytenr = 512 * bio->bi_iter.bi_sector;
+		dev_bytenr = 512 * iter.bi_sector;
 		bio_is_patched = 0;
 		if (dev_state->state->print_mask &
 		    BTRFSIC_PRINT_MASK_SUBMIT_BIO_BH)
@@ -2987,7 +2990,7 @@ static void __btrfsic_submit_bio(int rw, struct bio *bio)
 			       "submit_bio(rw=0x%x, bi_vcnt=%u,"
 			       " bi_sector=%llu (bytenr %llu), bi_bdev=%p)\n",
 			       rw, bio->bi_vcnt,
-			       (unsigned long long)bio->bi_iter.bi_sector,
+			       (unsigned long long)iter.bi_sector,
 			       dev_bytenr, bio->bi_bdev);
 
 		mapped_datav = kmalloc(sizeof(*mapped_datav) * bio->bi_vcnt,
@@ -2995,13 +2998,14 @@ static void __btrfsic_submit_bio(int rw, struct bio *bio)
 		if (!mapped_datav)
 			goto leave;
 		cur_bytenr = dev_bytenr;
-		for (i = 0; i < bio->bi_vcnt; i++) {
-			BUG_ON(bio->bi_io_vec[i].bv_len != PAGE_CACHE_SIZE);
-			mapped_datav[i] = kmap(bio->bi_io_vec[i].bv_page);
+
+		bio_for_each_segment(bvec, bio, iter) {
+			BUG_ON(bvec.bv_len != PAGE_CACHE_SIZE);
+			mapped_datav[i] = kmap(bvec.bv_page);
 			if (!mapped_datav[i]) {
 				while (i > 0) {
 					i--;
-					kunmap(bio->bi_io_vec[i].bv_page);
+					kunmap(bvec.bv_page);
 				}
 				kfree(mapped_datav);
 				goto leave;
@@ -3011,8 +3015,8 @@ static void __btrfsic_submit_bio(int rw, struct bio *bio)
 				printk(KERN_INFO
 				       "#%u: bytenr=%llu, len=%u, offset=%u\n",
 				       i, cur_bytenr, bio->bi_io_vec[i].bv_len,
-				       bio->bi_io_vec[i].bv_offset);
-			cur_bytenr += bio->bi_io_vec[i].bv_len;
+				       bvec.bv_offset);
+			cur_bytenr += bvec.bv_len;
 		}
 		btrfsic_process_written_block(dev_state, dev_bytenr,
 					      mapped_datav, bio->bi_vcnt,
@@ -3020,7 +3024,7 @@ static void __btrfsic_submit_bio(int rw, struct bio *bio)
 					      NULL, rw);
 		while (i > 0) {
 			i--;
-			kunmap(bio->bi_io_vec[i].bv_page);
+			kunmap(bvec.bv_page);
 		}
 		kfree(mapped_datav);
 	} else if (NULL != dev_state && (rw & REQ_FLUSH)) {
