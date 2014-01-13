@@ -147,6 +147,12 @@ int nfs_sync_mapping(struct address_space *mapping)
 	return ret;
 }
 
+static void nfs_zap_readdir_cookie(struct nfs_inode *nfsi)
+{
+	if (S_ISDIR(nfsi->vfs_inode.i_mode))
+		memset(nfsi->cookieverf, 0, sizeof(nfsi->cookieverf));
+}
+
 /*
  * Invalidate the local caches
  */
@@ -160,7 +166,6 @@ static void nfs_zap_caches_locked(struct inode *inode)
 	nfsi->attrtimeo = NFS_MINATTRTIMEO(inode);
 	nfsi->attrtimeo_timestamp = jiffies;
 
-	memset(NFS_I(inode)->cookieverf, 0, sizeof(NFS_I(inode)->cookieverf));
 	if (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode)) {
 		nfs_fscache_invalidate(inode);
 		nfsi->cache_validity |= NFS_INO_INVALID_ATTR
@@ -168,6 +173,7 @@ static void nfs_zap_caches_locked(struct inode *inode)
 					| NFS_INO_INVALID_ACCESS
 					| NFS_INO_INVALID_ACL
 					| NFS_INO_REVAL_PAGECACHE;
+		nfs_zap_readdir_cookie(nfsi);
 	} else
 		nfsi->cache_validity |= NFS_INO_INVALID_ATTR
 					| NFS_INO_INVALID_ACCESS
@@ -406,7 +412,7 @@ nfs_fhget(struct super_block *sb, struct nfs_fh *fh, struct nfs_fattr *fattr, st
 		inode->i_uid = make_kuid(&init_user_ns, -2);
 		inode->i_gid = make_kgid(&init_user_ns, -2);
 		inode->i_blocks = 0;
-		memset(nfsi->cookieverf, 0, sizeof(nfsi->cookieverf));
+		nfs_zap_readdir_cookie(nfsi);
 		nfsi->write_io = 0;
 		nfsi->read_io = 0;
 

@@ -156,14 +156,18 @@ struct nfs_inode {
 	struct list_head	access_cache_entry_lru;
 	struct list_head	access_cache_inode_lru;
 
-	/*
-	 * This is the cookie verifier used for NFSv3 readdir
-	 * operations
-	 */
-	__be32			cookieverf[2];
-
 	unsigned long		npages;
-	struct nfs_mds_commit_info commit_info;
+	/* File-type specific information */
+	union {
+		/*
+		 * This is the cookie verifier used for NFSv3 readdir
+		 * operations
+		 */
+		__be32			cookieverf[2];
+
+		/* Commit information for regular file writes */
+		struct nfs_mds_commit_info commit_info;
+	};
 
 	/* Open contexts for shared mmap writes */
 	struct list_head	open_files;
