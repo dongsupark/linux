@@ -441,6 +441,7 @@ nfs4_init_stateid_lock(struct nfs4_stateid_lock *st_lock)
 {
 	spin_lock_init(&st_lock->lock);
 	INIT_LIST_HEAD(&st_lock->list);
+	st_lock->n_active = 0;
 	rpc_init_wait_queue(&st_lock->wait, "Seqid_waitqueue");
 }
 
@@ -453,7 +454,25 @@ nfs4_destroy_stateid_lock(struct nfs4_stateid_lock *st_lock)
 static bool
 nfs4_stateid_lock_is_blocked(struct nfs4_stateid_lock *st_lock)
 {
-	return !list_empty(&st_lock->list);
+	return st_lock->n_active != 0;
+}
+
+static bool
+nfs4_stateid_lock_make_active(struct nfs4_stateid_lock *st_lock,
+		struct nfs4_stateid_lock_wait *wait)
+{
+	if (wait->shared) {
+		if (st_lock->n_active < 0)
+			return false;
+		st_lock->n_active++;
+	} else {
+		if (st_lock->n_active != 0)
+			return false;
+		st_lock->n_active = -1;
+	}
+	list_del_init(&wait->list);
+	wait->active = 1;
+	return true;
 }
 
 static void
@@ -461,13 +480,17 @@ nfs4_stateid_lock_wake_next_locked(struct nfs4_stateid_lock *st_lock)
 {
 	struct nfs4_stateid_lock_wait *next;
 
-	if (list_empty(&st_lock->list))
-		return;
+	for (;;) {
+		if (list_empty(&st_lock->list))
+			break;
 
-	next = list_first_entry(&st_lock->list,
+		next = list_first_entry(&st_lock->list,
 				struct nfs4_stateid_lock_wait,
 				list);
-	rpc_wake_up_queued_task(&st_lock->wait, next->task);
+		if (!nfs4_stateid_lock_make_active(st_lock, next))
+			break;
+		rpc_wake_up_queued_task(&st_lock->wait, next->task);
+	}
 }
 
 static void
@@ -475,6 +498,8 @@ nfs4_stateid_lock_wait_init(struct nfs4_stateid_lock_wait *wait)
 {
 	INIT_LIST_HEAD(&wait->list);
 	wait->task = NULL;
+	wait->active = 0;
+	wait->shared = 0;
 }
 
 static int
@@ -485,14 +510,16 @@ nfs4_stateid_lock_wait_begin(struct nfs4_stateid_lock *st_lock,
 	int status = 0;
 
 	spin_lock(&st_lock->lock);
-	wait->task = task;
-	if (list_empty(&wait->list))
-		list_add_tail(&wait->list, &st_lock->list);
-	if (list_first_entry(&st_lock->list, struct nfs4_stateid_lock_wait, list) == wait)
-		goto unlock;
-	rpc_sleep_on(&st_lock->wait, task, NULL);
-	status = -EAGAIN;
-unlock:
+	if (!wait->active && list_empty(&wait->list)) {
+		wait->task = task;
+		if (!list_empty(&st_lock->list) ||
+		    !nfs4_stateid_lock_make_active(st_lock, wait))
+			list_add_tail(&wait->list, &st_lock->list);
+	}
+	if (!wait->active) {
+		rpc_sleep_on(&st_lock->wait, task, NULL);
+		status = -EAGAIN;
+	}
 	spin_unlock(&st_lock->lock);
 	return status;
 }
@@ -501,12 +528,19 @@ static void
 nfs4_stateid_lock_wait_end(struct nfs4_stateid_lock *st_lock,
 		struct nfs4_stateid_lock_wait *wait)
 {
-	if (list_empty(&wait->list))
+	if (!wait->active && list_empty(&wait->list))
 		return;
 	spin_lock(&st_lock->lock);
 	list_del_init(&wait->list);
-	nfs4_stateid_lock_wake_next_locked(st_lock);
+	if (wait->active) {
+		if (wait->shared)
+			st_lock->n_active--;
+		else
+			st_lock->n_active = 0;
+		nfs4_stateid_lock_wake_next_locked(st_lock);
+	}
 	spin_unlock(&st_lock->lock);
+	wait->active = 0;
 }
 
 static void

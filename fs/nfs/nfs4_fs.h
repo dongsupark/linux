@@ -65,13 +65,17 @@ struct nfs4_minor_version_ops {
 
 struct nfs4_stateid_lock {
 	spinlock_t lock;		/* Protects the list */
-	struct list_head list;		/* Defines sequence of RPC calls */
+	int n_active;			/* Number of active shared locks */
+					/* == -1 for an exclusive lock */
+	struct list_head list;		/* Waiting RPC calls */
 	struct rpc_wait_queue	wait;	/* RPC call delay queue */
 };
 
 struct nfs4_stateid_lock_wait {
 	struct list_head list;
 	struct rpc_task *task;
+	unsigned char active : 1,
+		      shared : 1;
 };
 
 #define NFS_SEQID_CONFIRMED 1
