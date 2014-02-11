@@ -63,21 +63,29 @@ struct nfs4_minor_version_ops {
 	const struct nfs4_mig_recovery_ops *mig_recovery_ops;
 };
 
+struct nfs4_stateid_lock {
+	spinlock_t lock;		/* Protects the list */
+	struct list_head list;		/* Defines sequence of RPC calls */
+	struct rpc_wait_queue	wait;	/* RPC call delay queue */
+};
+
+struct nfs4_stateid_lock_wait {
+	struct list_head list;
+	struct rpc_task *task;
+};
+
 #define NFS_SEQID_CONFIRMED 1
 struct nfs_seqid_counter {
 	ktime_t create_time;
 	int owner_id;
 	int flags;
 	u32 counter;
-	spinlock_t lock;		/* Protects the list */
-	struct list_head list;		/* Defines sequence of RPC calls */
-	struct rpc_wait_queue	wait;	/* RPC call delay queue */
+	struct nfs4_stateid_lock st_lock;
 };
 
 struct nfs_seqid {
 	struct nfs_seqid_counter *sequence;
-	struct list_head list;
-	struct rpc_task *task;
+	struct nfs4_stateid_lock_wait wait;
 };
 
 static inline void nfs_confirm_seqid(struct nfs_seqid_counter *seqid, int status)
