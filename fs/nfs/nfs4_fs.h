@@ -63,21 +63,33 @@ struct nfs4_minor_version_ops {
 	const struct nfs4_mig_recovery_ops *mig_recovery_ops;
 };
 
+struct nfs4_stateid_lock {
+	spinlock_t lock;		/* Protects the list */
+	int n_active;			/* Number of active shared locks */
+					/* == -1 for an exclusive lock */
+	struct list_head list;		/* Waiting RPC calls */
+	struct rpc_wait_queue	wait;	/* RPC call delay queue */
+};
+
+struct nfs4_stateid_lock_wait {
+	struct list_head list;
+	struct rpc_task *task;
+	unsigned char active : 1,
+		      shared : 1;
+};
+
 #define NFS_SEQID_CONFIRMED 1
 struct nfs_seqid_counter {
 	ktime_t create_time;
 	int owner_id;
 	int flags;
 	u32 counter;
-	spinlock_t lock;		/* Protects the list */
-	struct list_head list;		/* Defines sequence of RPC calls */
-	struct rpc_wait_queue	wait;	/* RPC call delay queue */
+	struct nfs4_stateid_lock st_lock;
 };
 
 struct nfs_seqid {
 	struct nfs_seqid_counter *sequence;
-	struct list_head list;
-	struct rpc_task *task;
+	struct nfs4_stateid_lock_wait wait;
 };
 
 static inline void nfs_confirm_seqid(struct nfs_seqid_counter *seqid, int status)
@@ -427,6 +439,7 @@ extern void nfs4_close_sync(struct nfs4_state *, fmode_t);
 extern void nfs4_state_set_mode_locked(struct nfs4_state *, fmode_t);
 extern void nfs_inode_find_state_and_recover(struct inode *inode,
 		const nfs4_stateid *stateid);
+extern int nfs4_state_mark_reclaim_nograce(struct nfs_client *, struct nfs4_state *);
 extern void nfs4_schedule_lease_recovery(struct nfs_client *);
 extern int nfs4_wait_clnt_recover(struct nfs_client *clp);
 extern int nfs4_client_recover_expired_lease(struct nfs_client *clp);
@@ -498,6 +511,16 @@ static inline void nfs4_stateid_copy(nfs4_stateid *dst, const nfs4_stateid *src)
 static inline bool nfs4_stateid_match(const nfs4_stateid *dst, const nfs4_stateid *src)
 {
 	return memcmp(dst, src, sizeof(*dst)) == 0;
+}
+
+static inline bool nfs4_stateid_match_other(const nfs4_stateid *dst, const nfs4_stateid *src)
+{
+	return memcmp(dst->other, src->other, NFS4_STATEID_OTHER_SIZE) == 0;
+}
+
+static inline bool nfs4_stateid_is_newer(const nfs4_stateid *s1, const nfs4_stateid *s2)
+{
+	return (s32)(be32_to_cpu(s1->seqid) - be32_to_cpu(s2->seqid)) > 0;
 }
 
 static inline bool nfs4_valid_open_stateid(const struct nfs4_state *state)
