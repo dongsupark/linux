@@ -3001,6 +3001,7 @@ alloc_init_open_stateowner(unsigned int strhashval, struct nfsd4_open *open,
 static void init_open_stateid(struct nfs4_ol_stateid *stp, struct nfs4_file *fp, struct nfsd4_open *open) {
 	struct nfs4_openowner *oo = open->op_openowner;
 
+	atomic_inc(&stp->st_stid.sc_count);
 	stp->st_stid.sc_type = NFS4_OPEN_STID;
 	INIT_LIST_HEAD(&stp->st_locks);
 	stp->st_stateowner = &oo->oo_owner;
@@ -3340,6 +3341,7 @@ nfsd4_find_existing_open(struct nfs4_file *fp, struct nfsd4_open *open)
 		/* remember if we have seen this open owner */
 		if (local->st_stateowner == &oo->oo_owner) {
 			ret = local;
+			atomic_inc(&ret->st_stid.sc_count);
 			break;
 		}
 	}
@@ -3776,6 +3778,8 @@ out:
 		open->op_rflags |= NFS4_OPEN_RESULT_CONFIRM;
 	if (dp)
 		nfs4_put_delegation(dp);
+	if (stp)
+		put_generic_stateid(stp);
 
 	return status;
 }
