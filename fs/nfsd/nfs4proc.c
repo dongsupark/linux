@@ -467,10 +467,7 @@ out:
 		fh_put(resfh);
 		kfree(resfh);
 	}
-	nfsd4_cleanup_open_state(open, status);
-	if (open->op_openowner)
-		nfsd4_cstate_assign_replay(cstate,
-				&open->op_openowner->oo_owner);
+	nfsd4_cleanup_open_state(cstate, open, status);
 	nfsd4_bump_seqid(cstate, status);
 	nfs4_unlock_state();
 	return status;

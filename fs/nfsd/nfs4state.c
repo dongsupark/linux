@@ -2940,6 +2940,27 @@ static void init_nfs4_replay(struct nfs4_replay *rp)
 	mutex_init(&rp->rp_mutex);
 }
 
+static void nfsd4_cstate_assign_replay(struct nfsd4_compound_state *cstate,
+		struct nfs4_stateowner *so)
+{
+	if (!nfsd4_has_session(cstate)) {
+		mutex_lock(&so->so_replay.rp_mutex);
+		cstate->replay_owner = so;
+		atomic_inc(&so->so_count);
+	}
+}
+
+void nfsd4_cstate_clear_replay(struct nfsd4_compound_state *cstate)
+{
+	struct nfs4_stateowner *so = cstate->replay_owner;
+
+	if (so != NULL) {
+		cstate->replay_owner = NULL;
+		mutex_unlock(&so->so_replay.rp_mutex);
+		nfs4_put_stateowner(so);
+	}
+}
+
 static inline void *alloc_stateowner(struct kmem_cache *slab, struct xdr_netobj *owner, struct nfs4_client *clp)
 {
 	struct nfs4_stateowner *sop;
@@ -3792,7 +3813,8 @@ out:
 	return status;
 }
 
-void nfsd4_cleanup_open_state(struct nfsd4_open *open, __be32 status)
+void nfsd4_cleanup_open_state(struct nfsd4_compound_state *cstate,
+			      struct nfsd4_open *open, __be32 status)
 {
 	if (open->op_openowner) {
 		struct nfs4_openowner *oo = open->op_openowner;
@@ -3806,6 +3828,8 @@ void nfsd4_cleanup_open_state(struct nfsd4_open *open, __be32 status)
 			} else
 				oo->oo_flags &= ~NFS4_OO_NEW;
 		}
+		if (open->op_openowner)
+			nfsd4_cstate_assign_replay(cstate, &oo->oo_owner);
 	}
 	if (open->op_file)
 		nfsd4_free_file(open->op_file);
