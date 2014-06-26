@@ -189,6 +189,15 @@ static void put_client_renew_locked(struct nfs4_client *clp)
 		renew_client_locked(clp);
 }
 
+static void put_client_renew(struct nfs4_client *clp)
+{
+	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
+
+	spin_lock(&nn->client_lock);
+	put_client_renew_locked(clp);
+	spin_unlock(&nn->client_lock);
+}
+
 static __be32 nfsd4_get_session_locked(struct nfsd4_session *ses)
 {
 	__be32 status;
@@ -2382,6 +2391,7 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 			goto out_put_session;
 		cstate->slot = slot;
 		cstate->session = session;
+		cstate->clp = clp;
 		/* Return the cached reply status and set cstate->status
 		 * for nfsd4_proc_compound processing */
 		status = nfsd4_replay_cache_entry(resp, seq);
@@ -2416,6 +2426,7 @@ nfsd4_sequence(struct svc_rqst *rqstp,
 
 	cstate->slot = slot;
 	cstate->session = session;
+	cstate->clp = clp;
 
 out:
 	switch (clp->cl_cb_state) {
@@ -2452,7 +2463,8 @@ nfsd4_sequence_done(struct nfsd4_compoundres *resp)
 		}
 		/* Drop session reference that was taken in nfsd4_sequence() */
 		nfsd4_put_session(cs->session);
-	}
+	} else if (cs->clp)
+		put_client_renew(cs->clp);
 }
 
 __be32
@@ -5008,8 +5020,10 @@ static u64 nfsd_foreach_client_lock(struct nfs4_client *clp, u64 max, void (*fun
 	u64 count = 0;
 
 	list_for_each_entry(oop, &clp->cl_openowners, oo_perclient) {
-		list_for_each_entry_safe(stp, st_next, &oop->oo_owner.so_stateids, st_perstateowner) {
-			list_for_each_entry_safe(lop, lo_next, &stp->st_lockowners, lo_perstateid) {
+		list_for_each_entry_safe(stp, st_next,
+				&oop->oo_owner.so_stateids, st_perstateowner) {
+			list_for_each_entry_safe(lop, lo_next,
+					&stp->st_lockowners, lo_perstateid) {
 				if (func)
 					func(lop);
 				if (++count == max)
