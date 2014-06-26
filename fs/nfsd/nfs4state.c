@@ -146,6 +146,10 @@ static __be32 mark_client_expired_locked(struct nfs4_client *clp)
 
 static __be32 get_client_locked(struct nfs4_client *clp)
 {
+	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
+
+	lockdep_assert_held(&nn->client_lock);
+
 	if (is_client_expired(clp))
 		return nfserr_expired;
 	atomic_inc(&clp->cl_refcount);
@@ -186,6 +190,10 @@ renew_client(struct nfs4_client *clp)
 
 static void put_client_renew_locked(struct nfs4_client *clp)
 {
+	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
+
+	lockdep_assert_held(&nn->client_lock);
+
 	if (!atomic_dec_and_test(&clp->cl_refcount))
 		return;
 	if (!is_client_expired(clp))
@@ -217,6 +225,9 @@ static __be32 nfsd4_get_session_locked(struct nfsd4_session *ses)
 static void nfsd4_put_session_locked(struct nfsd4_session *ses)
 {
 	struct nfs4_client *clp = ses->se_client;
+	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
+
+	lockdep_assert_held(&nn->client_lock);
 
 	if (atomic_dec_and_test(&ses->se_ref) && is_session_dead(ses))
 		free_session(ses);
@@ -1399,6 +1410,8 @@ __find_in_sessionid_hashtbl(struct nfs4_sessionid *sessionid, struct net *net)
 	int idx;
 	struct nfsd_net *nn = net_generic(net, nfsd_net_id);
 
+	lockdep_assert_held(&nn->client_lock);
+
 	dump_sessionid(__func__, sessionid);
 	idx = hash_sessionid(sessionid);
 	/* Search in the appropriate list */
@@ -1435,6 +1448,11 @@ out:
 static void
 unhash_session(struct nfsd4_session *ses)
 {
+	struct nfs4_client *clp = ses->se_client;
+	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
+
+	lockdep_assert_held(&nn->client_lock);
+
 	list_del(&ses->se_hash);
 	spin_lock(&ses->se_client->cl_lock);
 	list_del(&ses->se_perclnt);
@@ -1522,6 +1540,8 @@ unhash_client_locked(struct nfs4_client *clp)
 {
 	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
 	struct nfsd4_session *ses;
+
+	lockdep_assert_held(&nn->client_lock);
 
 	/* Mark the client as expired! */
 	clp->cl_time = 0;
@@ -1852,6 +1872,8 @@ add_to_unconfirmed(struct nfs4_client *clp)
 	unsigned int idhashval;
 	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
 
+	lockdep_assert_held(&nn->client_lock);
+
 	clear_bit(NFSD4_CLIENT_CONFIRMED, &clp->cl_flags);
 	add_clp_to_name_tree(clp, &nn->unconf_name_tree);
 	idhashval = clientid_hashval(clp->cl_clientid.cl_id);
@@ -1864,6 +1886,8 @@ move_to_confirmed(struct nfs4_client *clp)
 {
 	unsigned int idhashval = clientid_hashval(clp->cl_clientid.cl_id);
 	struct nfsd_net *nn = net_generic(clp->net, nfsd_net_id);
+
+	lockdep_assert_held(&nn->client_lock);
 
 	dprintk("NFSD: move_to_confirm nfs4_client %p\n", clp);
 	list_move(&clp->cl_idhash, &nn->conf_id_hashtbl[idhashval]);
@@ -1895,6 +1919,7 @@ find_confirmed_client(clientid_t *clid, bool sessions, struct nfsd_net *nn)
 {
 	struct list_head *tbl = nn->conf_id_hashtbl;
 
+	lockdep_assert_held(&nn->client_lock);
 	return find_client_in_id_table(tbl, clid, sessions);
 }
 
@@ -1903,6 +1928,7 @@ find_unconfirmed_client(clientid_t *clid, bool sessions, struct nfsd_net *nn)
 {
 	struct list_head *tbl = nn->unconf_id_hashtbl;
 
+	lockdep_assert_held(&nn->client_lock);
 	return find_client_in_id_table(tbl, clid, sessions);
 }
 
@@ -1914,12 +1940,14 @@ static bool clp_used_exchangeid(struct nfs4_client *clp)
 static struct nfs4_client *
 find_confirmed_client_by_name(struct xdr_netobj *name, struct nfsd_net *nn)
 {
+	lockdep_assert_held(&nn->client_lock);
 	return find_clp_in_name_tree(name, &nn->conf_name_tree);
 }
 
 static struct nfs4_client *
 find_unconfirmed_client_by_name(struct xdr_netobj *name, struct nfsd_net *nn)
 {
+	lockdep_assert_held(&nn->client_lock);
 	return find_clp_in_name_tree(name, &nn->unconf_name_tree);
 }
 
@@ -4873,6 +4901,8 @@ find_lockowner_str_locked(clientid_t *clid, struct xdr_netobj *owner,
 {
 	unsigned int strhashval = ownerstr_hashval(owner);
 	struct nfs4_stateowner *so;
+
+	lockdep_assert_held(&clp->cl_lock);
 
 	list_for_each_entry(so, &clp->cl_ownerstr_hashtbl[strhashval],
 			    so_strhash) {
