@@ -347,6 +347,7 @@ struct nfs4_stateowner {
 	bool			so_is_open_owner;
 
 	void (*so_free)(struct nfs4_stateowner *);
+	void (*so_unhash)(struct nfs4_stateowner *);
 };
 
 struct nfs4_openowner {
