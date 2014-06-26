@@ -3269,10 +3269,10 @@ out:
 	return nfs_ok;
 }
 
-static __be32
-nfs4_check_open(struct nfs4_file *fp, struct nfsd4_open *open, struct nfs4_ol_stateid **stpp)
+static struct nfs4_ol_stateid *
+nfsd4_find_existing_open(struct nfs4_file *fp, struct nfsd4_open *open)
 {
-	struct nfs4_ol_stateid *local;
+	struct nfs4_ol_stateid *local, *ret = NULL;
 	struct nfs4_openowner *oo = open->op_openowner;
 
 	lockdep_assert_held(&fp->fi_lock);
@@ -3283,11 +3283,11 @@ nfs4_check_open(struct nfs4_file *fp, struct nfsd4_open *open, struct nfs4_ol_st
 			continue;
 		/* remember if we have seen this open owner */
 		if (local->st_stateowner == &oo->oo_owner) {
-			*stpp = local;
+			ret = local;
 			break;
 		}
 	}
-	return nfs_ok;
+	return ret;
 }
 
 static inline int nfs4_access_to_access(u32 nfs4_access)
@@ -3623,7 +3623,7 @@ nfsd4_process_open2(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nf
 		spin_lock(&fp->fi_lock);
 		status = nfs4_file_check_deny(fp, 0, open->op_share_deny);
 		if (status == nfs_ok)
-			status = nfs4_check_open(fp, open, &stp);
+			stp = nfsd4_find_existing_open(fp, open);
 		spin_unlock(&fp->fi_lock);
 		if (status)
 			goto out;
