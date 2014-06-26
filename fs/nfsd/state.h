@@ -340,10 +340,13 @@ struct nfs4_stateowner {
 	struct nfs4_client *    so_client;
 	/* after increment in ENCODE_SEQID_OP_TAIL, represents the next
 	 * sequence id expected from the client: */
+	atomic_t		so_count;
 	u32                     so_seqid;
 	struct xdr_netobj       so_owner;     /* open owner name */
 	struct nfs4_replay	so_replay;
 	bool			so_is_open_owner;
+
+	void (*so_free)(struct nfs4_stateowner *);
 };
 
 struct nfs4_openowner {
