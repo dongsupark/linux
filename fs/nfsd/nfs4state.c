@@ -5532,11 +5532,9 @@ nfsd4_release_lockowner(struct svc_rqst *rqstp,
 	dprintk("nfsd4_release_lockowner clientid: (%08x/%08x):\n",
 		clid->cl_boot, clid->cl_id);
 
-	nfs4_lock_state();
-
 	status = lookup_clientid(clid, cstate, nn);
 	if (status)
-		goto out;
+		return status;
 
 	status = nfserr_locks_held;
 	INIT_LIST_HEAD(&matches);
@@ -5578,7 +5576,6 @@ nfsd4_release_lockowner(struct svc_rqst *rqstp,
 out:
 	if (sop)
 		nfs4_put_stateowner(sop);
-	nfs4_unlock_state();
 	return status;
 }
 
