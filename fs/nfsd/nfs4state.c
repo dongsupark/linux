@@ -926,7 +926,7 @@ static void put_generic_stateid(struct nfs4_ol_stateid *stp)
 	nfs4_put_stid(&stp->st_stid);
 }
 
-static void __release_lock_stateid(struct nfs4_ol_stateid *stp)
+static void release_lock_stateid(struct nfs4_ol_stateid *stp)
 {
 	struct nfs4_openowner *oo = openowner(stp->st_openstp->st_stateowner);
 
@@ -950,7 +950,7 @@ static void release_lockowner_stateids(struct nfs4_lockowner *lo)
 	while (!list_empty(&lo->lo_owner.so_stateids)) {
 		stp = list_first_entry(&lo->lo_owner.so_stateids,
 				struct nfs4_ol_stateid, st_perstateowner);
-		__release_lock_stateid(stp);
+		release_lock_stateid(stp);
 	}
 }
 
@@ -959,21 +959,6 @@ static void release_lockowner(struct nfs4_lockowner *lo)
 	unhash_lockowner(lo);
 	release_lockowner_stateids(lo);
 	nfs4_put_stateowner(&lo->lo_owner);
-}
-
-static void release_lockowner_if_empty(struct nfs4_lockowner *lo)
-{
-	if (list_empty(&lo->lo_owner.so_stateids))
-		release_lockowner(lo);
-}
-
-static void release_lock_stateid(struct nfs4_ol_stateid *stp)
-{
-	struct nfs4_lockowner *lo;
-
-	lo = lockowner(stp->st_stateowner);
-	__release_lock_stateid(stp);
-	release_lockowner_if_empty(lo);
 }
 
 static void release_open_stateid_locks(struct nfs4_ol_stateid *open_stp)
@@ -4285,7 +4270,7 @@ nfsd4_free_lock_stateid(struct nfs4_ol_stateid *stp)
 
 	if (check_for_locks(stp->st_stid.sc_file, lo))
 		return nfserr_locks_held;
-	release_lockowner_if_empty(lo);
+	release_lock_stateid(stp);
 	return nfs_ok;
 }
 
@@ -4907,8 +4892,6 @@ static __be32 lookup_or_create_lock_state(struct nfsd4_compound_state *cstate,
 		lo = alloc_init_lock_stateowner(strhashval, cl, ost, lock);
 		if (lo == NULL)
 			return nfserr_jukebox;
-		/* FIXME: extra reference for new lockowners for the client */
-		atomic_inc(&lo->lo_owner.so_count);
 	} else {
 		/* with an existing lockowner, seqids must be the same */
 		status = nfserr_bad_seqid;
@@ -4919,7 +4902,6 @@ static __be32 lookup_or_create_lock_state(struct nfsd4_compound_state *cstate,
 
 	*lst = find_or_create_lock_stateid(lo, fi, ost, new);
 	if (*lst == NULL) {
-		release_lockowner_if_empty(lo);
 		status = nfserr_jukebox;
 		goto out;
 	}
@@ -5341,6 +5323,7 @@ nfsd4_release_lockowner(struct svc_rqst *rqstp,
 			continue;
 		if (same_owner_str(tmp, owner, clid)) {
 			sop = tmp;
+			atomic_inc(&sop->so_count);
 			break;
 		}
 	}
@@ -5354,8 +5337,10 @@ nfsd4_release_lockowner(struct svc_rqst *rqstp,
 	lo = lockowner(sop);
 	/* see if there are still any locks associated with it */
 	list_for_each_entry(stp, &sop->so_stateids, st_perstateowner) {
-		if (check_for_locks(stp->st_stid.sc_file, lo))
+		if (check_for_locks(stp->st_stid.sc_file, lo)) {
+			nfs4_put_stateowner(sop);
 			goto out;
+		}
 	}
 
 	status = nfs_ok;
