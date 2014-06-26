@@ -4016,12 +4016,14 @@ static __be32 lookup_clientid(clientid_t *clid,
 		 * if we don't have one cached already then we know this is for
 		 * is for v4.0 and "sessions" will be false.
 		 */
+		spin_lock(&nn->client_lock);
 		found = find_confirmed_client(clid, false, nn);
 		/* Cache the nfs4_client in cstate! */
 		if (found) {
 			cstate->clp = found;
 			atomic_inc(&found->cl_refcount);
 		}
+		spin_unlock(&nn->client_lock);
 	}
 	return found ? nfs_ok : nfserr_expired;
 }
