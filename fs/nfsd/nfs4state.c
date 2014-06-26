@@ -1066,13 +1066,19 @@ static void unhash_openowner_locked(struct nfs4_openowner *oo)
 
 static void release_last_closed_stateid(struct nfs4_openowner *oo)
 {
-	struct nfs4_ol_stateid *s = oo->oo_last_closed_stid;
+	struct nfsd_net *nn = net_generic(oo->oo_owner.so_client->net,
+					  nfsd_net_id);
+	struct nfs4_ol_stateid *s;
 
+	spin_lock(&nn->client_lock);
+	s = oo->oo_last_closed_stid;
 	if (s) {
 		list_del_init(&oo->oo_close_lru);
 		oo->oo_last_closed_stid = NULL;
-		put_generic_stateid(s);
 	}
+	spin_unlock(&nn->client_lock);
+	if (s)
+		put_generic_stateid(s);
 }
 
 static void release_openowner(struct nfs4_openowner *oo)
@@ -3224,6 +3230,7 @@ static void init_open_stateid(struct nfs4_ol_stateid *stp, struct nfs4_file *fp,
 static void
 move_to_close_lru(struct nfs4_ol_stateid *s, struct net *net)
 {
+	struct nfs4_ol_stateid *last;
 	struct nfs4_openowner *oo = openowner(s->st_stateowner);
 	struct nfsd_net *nn = net_generic(s->st_stid.sc_client->net,
 						nfsd_net_id);
@@ -3247,10 +3254,14 @@ move_to_close_lru(struct nfs4_ol_stateid *s, struct net *net)
 		s->st_stid.sc_file = NULL;
 	}
 
-	release_last_closed_stateid(oo);
+	spin_lock(&nn->client_lock);
+	last = oo->oo_last_closed_stid;
 	oo->oo_last_closed_stid = s;
 	list_move_tail(&oo->oo_close_lru, &nn->close_lru);
 	oo->oo_time = get_seconds();
+	spin_unlock(&nn->client_lock);
+	if (last)
+		put_generic_stateid(last);
 }
 
 static int
@@ -4106,6 +4117,7 @@ nfs4_laundromat(struct nfsd_net *nn)
 	struct nfs4_client *clp;
 	struct nfs4_openowner *oo;
 	struct nfs4_delegation *dp;
+	struct nfs4_ol_stateid *stp;
 	struct list_head *pos, *next, reaplist;
 	time_t cutoff = get_seconds() - nn->nfsd4_lease;
 	time_t t, new_timeo = nn->nfsd4_lease;
@@ -4157,15 +4169,26 @@ nfs4_laundromat(struct nfsd_net *nn)
 		dp = list_entry (pos, struct nfs4_delegation, dl_recall_lru);
 		revoke_delegation(dp);
 	}
-	list_for_each_safe(pos, next, &nn->close_lru) {
-		oo = container_of(pos, struct nfs4_openowner, oo_close_lru);
-		if (time_after((unsigned long)oo->oo_time, (unsigned long)cutoff)) {
+
+	spin_lock(&nn->client_lock);
+	while (!list_empty(&nn->close_lru)) {
+		oo = list_first_entry(&nn->close_lru, struct nfs4_openowner,
+					oo_close_lru);
+		if (time_after((unsigned long)oo->oo_time,
+			       (unsigned long)cutoff)) {
 			t = oo->oo_time - cutoff;
 			new_timeo = min(new_timeo, t);
 			break;
 		}
-		release_last_closed_stateid(oo);
+		list_del_init(&oo->oo_close_lru);
+		stp = oo->oo_last_closed_stid;
+		oo->oo_last_closed_stid = NULL;
+		spin_unlock(&nn->client_lock);
+		put_generic_stateid(stp);
+		spin_lock(&nn->client_lock);
 	}
+	spin_unlock(&nn->client_lock);
+
 	new_timeo = max_t(time_t, new_timeo, NFSD_LAUNDROMAT_MINTIMEOUT);
 	nfs4_unlock_state();
 	return new_timeo;
