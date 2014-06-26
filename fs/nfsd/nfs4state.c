@@ -384,24 +384,15 @@ static void nfs4_file_get_access(struct nfs4_file *fp, u32 access)
 		__nfs4_file_get_access(fp, oflag);
 }
 
-static struct file *nfs4_file_put_fd(struct nfs4_file *fp, int oflag)
-{
-	struct file *filp;
-
-	filp = fp->fi_fds[oflag];
-	fp->fi_fds[oflag] = NULL;
-	return filp;
-}
-
 static void __nfs4_file_put_access(struct nfs4_file *fp, int oflag)
 {
 	if (atomic_dec_and_lock(&fp->fi_access[oflag], &fp->fi_lock)) {
 		struct file *f1 = NULL;
 		struct file *f2 = NULL;
 
-		f1 = nfs4_file_put_fd(fp, oflag);
+		swap(f1, fp->fi_fds[oflag]);
 		if (atomic_read(&fp->fi_access[1 - oflag]) == 0)
-			f2 = nfs4_file_put_fd(fp, O_RDWR);
+			swap(f2, fp->fi_fds[O_RDWR]);
 		spin_unlock(&fp->fi_lock);
 		if (f1)
 			fput(f1);
