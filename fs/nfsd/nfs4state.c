@@ -1682,15 +1682,24 @@ static void gen_confirm(struct nfs4_client *clp)
 	memcpy(clp->cl_confirm.data, verf, sizeof(clp->cl_confirm.data));
 }
 
+static struct nfs4_stid *
+find_stateid_locked(struct nfs4_client *cl, stateid_t *t)
+{
+	struct nfs4_stid *ret;
+
+	ret = idr_find(&cl->cl_stateids, t->si_opaque.so_id);
+	if (!ret || !ret->sc_type)
+		return NULL;
+	return ret;
+}
+
 static struct nfs4_stid *find_stateid(struct nfs4_client *cl, stateid_t *t)
 {
 	struct nfs4_stid *ret;
 
 	spin_lock(&cl->cl_lock);
-	ret = idr_find(&cl->cl_stateids, t->si_opaque.so_id);
+	ret = find_stateid_locked(cl, t);
 	spin_unlock(&cl->cl_lock);
-	if (!ret || !ret->sc_type)
-		return NULL;
 	return ret;
 }
 
@@ -1698,12 +1707,12 @@ static struct nfs4_stid *find_stateid_by_type(struct nfs4_client *cl, stateid_t 
 {
 	struct nfs4_stid *s;
 
-	s = find_stateid(cl, t);
-	if (!s)
-		return NULL;
-	if (typemask & s->sc_type)
-		return s;
-	return NULL;
+	spin_lock(&cl->cl_lock);
+	s = find_stateid_locked(cl, t);
+	if (s != NULL && !(typemask & s->sc_type))
+		s = NULL;
+	spin_unlock(&cl->cl_lock);
+	return s;
 }
 
 static struct nfs4_client *create_client(struct xdr_netobj name,
