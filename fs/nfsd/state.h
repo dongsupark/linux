@@ -86,6 +86,8 @@ struct nfs4_stid {
 	stateid_t sc_stateid;
 	struct nfs4_client *sc_client;
 	struct nfs4_file *sc_file;
+
+	void (*sc_free)(struct nfs4_stid *);
 };
 
 struct nfs4_delegation {
