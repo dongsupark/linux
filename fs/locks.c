@@ -1308,6 +1308,32 @@ static bool leases_conflict(struct file_lock *lease, struct file_lock *breaker)
 }
 
 /**
+ * file_has_lease - does the given file have a lease set on it?
+ * @file: struct file on which we want to check the lease
+ *
+ * Returns true if a lease was is set on the given file description,
+ * false otherwise.
+ */
+bool
+file_has_lease(struct file *file)
+{
+	bool ret = false;
+	struct inode *inode = file_inode(file);
+	struct file_lock *fl;
+
+	spin_lock(&inode->i_lock);
+	for (fl = inode->i_flock; fl && IS_LEASE(fl); fl = fl->fl_next) {
+		if (fl->fl_file == file) {
+			ret = true;
+			break;
+		}
+	}
+	spin_unlock(&inode->i_lock);
+	return ret;
+}
+EXPORT_SYMBOL(file_has_lease);
+
+/**
  *	__break_lease	-	revoke all outstanding leases on file
  *	@inode: the inode of the file to return
  *	@mode: O_RDONLY: break only write leases; O_WRONLY or O_RDWR:
