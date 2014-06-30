@@ -1,0 +1,17 @@
+Importing jdelvare-hwmon based on 3.15-rc7
+Unchanged quilt series jdelvare-hwmon
+Importing rd-docs based on 3.16-rc2
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard a497c3ba1d97fc69c1e78e7b96435ba8c2cb42ee
+HEAD is now at a497c3ba1d97 Linux 3.16-rc2
+$ git am --patch-format=mbox ../quilt/rd-docs/docum-email-clients-add-git.patch
+Applying: These days most people use git to send patches so I have added a section
+$ git am --patch-format=mbox ../quilt/rd-docs/docum-exceptions.patch
+Applying: Note that I don't maintain Documentation/ABI/,
+$ git am --patch-format=mbox ../quilt/rd-docs/docum_changes_cleanup_mcelog.patch
+Applying: The paragraph on mcelog currently describes kernel v2.6.31. In that
+$ cd /home/sfr/kernels/next/next
+$ git fetch -f ../quilt-tmp master:rd-docs/master
+From ../quilt-tmp
+ + 93df5e1c88f7...b5fa23d4481a master     -> rd-docs/master  (forced update)
