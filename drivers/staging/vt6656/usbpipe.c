@@ -242,7 +242,7 @@ int PIPEnsBulkInUsbRead(struct vnt_private *priv, struct vnt_rcb *rcb)
 	usb_fill_bulk_urb(urb,
 		priv->usb,
 		usb_rcvbulkpipe(priv->usb, 2),
-		(void *) (rcb->skb->data),
+		skb_put(rcb->skb, skb_tailroom(rcb->skb)),
 		MAX_TOTAL_SIZE_WITH_ALL_HEADERS,
 		s_nsBulkInUsbIoCompleteRead,
 		rcb);
@@ -297,7 +297,7 @@ static void s_nsBulkInUsbIoCompleteRead(struct urb *urb)
 	if (urb->actual_length) {
 		spin_lock_irqsave(&priv->lock, flags);
 
-		if (RXbBulkInProcessData(priv, rcb, urb->actual_length) == true)
+		if (vnt_rx_data(priv, rcb, urb->actual_length))
 			re_alloc_skb = true;
 
 		spin_unlock_irqrestore(&priv->lock, flags);
@@ -337,8 +337,6 @@ int PIPEnsSendBulkOut(struct vnt_private *priv,
 {
 	int status;
 	struct urb *urb;
-
-	priv->bPWBitOn = false;
 
 	if (!(MP_IS_READY(priv) && priv->Flags & fMP_POST_WRITES)) {
 		context->in_use = false;
@@ -398,7 +396,7 @@ static void s_nsBulkOutIoCompleteWrite(struct urb *urb)
 {
 	struct vnt_usb_send_context *context = urb->context;
 	struct vnt_private *priv = context->priv;
-	u8 context_type = context->type;
+	struct ieee80211_tx_info *info;
 
 	switch (urb->status) {
 	case 0:
@@ -415,24 +413,18 @@ static void s_nsBulkOutIoCompleteWrite(struct urb *urb)
 		break;
 	}
 
-	if (!netif_device_present(priv->dev))
-		return;
-
-	if (CONTEXT_DATA_PACKET == context_type) {
-		if (context->skb != NULL) {
-			dev_kfree_skb_irq(context->skb);
-			context->skb = NULL;
-			dev_dbg(&priv->usb->dev,
-					"tx  %d bytes\n", context->buf_len);
-		}
-
-		priv->dev->trans_start = jiffies;
+	if (context->skb) {
+		info = IEEE80211_SKB_CB(context->skb);
+		ieee80211_tx_info_clear_status(info);
+		info->status.rates[0].idx = priv->wCurrentRate;
+		info->status.rates[0].count = 0;
+		if (!urb->status)
+			info->flags |= IEEE80211_TX_STAT_ACK;
+		ieee80211_tx_status_irqsafe(priv->hw, context->skb);
 	}
 
-	if (priv->bLinkPass == true) {
-		if (netif_queue_stopped(priv->dev))
-			netif_wake_queue(priv->dev);
-	}
+	if (context->type == CONTEXT_DATA_PACKET)
+		ieee80211_wake_queues(priv->hw);
 
 	context->in_use = false;
 
