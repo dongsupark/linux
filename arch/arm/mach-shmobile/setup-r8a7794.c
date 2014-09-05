@@ -1,8 +1,8 @@
 /*
- * r7s72100 processor support
+ * r8a7794 processor support
  *
- * Copyright (C) 2013  Renesas Solutions Corp.
- * Copyright (C) 2013  Magnus Damm
+ * Copyright (C) 2014  Renesas Electronics Corporation
+ * Copyright (C) 2014  Ulrich Hecht
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -12,25 +12,24 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#include <linux/kernel.h>
-
+#include <linux/of_platform.h>
+#include "common.h"
+#include "rcar-gen2.h"
 #include <asm/mach/arch.h>
 
-#include "common.h"
+#ifdef CONFIG_USE_OF
 
-static const char *r7s72100_boards_compat_dt[] __initdata = {
-	"renesas,r7s72100",
+static const char * const r8a7794_boards_compat_dt[] __initconst = {
+	"renesas,r8a7794",
 	NULL,
 };
 
-DT_MACHINE_START(R7S72100_DT, "Generic R7S72100 (Flattened Device Tree)")
+DT_MACHINE_START(R8A7794_DT, "Generic R8A7794 (Flattened Device Tree)")
 	.init_early	= shmobile_init_delay,
 	.init_late	= shmobile_init_late,
-	.dt_compat	= r7s72100_boards_compat_dt,
+	.init_time	= rcar_gen2_timer_init,
+	.dt_compat	= r8a7794_boards_compat_dt,
 MACHINE_END
+#endif /* CONFIG_USE_OF */
