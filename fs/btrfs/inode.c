@@ -7789,8 +7789,8 @@ static int btrfs_submit_direct_hook(int rw, struct btrfs_dio_private *dip,
 			start_sector += submit_len >> 9;
 			file_offset += submit_len;
 
-			bio = btrfs_dio_bio_alloc(orig_bio->bi_bdev,
-						  start_sector, GFP_NOFS);
+			bio = btrfs_bio_alloc(orig_bio->bi_bdev, start_sector,
+					      BIO_MAX_PAGES, GFP_NOFS);
 			if (!bio)
 				goto out_err;
 			bio->bi_private = dip;
