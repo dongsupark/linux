@@ -97,7 +97,7 @@ static struct kmem_cache *bio_find_or_create_slab(unsigned int extra_size)
 		goto out_unlock;
 
 	if (bio_slab_nr == bio_slab_max && entry == -1) {
-		new_bio_slab_max = bio_slab_max << 1;
+		new_bio_slab_max = bio_slab_max > 0 ? bio_slab_max << 1 : 1;
 		new_bio_slabs = krealloc(bio_slabs,
 					 new_bio_slab_max * sizeof(struct bio_slab),
 					 GFP_KERNEL);
