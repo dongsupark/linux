@@ -77,8 +77,6 @@ bool bio_attempt_front_merge(struct request_queue *q, struct request *req,
 			     struct bio *bio);
 bool bio_attempt_back_merge(struct request_queue *q, struct request *req,
 			    struct bio *bio);
-bool blk_attempt_plug_merge(struct request_queue *q, struct bio *bio,
-			    unsigned int *request_count);
 
 void blk_account_io_start(struct request *req, bool new_io);
 void blk_account_io_completion(struct request *req, unsigned int bytes);
