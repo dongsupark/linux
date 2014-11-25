@@ -169,11 +169,9 @@ static inline int dm_bufio_cache_index(struct dm_bufio_client *c)
 #define DM_BUFIO_CACHE(c)	(dm_bufio_caches[dm_bufio_cache_index(c)])
 #define DM_BUFIO_CACHE_NAME(c)	(dm_bufio_cache_names[dm_bufio_cache_index(c)])
 
-#define dm_bufio_in_request()	(!!current->bio_list)
-
 static void dm_bufio_lock(struct dm_bufio_client *c)
 {
-	mutex_lock_nested(&c->lock, dm_bufio_in_request());
+	mutex_lock_nested(&c->lock, 0);
 }
 
 static int dm_bufio_trylock(struct dm_bufio_client *c)
@@ -1044,8 +1042,6 @@ EXPORT_SYMBOL_GPL(dm_bufio_get);
 void *dm_bufio_read(struct dm_bufio_client *c, sector_t block,
 		    struct dm_buffer **bp)
 {
-	BUG_ON(dm_bufio_in_request());
-
 	return new_read(c, block, NF_READ, bp);
 }
 EXPORT_SYMBOL_GPL(dm_bufio_read);
@@ -1053,8 +1049,6 @@ EXPORT_SYMBOL_GPL(dm_bufio_read);
 void *dm_bufio_new(struct dm_bufio_client *c, sector_t block,
 		   struct dm_buffer **bp)
 {
-	BUG_ON(dm_bufio_in_request());
-
 	return new_read(c, block, NF_FRESH, bp);
 }
 EXPORT_SYMBOL_GPL(dm_bufio_new);
@@ -1065,8 +1059,6 @@ void dm_bufio_prefetch(struct dm_bufio_client *c,
 	struct blk_plug plug;
 
 	LIST_HEAD(write_list);
-
-	BUG_ON(dm_bufio_in_request());
 
 	blk_start_plug(&plug);
 	dm_bufio_lock(c);
@@ -1153,8 +1145,6 @@ EXPORT_SYMBOL_GPL(dm_bufio_mark_buffer_dirty);
 void dm_bufio_write_dirty_buffers_async(struct dm_bufio_client *c)
 {
 	LIST_HEAD(write_list);
-
-	BUG_ON(dm_bufio_in_request());
 
 	dm_bufio_lock(c);
 	__write_dirty_buffers_async(c, 0, &write_list);
@@ -1259,8 +1249,6 @@ int dm_bufio_issue_flush(struct dm_bufio_client *c)
 		.count = 0,
 	};
 
-	BUG_ON(dm_bufio_in_request());
-
 	return dm_io(&io_req, 1, &io_reg, NULL);
 }
 EXPORT_SYMBOL_GPL(dm_bufio_issue_flush);
@@ -1281,8 +1269,6 @@ void dm_bufio_release_move(struct dm_buffer *b, sector_t new_block)
 {
 	struct dm_bufio_client *c = b->c;
 	struct dm_buffer *new;
-
-	BUG_ON(dm_bufio_in_request());
 
 	dm_bufio_lock(c);
 
@@ -1408,8 +1394,6 @@ static void drop_buffers(struct dm_bufio_client *c)
 {
 	struct dm_buffer *b;
 	int i;
-
-	BUG_ON(dm_bufio_in_request());
 
 	/*
 	 * An optimization so that the buffers are not written one-by-one.
