@@ -172,12 +172,9 @@ EXPORT_SYMBOL_GPL(dio_end_io);
 
 static void dio_wait_completion(struct dio *dio)
 {
-	if (atomic_add_return(DIO_WAKEUP - 1, &dio->refcount) == DIO_WAKEUP)
-		return;
-
 	while (1) {
 		set_current_state(TASK_UNINTERRUPTIBLE);
-		if (atomic_read(&dio->refcount) == DIO_WAKEUP)
+		if (dio->async)
 			break;
 
 		io_schedule();
@@ -643,30 +640,31 @@ do_blockdev_direct_IO(int rw, struct kiocb *iocb, struct inode *inode,
 
 		dio_send_bio(dio, bio, iocb->ki_filp, offset + dio->result,
 			     get_block, submit_io);
+
+		/*
+		 * For file extending writes updating i_size before data
+		 * writeouts complete can expose uninitialized blocks. So
+		 * even for AIO, we need to wait for i/o to complete before
+		 * returning in this case.
+		 */
+		if (!is_sync_kiocb(iocb) &&
+		    ret == 0 && dio->result &&
+		    ((rw == READ) ||
+		     (offset + size <= dio->i_size &&
+		      dio->result == size))) {
+			if (!dio->async)
+				ret = dio_complete(dio, offset, ret, false);
+			else
+				ret = -EIOCBQUEUED;
+		} else {
+			dio_wait_completion(dio);
+			ret = dio_complete(dio, offset, ret, false);
+			BUG_ON(ret == -EIOCBQUEUED);
+		}
+
 	}
 
 	blk_finish_plug(&plug);
-
-	/*
-	 * For file extending writes updating i_size before data
-	 * writeouts complete can expose uninitialized blocks. So
-	 * even for AIO, we need to wait for i/o to complete before
-	 * returning in this case.
-	 */
-	if (!is_sync_kiocb(iocb) &&
-	    ret == 0 && dio->result &&
-	    ((rw == READ) ||
-	     (offset + size <= dio->i_size &&
-	      dio->result == size))) {
-		if (atomic_dec_and_test(&dio->refcount))
-			ret = dio_complete(dio, offset, ret, false);
-		else
-			ret = -EIOCBQUEUED;
-	} else {
-		dio_wait_completion(dio);
-		ret = dio_complete(dio, offset, ret, false);
-		BUG_ON(ret == -EIOCBQUEUED);
-	}
 
 	return ret;
 }
