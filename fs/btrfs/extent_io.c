@@ -2495,7 +2495,7 @@ static void end_bio_extent_writepage(struct bio *bio, int err)
 		 * advance bv_offset and adjust bv_len to compensate.
 		 * Print a warning for nonzero offsets, and an error
 		 * if they don't add up to a full page.  */
-		if (bvec.bv_offset || bvec.bv_len != PAGE_CACHE_SIZE) {
+		if (bvec.bv_offset) {
 			if (bvec.bv_offset + bvec.bv_len != PAGE_CACHE_SIZE)
 				btrfs_err(BTRFS_I(page->mapping->host)->root->fs_info,
 				   "partial page write in btrfs with offset %u and length %u",
@@ -2508,7 +2508,8 @@ static void end_bio_extent_writepage(struct bio *bio, int err)
 		}
 
 		start = page_offset(page);
-		end = start + bvec.bv_offset + bvec.bv_len - 1;
+		end = start + bvec.bv_offset
+			+ min_t(unsigned int, bvec.bv_len, PAGE_CACHE_SIZE) - 1;
 
 		if (end_extent_writepage(page, err, start, end))
 			continue;
@@ -2575,7 +2576,7 @@ static void end_bio_extent_readpage(struct bio *bio, int err)
 		 * advance bv_offset and adjust bv_len to compensate.
 		 * Print a warning for nonzero offsets, and an error
 		 * if they don't add up to a full page.  */
-		if (bvec.bv_offset || bvec.bv_len != PAGE_CACHE_SIZE) {
+		if (bvec.bv_offset) {
 			if (bvec.bv_offset + bvec.bv_len != PAGE_CACHE_SIZE)
 				btrfs_err(BTRFS_I(page->mapping->host)->root->fs_info,
 				   "partial page read in btrfs with offset %u and length %u",
@@ -2588,7 +2589,8 @@ static void end_bio_extent_readpage(struct bio *bio, int err)
 		}
 
 		start = page_offset(page);
-		end = start + bvec.bv_offset + bvec.bv_len - 1;
+		end = start + bvec.bv_offset
+			+ min_t(unsigned int, bvec.bv_len, PAGE_CACHE_SIZE) - 1;
 		len = bvec.bv_len;
 
 		mirror = io_bio->mirror_num;
