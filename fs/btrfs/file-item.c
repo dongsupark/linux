@@ -448,6 +448,8 @@ int btrfs_csum_one_bio(struct btrfs_root *root, struct inode *inode,
 	index = 0;
 
 	bio_for_each_page(bvec, bio, iter) {
+		unsigned int bv_len = min_t(unsigned int, bvec.bv_len, PAGE_CACHE_SIZE);
+
 		if (!contig)
 			offset = page_offset(bvec.bv_page) + bvec.bv_offset;
 
@@ -472,14 +474,14 @@ int btrfs_csum_one_bio(struct btrfs_root *root, struct inode *inode,
 		sums->sums[index] = ~(u32)0;
 		sums->sums[index] = btrfs_csum_data(data + bvec.bv_offset,
 						    sums->sums[index],
-						    bvec.bv_len);
+						    bv_len);
 		kunmap_atomic(data);
 		btrfs_csum_final(sums->sums[index],
 				 (char *)(sums->sums + index));
 
 		index++;
-		offset += bvec.bv_len;
-		this_sum_bytes += bvec.bv_len;
+		offset += bv_len;
+		this_sum_bytes += bv_len;
 	}
 	this_sum_bytes = 0;
 	btrfs_add_ordered_sum(inode, ordered, sums);
