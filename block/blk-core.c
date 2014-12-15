@@ -1802,7 +1802,7 @@ void generic_make_request(struct bio *bio)
 	 */
 	blk_start_plug(&plug);
 
-	bio = splits.head;
+	bio_list_add(&splits, bio);
 	p = &tsk->plug->list.head;
 
 	while (*p &&
