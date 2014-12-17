@@ -3915,7 +3915,7 @@ skip_create_disk:
 	dd->tags.reserved_tags = 1;
 	dd->tags.cmd_size = sizeof(struct mtip_cmd);
 	dd->tags.numa_node = dd->numa_node;
-	dd->tags.flags = BLK_MQ_F_SHOULD_MERGE;
+	dd->tags.flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_SG_MERGE;
 	dd->tags.driver_data = dd;
 
 	rv = blk_mq_alloc_tag_set(&dd->tags);
