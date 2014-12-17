@@ -71,7 +71,8 @@ static void ext4_finish_bio(struct bio *bio)
 		struct page *page = bvec.bv_page;
 		struct buffer_head *bh, *head;
 		unsigned bio_start = bvec.bv_offset;
-		unsigned bio_end = bio_start + bvec.bv_len;
+		unsigned bio_end = bio_start +
+			min_t(unsigned int , bvec.bv_len, PAGE_CACHE_SIZE);
 		unsigned under_io = 0;
 		unsigned long flags;
 
