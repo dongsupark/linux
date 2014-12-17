@@ -7463,8 +7463,11 @@ static int __btrfs_subio_endio_read(struct inode *inode,
 	done.inode = inode;
 
 	bio_for_each_page_all(bvec, &io_bio->bio, iter) {
+		unsigned int bv_len = min_t(unsigned int, bvec.bv_len,
+					    PAGE_CACHE_SIZE);
+
 		ret = __readpage_endio_check(inode, io_bio, i, bvec.bv_page,
-					     0, start, bvec.bv_len);
+					     0, start, bv_len);
 		if (likely(!ret))
 			goto next;
 try_again:
@@ -7473,7 +7476,7 @@ try_again:
 		init_completion(&done.done);
 
 		ret = dio_read_error(inode, &io_bio->bio, bvec.bv_page, start,
-				     start + bvec.bv_len - 1,
+				     start + bv_len - 1,
 				     io_bio->mirror_num,
 				     btrfs_retry_endio, &done);
 		if (ret) {
@@ -7488,8 +7491,8 @@ try_again:
 			goto try_again;
 		}
 next:
-		offset += bvec.bv_len;
-		start += bvec.bv_len;
+		offset += bv_len;
+		start += bv_len;
 		i++;
 	}
 
