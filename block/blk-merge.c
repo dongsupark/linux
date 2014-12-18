@@ -180,6 +180,8 @@ static unsigned int __blk_recalc_rq_segments(struct request_queue *q,
 					     bool no_sg_merge)
 {
 	unsigned nr_phys_segs = 0;
+	struct bio_vec bvec;
+	struct bvec_iter iter;
 
 	if (!bio)
 		return 0;
@@ -195,14 +197,14 @@ static unsigned int __blk_recalc_rq_segments(struct request_queue *q,
 		return 1;
 
 	for_each_bio(bio) {
-		struct bvec_iter iter = bio->bi_iter;
+		bio_for_each_page(bvec, bio, iter) {
+			while (iter.bi_size) {
+				struct bio_vec bv = bio_iter_iovec(bio, iter);
+				unsigned nbytes = blk_max_segment(q, &bv);
 
-		while (iter.bi_size) {
-			struct bio_vec bv = bio_iter_iovec(bio, iter);
-			unsigned nbytes = blk_max_segment(q, &bv);
-
-			nr_phys_segs++;
-			bio_advance_iter(bio, &iter, nbytes);
+				nr_phys_segs++;
+				bio_advance_iter(bio, &iter, nbytes);
+			}
 		}
 	}
 
