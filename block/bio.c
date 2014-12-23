@@ -1399,17 +1399,17 @@ struct bio *bio_map_user_iov(struct request_queue *q, struct block_device *bdev,
 
 static void __bio_unmap_user(struct bio *bio)
 {
-	struct bio_vec *bvec;
-	int i;
+	struct bio_vec bvec;
+	struct bvec_iter iter;
 
 	/*
 	 * make sure we dirty pages we wrote to
 	 */
-	bio_for_each_segment_all(bvec, bio, i) {
+	bio_for_each_page_all(bvec, bio, iter) {
 		if (bio_data_dir(bio) == READ)
-			set_page_dirty_lock(bvec->bv_page);
+			set_page_dirty_lock(bvec.bv_page);
 
-		page_cache_release(bvec->bv_page);
+		page_cache_release(bvec.bv_page);
 	}
 
 	bio_put(bio);
