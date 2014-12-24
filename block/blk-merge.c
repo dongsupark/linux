@@ -128,13 +128,13 @@ static struct bio *blk_bio_segment_split(struct request_queue *q,
 		unsigned remaining = (queue_max_sectors(q) << 9) -
 			(bio->bi_iter.bi_size - iter.bi_size);
 
+		if (nsegs == queue_max_segments(q))
+			goto split;
+
 		if (bv.bv_len > remaining) {
 			bio_advance_iter(bio, &iter, remaining);
 			goto split;
 		}
-
-		if (nsegs == queue_max_segments(q))
-			goto split;
 
 		nsegs++;
 		bio_advance_iter(bio, &iter, blk_max_segment(q, &bv));
