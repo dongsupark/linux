@@ -188,23 +188,35 @@ static int parse_mount_options(char *data, int op, struct pts_mount_opts *opts)
 		token = match_token(p, tokens, args);
 		switch (token) {
 		case Opt_uid:
-			if (match_int(&args[0], &option))
+		{
+			char *uidstr = args[0].from;
+			uid_t uidval;
+			int rc = kstrtouint(uidstr, 0, &uidval);
+
+			if (rc)
 				return -EINVAL;
-			uid = make_kuid(current_user_ns(), option);
+			uid = make_kuid(current_user_ns(), uidval);
 			if (!uid_valid(uid))
 				return -EINVAL;
 			opts->uid = uid;
 			opts->setuid = 1;
 			break;
+		}
 		case Opt_gid:
-			if (match_int(&args[0], &option))
+		{
+			char *gidstr = args[0].from;
+			gid_t gidval;
+			int rc = kstrtouint(gidstr, 0, &gidval);
+
+			if (rc)
 				return -EINVAL;
-			gid = make_kgid(current_user_ns(), option);
+			gid = make_kgid(current_user_ns(), gidval);
 			if (!gid_valid(gid))
 				return -EINVAL;
 			opts->gid = gid;
 			opts->setgid = 1;
 			break;
+		}
 		case Opt_mode:
 			if (match_octal(&args[0], &option))
 				return -EINVAL;
