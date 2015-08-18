@@ -17,6 +17,8 @@
 #include <linux/math64.h>
 #include <linux/export.h>
 #include <linux/types.h>
+#include <linux/sched.h>
+#include <linux/cred.h>
 #include <asm/uaccess.h>
 #include "kstrtox.h"
 
@@ -334,6 +336,44 @@ int f(const char __user *s, size_t count, unsigned int base, type *res)	\
 	return g(buf, base, res);					\
 }									\
 EXPORT_SYMBOL(f)
+
+int kstrtouid(const char *uidstr, kuid_t *kuid)
+{
+	uid_t uidval;
+	kuid_t kuidtmp;
+
+	int rc = kstrtouint(uidstr, 0, &uidval);
+
+	if (rc)
+		return rc;
+
+	kuidtmp = make_kuid(current_user_ns(), uidval);
+	if (!uid_valid(kuidtmp))
+		return -EINVAL;
+
+	*kuid = kuidtmp;
+	return 0;
+}
+EXPORT_SYMBOL(kstrtouid);
+
+int kstrtogid(const char *gidstr, kgid_t *kgid)
+{
+	gid_t gidval;
+	kgid_t kgidtmp;
+
+	int rc = kstrtouint(gidstr, 0, &gidval);
+
+	if (rc)
+		return rc;
+
+	kgidtmp = make_kgid(current_user_ns(), gidval);
+	if (!gid_valid(kgidtmp))
+		return -EINVAL;
+
+	*kgid = kgidtmp;
+	return 0;
+}
+EXPORT_SYMBOL(kstrtogid);
 
 kstrto_from_user(kstrtoull_from_user,	kstrtoull,	unsigned long long);
 kstrto_from_user(kstrtoll_from_user,	kstrtoll,	long long);
