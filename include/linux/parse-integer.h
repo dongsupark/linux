@@ -2,6 +2,7 @@
 #define _PARSE_INTEGER_H
 #include <linux/compiler.h>
 #include <linux/types.h>
+#include <linux/uidgid.h>
 
 /*
  * int parse_integer(const char *s, unsigned int base, T *val);
@@ -154,6 +155,9 @@ static inline int __must_check kstrtos8(const char *s, unsigned int base, s8 *re
 {
 	return parse_integer(s, base | PARSE_INTEGER_NEWLINE, res);
 }
+
+int __must_check kstrtouid(const char *uidstr, kuid_t *kuid);
+int __must_check kstrtogid(const char *gidstr, kgid_t *kgid);
 
 int __must_check kstrtoull_from_user(const char __user *s, size_t count, unsigned int base, unsigned long long *res);
 int __must_check kstrtoll_from_user(const char __user *s, size_t count, unsigned int base, long long *res);
